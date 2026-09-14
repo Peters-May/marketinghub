@@ -164,10 +164,7 @@ export const CONTENT_TYPES: FieldOption[] = [
 
 export const CONTENT_CATEGORIES: FieldOption[] = [
   { value: "General", label: "General" },
-  { value: "Social Media", label: "Social Media" },
   { value: "Insight", label: "Insight" },
-  { value: "Newsletter", label: "Newsletter" },
-  { value: "Sponsorship", label: "Sponsorship" },
   { value: "Seasonal", label: "Seasonal" },
   { value: "Commercial", label: "Commercial" },
   { value: "Freight Forwarding", label: "Freight Forwarding" },

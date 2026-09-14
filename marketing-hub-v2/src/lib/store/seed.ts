@@ -59,7 +59,7 @@ export function createSeedStore(): HubStore {
           .slice(0, 10),
         deadline_date: null,
         status: "draft",
-        category: "Social Media",
+        category: "Seasonal",
         priority: "Medium",
         website: "",
         caption: "",

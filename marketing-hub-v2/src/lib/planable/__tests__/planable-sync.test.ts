@@ -50,7 +50,7 @@ function contentItem(overrides: Partial<ContentItem> = {}): ContentItem {
     due_date: "2026-09-10",
     deadline_date: null,
     status: "draft",
-    category: "Social Media",
+    category: "",
     priority: "",
     website: "",
     caption: "Hello",

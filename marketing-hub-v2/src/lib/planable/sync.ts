@@ -579,7 +579,7 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
       due_date,
       deadline_date: null,
       status: published ? "published" : status,
-      category: "Social Media",
+      category: "",
       priority: "",
       website: "",
       caption,
