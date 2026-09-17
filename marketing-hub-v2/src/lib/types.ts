@@ -169,6 +169,106 @@ export type Contact = {
   notes: string;
   /** Hub user (auth) linked to this contact — members edit only their linked record. */
   user_id: string | null;
+  /** Journalist / media contact (shown in PR module). */
+  is_press: boolean;
+  /** Coverage beat — e.g. yachting, freight, logistics. */
+  beat: string;
+  /** Publication / outlet name when distinct from organisation. */
+  outlet: string;
+  /** Country or market focus. */
+  country: string;
+  /** Topics they prefer to cover. */
+  preferred_topics: string;
+  /** Last outreach / contact date (ISO date or datetime). */
+  last_contacted_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Saved media list for PR targeting. */
+export type MediaList = {
+  id: string;
+  name: string;
+  description: string;
+  /** Contact ids on this list. */
+  contact_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrPitchStatus = "draft" | "exported" | "archived";
+
+/** Pitch drafted in Hub; sent via Outlook (.eml), not Hub mail. */
+export type PrPitch = {
+  id: string;
+  title: string;
+  subject: string;
+  /** Plain or HTML body; merge fields {{name}}, {{outlet}}, {{organisation}}. */
+  body: string;
+  status: PrPitchStatus;
+  /** Optional media list used as recipient source. */
+  media_list_id: string | null;
+  /** Explicit recipient contact ids (overrides / supplements list). */
+  recipient_ids: string[];
+  /** Linked press release (content id). */
+  content_id: string | null;
+  /** Linked event id. */
+  event_id: string | null;
+  /** When staff downloaded / opened for Outlook. */
+  exported_at: string | null;
+  notes: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrCoverageSentiment = "positive" | "neutral" | "negative" | "";
+
+/** Manual or promoted media coverage / clipping. */
+export type PrCoverage = {
+  id: string;
+  title: string;
+  url: string;
+  outlet: string;
+  published_at: string | null;
+  sentiment: PrCoverageSentiment;
+  notes: string;
+  pitch_id: string | null;
+  content_id: string | null;
+  event_id: string | null;
+  /** Set when promoted from a monitor mention. */
+  monitor_mention_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Brand / keyword query for media monitoring. */
+export type PrMonitorQuery = {
+  id: string;
+  name: string;
+  keywords: string;
+  /** Comma-separated terms to exclude. */
+  exclusions: string;
+  active: boolean;
+  last_run_at: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Ingested mention awaiting promote-to-coverage or dismiss. */
+export type PrMonitorMentionStatus = "new" | "promoted" | "dismissed";
+
+export type PrMonitorMention = {
+  id: string;
+  query_id: string;
+  title: string;
+  url: string;
+  outlet: string;
+  published_at: string | null;
+  snippet: string;
+  status: PrMonitorMentionStatus;
+  external_id: string;
   created_at: string;
   updated_at: string;
 };
@@ -699,4 +799,14 @@ export type HubStore = {
   budget_payments: BudgetPayment[];
   /** Notes, quarters, and source metadata for the budget page. */
   budget_meta: BudgetMeta;
+  /** PR media lists (journalist targeting). */
+  media_lists: MediaList[];
+  /** PR pitch drafts (Outlook export). */
+  pr_pitches: PrPitch[];
+  /** Coverage / clippings. */
+  pr_coverage: PrCoverage[];
+  /** Media monitoring queries. */
+  pr_monitor_queries: PrMonitorQuery[];
+  /** Monitoring inbox mentions. */
+  pr_monitor_mentions: PrMonitorMention[];
 };

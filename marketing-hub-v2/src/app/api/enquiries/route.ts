@@ -14,6 +14,7 @@ import {
 import type { EnquiryIntake, WebEnquiryStatus } from "@/lib/types";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
+import { syncWebEnquiryToPortal } from "@/lib/sync/portal-enquiries";
 
 /**
  * Staff list: GET with session — web + WhatsApp merged.
@@ -120,10 +121,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const item = await upsertWebEnquiryFromWebhook(body);
+    // Hub remains SoT: ingest succeeds even when Portal sync fails.
+    const portal_sync = await syncWebEnquiryToPortal(body);
     return jsonOk({
       ok: true,
       id: item.id,
       submission_id: item.submission_id,
+      portal_sync,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Ingest failed";

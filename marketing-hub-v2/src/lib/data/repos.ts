@@ -38,6 +38,14 @@ import type {
   StaffRequest,
   ThemeMainContent,
   ThemeOffshoot,
+  MediaList,
+  PrPitch,
+  PrPitchStatus,
+  PrCoverage,
+  PrCoverageSentiment,
+  PrMonitorQuery,
+  PrMonitorMention,
+  PrMonitorMentionStatus,
 } from "@/lib/types";
 
 function nowIso() {
@@ -345,6 +353,12 @@ function normalizeContact(c: Contact): Contact {
     website: c.website ?? "",
     services: c.services ?? "",
     user_id: c.user_id ?? null,
+    is_press: Boolean(c.is_press),
+    beat: c.beat ?? "",
+    outlet: c.outlet ?? "",
+    country: c.country ?? "",
+    preferred_topics: c.preferred_topics ?? "",
+    last_contacted_at: c.last_contacted_at ?? null,
   };
 }
 
@@ -442,6 +456,12 @@ export async function ensureContactForUser(input: {
     tags: [],
     notes: input.notes ?? "",
     user_id: input.userId,
+    is_press: false,
+    beat: "",
+    outlet: "",
+    country: "",
+    preferred_topics: "",
+    last_contacted_at: null,
   });
 }
 
@@ -454,6 +474,12 @@ export async function createContact(
     website: input.website ?? "",
     services: input.services ?? "",
     user_id: input.user_id ?? null,
+    is_press: Boolean(input.is_press),
+    beat: input.beat ?? "",
+    outlet: input.outlet ?? "",
+    country: input.country ?? "",
+    preferred_topics: input.preferred_topics ?? "",
+    last_contacted_at: input.last_contacted_at ?? null,
     id: uid("ctc"),
     created_at: nowIso(),
     updated_at: nowIso(),
@@ -1846,4 +1872,306 @@ export async function deleteBudgetPayment(id: string) {
       (payment) => payment.id !== id
     );
   });
+}
+
+// —— PR module (media lists, pitches, coverage, monitoring) ——
+
+export async function listMediaLists() {
+  const store = await readStore();
+  return [...(store.media_lists ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
+export async function createMediaList(
+  input: Omit<MediaList, "id" | "created_at" | "updated_at">
+) {
+  const item: MediaList = {
+    ...input,
+    contact_ids: Array.isArray(input.contact_ids) ? input.contact_ids : [],
+    id: uid("ml"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.media_lists) s.media_lists = [];
+    s.media_lists.push(item);
+  });
+  return item;
+}
+
+export async function updateMediaList(id: string, patch: Partial<MediaList>) {
+  let updated: MediaList | null = null;
+  await updateStore((s) => {
+    if (!s.media_lists) s.media_lists = [];
+    const idx = s.media_lists.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    s.media_lists[idx] = {
+      ...s.media_lists[idx],
+      ...patch,
+      id,
+      contact_ids: Array.isArray(patch.contact_ids)
+        ? patch.contact_ids
+        : s.media_lists[idx].contact_ids,
+      updated_at: nowIso(),
+    };
+    updated = s.media_lists[idx];
+  });
+  return updated;
+}
+
+export async function deleteMediaList(id: string) {
+  await updateStore((s) => {
+    s.media_lists = (s.media_lists ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listPrPitches() {
+  const store = await readStore();
+  return [...(store.pr_pitches ?? [])].sort(
+    (a, b) =>
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+}
+
+export async function createPrPitch(
+  input: Omit<PrPitch, "id" | "created_at" | "updated_at">
+) {
+  const item: PrPitch = {
+    ...input,
+    status: (input.status as PrPitchStatus) || "draft",
+    media_list_id: input.media_list_id ?? null,
+    recipient_ids: Array.isArray(input.recipient_ids)
+      ? input.recipient_ids
+      : [],
+    content_id: input.content_id ?? null,
+    event_id: input.event_id ?? null,
+    exported_at: input.exported_at ?? null,
+    id: uid("pitch"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.pr_pitches) s.pr_pitches = [];
+    s.pr_pitches.push(item);
+  });
+  return item;
+}
+
+export async function updatePrPitch(id: string, patch: Partial<PrPitch>) {
+  let updated: PrPitch | null = null;
+  await updateStore((s) => {
+    if (!s.pr_pitches) s.pr_pitches = [];
+    const idx = s.pr_pitches.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    s.pr_pitches[idx] = {
+      ...s.pr_pitches[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    updated = s.pr_pitches[idx];
+  });
+  return updated;
+}
+
+export async function deletePrPitch(id: string) {
+  await updateStore((s) => {
+    s.pr_pitches = (s.pr_pitches ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listPrCoverage() {
+  const store = await readStore();
+  return [...(store.pr_coverage ?? [])].sort((a, b) => {
+    const da = a.published_at || a.created_at;
+    const db = b.published_at || b.created_at;
+    return new Date(db).getTime() - new Date(da).getTime();
+  });
+}
+
+export async function createPrCoverage(
+  input: Omit<PrCoverage, "id" | "created_at" | "updated_at">
+) {
+  const item: PrCoverage = {
+    ...input,
+    sentiment: (input.sentiment as PrCoverageSentiment) || "",
+    pitch_id: input.pitch_id ?? null,
+    content_id: input.content_id ?? null,
+    event_id: input.event_id ?? null,
+    monitor_mention_id: input.monitor_mention_id ?? null,
+    id: uid("cov"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.pr_coverage) s.pr_coverage = [];
+    s.pr_coverage.push(item);
+  });
+  return item;
+}
+
+export async function updatePrCoverage(
+  id: string,
+  patch: Partial<PrCoverage>
+) {
+  let updated: PrCoverage | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage) s.pr_coverage = [];
+    const idx = s.pr_coverage.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    s.pr_coverage[idx] = {
+      ...s.pr_coverage[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    updated = s.pr_coverage[idx];
+  });
+  return updated;
+}
+
+export async function deletePrCoverage(id: string) {
+  await updateStore((s) => {
+    s.pr_coverage = (s.pr_coverage ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listPrMonitorQueries() {
+  const store = await readStore();
+  return [...(store.pr_monitor_queries ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
+export async function createPrMonitorQuery(
+  input: Omit<PrMonitorQuery, "id" | "created_at" | "updated_at">
+) {
+  const item: PrMonitorQuery = {
+    ...input,
+    active: input.active !== false,
+    last_run_at: input.last_run_at ?? null,
+    id: uid("pmq"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.pr_monitor_queries) s.pr_monitor_queries = [];
+    s.pr_monitor_queries.push(item);
+  });
+  return item;
+}
+
+export async function updatePrMonitorQuery(
+  id: string,
+  patch: Partial<PrMonitorQuery>
+) {
+  let updated: PrMonitorQuery | null = null;
+  await updateStore((s) => {
+    if (!s.pr_monitor_queries) s.pr_monitor_queries = [];
+    const idx = s.pr_monitor_queries.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    s.pr_monitor_queries[idx] = {
+      ...s.pr_monitor_queries[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    updated = s.pr_monitor_queries[idx];
+  });
+  return updated;
+}
+
+export async function deletePrMonitorQuery(id: string) {
+  await updateStore((s) => {
+    s.pr_monitor_queries = (s.pr_monitor_queries ?? []).filter(
+      (x) => x.id !== id
+    );
+  });
+}
+
+export async function listPrMonitorMentions() {
+  const store = await readStore();
+  return [...(store.pr_monitor_mentions ?? [])].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
+export async function upsertPrMonitorMentions(
+  mentions: Omit<PrMonitorMention, "id" | "created_at" | "updated_at">[]
+) {
+  const created: PrMonitorMention[] = [];
+  await updateStore((s) => {
+    if (!s.pr_monitor_mentions) s.pr_monitor_mentions = [];
+    const byExternal = new Map(
+      s.pr_monitor_mentions.map((m) => [m.external_id, m])
+    );
+    for (const input of mentions) {
+      if (input.external_id && byExternal.has(input.external_id)) continue;
+      const item: PrMonitorMention = {
+        ...input,
+        status: (input.status as PrMonitorMentionStatus) || "new",
+        id: uid("pmm"),
+        created_at: nowIso(),
+        updated_at: nowIso(),
+      };
+      s.pr_monitor_mentions.push(item);
+      byExternal.set(item.external_id, item);
+      created.push(item);
+    }
+  });
+  return created;
+}
+
+export async function updatePrMonitorMention(
+  id: string,
+  patch: Partial<PrMonitorMention>
+) {
+  let updated: PrMonitorMention | null = null;
+  await updateStore((s) => {
+    if (!s.pr_monitor_mentions) s.pr_monitor_mentions = [];
+    const idx = s.pr_monitor_mentions.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    s.pr_monitor_mentions[idx] = {
+      ...s.pr_monitor_mentions[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    updated = s.pr_monitor_mentions[idx];
+  });
+  return updated;
+}
+
+export async function deletePrMonitorMention(id: string) {
+  await updateStore((s) => {
+    s.pr_monitor_mentions = (s.pr_monitor_mentions ?? []).filter(
+      (x) => x.id !== id
+    );
+  });
+}
+
+/** Published PR / press-release content for the public newsroom. */
+export async function listPublishedPressReleases() {
+  const store = await readStore();
+  return store.content
+    .map(withContentPlanableDefaults)
+    .filter((c) => {
+      if (c.status !== "published") return false;
+      const type = (c.content_type || "").toLowerCase();
+      const cat = (c.category || "").toLowerCase();
+      const channels = (c.channel || []).map((x) => x.toLowerCase());
+      return (
+        type === "pr" ||
+        type === "press" ||
+        cat === "press release" ||
+        channels.includes("pr")
+      );
+    })
+    .sort((a, b) => {
+      const da = a.due_date || a.updated_at;
+      const db = b.due_date || b.updated_at;
+      return new Date(db).getTime() - new Date(da).getTime();
+    });
 }

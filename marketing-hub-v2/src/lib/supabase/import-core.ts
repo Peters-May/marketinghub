@@ -654,6 +654,13 @@ function mapContactRows(
     const tags = [typeTag, statusTag, pressField, team]
       .map((t) => t.trim())
       .filter(Boolean);
+    const outlet = asString(
+      pickField(r, [/^outlet$/i, /^publication$/i, /^media$/i])
+    );
+    const isPress =
+      tags.some((t) => /^press$/i.test(t)) ||
+      Boolean(pressField) ||
+      Boolean(outlet);
 
     return {
       id: `sb_${id}`,
@@ -677,6 +684,14 @@ function mapContactRows(
         )
       ),
       user_id: null,
+      is_press: isPress,
+      beat: pressField,
+      outlet: outlet || organisation,
+      country: asString(pickField(r, [/^country$/i, /^market$/i, /^region$/i])),
+      preferred_topics: asString(
+        pickField(r, [/^preferred_?topics$/i, /^topics$/i])
+      ),
+      last_contacted_at: null,
       created_at: asIsoDate(r.created_at) || now,
       updated_at: asIsoDate(r.updated_at) || now,
     };

@@ -62,6 +62,12 @@ export async function POST(request: NextRequest) {
     tags,
     notes: body.notes ?? "",
     user_id: kind === "company" ? null : body.user_id ?? null,
+    is_press: Boolean(body.is_press),
+    beat: body.beat ?? "",
+    outlet: body.outlet ?? "",
+    country: body.country ?? "",
+    preferred_topics: body.preferred_topics ?? "",
+    last_contacted_at: body.last_contacted_at ?? null,
   });
   return jsonOk({ item }, { status: 201 });
 }

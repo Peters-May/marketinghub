@@ -59,6 +59,12 @@ export async function POST(request: NextRequest) {
       tags,
       notes: body.notes ?? "",
       user_id: user.id,
+      is_press: false,
+      beat: "",
+      outlet: "",
+      country: "",
+      preferred_topics: "",
+      last_contacted_at: null,
     });
     return jsonOk({ contact: item }, { status: 201 });
   }

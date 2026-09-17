@@ -3,6 +3,7 @@ import {
   createServiceClient,
   hasServiceRoleKey,
 } from "@/lib/supabase/admin";
+import { syncWhatsAppEnquiryToPortal } from "@/lib/sync/portal-enquiries";
 import type { WhatsAppEnquiry, WebEnquiryStatus } from "@/lib/types";
 
 const STATUSES: WebEnquiryStatus[] = ["new", "in_progress", "done"];
@@ -302,7 +303,10 @@ export async function upsertWhatsAppEnquiry(
     .single();
 
   if (error) throw new Error(error.message);
-  return rowToWhatsApp(data as Record<string, unknown>);
+  const enquiry = rowToWhatsApp(data as Record<string, unknown>);
+  // Hub remains SoT: store succeeds even when Portal sync fails.
+  void syncWhatsAppEnquiryToPortal(enquiry);
+  return enquiry;
 }
 
 const PAGE_SIZE = 1000;
@@ -478,7 +482,9 @@ export async function updateWhatsAppEnquiry(
 
   if (error) throw new Error(error.message);
   if (!data) return null;
-  return rowToWhatsApp(data as Record<string, unknown>);
+  const enquiry = rowToWhatsApp(data as Record<string, unknown>);
+  void syncWhatsAppEnquiryToPortal(enquiry);
+  return enquiry;
 }
 
 /** @deprecated Prefer updateWhatsAppEnquiry({ id, status }) */

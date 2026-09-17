@@ -26,6 +26,11 @@ const emptyForm = {
   tags: "",
   notes: "",
   user_id: "",
+  is_press: false,
+  beat: "",
+  outlet: "",
+  country: "",
+  preferred_topics: "",
 };
 
 type ContactForm = typeof emptyForm;
@@ -43,6 +48,11 @@ function toForm(c: Contact): ContactForm {
     tags: c.tags.join(", "),
     notes: c.notes,
     user_id: c.user_id ?? "",
+    is_press: Boolean(c.is_press),
+    beat: c.beat ?? "",
+    outlet: c.outlet ?? "",
+    country: c.country ?? "",
+    preferred_topics: c.preferred_topics ?? "",
   };
 }
 
@@ -125,6 +135,10 @@ export function ContactsClient({ initial }: { initial: Contact[] }) {
           c.email,
           c.website,
           c.services,
+          c.outlet,
+          c.beat,
+          c.country,
+          c.preferred_topics,
           c.tags.join(" "),
           plainTextFromHtml(c.notes),
           c.user_id ? userById.get(c.user_id)?.full_name ?? "" : "",
@@ -151,6 +165,11 @@ export function ContactsClient({ initial }: { initial: Contact[] }) {
           ? form.organisation.trim() || form.name.trim()
           : form.organisation,
         user_id: isCompany(form.kind) ? null : form.user_id || null,
+        is_press: form.is_press,
+        beat: form.beat,
+        outlet: form.outlet,
+        country: form.country,
+        preferred_topics: form.preferred_topics,
       }),
     });
     setShowForm(false);
@@ -192,6 +211,11 @@ export function ContactsClient({ initial }: { initial: Contact[] }) {
             tags: parseTags(edit.tags),
             notes: edit.notes,
             user_id: isCompany(edit.kind) ? null : edit.user_id || null,
+            is_press: edit.is_press,
+            beat: edit.beat,
+            outlet: edit.outlet,
+            country: edit.country,
+            preferred_topics: edit.preferred_topics,
           },
         }),
       });
@@ -465,6 +489,26 @@ export function ContactsClient({ initial }: { initial: Contact[] }) {
                     )}
                   </dd>
                 </div>
+                {selected.is_press ? (
+                  <>
+                    <div>
+                      <dt className="label !mb-0.5">Press</dt>
+                      <dd>Yes</dd>
+                    </div>
+                    <div>
+                      <dt className="label !mb-0.5">Outlet</dt>
+                      <dd>{selected.outlet || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="label !mb-0.5">Beat</dt>
+                      <dd>{selected.beat || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="label !mb-0.5">Country</dt>
+                      <dd>{selected.country || "—"}</dd>
+                    </div>
+                  </>
+                ) : null}
                 {isCompany(selected.kind) ? null : (
                   <div>
                     <dt className="label !mb-0.5">Linked hub user</dt>
@@ -664,6 +708,55 @@ function ContactFields({
           onChange={(e) => onChange({ ...form, phone: e.target.value })}
         />
       </div>
+      <div className="md:col-span-2 flex items-center gap-2 pt-1">
+        <input
+          id="contact-is-press"
+          type="checkbox"
+          checked={form.is_press}
+          onChange={(e) => onChange({ ...form, is_press: e.target.checked })}
+        />
+        <label htmlFor="contact-is-press" className="text-sm text-brand">
+          Press / media contact
+        </label>
+      </div>
+      {form.is_press ? (
+        <>
+          <div>
+            <label className="label">Outlet</label>
+            <input
+              className="field"
+              value={form.outlet}
+              onChange={(e) => onChange({ ...form, outlet: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label">Beat</label>
+            <input
+              className="field"
+              value={form.beat}
+              onChange={(e) => onChange({ ...form, beat: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label">Country</label>
+            <input
+              className="field"
+              value={form.country}
+              onChange={(e) => onChange({ ...form, country: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label">Preferred topics</label>
+            <input
+              className="field"
+              value={form.preferred_topics}
+              onChange={(e) =>
+                onChange({ ...form, preferred_topics: e.target.value })
+              }
+            />
+          </div>
+        </>
+      ) : null}
       <div className={company ? "md:col-span-2" : undefined}>
         <label className="label">
           {company ? "Tags (e.g. vendor, printer, merch)" : "Tags (comma-separated)"}

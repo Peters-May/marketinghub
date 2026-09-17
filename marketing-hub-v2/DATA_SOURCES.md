@@ -2,6 +2,12 @@
 
 Keep the UI simple. Pull from the **tidy** Core Data tables only.
 
+## Enquiries (web + WhatsApp)
+
+- **Web:** WordPress Quote Builder webhook → Hub `web_enquiries` (SoT). With `PORTAL_BASE_URL` + `PORTAL_ENQUIRY_SYNC_SECRET`, Hub forwards the same payload to Portal. See [`docs/PORTAL_ENQUIRY_SYNC.md`](docs/PORTAL_ENQUIRY_SYNC.md).
+- **WhatsApp:** ChatGPT MCP → Hub `whatsapp_enquiries` (SoT); mirrored to Portal as `whatsapp:hub:WA-###`.
+- Point WP/PMQB at Hub only — do not dual-send to Portal.
+
 ## Canonical sources
 
 | Hub module | Use this Supabase table | Do not use |

@@ -12,6 +12,7 @@ import {
   Library,
   KeyRound,
   MessageSquarePlus,
+  Megaphone,
   Settings,
   Sparkles,
   Users,
@@ -54,6 +55,12 @@ export const STAFF_NAV: NavItem[] = [
     description: "Social calendar (scheduled & published) — full pipeline in Admin view",
     icon: Clapperboard,
     member: true,
+  },
+  {
+    href: "/app/pr",
+    label: "PR",
+    description: "Press contacts, media lists, pitches, coverage — admin only",
+    icon: Megaphone,
   },
   {
     href: "/app/tasks",

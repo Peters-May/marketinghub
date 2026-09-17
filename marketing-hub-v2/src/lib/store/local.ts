@@ -131,6 +131,12 @@ function migrateContacts(
     website: item.website ?? "",
     services: item.services ?? "",
     user_id: item.user_id ?? null,
+    is_press: Boolean(item.is_press),
+    beat: item.beat ?? "",
+    outlet: item.outlet ?? "",
+    country: item.country ?? "",
+    preferred_topics: item.preferred_topics ?? "",
+    last_contacted_at: item.last_contacted_at ?? null,
   }));
 }
 
@@ -213,6 +219,13 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       budgetLines
     ),
     budget_meta: budgetMeta,
+    media_lists: store.media_lists ?? seed.media_lists ?? [],
+    pr_pitches: store.pr_pitches ?? seed.pr_pitches ?? [],
+    pr_coverage: store.pr_coverage ?? seed.pr_coverage ?? [],
+    pr_monitor_queries:
+      store.pr_monitor_queries ?? seed.pr_monitor_queries ?? [],
+    pr_monitor_mentions:
+      store.pr_monitor_mentions ?? seed.pr_monitor_mentions ?? [],
   };
   return syncThemeIdsOntoContent(base);
 }
@@ -270,7 +283,12 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     store.field_extras === undefined ||
     !store.budget_lines ||
     !store.budget_payments ||
-    !store.budget_meta
+    !store.budget_meta ||
+    !store.media_lists ||
+    !store.pr_pitches ||
+    !store.pr_coverage ||
+    !store.pr_monitor_queries ||
+    !store.pr_monitor_mentions
   );
 }
 
