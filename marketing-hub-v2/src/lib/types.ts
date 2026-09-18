@@ -760,6 +760,31 @@ export type HubStoredFieldDef = {
 
 export type HubFieldExtras = Partial<Record<string, HubStoredFieldDef[]>>;
 
+/** Public newsroom content / SEO / branding settings (admin-managed). */
+export type NewsroomSettings = {
+  /** Display title — e.g. "Peters & May News" (max 150). */
+  title: string;
+  /** Interface language for the newsroom. */
+  language: "en" | "pl";
+  /** Homepage welcome / greetings blurb. */
+  homepage_greetings: string;
+  /** Longer about / description (optional). */
+  description: string;
+  /** SEO title for search engines. */
+  seo_title: string;
+  /** Comma-separated SEO keywords. */
+  seo_keywords: string;
+  /** Meta description (aim ≤150 chars). */
+  seo_description: string;
+  /** Theme accent hex (defaults to brand P&M Blue). */
+  theme_color: string;
+  /** Logo URL for public newsroom header. */
+  logo_url: string;
+  /** Hero / background image URL. */
+  background_url: string;
+  updated_at: string;
+};
+
 export type HubStore = {
   events: EventItem[];
   /** Per-user RSVP rows for Events. */
@@ -809,4 +834,6 @@ export type HubStore = {
   pr_monitor_queries: PrMonitorQuery[];
   /** Monitoring inbox mentions. */
   pr_monitor_mentions: PrMonitorMention[];
+  /** Public newsroom configuration. */
+  newsroom_settings: NewsroomSettings;
 };

@@ -6,6 +6,7 @@ import type {
   Contact,
   ContentItem,
   MediaList,
+  NewsroomSettings,
   PrCoverage,
   PrMonitorMention,
   PrMonitorQuery,
@@ -24,22 +25,70 @@ import {
 } from "@/lib/pr/pitch-eml";
 import { plainTextFromHtml } from "@/lib/plain-text";
 
+export type PrSection =
+  | "contacts"
+  | "database"
+  | "lists"
+  | "releases"
+  | "emails"
+  | "pitches"
+  | "coverage"
+  | "monitor"
+  | "monitoring"
+  | "newsroom"
+  | "reporting"
+  | "statistics";
+
 type TabId =
   | "contacts"
   | "lists"
   | "releases"
   | "pitches"
   | "coverage"
-  | "monitor";
+  | "monitor"
+  | "newsroom"
+  | "reporting"
+  | "statistics";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "contacts", label: "Press contacts" },
   { id: "lists", label: "Media lists" },
   { id: "releases", label: "Releases" },
-  { id: "pitches", label: "Pitches" },
+  { id: "pitches", label: "Emails / pitches" },
   { id: "coverage", label: "Coverage" },
   { id: "monitor", label: "Monitoring" },
+  { id: "newsroom", label: "Newsroom" },
+  { id: "reporting", label: "Reporting" },
+  { id: "statistics", label: "Statistics" },
 ];
+
+function sectionToTab(section?: PrSection | null): TabId {
+  switch (section) {
+    case "database":
+    case "contacts":
+      return "contacts";
+    case "lists":
+      return "lists";
+    case "releases":
+      return "releases";
+    case "emails":
+    case "pitches":
+      return "pitches";
+    case "coverage":
+      return "coverage";
+    case "monitor":
+    case "monitoring":
+      return "monitor";
+    case "newsroom":
+      return "newsroom";
+    case "reporting":
+      return "reporting";
+    case "statistics":
+      return "statistics";
+    default:
+      return "contacts";
+  }
+}
 
 type Props = {
   initialContacts: Contact[];
@@ -49,7 +98,9 @@ type Props = {
   initialContent: ContentItem[];
   initialQueries: PrMonitorQuery[];
   initialMentions: PrMonitorMention[];
+  initialNewsroom: NewsroomSettings;
   newsApiConfigured: boolean;
+  initialSection?: PrSection | null;
 };
 
 function isPressRelease(c: ContentItem): boolean {
@@ -72,12 +123,14 @@ export function PrClient({
   initialContent,
   initialQueries,
   initialMentions,
+  initialNewsroom,
   newsApiConfigured: initialNewsApi,
+  initialSection,
 }: Props) {
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
 
-  const [tab, setTab] = useState<TabId>("contacts");
+  const [tab, setTab] = useState<TabId>(() => sectionToTab(initialSection));
   const [contacts, setContacts] = useState(initialContacts);
   const [lists, setLists] = useState(initialLists);
   const [pitches, setPitches] = useState(initialPitches);
@@ -85,10 +138,22 @@ export function PrClient({
   const [content, setContent] = useState(initialContent);
   const [queries, setQueries] = useState(initialQueries);
   const [mentions, setMentions] = useState(initialMentions);
+  const [newsroom, setNewsroom] = useState(initialNewsroom);
   const [newsApiConfigured, setNewsApiConfigured] = useState(initialNewsApi);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  const [newsroomForm, setNewsroomForm] = useState({
+    title: initialNewsroom.title,
+    language: initialNewsroom.language,
+    homepage_greetings: initialNewsroom.homepage_greetings,
+    description: initialNewsroom.description,
+    seo_title: initialNewsroom.seo_title,
+    seo_keywords: initialNewsroom.seo_keywords,
+    seo_description: initialNewsroom.seo_description,
+    theme_color: initialNewsroom.theme_color,
+  });
 
   const [contactForm, setContactForm] = useState({
     name: "",
@@ -130,13 +195,14 @@ export function PrClient({
   });
 
   const refreshAll = useCallback(async () => {
-    const [c, l, p, cov, cont, mon] = await Promise.all([
+    const [c, l, p, cov, cont, mon, nr] = await Promise.all([
       fetch("/api/contacts").then((r) => r.json()),
       fetch("/api/pr/media-lists").then((r) => r.json()),
       fetch("/api/pr/pitches").then((r) => r.json()),
       fetch("/api/pr/coverage").then((r) => r.json()),
       fetch("/api/content").then((r) => r.json()),
       fetch("/api/pr/monitor").then((r) => r.json()),
+      fetch("/api/pr/newsroom").then((r) => r.json()),
     ]);
     setContacts(c.contacts ?? []);
     setLists(l.media_lists ?? []);
@@ -146,6 +212,19 @@ export function PrClient({
     setQueries(mon.queries ?? []);
     setMentions(mon.mentions ?? []);
     setNewsApiConfigured(Boolean(mon.news_api_configured));
+    if (nr.settings) {
+      setNewsroom(nr.settings);
+      setNewsroomForm({
+        title: nr.settings.title,
+        language: nr.settings.language,
+        homepage_greetings: nr.settings.homepage_greetings,
+        description: nr.settings.description,
+        seo_title: nr.settings.seo_title,
+        seo_keywords: nr.settings.seo_keywords,
+        seo_description: nr.settings.seo_description,
+        theme_color: nr.settings.theme_color,
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -440,19 +519,47 @@ export function PrClient({
     await refreshAll();
   }
 
+  async function saveNewsroom() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/pr/newsroom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patch: newsroomForm }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save newsroom");
+      setNewsroom(data.settings);
+      setMessage("Newsroom settings saved.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="PR"
-        description="Press contacts, media lists, releases, Outlook pitches, coverage, and monitoring — replacing Prowly inside the Hub."
+        description="Press contacts, media lists, releases, Outlook pitches, coverage, and monitoring."
         actions={
-          <Link
-            href="/newsroom"
-            target="_blank"
-            className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
-          >
-            Open newsroom
-          </Link>
+          <>
+            <Link
+              href="/app/pr"
+              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
+            >
+              PR home
+            </Link>
+            <Link
+              href="/newsroom"
+              target="_blank"
+              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
+            >
+              Open newsroom
+            </Link>
+          </>
         }
       />
 
@@ -1134,6 +1241,217 @@ export function PrClient({
                   ))
               )}
             </ul>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "newsroom" ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="surface-card space-y-4 p-5">
+            <div>
+              <h2 className="font-display text-xl text-brand">
+                Newsroom&apos;s information
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                Change your newsroom title to describe its purpose. Select the
+                interface language, add a description and a home page welcome
+                message.
+              </p>
+            </div>
+            <label className="block text-sm">
+              <span className="text-muted">
+                Newsroom title (required) · {newsroomForm.title.length}/150
+              </span>
+              <input
+                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                maxLength={150}
+                value={newsroomForm.title}
+                onChange={(e) =>
+                  setNewsroomForm((f) => ({ ...f, title: e.target.value }))
+                }
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Language</span>
+              <select
+                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                value={newsroomForm.language}
+                onChange={(e) =>
+                  setNewsroomForm((f) => ({
+                    ...f,
+                    language: e.target.value === "pl" ? "pl" : "en",
+                  }))
+                }
+              >
+                <option value="en">English</option>
+                <option value="pl">Polish</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Homepage greetings</span>
+              <textarea
+                className="mt-1 h-28 w-full rounded-md border border-brand/15 px-3 py-2"
+                value={newsroomForm.homepage_greetings}
+                onChange={(e) =>
+                  setNewsroomForm((f) => ({
+                    ...f,
+                    homepage_greetings: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">About / description</span>
+              <textarea
+                className="mt-1 h-28 w-full rounded-md border border-brand/15 px-3 py-2"
+                value={newsroomForm.description}
+                onChange={(e) =>
+                  setNewsroomForm((f) => ({
+                    ...f,
+                    description: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <button
+              type="button"
+              disabled={busy || !newsroomForm.title.trim()}
+              onClick={() => void saveNewsroom()}
+              className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save newsroom information
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div className="surface-card space-y-3 p-5">
+              <h2 className="font-display text-lg text-brand">SEO &amp; Analytics</h2>
+              <label className="block text-sm">
+                <span className="text-muted">SEO title</span>
+                <input
+                  className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                  value={newsroomForm.seo_title}
+                  onChange={(e) =>
+                    setNewsroomForm((f) => ({ ...f, seo_title: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">SEO keywords</span>
+                <input
+                  className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                  value={newsroomForm.seo_keywords}
+                  onChange={(e) =>
+                    setNewsroomForm((f) => ({
+                      ...f,
+                      seo_keywords: e.target.value,
+                    }))
+                  }
+                />
+                <span className="mt-1 block text-xs text-muted">
+                  Separate keywords with commas.
+                </span>
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">
+                  Description for search engines ·{" "}
+                  {newsroomForm.seo_description.length}/150
+                </span>
+                <textarea
+                  className="mt-1 h-24 w-full rounded-md border border-brand/15 px-3 py-2"
+                  maxLength={150}
+                  value={newsroomForm.seo_description}
+                  onChange={(e) =>
+                    setNewsroomForm((f) => ({
+                      ...f,
+                      seo_description: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-muted">Theme colour</span>
+                <input
+                  type="color"
+                  className="mt-1 h-10 w-20 cursor-pointer rounded border border-brand/15"
+                  value={newsroomForm.theme_color || "#007DC5"}
+                  onChange={(e) =>
+                    setNewsroomForm((f) => ({
+                      ...f,
+                      theme_color: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div className="surface-card p-5 text-sm text-muted">
+              <p>
+                Public page:{" "}
+                <Link href="/newsroom" className="text-accent underline" target="_blank">
+                  /newsroom
+                </Link>
+              </p>
+              <p className="mt-2">
+                Current title: <strong className="text-brand">{newsroom.title}</strong>
+              </p>
+              <p className="mt-1">
+                Published releases on the site:{" "}
+                {releases.filter((r) => r.status === "published").length}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "reporting" ? (
+        <EmptyState
+          title="Reporting — coming soon"
+          description="Interactive coverage reports (clips, pitch activity, share of voice) will land here after enough coverage data is logged. Use Coverage and Monitoring for now."
+          action={
+            <button
+              type="button"
+              className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+              onClick={() => setTab("coverage")}
+            >
+              Open coverage
+            </button>
+          }
+        />
+      ) : null}
+
+      {tab === "statistics" ? (
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Lightweight overview of Hub PR activity. Open/click tracking for
+            Outlook pitches is not available yet.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "Press contacts", value: pressContacts.length },
+              { label: "Media lists", value: lists.length },
+              { label: "Pitch drafts", value: pitches.length },
+              { label: "Coverage clips", value: coverage.length },
+              {
+                label: "Published releases",
+                value: releases.filter((r) => r.status === "published").length,
+              },
+              {
+                label: "Monitor queries",
+                value: queries.length,
+              },
+              {
+                label: "New mentions",
+                value: mentions.filter((m) => m.status === "new").length,
+              },
+              {
+                label: "Exported pitches",
+                value: pitches.filter((p) => p.status === "exported").length,
+              },
+            ].map((s) => (
+              <div key={s.label} className="surface-card px-4 py-3">
+                <div className="font-display text-2xl text-brand">{s.value}</div>
+                <div className="text-xs text-muted">{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

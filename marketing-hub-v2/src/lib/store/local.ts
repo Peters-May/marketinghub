@@ -26,6 +26,7 @@ import {
 import { allowDemoAuth } from "@/lib/auth/config";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { cache } from "react";
+import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 
 const DATA_DIR = getDataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
@@ -226,6 +227,9 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       store.pr_monitor_queries ?? seed.pr_monitor_queries ?? [],
     pr_monitor_mentions:
       store.pr_monitor_mentions ?? seed.pr_monitor_mentions ?? [],
+    newsroom_settings: normalizeNewsroomSettings(
+      store.newsroom_settings ?? seed.newsroom_settings
+    ),
   };
   return syncThemeIdsOntoContent(base);
 }
@@ -288,7 +292,8 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.pr_pitches ||
     !store.pr_coverage ||
     !store.pr_monitor_queries ||
-    !store.pr_monitor_mentions
+    !store.pr_monitor_mentions ||
+    !store.newsroom_settings
   );
 }
 

@@ -46,7 +46,9 @@ import type {
   PrMonitorQuery,
   PrMonitorMention,
   PrMonitorMentionStatus,
+  NewsroomSettings,
 } from "@/lib/types";
+import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 
 function nowIso() {
   return new Date().toISOString();
@@ -2174,4 +2176,24 @@ export async function listPublishedPressReleases() {
       const db = b.due_date || b.updated_at;
       return new Date(db).getTime() - new Date(da).getTime();
     });
+}
+
+export async function getNewsroomSettings(): Promise<NewsroomSettings> {
+  const store = await readStore();
+  return normalizeNewsroomSettings(store.newsroom_settings);
+}
+
+export async function updateNewsroomSettings(
+  patch: Partial<NewsroomSettings>
+): Promise<NewsroomSettings> {
+  let next: NewsroomSettings = normalizeNewsroomSettings(patch);
+  await updateStore((s) => {
+    next = normalizeNewsroomSettings({
+      ...s.newsroom_settings,
+      ...patch,
+      updated_at: nowIso(),
+    });
+    s.newsroom_settings = next;
+  });
+  return next;
 }

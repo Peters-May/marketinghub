@@ -1407,6 +1407,24 @@ export function createSeedStore(): HubStore {
       },
     ],
     pr_monitor_mentions: [],
+    newsroom_settings: {
+      title: "Peters & May News",
+      language: "en",
+      homepage_greetings:
+        "Welcome to our newsroom, the latest updates, stories and insights from Peters & May.",
+      description:
+        "Peters & May is a global specialist in bespoke logistics. This newsroom shares press releases, expert insights and media contacts for journalists.",
+      seo_title:
+        "Peters & May Newsroom | Global Yacht Transport, Freight Forwarding & Marine Logistics",
+      seo_keywords:
+        "Peters & May, yacht transport, boat shipping, marine logistics, freight forwarding",
+      seo_description:
+        "Latest news and insights from Peters & May, covering yacht transport, freight forwarding, commercial marine logistics and project cargo.",
+      theme_color: "#007DC5",
+      logo_url: "",
+      background_url: "",
+      updated_at: now,
+    },
   };
 }
 
