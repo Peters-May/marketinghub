@@ -43,6 +43,11 @@ export async function POST(request: NextRequest) {
     name: String(body.name ?? "Untitled list").trim() || "Untitled list",
     description: String(body.description ?? ""),
     contact_ids: contactIds,
+    list_kind:
+      body.list_kind === "marketing" || body.list_kind === "mixed"
+        ? body.list_kind
+        : "press",
+    source: String(body.source ?? "manual"),
   });
   return jsonOk({ item }, { status: 201 });
 }

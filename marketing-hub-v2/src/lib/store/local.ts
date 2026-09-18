@@ -138,6 +138,12 @@ function migrateContacts(
     country: item.country ?? "",
     preferred_topics: item.preferred_topics ?? "",
     last_contacted_at: item.last_contacted_at ?? null,
+    marketing_consent:
+      item.marketing_consent === true
+        ? true
+        : item.marketing_consent === false
+          ? false
+          : null,
   }));
 }
 

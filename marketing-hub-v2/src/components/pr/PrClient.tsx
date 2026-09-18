@@ -16,14 +16,8 @@ import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
-import {
-  applyPitchMerge,
-  buildEml,
-  downloadEmlBlob,
-  isPressContact,
-  mailtoHref,
-} from "@/lib/pr/pitch-eml";
-import { plainTextFromHtml } from "@/lib/plain-text";
+import { isPressContact } from "@/lib/pr/pitch-eml";
+import { EmailsClient } from "@/components/pr/emails/EmailsClient";
 
 export type PrSection =
   | "contacts"
@@ -54,7 +48,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "contacts", label: "Press contacts" },
   { id: "lists", label: "Media lists" },
   { id: "releases", label: "Releases" },
-  { id: "pitches", label: "Emails / pitches" },
+  { id: "pitches", label: "Emails" },
   { id: "coverage", label: "Coverage" },
   { id: "monitor", label: "Monitoring" },
   { id: "newsroom", label: "Newsroom" },
@@ -101,6 +95,7 @@ type Props = {
   initialNewsroom: NewsroomSettings;
   newsApiConfigured: boolean;
   initialSection?: PrSection | null;
+  prefillContentId?: string | null;
 };
 
 function isPressRelease(c: ContentItem): boolean {
@@ -126,6 +121,7 @@ export function PrClient({
   initialNewsroom,
   newsApiConfigured: initialNewsApi,
   initialSection,
+  prefillContentId = null,
 }: Props) {
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
@@ -164,21 +160,17 @@ export function PrClient({
     country: "",
     role: "",
     preferred_topics: "",
+    marketing_consent: false,
   });
   const [csvText, setCsvText] = useState("");
   const [importListId, setImportListId] = useState("");
 
-  const [listForm, setListForm] = useState({ name: "", description: "" });
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
-
-  const [pitchForm, setPitchForm] = useState({
-    title: "",
-    subject: "Pitch from Peters & May",
-    body: "Dear {{name}},\n\nI thought this might interest {{outlet}}.\n\nBest regards,\nMarketing\nPeters & May",
-    media_list_id: "",
-    content_id: "",
+  const [listForm, setListForm] = useState({
+    name: "",
+    description: "",
+    list_kind: "press" as "press" | "marketing" | "mixed",
   });
-  const [selectedPitchId, setSelectedPitchId] = useState<string | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
   const [clipForm, setClipForm] = useState({
     title: "",
@@ -258,12 +250,6 @@ export function PrClient({
   );
 
   const selectedList = lists.find((l) => l.id === selectedListId) ?? null;
-  const selectedPitch = pitches.find((p) => p.id === selectedPitchId) ?? null;
-
-  const contactById = useMemo(() => {
-    const m = new Map(contacts.map((c) => [c.id, c]));
-    return m;
-  }, [contacts]);
 
   async function createPressContact() {
     setBusy(true);
@@ -274,6 +260,7 @@ export function PrClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...contactForm,
+          marketing_consent: contactForm.marketing_consent ? true : null,
           is_press: true,
           tags: ["Press"],
           kind: "person",
@@ -289,6 +276,7 @@ export function PrClient({
         country: "",
         role: "",
         preferred_topics: "",
+        marketing_consent: false,
       });
       await refreshAll();
       setMessage("Press contact added.");
@@ -334,7 +322,7 @@ export function PrClient({
         body: JSON.stringify(listForm),
       });
       if (!res.ok) throw new Error("Could not create list");
-      setListForm({ name: "", description: "" });
+      setListForm({ name: "", description: "", list_kind: "press" });
       await refreshAll();
     } finally {
       setBusy(false);
@@ -358,81 +346,6 @@ export function PrClient({
       }),
     });
     await refreshAll();
-  }
-
-  async function createPitch() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/pr/pitches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...pitchForm,
-          media_list_id: pitchForm.media_list_id || null,
-          content_id: pitchForm.content_id || null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not create pitch");
-      setSelectedPitchId(data.item?.id ?? null);
-      await refreshAll();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function resolvePitchRecipients(pitch: PrPitch): Contact[] {
-    const ids = new Set(pitch.recipient_ids);
-    if (pitch.media_list_id) {
-      const list = lists.find((l) => l.id === pitch.media_list_id);
-      list?.contact_ids.forEach((id) => ids.add(id));
-    }
-    return Array.from(ids)
-      .map((id) => contactById.get(id))
-      .filter((c): c is Contact => Boolean(c));
-  }
-
-  async function exportPitchOutlook(mode: "bcc" | "per_contact") {
-    if (!selectedPitch) return;
-    const recipients = resolvePitchRecipients(selectedPitch);
-    if (!recipients.length) {
-      setMessage("Add recipients via a media list first.");
-      return;
-    }
-
-    if (mode === "bcc") {
-      const emails = recipients.map((c) => c.email).filter(Boolean);
-      const first = recipients[0];
-      const subject = applyPitchMerge(selectedPitch.subject, first);
-      const body = applyPitchMerge(selectedPitch.body, first);
-      const eml = buildEml({
-        to: [],
-        bcc: emails,
-        subject,
-        body,
-      });
-      downloadEmlBlob(selectedPitch.title || "pitch", eml);
-    } else {
-      for (const c of recipients) {
-        if (!c.email) continue;
-        const subject = applyPitchMerge(selectedPitch.subject, c);
-        const body = applyPitchMerge(selectedPitch.body, c);
-        const eml = buildEml({
-          to: [c.email],
-          subject,
-          body,
-        });
-        downloadEmlBlob(`${selectedPitch.title}-${c.name}`, eml);
-      }
-    }
-
-    await fetch("/api/pr/pitches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark_exported", id: selectedPitch.id }),
-    });
-    await refreshAll();
-    setMessage("Downloaded .eml for Outlook. Open the file to send.");
   }
 
   async function createClip() {
@@ -624,6 +537,21 @@ export function PrClient({
                   />
                 </label>
               ))}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={contactForm.marketing_consent}
+                  onChange={(e) =>
+                    setContactForm((f) => ({
+                      ...f,
+                      marketing_consent: e.target.checked,
+                    }))
+                  }
+                />
+                <span className="text-muted">
+                  Marketing email consent (for HubSpot lists)
+                </span>
+              </label>
               <button
                 type="button"
                 disabled={busy || !contactForm.name.trim()}
@@ -740,6 +668,26 @@ export function PrClient({
                   setListForm((f) => ({ ...f, description: e.target.value }))
                 }
               />
+              <label className="block text-sm">
+                <span className="text-muted">List kind</span>
+                <select
+                  className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                  value={listForm.list_kind}
+                  onChange={(e) =>
+                    setListForm((f) => ({
+                      ...f,
+                      list_kind: e.target.value as
+                        | "press"
+                        | "marketing"
+                        | "mixed",
+                    }))
+                  }
+                >
+                  <option value="press">Press (journalists)</option>
+                  <option value="marketing">Marketing (HubSpot)</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </label>
               <button
                 type="button"
                 disabled={busy || !listForm.name.trim()}
@@ -764,7 +712,7 @@ export function PrClient({
                   >
                     <div className="font-medium text-brand">{l.name}</div>
                     <div className="text-xs text-muted">
-                      {l.contact_ids.length} contact
+                      {l.list_kind || "press"} · {l.contact_ids.length} contact
                       {l.contact_ids.length === 1 ? "" : "s"}
                     </div>
                   </button>
@@ -881,12 +829,20 @@ export function PrClient({
                       {r.status} · {r.category || r.content_type}
                     </div>
                   </div>
-                  <Link
-                    href="/app/content"
-                    className="text-sm text-accent underline"
-                  >
-                    Edit in Content
-                  </Link>
+                  <div className="flex flex-wrap gap-3">
+                    <Link
+                      href={`/app/pr/emails?content_id=${encodeURIComponent(r.id)}`}
+                      className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+                    >
+                      Pitch the story
+                    </Link>
+                    <Link
+                      href="/app/content"
+                      className="text-sm text-accent underline self-center"
+                    >
+                      Edit in Content
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -895,156 +851,14 @@ export function PrClient({
       ) : null}
 
       {tab === "pitches" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="surface-card space-y-3 p-4">
-            <h2 className="font-display text-lg text-brand">New pitch</h2>
-            <p className="text-xs text-muted">
-              Merge fields: {"{{name}}"}, {"{{outlet}}"}, {"{{organisation}}"},{" "}
-              {"{{email}}"}, {"{{beat}}"}, {"{{country}}"}. Download .eml and
-              open in Outlook to send — Hub does not send mail.
-            </p>
-            <input
-              className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-              placeholder="Internal title"
-              value={pitchForm.title}
-              onChange={(e) =>
-                setPitchForm((f) => ({ ...f, title: e.target.value }))
-              }
-            />
-            <input
-              className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-              placeholder="Email subject"
-              value={pitchForm.subject}
-              onChange={(e) =>
-                setPitchForm((f) => ({ ...f, subject: e.target.value }))
-              }
-            />
-            <textarea
-              className="h-40 w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-              value={pitchForm.body}
-              onChange={(e) =>
-                setPitchForm((f) => ({ ...f, body: e.target.value }))
-              }
-            />
-            <label className="block text-sm">
-              <span className="text-muted">Media list</span>
-              <select
-                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                value={pitchForm.media_list_id}
-                onChange={(e) =>
-                  setPitchForm((f) => ({
-                    ...f,
-                    media_list_id: e.target.value,
-                  }))
-                }
-              >
-                <option value="">—</option>
-                {lists.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-muted">Linked release (optional)</span>
-              <select
-                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                value={pitchForm.content_id}
-                onChange={(e) =>
-                  setPitchForm((f) => ({ ...f, content_id: e.target.value }))
-                }
-              >
-                <option value="">—</option>
-                {releases.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={busy || !pitchForm.title.trim()}
-              onClick={() => void createPitch()}
-              className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Save pitch
-            </button>
-          </div>
-          <div className="space-y-3">
-            <ul className="space-y-2">
-              {pitches.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPitchId(p.id)}
-                    className={cn(
-                      "w-full rounded-xl border px-4 py-3 text-left",
-                      selectedPitchId === p.id
-                        ? "border-accent bg-accent-soft"
-                        : "border-brand/10 bg-white"
-                    )}
-                  >
-                    <div className="font-medium text-brand">{p.title}</div>
-                    <div className="text-xs text-muted">
-                      {p.status}
-                      {p.exported_at
-                        ? ` · exported ${p.exported_at.slice(0, 10)}`
-                        : ""}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {selectedPitch ? (
-              <div className="surface-card space-y-3 p-4">
-                <h3 className="font-display text-lg text-brand">
-                  {selectedPitch.title}
-                </h3>
-                <p className="text-sm text-muted">{selectedPitch.subject}</p>
-                <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-mist p-3 text-xs">
-                  {plainTextFromHtml(selectedPitch.body)}
-                </pre>
-                <p className="text-xs text-muted">
-                  Recipients: {resolvePitchRecipients(selectedPitch).length}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void exportPitchOutlook("bcc")}
-                    className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                  >
-                    Download .eml (BCC all)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void exportPitchOutlook("per_contact")}
-                    className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand"
-                  >
-                    Download one .eml each
-                  </button>
-                  {(() => {
-                    const first = resolvePitchRecipients(selectedPitch)[0];
-                    if (!first?.email) return null;
-                    return (
-                      <a
-                        className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand"
-                        href={mailtoHref(
-                          first.email,
-                          applyPitchMerge(selectedPitch.subject, first),
-                          applyPitchMerge(selectedPitch.body, first)
-                        )}
-                      >
-                        Open mailto (first)
-                      </a>
-                    );
-                  })()}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <EmailsClient
+          initialPitches={pitches}
+          initialLists={lists}
+          initialContacts={contacts}
+          initialContent={content}
+          prefillContentId={prefillContentId}
+          onListsChanged={() => void refreshAll()}
+        />
       ) : null}
 
       {tab === "coverage" ? (

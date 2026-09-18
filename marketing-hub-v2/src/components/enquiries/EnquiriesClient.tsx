@@ -739,6 +739,8 @@ export function EnquiriesClient({
   const [saving, setSaving] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [showSourceUpdate, setShowSourceUpdate] = useState(false);
+  const [listHint, setListHint] = useState("");
+
 
   useEffect(() => {
     try {
@@ -901,9 +903,72 @@ export function EnquiriesClient({
     }
   }
 
+  async function addEnquiryToMarketingList(e: HubEnquiry) {
+    if (!e.customer_email?.trim()) {
+      setListHint("Enquiry has no email address.");
+      return;
+    }
+    setSaving(true);
+    setListHint("");
+    try {
+      const contactRes = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: e.customer_name || e.customer_email,
+          email: e.customer_email,
+          organisation: e.company || "",
+          country: e.customer_country || "",
+          kind: "person",
+          marketing_consent: true,
+          tags: ["Enquiry", "Marketing"],
+          notes: `From enquiry ${e.id}`,
+        }),
+      });
+      const contactData = await contactRes.json();
+      if (!contactRes.ok) {
+        throw new Error(contactData.error || "Could not create contact");
+      }
+      const contactId = contactData.item?.id as string | undefined;
+      const listsRes = await fetch("/api/pr/media-lists");
+      const listsData = await listsRes.json();
+      const marketingList =
+        (listsData.media_lists ?? []).find(
+          (l: { list_kind?: string; name?: string }) =>
+            l.list_kind === "marketing"
+        ) ?? null;
+      if (contactId && marketingList) {
+        const ids = Array.from(
+          new Set([...(marketingList.contact_ids || []), contactId])
+        );
+        await fetch("/api/pr/media-lists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: marketingList.id,
+            patch: { contact_ids: ids },
+          }),
+        });
+        setListHint(
+          `Added to marketing list “${marketingList.name}”. Open Emails to draft.`
+        );
+      } else {
+        setListHint(
+          "Contact saved with marketing consent. Create a marketing list in PR → Media lists."
+        );
+      }
+    } catch (err) {
+      setListHint(err instanceof Error ? err.message : "Could not add contact");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function closeDrawer() {
     setSelected(null);
     setShowRaw(false);
+    setListHint("");
   }
 
   const detail = selected ? buildDetailSections(selected) : null;
@@ -1513,6 +1578,26 @@ export function EnquiriesClient({
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
                       Test
                     </span>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {selected.marketing_emails_consent ? (
+                <div className="space-y-2 rounded-lg border border-brand/10 bg-mist/50 p-3">
+                  <p className="text-xs text-muted">
+                    This enquiry opted in to marketing emails. Add them to a
+                    Hub marketing list for HubSpot export.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    className="rounded-lg bg-brand px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                    onClick={() => void addEnquiryToMarketingList(selected)}
+                  >
+                    Add to marketing list
+                  </button>
+                  {listHint ? (
+                    <p className="text-xs text-brand">{listHint}</p>
                   ) : null}
                 </div>
               ) : null}

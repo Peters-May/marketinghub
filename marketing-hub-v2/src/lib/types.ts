@@ -181,41 +181,71 @@ export type Contact = {
   preferred_topics: string;
   /** Last outreach / contact date (ISO date or datetime). */
   last_contacted_at: string | null;
+  /**
+   * Marketing email opt-in. null = unknown; false = suppressed;
+   * true = may include on marketing lists / HubSpot export.
+   */
+  marketing_consent: boolean | null;
   created_at: string;
   updated_at: string;
 };
 
-/** Saved media list for PR targeting. */
+export type EmailListKind = "press" | "marketing" | "mixed";
+
+/** Saved list for PR or marketing email targeting (store key: media_lists). */
 export type MediaList = {
   id: string;
   name: string;
   description: string;
   /** Contact ids on this list. */
   contact_ids: string[];
+  /** Audience kind — press journalists vs marketing subscribers. */
+  list_kind: EmailListKind;
+  /** How the list was populated. */
+  source: string;
   created_at: string;
   updated_at: string;
 };
 
-export type PrPitchStatus = "draft" | "exported" | "archived";
+export type EmailChannel = "pr" | "marketing";
 
-/** Pitch drafted in Hub; sent via Outlook (.eml), not Hub mail. */
+export type PrPitchStatus =
+  | "draft"
+  | "exported"
+  | "sent_external"
+  | "archived";
+
+/** Email draft — PR pitch (Outlook) or marketing (HubSpot export). Store: pr_pitches. */
 export type PrPitch = {
   id: string;
   title: string;
   subject: string;
-  /** Plain or HTML body; merge fields {{name}}, {{outlet}}, {{organisation}}. */
+  /** Plain or HTML body; merge fields {{name}}, {{outlet}}, {{organisation}}, … */
   body: string;
   status: PrPitchStatus;
-  /** Optional media list used as recipient source. */
+  /** pr = Outlook export; marketing = HubSpot-oriented. */
+  channel: EmailChannel;
+  preview_text: string;
+  from_name: string;
+  from_email: string;
+  campaign_tag: string;
+  theme_id: string | null;
+  /** Optional legacy single list; prefer list_ids. */
   media_list_id: string | null;
-  /** Explicit recipient contact ids (overrides / supplements list). */
+  /** One or more media/email lists. */
+  list_ids: string[];
+  /** Explicit recipient contact ids (overrides / supplements lists). */
   recipient_ids: string[];
-  /** Linked press release (content id). */
+  /** Linked press release or newsletter (content id). */
   content_id: string | null;
   /** Linked event id. */
   event_id: string | null;
   /** When staff downloaded / opened for Outlook. */
   exported_at: string | null;
+  /** Optional HubSpot campaign / email deep link. */
+  hubspot_url: string;
+  /** Parent draft id when this is a follow-up. */
+  parent_draft_id: string | null;
   notes: string;
   created_by: string;
   created_at: string;

@@ -169,6 +169,7 @@ export async function POST(request: NextRequest) {
         notes: "",
         user_id: null,
         last_contacted_at: null,
+        marketing_consent: null,
         ...pressFields,
       });
       byEmail.set(email || item.id, item);

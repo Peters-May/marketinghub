@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       country: "",
       preferred_topics: "",
       last_contacted_at: null,
+      marketing_consent: null,
     });
     return jsonOk({ contact: item }, { status: 201 });
   }

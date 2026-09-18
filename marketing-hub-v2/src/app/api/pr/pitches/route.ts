@@ -6,7 +6,7 @@ import {
   listPrPitches,
   updatePrPitch,
 } from "@/lib/data/repos";
-import type { PrPitch } from "@/lib/types";
+import type { EmailChannel, PrPitch, PrPitchStatus } from "@/lib/types";
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -44,20 +44,72 @@ export async function POST(request: NextRequest) {
     return jsonOk({ item: updated });
   }
 
+  if (action === "mark_sent_external") {
+    const updated = await updatePrPitch(body.id, {
+      status: "sent_external",
+      exported_at: new Date().toISOString(),
+      hubspot_url: body.hubspot_url
+        ? String(body.hubspot_url)
+        : undefined,
+    });
+    if (!updated) return jsonError("Not found", 404);
+    return jsonOk({ item: updated });
+  }
+
+  if (action === "follow_up") {
+    const pitches = await listPrPitches();
+    const parent = pitches.find((p) => p.id === body.id);
+    if (!parent) return jsonError("Not found", 404);
+    const {
+      id: _id,
+      created_at: _created,
+      updated_at: _updated,
+      ...rest
+    } = parent;
+    const item = await createPrPitch({
+      ...rest,
+      title: `Follow-up: ${parent.title}`,
+      subject: parent.subject.startsWith("Re:")
+        ? parent.subject
+        : `Re: ${parent.subject}`,
+      status: "draft",
+      exported_at: null,
+      parent_draft_id: parent.id,
+      created_by: user?.full_name || user?.email || "Staff",
+    });
+    return jsonOk({ item }, { status: 201 });
+  }
+
   const recipientIds = Array.isArray(body.recipient_ids)
     ? body.recipient_ids.map(String)
     : [];
+  const listIds = Array.isArray(body.list_ids)
+    ? body.list_ids.map(String)
+    : body.media_list_id
+      ? [String(body.media_list_id)]
+      : [];
+  const channel: EmailChannel =
+    body.channel === "marketing" ? "marketing" : "pr";
 
   const item = await createPrPitch({
-    title: String(body.title ?? "Untitled pitch").trim() || "Untitled pitch",
+    title: String(body.title ?? "Untitled email").trim() || "Untitled email",
     subject: String(body.subject ?? ""),
     body: String(body.body ?? ""),
-    status: "draft",
-    media_list_id: body.media_list_id || null,
+    status: "draft" as PrPitchStatus,
+    channel,
+    preview_text: String(body.preview_text ?? ""),
+    from_name: String(body.from_name ?? "Peters & May Marketing"),
+    from_email: String(body.from_email ?? "marketing@petersandmay.com"),
+    campaign_tag: String(body.campaign_tag ?? ""),
+    theme_id: body.theme_id || null,
+    media_list_id: listIds[0] || null,
+    list_ids: listIds,
     recipient_ids: recipientIds,
     content_id: body.content_id || null,
     event_id: body.event_id || null,
     exported_at: null,
+    hubspot_url: String(body.hubspot_url ?? ""),
+    parent_draft_id: body.parent_draft_id || null,
     notes: String(body.notes ?? ""),
     created_by: user?.full_name || user?.email || "Staff",
   });

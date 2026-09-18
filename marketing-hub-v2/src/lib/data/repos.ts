@@ -361,6 +361,12 @@ function normalizeContact(c: Contact): Contact {
     country: c.country ?? "",
     preferred_topics: c.preferred_topics ?? "",
     last_contacted_at: c.last_contacted_at ?? null,
+    marketing_consent:
+      c.marketing_consent === true
+        ? true
+        : c.marketing_consent === false
+          ? false
+          : null,
   };
 }
 
@@ -464,6 +470,7 @@ export async function ensureContactForUser(input: {
     country: "",
     preferred_topics: "",
     last_contacted_at: null,
+    marketing_consent: null,
   });
 }
 
@@ -482,6 +489,12 @@ export async function createContact(
     country: input.country ?? "",
     preferred_topics: input.preferred_topics ?? "",
     last_contacted_at: input.last_contacted_at ?? null,
+    marketing_consent:
+      input.marketing_consent === true
+        ? true
+        : input.marketing_consent === false
+          ? false
+          : null,
     id: uid("ctc"),
     created_at: nowIso(),
     updated_at: nowIso(),
@@ -1878,23 +1891,72 @@ export async function deleteBudgetPayment(id: string) {
 
 // —— PR module (media lists, pitches, coverage, monitoring) ——
 
+function normalizeMediaList(list: MediaList): MediaList {
+  const kind =
+    list.list_kind === "marketing" || list.list_kind === "mixed"
+      ? list.list_kind
+      : "press";
+  return {
+    ...list,
+    contact_ids: Array.isArray(list.contact_ids) ? list.contact_ids : [],
+    list_kind: kind,
+    source: list.source ?? "",
+  };
+}
+
+function normalizePrPitch(p: PrPitch): PrPitch {
+  const listIds = Array.isArray(p.list_ids)
+    ? p.list_ids
+    : p.media_list_id
+      ? [p.media_list_id]
+      : [];
+  const status =
+    p.status === "exported" ||
+    p.status === "sent_external" ||
+    p.status === "archived"
+      ? p.status
+      : "draft";
+  return {
+    ...p,
+    status,
+    channel: p.channel === "marketing" ? "marketing" : "pr",
+    preview_text: p.preview_text ?? "",
+    from_name: p.from_name ?? "Peters & May Marketing",
+    from_email: p.from_email ?? "marketing@petersandmay.com",
+    campaign_tag: p.campaign_tag ?? "",
+    theme_id: p.theme_id ?? null,
+    media_list_id: p.media_list_id ?? listIds[0] ?? null,
+    list_ids: listIds,
+    recipient_ids: Array.isArray(p.recipient_ids) ? p.recipient_ids : [],
+    content_id: p.content_id ?? null,
+    event_id: p.event_id ?? null,
+    exported_at: p.exported_at ?? null,
+    hubspot_url: p.hubspot_url ?? "",
+    parent_draft_id: p.parent_draft_id ?? null,
+    notes: p.notes ?? "",
+    created_by: p.created_by ?? "",
+  };
+}
+
 export async function listMediaLists() {
   const store = await readStore();
-  return [...(store.media_lists ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  return [...(store.media_lists ?? [])]
+    .map(normalizeMediaList)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function createMediaList(
   input: Omit<MediaList, "id" | "created_at" | "updated_at">
 ) {
-  const item: MediaList = {
+  const item = normalizeMediaList({
     ...input,
     contact_ids: Array.isArray(input.contact_ids) ? input.contact_ids : [],
+    list_kind: input.list_kind ?? "press",
+    source: input.source ?? "",
     id: uid("ml"),
     created_at: nowIso(),
     updated_at: nowIso(),
-  };
+  });
   await updateStore((s) => {
     if (!s.media_lists) s.media_lists = [];
     s.media_lists.push(item);
@@ -1908,15 +1970,15 @@ export async function updateMediaList(id: string, patch: Partial<MediaList>) {
     if (!s.media_lists) s.media_lists = [];
     const idx = s.media_lists.findIndex((x) => x.id === id);
     if (idx === -1) return;
-    s.media_lists[idx] = {
-      ...s.media_lists[idx],
+    s.media_lists[idx] = normalizeMediaList({
+      ...normalizeMediaList(s.media_lists[idx]),
       ...patch,
       id,
       contact_ids: Array.isArray(patch.contact_ids)
         ? patch.contact_ids
         : s.media_lists[idx].contact_ids,
       updated_at: nowIso(),
-    };
+    });
     updated = s.media_lists[idx];
   });
   return updated;
@@ -1930,29 +1992,47 @@ export async function deleteMediaList(id: string) {
 
 export async function listPrPitches() {
   const store = await readStore();
-  return [...(store.pr_pitches ?? [])].sort(
-    (a, b) =>
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
+  return [...(store.pr_pitches ?? [])]
+    .map(normalizePrPitch)
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
 }
 
 export async function createPrPitch(
   input: Omit<PrPitch, "id" | "created_at" | "updated_at">
 ) {
-  const item: PrPitch = {
+  const listIds = Array.isArray(input.list_ids)
+    ? input.list_ids
+    : input.media_list_id
+      ? [input.media_list_id]
+      : [];
+  const item = normalizePrPitch({
     ...input,
     status: (input.status as PrPitchStatus) || "draft",
-    media_list_id: input.media_list_id ?? null,
+    channel: input.channel === "marketing" ? "marketing" : "pr",
+    preview_text: input.preview_text ?? "",
+    from_name: input.from_name ?? "Peters & May Marketing",
+    from_email: input.from_email ?? "marketing@petersandmay.com",
+    campaign_tag: input.campaign_tag ?? "",
+    theme_id: input.theme_id ?? null,
+    media_list_id: input.media_list_id ?? listIds[0] ?? null,
+    list_ids: listIds,
     recipient_ids: Array.isArray(input.recipient_ids)
       ? input.recipient_ids
       : [],
     content_id: input.content_id ?? null,
     event_id: input.event_id ?? null,
     exported_at: input.exported_at ?? null,
+    hubspot_url: input.hubspot_url ?? "",
+    parent_draft_id: input.parent_draft_id ?? null,
+    notes: input.notes ?? "",
+    created_by: input.created_by ?? "",
     id: uid("pitch"),
     created_at: nowIso(),
     updated_at: nowIso(),
-  };
+  });
   await updateStore((s) => {
     if (!s.pr_pitches) s.pr_pitches = [];
     s.pr_pitches.push(item);
@@ -1966,12 +2046,12 @@ export async function updatePrPitch(id: string, patch: Partial<PrPitch>) {
     if (!s.pr_pitches) s.pr_pitches = [];
     const idx = s.pr_pitches.findIndex((x) => x.id === id);
     if (idx === -1) return;
-    s.pr_pitches[idx] = {
-      ...s.pr_pitches[idx],
+    s.pr_pitches[idx] = normalizePrPitch({
+      ...normalizePrPitch(s.pr_pitches[idx]),
       ...patch,
       id,
       updated_at: nowIso(),
-    };
+    });
     updated = s.pr_pitches[idx];
   });
   return updated;

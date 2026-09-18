@@ -32,8 +32,10 @@ const SECTIONS = new Set<PrSection>([
 
 export default async function PrSectionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ section: string }>;
+  searchParams: Promise<{ content_id?: string }>;
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
@@ -44,6 +46,9 @@ export default async function PrSectionPage({
   const { section: raw } = await params;
   const section = raw as PrSection;
   if (!SECTIONS.has(section)) notFound();
+
+  const qs = await searchParams;
+  const prefillContentId = qs.content_id?.trim() || null;
 
   const [
     contacts,
@@ -77,6 +82,7 @@ export default async function PrSectionPage({
       initialNewsroom={newsroom}
       newsApiConfigured={Boolean(process.env.NEWS_API_KEY?.trim())}
       initialSection={section}
+      prefillContentId={prefillContentId}
     />
   );
 }

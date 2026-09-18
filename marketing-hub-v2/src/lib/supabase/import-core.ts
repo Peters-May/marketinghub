@@ -692,6 +692,7 @@ function mapContactRows(
         pickField(r, [/^preferred_?topics$/i, /^topics$/i])
       ),
       last_contacted_at: null,
+      marketing_consent: null,
       created_at: asIsoDate(r.created_at) || now,
       updated_at: asIsoDate(r.updated_at) || now,
     };

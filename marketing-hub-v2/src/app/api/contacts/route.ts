@@ -68,6 +68,12 @@ export async function POST(request: NextRequest) {
     country: body.country ?? "",
     preferred_topics: body.preferred_topics ?? "",
     last_contacted_at: body.last_contacted_at ?? null,
+    marketing_consent:
+      body.marketing_consent === true
+        ? true
+        : body.marketing_consent === false
+          ? false
+          : null,
   });
   return jsonOk({ item }, { status: 201 });
 }
