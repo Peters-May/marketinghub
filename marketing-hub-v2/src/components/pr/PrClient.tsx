@@ -549,7 +549,7 @@ export function PrClient({
                   }
                 />
                 <span className="text-muted">
-                  Marketing email consent (for HubSpot lists)
+                  Marketing email consent (for marketing lists)
                 </span>
               </label>
               <button
@@ -684,7 +684,7 @@ export function PrClient({
                   }
                 >
                   <option value="press">Press (journalists)</option>
-                  <option value="marketing">Marketing (HubSpot)</option>
+                  <option value="marketing">Marketing</option>
                   <option value="mixed">Mixed</option>
                 </select>
               </label>

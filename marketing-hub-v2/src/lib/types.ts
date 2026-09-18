@@ -183,7 +183,7 @@ export type Contact = {
   last_contacted_at: string | null;
   /**
    * Marketing email opt-in. null = unknown; false = suppressed;
-   * true = may include on marketing lists / HubSpot export.
+   * true = may include on marketing lists / email export.
    */
   marketing_consent: boolean | null;
   created_at: string;
@@ -215,7 +215,7 @@ export type PrPitchStatus =
   | "sent_external"
   | "archived";
 
-/** Email draft — PR pitch (Outlook) or marketing (HubSpot export). Store: pr_pitches. */
+/** Email draft — PR or marketing outreach (Outlook export). Store: pr_pitches. */
 export type PrPitch = {
   id: string;
   title: string;
@@ -223,7 +223,7 @@ export type PrPitch = {
   /** Plain or HTML body; merge fields {{name}}, {{outlet}}, {{organisation}}, … */
   body: string;
   status: PrPitchStatus;
-  /** pr = Outlook export; marketing = HubSpot-oriented. */
+  /** Audience channel — both export via Outlook by default. */
   channel: EmailChannel;
   preview_text: string;
   from_name: string;
@@ -242,7 +242,7 @@ export type PrPitch = {
   event_id: string | null;
   /** When staff downloaded / opened for Outlook. */
   exported_at: string | null;
-  /** Optional HubSpot campaign / email deep link. */
+  /** Optional external tool deep link (legacy / unused in primary flow). */
   hubspot_url: string;
   /** Parent draft id when this is a follow-up. */
   parent_draft_id: string | null;

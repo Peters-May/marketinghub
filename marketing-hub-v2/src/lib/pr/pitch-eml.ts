@@ -127,7 +127,7 @@ export function hasMarketingConsent(c: Contact): boolean {
   return c.marketing_consent === true;
 }
 
-/** Build recipient CSV for HubSpot list upload. */
+/** Build recipient CSV for list export (Outlook BCC prep or external tools). */
 export function recipientsToCsv(
   contacts: Contact[],
   opts?: { requireMarketingConsent?: boolean }
@@ -164,8 +164,6 @@ export function downloadTextFile(filename: string, text: string, mime: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
-
-export const DEFAULT_HUBSPOT_URL = "https://app-eu1.hubspot.com/";
 
 export function insertNewsroomLink(body: string, baseUrl = ""): string {
   const link = `${baseUrl.replace(/\/$/, "")}/newsroom`;

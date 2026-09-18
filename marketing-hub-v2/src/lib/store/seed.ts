@@ -1415,7 +1415,7 @@ export function createSeedStore(): HubStore {
       {
         id: "ml_seed_marketing",
         name: "Marketing — newsletter",
-        description: "Marketing email list (HubSpot)",
+        description: "Marketing email list (consent required)",
         list_kind: "marketing",
         source: "seed",
         contact_ids: [],

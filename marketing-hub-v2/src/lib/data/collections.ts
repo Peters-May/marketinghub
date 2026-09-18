@@ -609,7 +609,7 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
   {
     key: "pr_pitches",
     label: "Emails",
-    description: "PR Outlook pitches and marketing HubSpot drafts",
+    description: "PR and marketing email drafts (Outlook export)",
     fields: [
       f("id", { type: "readonly", locked: true }),
       f("title"),
@@ -640,7 +640,7 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
       f("recipient_ids", { type: "tags", label: "Recipient IDs" }),
       f("content_id", { label: "Content ID" }),
       f("event_id", { label: "Event ID" }),
-      f("hubspot_url", { label: "HubSpot URL", type: "url" }),
+      f("hubspot_url", { label: "External tool URL", type: "url" }),
       f("parent_draft_id", { label: "Parent draft ID" }),
       f("theme_id", { label: "Theme ID" }),
       f("exported_at", { type: "readonly", label: "Exported at" }),

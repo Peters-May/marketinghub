@@ -8,7 +8,6 @@ export {
   hasMarketingConsent,
   recipientsToCsv,
   downloadTextFile,
-  DEFAULT_HUBSPOT_URL,
   MERGE_TOKEN_HELP,
   insertNewsroomLink,
   insertReleaseBlock,

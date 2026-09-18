@@ -17,7 +17,6 @@ import {
   buildEml,
   downloadEmlBlob,
   downloadTextFile,
-  DEFAULT_HUBSPOT_URL,
   hasMarketingConsent,
   insertNewsroomLink,
   insertReleaseBlock,
@@ -99,7 +98,7 @@ export function EmailsClient({
     campaign_tag: "",
     list_ids: [] as string[],
     content_id: "",
-    hubspot_url: DEFAULT_HUBSPOT_URL,
+    hubspot_url: "",
   });
 
   const refresh = useCallback(async () => {
@@ -240,7 +239,7 @@ export function EmailsClient({
       campaign_tag: "",
       list_ids: [],
       content_id: "",
-      hubspot_url: DEFAULT_HUBSPOT_URL,
+      hubspot_url: "",
     });
     setSelectedId(null);
     setStep("write");
@@ -370,7 +369,7 @@ export function EmailsClient({
     setMessage("Downloaded .eml for Outlook.");
   }
 
-  async function exportHubSpot() {
+  async function exportRecipientCsv() {
     let id = selectedId;
     if (!id) {
       await saveDraft();
@@ -381,36 +380,29 @@ export function EmailsClient({
       list_ids: form.list_ids,
       media_list_id: form.list_ids[0] || null,
       recipient_ids: [] as string[],
-      channel: "marketing" as const,
+      channel: form.channel,
     };
     const recipients = resolveRecipients(draft);
     if (!recipients.length) {
-      setMessage("No consented marketing recipients to export.");
+      setMessage(
+        form.channel === "marketing"
+          ? "No consented marketing recipients to export."
+          : "Add a list with contacts first."
+      );
       return;
     }
-    const csv = recipientsToCsv(recipients, { requireMarketingConsent: true });
-    downloadTextFile("hubspot-recipients.csv", csv, "text/csv");
-    const emails = recipients.map((c) => c.email).join("; ");
+    const csv = recipientsToCsv(recipients, {
+      requireMarketingConsent: form.channel === "marketing",
+    });
+    downloadTextFile("email-recipients.csv", csv, "text/csv");
+    const emails = recipients.map((c) => c.email).filter(Boolean).join("; ");
     try {
       await navigator.clipboard.writeText(emails);
     } catch {
       /* ignore */
     }
-    if (id) {
-      await fetch("/api/pr/pitches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "mark_sent_external",
-          id,
-          hubspot_url: form.hubspot_url || DEFAULT_HUBSPOT_URL,
-        }),
-      });
-      await refresh();
-    }
-    window.open(form.hubspot_url || DEFAULT_HUBSPOT_URL, "_blank");
     setMessage(
-      `CSV downloaded and ${recipients.length} emails copied. HubSpot opened — paste/import there to send.`
+      `CSV downloaded and ${recipients.length} emails copied. Use Outlook .eml to send, or paste elsewhere if needed.`
     );
   }
 
@@ -507,7 +499,7 @@ export function EmailsClient({
                 }
               >
                 <option value="pr">PR pitch (Outlook)</option>
-                <option value="marketing">Marketing (HubSpot)</option>
+                <option value="marketing">Marketing (Outlook)</option>
               </select>
             </label>
             <input
@@ -716,8 +708,9 @@ export function EmailsClient({
         {step === "export" ? (
           <div className="surface-card space-y-4 p-5">
             <p className="text-sm text-muted">
-              Hub does not send blasts. PR → Outlook .eml. Marketing → CSV +
-              HubSpot.
+              Hub does not send blasts. Download a .eml and open it in Outlook to
+              send — same path for PR and marketing. CSV is optional for
+              records or another tool.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -728,35 +721,30 @@ export function EmailsClient({
               >
                 Save draft
               </button>
-              {form.channel === "pr" ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void exportOutlook("bcc")}
-                    className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                  >
-                    Download .eml (BCC)
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void exportOutlook("each")}
-                    className="rounded-lg border border-brand/20 px-3 py-2 text-sm"
-                  >
-                    One .eml each
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void exportHubSpot()}
-                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                >
-                  Export CSV + open HubSpot
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void exportOutlook("bcc")}
+                className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+              >
+                Download .eml (BCC)
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void exportOutlook("each")}
+                className="rounded-lg border border-brand/20 px-3 py-2 text-sm"
+              >
+                One .eml each
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void exportRecipientCsv()}
+                className="rounded-lg border border-brand/20 px-3 py-2 text-sm"
+              >
+                Copy emails / CSV
+              </button>
             </div>
             <button
               type="button"
@@ -807,23 +795,20 @@ export function EmailsClient({
               >
                 Create follow-up
               </button>
-              {selected.channel === "pr" ? (
-                <button
-                  type="button"
-                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                  onClick={() => void exportOutlook("bcc")}
-                >
-                  Download .eml
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                  onClick={() => void exportHubSpot()}
-                >
-                  HubSpot export
-                </button>
-              )}
+              <button
+                type="button"
+                className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+                onClick={() => void exportOutlook("bcc")}
+              >
+                Download .eml
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-brand/20 px-3 py-2 text-sm"
+                onClick={() => void exportRecipientCsv()}
+              >
+                Copy emails / CSV
+              </button>
             </div>
           </div>
           <dl className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
@@ -874,8 +859,8 @@ export function EmailsClient({
         <div>
           <h2 className="font-display text-xl text-brand">Emails</h2>
           <p className="text-sm text-muted">
-            PR pitches (Outlook) and marketing drafts (HubSpot). Shared contacts
-            and lists.
+            PR pitches and marketing drafts — shared contacts and lists. Send
+            via Outlook (.eml); Hub never blast-sends.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -900,7 +885,7 @@ export function EmailsClient({
         {[
           { label: "Drafts", value: stats.drafts },
           { label: "Exported (Outlook)", value: stats.exported },
-          { label: "Sent external (HubSpot)", value: stats.sentExternal },
+          { label: "Sent external", value: stats.sentExternal },
           { label: "Updated (30 days)", value: stats.recent },
         ].map((s) => (
           <div key={s.label} className="surface-card px-4 py-3">
@@ -998,7 +983,7 @@ export function EmailsClient({
       {filtered.length === 0 ? (
         <EmptyState
           title="No emails yet"
-          description="Create a PR pitch for Outlook, or a marketing draft to export into HubSpot."
+          description="Create a PR pitch or marketing email, then download .eml for Outlook."
           action={
             <button
               type="button"

@@ -64,7 +64,7 @@ const CARDS: Card[] = [
     href: "/app/pr/emails",
     title: "Emails",
     description:
-      "Draft PR pitches for Outlook and marketing emails for HubSpot. Shared contacts, lists, and composer.",
+      "Draft PR and marketing emails with shared contacts and lists, then send via Outlook.",
     cta: "Open Emails",
     icon: Mail,
     status: "live",

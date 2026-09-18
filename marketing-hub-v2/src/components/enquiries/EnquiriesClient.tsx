@@ -1586,7 +1586,7 @@ export function EnquiriesClient({
                 <div className="space-y-2 rounded-lg border border-brand/10 bg-mist/50 p-3">
                   <p className="text-xs text-muted">
                     This enquiry opted in to marketing emails. Add them to a
-                    Hub marketing list for HubSpot export.
+                    Hub marketing list for outreach.
                   </p>
                   <button
                     type="button"
