@@ -49,6 +49,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
+import { createPersonContact } from "@/lib/contacts/create-person";
 
 const ATTENDANCE_OPTIONS: { value: EventAttendanceStatus; label: string }[] = [
   { value: "attending", label: "Attending" },
@@ -433,6 +434,22 @@ function EventFields({
   );
 }
 
+type NewContactDraft = {
+  name: string;
+  organisation: string;
+  role: string;
+  email: string;
+  phone: string;
+};
+
+const emptyNewContact = (name = ""): NewContactDraft => ({
+  name,
+  organisation: "",
+  role: "",
+  email: "",
+  phone: "",
+});
+
 function EventAttendeeManager({
   attending,
   contacts,
@@ -441,6 +458,7 @@ function EventAttendeeManager({
   currentUserId,
   saving,
   onAddContact,
+  onContactCreated,
   onRemove,
   className = "",
 }: {
@@ -451,10 +469,15 @@ function EventAttendeeManager({
   currentUserId: string | null;
   saving: boolean;
   onAddContact: (contactId: string) => void;
+  onContactCreated: (contact: Contact) => void;
   onRemove: (userId: string) => void;
   className?: string;
 }) {
   const [pick, setPick] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<NewContactDraft>(emptyNewContact);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const attendingIds = useMemo(() => {
     const ids = new Set(attending.map((a) => a.user_id));
@@ -484,6 +507,52 @@ function EventAttendeeManager({
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [contacts, attendingIds]);
+
+  function openCreateModal(name = "") {
+    setCreateForm(emptyNewContact(name.trim()));
+    setCreateError("");
+    setCreateOpen(true);
+  }
+
+  function closeCreateModal() {
+    if (createSaving) return;
+    setCreateOpen(false);
+    setCreateError("");
+  }
+
+  useEffect(() => {
+    if (!createOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (!createSaving) {
+        setCreateOpen(false);
+        setCreateError("");
+      }
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [createOpen, createSaving]);
+
+  async function saveNewContact() {
+    if (createSaving) return;
+    setCreateSaving(true);
+    setCreateError("");
+    try {
+      const item = await createPersonContact(createForm);
+      onContactCreated(item);
+      setCreateOpen(false);
+      setPick("");
+      onAddContact(item.id);
+    } catch (err) {
+      setCreateError(
+        err instanceof Error ? err.message : "Could not add this person"
+      );
+    } finally {
+      setCreateSaving(false);
+    }
+  }
 
   return (
     <div className={className}>
@@ -532,19 +601,157 @@ function EventAttendeeManager({
           <SearchSelect
             className="field"
             value={pick}
-            disabled={saving || !contactsLoaded}
+            disabled={saving || !contactsLoaded || createSaving}
             aria-label="Add someone attending"
             placeholder={
               contactsLoaded ? "Add someone…" : "Loading people…"
             }
+            searchPlaceholder="Search or add a person…"
             options={options}
-            noResultsLabel="No more people to add"
+            noResultsLabel="No matches — add them as a new contact"
+            allowCreate
+            createLabel={(name) => `Add “${name}” as a new contact…`}
+            onCreate={(name) => {
+              openCreateModal(name);
+            }}
             onChange={(contactId) => {
               if (!contactId) return;
               setPick("");
               onAddContact(contactId);
             }}
           />
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 md:left-sidebar"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-new-contact-title"
+          onClick={closeCreateModal}
+        >
+          <div
+            className="surface-card w-full max-w-md p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              id="event-new-contact-title"
+              className="font-display text-xl text-brand"
+            >
+              New contact
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              Add them to Contacts, then mark them attending this event.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="event-new-contact-name">
+                  Name
+                </label>
+                <input
+                  id="event-new-contact-name"
+                  className="field"
+                  autoFocus
+                  value={createForm.name}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, name: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void saveNewContact();
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="event-new-contact-org">
+                  Organisation
+                </label>
+                <input
+                  id="event-new-contact-org"
+                  className="field"
+                  value={createForm.organisation}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      organisation: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="event-new-contact-role">
+                  Role
+                </label>
+                <input
+                  id="event-new-contact-role"
+                  className="field"
+                  value={createForm.role}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, role: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="event-new-contact-email">
+                  Email
+                </label>
+                <input
+                  id="event-new-contact-email"
+                  className="field"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="event-new-contact-phone">
+                  Phone
+                </label>
+                <input
+                  id="event-new-contact-phone"
+                  className="field"
+                  value={createForm.phone}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      phone: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            {createError ? (
+              <p className="mt-3 text-sm text-[var(--danger)]" role="alert">
+                {createError}
+              </p>
+            ) : null}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={createSaving}
+                onClick={closeCreateModal}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={createSaving || !createForm.name.trim()}
+                onClick={() => void saveNewContact()}
+              >
+                {createSaving ? "Saving…" : "Save & add"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
@@ -1710,6 +1917,13 @@ export function EventsClient({
                     canManage={canManageAttendees}
                     currentUserId={currentUserId}
                     saving={attendanceSaving}
+                    onContactCreated={(contact) => {
+                      setPeopleContacts((prev) =>
+                        prev.some((c) => c.id === contact.id)
+                          ? prev
+                          : [...prev, contact]
+                      );
+                    }}
                     onAddContact={(contactId) =>
                       void addAttendeeFromContact(selected.id, contactId)
                     }
@@ -1889,6 +2103,13 @@ export function EventsClient({
               canManage={canManageAttendees}
               currentUserId={currentUserId}
               saving={attendanceSaving}
+              onContactCreated={(contact) => {
+                setPeopleContacts((prev) =>
+                  prev.some((c) => c.id === contact.id)
+                    ? prev
+                    : [...prev, contact]
+                );
+              }}
               onAddContact={(contactId) =>
                 void addAttendeeFromContact(editingId, contactId)
               }
