@@ -6,7 +6,6 @@ import {
   listMediaLists,
   listPrCoverage,
   listPrMonitorMentions,
-  listPrMonitorQueries,
   listPrPitches,
 } from "@/lib/data/repos";
 import { isPressContact } from "@/lib/pr/pitch-eml";

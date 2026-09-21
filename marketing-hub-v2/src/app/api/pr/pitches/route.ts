@@ -60,12 +60,11 @@ export async function POST(request: NextRequest) {
     const pitches = await listPrPitches();
     const parent = pitches.find((p) => p.id === body.id);
     if (!parent) return jsonError("Not found", 404);
-    const {
-      id: _id,
-      created_at: _created,
-      updated_at: _updated,
-      ...rest
-    } = parent;
+    const rest = Object.fromEntries(
+      Object.entries(parent).filter(
+        ([key]) => key !== "id" && key !== "created_at" && key !== "updated_at"
+      )
+    ) as Omit<PrPitch, "id" | "created_at" | "updated_at">;
     const item = await createPrPitch({
       ...rest,
       title: `Follow-up: ${parent.title}`,
