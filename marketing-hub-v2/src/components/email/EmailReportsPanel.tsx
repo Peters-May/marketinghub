@@ -36,7 +36,7 @@ const STATUS_LABEL: Record<EmailCampaign["status"], string> = {
   cancelled: "Cancelled",
 };
 
-export function EmailReportsPanel(_props: { campaigns: EmailCampaign[] }) {
+export function EmailReportsPanel() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [rollup, setRollup] = useState<Rollup | null>(null);

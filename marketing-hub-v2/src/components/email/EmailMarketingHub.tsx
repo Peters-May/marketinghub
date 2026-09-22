@@ -118,7 +118,7 @@ export function EmailMarketingHub({
         />
       ) : null}
 
-      {tab === "reports" ? <EmailReportsPanel campaigns={campaigns} /> : null}
+      {tab === "reports" ? <EmailReportsPanel /> : null}
     </div>
   );
 }
