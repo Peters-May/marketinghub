@@ -2,9 +2,16 @@ import {
   createWhatsAppHubEnquiry,
   listHubEnquiries,
   updateWhatsAppHubEnquiry,
+  whatsappToHubEnquiry,
 } from "@/lib/data/hub-enquiries";
-import type { WhatsAppEnquiryInput } from "@/lib/data/whatsapp-enquiries";
+import {
+  getWhatsAppEnquiry,
+  type WhatsAppEnquiryInput,
+} from "@/lib/data/whatsapp-enquiries";
 import type { EnquiryIntake, HubEnquiry } from "@/lib/types";
+
+/** Match listHubEnquiries ceiling — enough for a full calendar year of enquiries. */
+const MCP_ENQUIRY_FETCH_CAP = 20_000;
 
 export type EnquirySummary = {
   id: string;
@@ -135,16 +142,40 @@ export async function updateWhatsAppEnquiryFromMcp(
   return toSummary(item);
 }
 
+function enquiryYear(e: HubEnquiry): number | null {
+  const raw = e.sent_to_office_at ?? e.created_at ?? e.received_at;
+  const t = new Date(raw).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(t).getFullYear();
+}
+
 export async function listEnquiriesForMcp(input: {
   channel?: EnquiryIntake;
   include_test?: boolean;
+  /** Calendar year (default: current year). Pass null to skip year filter. */
+  year?: number | null;
+  /** Optional cap after year filter. Omit for all rows in scope. */
   limit?: number;
 }): Promise<EnquirySummary[]> {
-  const items = await listHubEnquiries({
+  const year =
+    input.year === null
+      ? null
+      : input.year ?? new Date().getFullYear();
+
+  let items = await listHubEnquiries({
     channel: input.channel,
     includeTest: Boolean(input.include_test),
-    limit: Math.min(Math.max(input.limit ?? 25, 1), 100),
   });
+
+  if (year != null) {
+    items = items.filter((e) => enquiryYear(e) === year);
+  }
+
+  if (input.limit != null) {
+    const limit = Math.min(Math.max(input.limit, 1), MCP_ENQUIRY_FETCH_CAP);
+    items = items.slice(0, limit);
+  }
+
   return items.map(toSummary);
 }
 
@@ -153,7 +184,23 @@ export async function getEnquiryForMcp(
 ): Promise<EnquirySummary | null> {
   const needle = id.trim();
   if (!needle) return null;
-  const items = await listEnquiriesForMcp({ include_test: true, limit: 100 });
+
+  const looksExternal = /^WA-/i.test(needle);
+  const direct = await getWhatsAppEnquiry(
+    looksExternal ? { external_id: needle } : { id: needle }
+  );
+  if (direct) return toSummary(whatsappToHubEnquiry(direct));
+
+  const alt = await getWhatsAppEnquiry(
+    looksExternal ? { id: needle } : { external_id: needle }
+  );
+  if (alt) return toSummary(whatsappToHubEnquiry(alt));
+
+  // Web / older rows: scan full store (not year-capped) so fetch always works.
+  const items = await listEnquiriesForMcp({
+    include_test: true,
+    year: null,
+  });
   return (
     items.find((item) => item.id === needle || item.external_id === needle) ??
     null

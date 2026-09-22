@@ -102,17 +102,22 @@ export function registerEnquiryMcpTools(server: McpServer) {
     {
       title: "Search enquiries",
       description:
-        "Search Marketing Hub WhatsApp enquiries by name, vessel, route, or WA-###. Use before fetch. Prefer create_whatsapp_enquiry to add a new tracker row.",
+        "Search Marketing Hub WhatsApp enquiries for a calendar year (default: current year) by name, vessel, route, or WA-###. Use before fetch.",
       annotations: readOnlyAnnotations,
       inputSchema: z.object({
         query: z.string().describe("Search name, vessel, route, or WA-###"),
+        year: z
+          .number()
+          .int()
+          .optional()
+          .describe("Calendar year to search (default: current year)"),
       }),
     },
-    async ({ query }) => {
+    async ({ query, year }) => {
       const q = query.trim().toLowerCase();
       const items = await listEnquiriesForMcp({
         channel: "whatsapp",
-        limit: 50,
+        year: year ?? new Date().getFullYear(),
       });
       const matches = q
         ? items.filter((item) =>
@@ -128,9 +133,9 @@ export function registerEnquiryMcpTools(server: McpServer) {
               .toLowerCase()
               .includes(q)
           )
-        : items.slice(0, 20);
+        : items;
       return jsonDocument({
-        results: matches.slice(0, 20).map((item) => {
+        results: matches.slice(0, 100).map((item) => {
           const id = item.external_id || item.id;
           const snippet = `${item.enquiry_type} ${item.collection_location} to ${item.delivery_location}`.trim();
           return {
@@ -223,11 +228,19 @@ export function registerEnquiryMcpTools(server: McpServer) {
     {
       title: "List enquiries",
       description:
-        "List Marketing Hub enquiries. Use channel whatsapp for the WhatsApp tracker.",
+        "List all Marketing Hub enquiries for a calendar year (default: current year). Use channel whatsapp for the WhatsApp tracker. Optional limit caps the result; omit limit to return the full year.",
       annotations: readOnlyAnnotations,
       inputSchema: z.object({
         channel: z.string().optional().describe("web or whatsapp"),
-        limit: z.number().optional().describe("Max rows, default 25"),
+        year: z
+          .number()
+          .int()
+          .optional()
+          .describe("Calendar year (default: current year)"),
+        limit: z
+          .number()
+          .optional()
+          .describe("Optional max rows; omit for all enquiries in the year"),
       }),
     },
     async (args) =>
@@ -237,6 +250,7 @@ export function registerEnquiryMcpTools(server: McpServer) {
             args.channel === "web" || args.channel === "whatsapp"
               ? args.channel
               : undefined,
+          year: args.year ?? new Date().getFullYear(),
           limit: args.limit,
         })
       )
