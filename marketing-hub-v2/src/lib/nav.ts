@@ -11,6 +11,7 @@ import {
   Inbox,
   Library,
   KeyRound,
+  Mail,
   MessageSquarePlus,
   Megaphone,
   Settings,
@@ -56,6 +57,13 @@ export const STAFF_NAV: NavItem[] = [
     label: "Content & Social",
     description: "Social calendar (scheduled & published) — full pipeline in Admin view",
     icon: Clapperboard,
+    member: true,
+  },
+  {
+    href: "/app/email",
+    label: "Email",
+    description: "E-shots, audiences, templates, and performance",
+    icon: Mail,
     member: true,
   },
   {

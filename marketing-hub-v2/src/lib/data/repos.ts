@@ -51,8 +51,28 @@ import type {
   PrMonitorMention,
   PrMonitorMentionStatus,
   NewsroomSettings,
+  EmailTemplate,
+  EmailAudience,
+  EmailAudienceFilter,
+  EmailCampaign,
+  EmailCampaignStatus,
+  EmailCampaignStats,
+  EmailSuppression,
+  EmailSuppressionReason,
+  EmailEvent,
+  EmailEventKind,
 } from "@/lib/types";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
+
+export const EMPTY_EMAIL_CAMPAIGN_STATS: EmailCampaignStats = {
+  recipients: 0,
+  delivered: 0,
+  opened: 0,
+  clicked: 0,
+  bounced: 0,
+  complained: 0,
+  unsubscribed: 0,
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -2271,4 +2291,468 @@ export async function updateNewsroomSettings(
     s.newsroom_settings = next;
   });
   return next;
+}
+
+function normalizeAudienceFilter(
+  filter?: Partial<EmailAudienceFilter> | null
+): EmailAudienceFilter {
+  return {
+    tags: Array.isArray(filter?.tags) ? filter!.tags.map(String) : [],
+    country: filter?.country ?? "",
+  };
+}
+
+function normalizeEmailStats(
+  stats?: Partial<EmailCampaignStats> | null
+): EmailCampaignStats {
+  return {
+    recipients: Number(stats?.recipients) || 0,
+    delivered: Number(stats?.delivered) || 0,
+    opened: Number(stats?.opened) || 0,
+    clicked: Number(stats?.clicked) || 0,
+    bounced: Number(stats?.bounced) || 0,
+    complained: Number(stats?.complained) || 0,
+    unsubscribed: Number(stats?.unsubscribed) || 0,
+  };
+}
+
+const EMAIL_CAMPAIGN_STATUSES: EmailCampaignStatus[] = [
+  "draft",
+  "scheduled",
+  "sending",
+  "sent",
+  "failed",
+  "cancelled",
+];
+
+function normalizeEmailCampaignStatus(
+  status: unknown
+): EmailCampaignStatus {
+  return EMAIL_CAMPAIGN_STATUSES.includes(status as EmailCampaignStatus)
+    ? (status as EmailCampaignStatus)
+    : "draft";
+}
+
+function normalizeEmailTemplate(
+  t: Partial<EmailTemplate> & { id: string }
+): EmailTemplate {
+  return {
+    id: t.id,
+    name: t.name ?? "Untitled template",
+    subject_default: t.subject_default ?? "",
+    preview_text_default: t.preview_text_default ?? "",
+    html_body: t.html_body ?? "",
+    created_at: t.created_at ?? nowIso(),
+    updated_at: t.updated_at ?? nowIso(),
+  };
+}
+
+function normalizeEmailAudience(
+  a: Partial<EmailAudience> & { id: string }
+): EmailAudience {
+  return {
+    id: a.id,
+    name: a.name ?? "Untitled audience",
+    description: a.description ?? "",
+    list_ids: Array.isArray(a.list_ids) ? a.list_ids : [],
+    contact_ids: Array.isArray(a.contact_ids) ? a.contact_ids : [],
+    filter: normalizeAudienceFilter(a.filter),
+    exclude_unsubscribed: a.exclude_unsubscribed !== false,
+    created_at: a.created_at ?? nowIso(),
+    updated_at: a.updated_at ?? nowIso(),
+  };
+}
+
+function normalizeEmailCampaign(
+  c: Partial<EmailCampaign> & { id: string }
+): EmailCampaign {
+  return {
+    id: c.id,
+    title: c.title ?? "Untitled campaign",
+    status: normalizeEmailCampaignStatus(c.status),
+    subject: c.subject ?? "",
+    preview_text: c.preview_text ?? "",
+    from_name: c.from_name ?? "Peters & May Marketing",
+    from_email: c.from_email ?? "marketing@petersandmay.com",
+    html_body: c.html_body ?? "",
+    template_id: c.template_id ?? null,
+    audience_id: c.audience_id ?? null,
+    list_ids: Array.isArray(c.list_ids) ? c.list_ids : [],
+    recipient_ids: Array.isArray(c.recipient_ids) ? c.recipient_ids : [],
+    brief: c.brief ?? "",
+    hubspot_url: c.hubspot_url ?? "",
+    theme_id: c.theme_id ?? null,
+    content_id: c.content_id ?? null,
+    scheduled_at: c.scheduled_at ?? null,
+    sent_at: c.sent_at ?? null,
+    stats: normalizeEmailStats(c.stats),
+    last_error: c.last_error ?? "",
+    created_by: c.created_by ?? "",
+    created_at: c.created_at ?? nowIso(),
+    updated_at: c.updated_at ?? nowIso(),
+  };
+}
+
+export async function listEmailTemplates() {
+  const store = await readStore();
+  return [...(store.email_templates ?? [])]
+    .map(normalizeEmailTemplate)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createEmailTemplate(
+  input: Omit<EmailTemplate, "id" | "created_at" | "updated_at">
+) {
+  const item = normalizeEmailTemplate({
+    ...input,
+    id: uid("etpl"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+  await updateStore((s) => {
+    if (!s.email_templates) s.email_templates = [];
+    s.email_templates.push(item);
+  });
+  return item;
+}
+
+export async function updateEmailTemplate(
+  id: string,
+  patch: Partial<EmailTemplate>
+): Promise<EmailTemplate | null> {
+  let updated: EmailTemplate | null = null;
+  await updateStore((s) => {
+    if (!s.email_templates) s.email_templates = [];
+    const idx = s.email_templates.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const next = normalizeEmailTemplate({
+      ...normalizeEmailTemplate(s.email_templates[idx]),
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    });
+    s.email_templates[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function deleteEmailTemplate(id: string) {
+  await updateStore((s) => {
+    s.email_templates = (s.email_templates ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listEmailAudiences() {
+  const store = await readStore();
+  return [...(store.email_audiences ?? [])]
+    .map(normalizeEmailAudience)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createEmailAudience(
+  input: Omit<EmailAudience, "id" | "created_at" | "updated_at">
+) {
+  const item = normalizeEmailAudience({
+    ...input,
+    list_ids: Array.isArray(input.list_ids) ? input.list_ids : [],
+    contact_ids: Array.isArray(input.contact_ids) ? input.contact_ids : [],
+    filter: normalizeAudienceFilter(input.filter),
+    exclude_unsubscribed: input.exclude_unsubscribed !== false,
+    id: uid("eaud"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+  await updateStore((s) => {
+    if (!s.email_audiences) s.email_audiences = [];
+    s.email_audiences.push(item);
+  });
+  return item;
+}
+
+export async function updateEmailAudience(
+  id: string,
+  patch: Partial<EmailAudience>
+): Promise<EmailAudience | null> {
+  let updated: EmailAudience | null = null;
+  await updateStore((s) => {
+    if (!s.email_audiences) s.email_audiences = [];
+    const idx = s.email_audiences.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailAudience(s.email_audiences[idx]);
+    const next = normalizeEmailAudience({
+      ...prev,
+      ...patch,
+      id,
+      list_ids: Array.isArray(patch.list_ids) ? patch.list_ids : prev.list_ids,
+      contact_ids: Array.isArray(patch.contact_ids)
+        ? patch.contact_ids
+        : prev.contact_ids,
+      filter: patch.filter
+        ? normalizeAudienceFilter(patch.filter)
+        : prev.filter,
+      updated_at: nowIso(),
+    });
+    s.email_audiences[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function deleteEmailAudience(id: string) {
+  await updateStore((s) => {
+    s.email_audiences = (s.email_audiences ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listEmailCampaigns() {
+  const store = await readStore();
+  return [...(store.email_campaigns ?? [])]
+    .map(normalizeEmailCampaign)
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+}
+
+export async function getEmailCampaign(id: string) {
+  const store = await readStore();
+  const found = (store.email_campaigns ?? []).find((x) => x.id === id);
+  return found ? normalizeEmailCampaign(found) : null;
+}
+
+export async function createEmailCampaign(
+  input: Omit<EmailCampaign, "id" | "created_at" | "updated_at" | "stats"> & {
+    stats?: EmailCampaignStats;
+  }
+) {
+  const item = normalizeEmailCampaign({
+    ...input,
+    status: normalizeEmailCampaignStatus(input.status),
+    list_ids: Array.isArray(input.list_ids) ? input.list_ids : [],
+    recipient_ids: Array.isArray(input.recipient_ids)
+      ? input.recipient_ids
+      : [],
+    stats: input.stats ?? EMPTY_EMAIL_CAMPAIGN_STATS,
+    id: uid("ecamp"),
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+  await updateStore((s) => {
+    if (!s.email_campaigns) s.email_campaigns = [];
+    s.email_campaigns.push(item);
+  });
+  return item;
+}
+
+export async function updateEmailCampaign(
+  id: string,
+  patch: Partial<EmailCampaign>
+): Promise<EmailCampaign | null> {
+  let updated: EmailCampaign | null = null;
+  await updateStore((s) => {
+    if (!s.email_campaigns) s.email_campaigns = [];
+    const idx = s.email_campaigns.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
+    const next = normalizeEmailCampaign({
+      ...prev,
+      ...patch,
+      id,
+      status:
+        patch.status !== undefined
+          ? normalizeEmailCampaignStatus(patch.status)
+          : prev.status,
+      list_ids: Array.isArray(patch.list_ids) ? patch.list_ids : prev.list_ids,
+      recipient_ids: Array.isArray(patch.recipient_ids)
+        ? patch.recipient_ids
+        : prev.recipient_ids,
+      stats: patch.stats
+        ? normalizeEmailStats(patch.stats)
+        : prev.stats,
+      updated_at: nowIso(),
+    });
+    s.email_campaigns[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function deleteEmailCampaign(id: string) {
+  await updateStore((s) => {
+    s.email_campaigns = (s.email_campaigns ?? []).filter((x) => x.id !== id);
+  });
+}
+
+export async function listEmailSuppressions() {
+  const store = await readStore();
+  return [...(store.email_suppressions ?? [])].sort((a, b) =>
+    a.email.localeCompare(b.email)
+  );
+}
+
+export async function findEmailSuppression(email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  const store = await readStore();
+  return (
+    (store.email_suppressions ?? []).find(
+      (s) => s.email.trim().toLowerCase() === normalized
+    ) ?? null
+  );
+}
+
+export async function addEmailSuppression(input: {
+  email: string;
+  reason: EmailSuppressionReason;
+  contact_id?: string | null;
+  campaign_id?: string | null;
+}) {
+  const email = input.email.trim().toLowerCase();
+  if (!email) return null;
+  const existing = await findEmailSuppression(email);
+  if (existing) return existing;
+  const item: EmailSuppression = {
+    id: uid("esup"),
+    email,
+    reason: input.reason,
+    contact_id: input.contact_id ?? null,
+    campaign_id: input.campaign_id ?? null,
+    created_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.email_suppressions) s.email_suppressions = [];
+    s.email_suppressions.push(item);
+  });
+  return item;
+}
+
+export async function listEmailEvents(campaignId?: string) {
+  const store = await readStore();
+  let rows = [...(store.email_events ?? [])];
+  if (campaignId) {
+    rows = rows.filter((e) => e.campaign_id === campaignId);
+  }
+  return rows.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
+export async function appendEmailEvent(input: {
+  campaign_id: string;
+  contact_id?: string | null;
+  email: string;
+  kind: EmailEventKind;
+  resend_message_id?: string;
+  meta?: string;
+}) {
+  const item: EmailEvent = {
+    id: uid("eevt"),
+    campaign_id: input.campaign_id,
+    contact_id: input.contact_id ?? null,
+    email: input.email.trim().toLowerCase(),
+    kind: input.kind,
+    resend_message_id: input.resend_message_id ?? "",
+    meta: input.meta ?? "",
+    created_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.email_events) s.email_events = [];
+    s.email_events.push(item);
+  });
+  return item;
+}
+
+export async function bumpEmailCampaignStat(
+  campaignId: string,
+  field: keyof EmailCampaignStats,
+  delta = 1
+) {
+  let updated: EmailCampaign | null = null;
+  await updateStore((s) => {
+    if (!s.email_campaigns) s.email_campaigns = [];
+    const idx = s.email_campaigns.findIndex((x) => x.id === campaignId);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
+    const stats = { ...prev.stats, [field]: (prev.stats[field] || 0) + delta };
+    s.email_campaigns[idx] = normalizeEmailCampaign({
+      ...prev,
+      stats,
+      updated_at: nowIso(),
+    });
+    updated = s.email_campaigns[idx];
+  });
+  return updated;
+}
+
+/**
+ * Resolve consented marketing recipients for a campaign / audience.
+ * Requires marketing_consent === true and a usable email; respects suppressions.
+ */
+export async function resolveEmailRecipients(opts: {
+  audienceId?: string | null;
+  listIds?: string[];
+  recipientIds?: string[];
+  excludeUnsubscribed?: boolean;
+}): Promise<Contact[]> {
+  const store = await readStore();
+  const contacts = store.contacts ?? [];
+  const lists = store.media_lists ?? [];
+  const suppressions = new Set(
+    (store.email_suppressions ?? []).map((s) => s.email.trim().toLowerCase())
+  );
+
+  const idSet = new Set<string>();
+  for (const id of opts.recipientIds ?? []) idSet.add(id);
+
+  let excludeUnsubscribed = opts.excludeUnsubscribed !== false;
+  let filter: EmailAudienceFilter = { tags: [], country: "" };
+
+  if (opts.audienceId) {
+    const audience = (store.email_audiences ?? []).find(
+      (a) => a.id === opts.audienceId
+    );
+    if (audience) {
+      excludeUnsubscribed = audience.exclude_unsubscribed !== false;
+      filter = normalizeAudienceFilter(audience.filter);
+      for (const id of audience.contact_ids ?? []) idSet.add(id);
+      for (const listId of audience.list_ids ?? []) {
+        const list = lists.find((l) => l.id === listId);
+        if (list) for (const cid of list.contact_ids ?? []) idSet.add(cid);
+      }
+    }
+  }
+
+  for (const listId of opts.listIds ?? []) {
+    const list = lists.find((l) => l.id === listId);
+    if (list) for (const cid of list.contact_ids ?? []) idSet.add(cid);
+  }
+
+  const out: Contact[] = [];
+  for (const id of idSet) {
+    const c = contacts.find((x) => x.id === id);
+    if (!c) continue;
+    const email = (c.email ?? "").trim().toLowerCase();
+    if (!email || !email.includes("@")) continue;
+    if (c.marketing_consent !== true) continue;
+    if (excludeUnsubscribed && suppressions.has(email)) continue;
+    if (filter.country.trim()) {
+      if (
+        (c.country ?? "").trim().toLowerCase() !==
+        filter.country.trim().toLowerCase()
+      ) {
+        continue;
+      }
+    }
+    if (filter.tags.length) {
+      const tags = (c.tags ?? []).map((t) => t.toLowerCase());
+      const ok = filter.tags.every((t) =>
+        tags.includes(t.trim().toLowerCase())
+      );
+      if (!ok) continue;
+    }
+    out.push(c);
+  }
+  return out;
 }

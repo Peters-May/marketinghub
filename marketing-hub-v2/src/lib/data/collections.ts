@@ -12,6 +12,9 @@ export type CollectionKey = Exclude<
   | "budget_lines"
   | "budget_payments"
   | "budget_meta"
+  | "email_suppressions"
+  | "email_events"
+  | "newsroom_settings"
 >;
 
 export type FieldType =
@@ -964,6 +967,81 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
         options: TASK_RELATED_TYPES,
       }),
       f("related_id", { label: "Linked record id" }),
+      f("created_at", { type: "readonly", locked: true }),
+      f("updated_at", { type: "readonly", locked: true }),
+    ],
+  },
+  {
+    key: "email_templates",
+    label: "Email templates",
+    description: "Reusable HTML templates for marketing e-shots",
+    fields: [
+      f("id", { type: "readonly", locked: true }),
+      f("name"),
+      f("subject_default", { label: "Default subject" }),
+      f("preview_text_default", { label: "Default preview text" }),
+      f("html_body", { type: "longtext", label: "HTML body" }),
+      f("created_at", { type: "readonly", locked: true }),
+      f("updated_at", { type: "readonly", locked: true }),
+    ],
+  },
+  {
+    key: "email_audiences",
+    label: "Email audiences",
+    description: "Marketing audiences built from lists and filters",
+    fields: [
+      f("id", { type: "readonly", locked: true }),
+      f("name"),
+      f("description", { type: "longtext" }),
+      f("list_ids", { type: "tags", label: "List IDs" }),
+      f("contact_ids", { type: "tags", label: "Contact IDs" }),
+      f("exclude_unsubscribed", {
+        type: "select",
+        label: "Exclude unsubscribed",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+      }),
+      f("created_at", { type: "readonly", locked: true }),
+      f("updated_at", { type: "readonly", locked: true }),
+    ],
+  },
+  {
+    key: "email_campaigns",
+    label: "Email campaigns",
+    description: "Marketing e-shots and newsletters (Hub send)",
+    fields: [
+      f("id", { type: "readonly", locked: true }),
+      f("title"),
+      f("status", {
+        type: "select",
+        options: [
+          { value: "draft", label: "Draft" },
+          { value: "scheduled", label: "Scheduled" },
+          { value: "sending", label: "Sending" },
+          { value: "sent", label: "Sent" },
+          { value: "failed", label: "Failed" },
+          { value: "cancelled", label: "Cancelled" },
+        ],
+      }),
+      f("subject"),
+      f("preview_text", { label: "Preview text" }),
+      f("from_name", { label: "From name" }),
+      f("from_email", { label: "From email", type: "email" }),
+      f("html_body", { type: "longtext", label: "HTML body" }),
+      f("template_id", { label: "Template ID" }),
+      f("audience_id", { label: "Audience ID" }),
+      f("list_ids", { type: "tags", label: "List IDs" }),
+      f("recipient_ids", { type: "tags", label: "Recipient IDs" }),
+      f("brief", { type: "longtext", label: "Brief" }),
+      f("hubspot_url", { label: "HubSpot URL", type: "url" }),
+      f("theme_id", { label: "Theme ID" }),
+      f("content_id", { label: "Content ID" }),
+      f("scheduled_at", { type: "datetime", label: "Scheduled at" }),
+      f("sent_at", { type: "datetime", label: "Sent at" }),
+      f("last_error", { label: "Last error" }),
+      f("created_by", { label: "Created by" }),
       f("created_at", { type: "readonly", locked: true }),
       f("updated_at", { type: "readonly", locked: true }),
     ],

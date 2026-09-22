@@ -1449,6 +1449,40 @@ export function createSeedStore(): HubStore {
       },
     ],
     pr_monitor_mentions: [],
+    email_templates: [
+      {
+        id: "etpl_seed_newsletter",
+        name: "Newsletter — simple",
+        subject_default: "Peters & May update",
+        preview_text_default: "News from Peters & May",
+        html_body: `<!DOCTYPE html>
+<html><body style="font-family: Archivo, Arial, sans-serif; color: #0B2545; max-width: 600px; margin: 0 auto; padding: 24px;">
+  <p>Hello {{name}},</p>
+  <p>Here is the latest from Peters & May.</p>
+  <p style="margin-top: 32px; font-size: 12px; color: #666;">
+    <a href="{{unsubscribe_url}}">Unsubscribe</a>
+  </p>
+</body></html>`,
+        created_at: now,
+        updated_at: now,
+      },
+    ],
+    email_audiences: [
+      {
+        id: "eaud_seed_newsletter",
+        name: "Newsletter audience",
+        description: "Marketing newsletter list (consent required)",
+        list_ids: ["ml_seed_marketing"],
+        contact_ids: [],
+        filter: { tags: [], country: "" },
+        exclude_unsubscribed: true,
+        created_at: now,
+        updated_at: now,
+      },
+    ],
+    email_campaigns: [],
+    email_suppressions: [],
+    email_events: [],
     newsroom_settings: {
       title: "Peters & May News",
       language: "en",

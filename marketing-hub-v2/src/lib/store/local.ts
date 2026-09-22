@@ -233,6 +233,12 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       store.pr_monitor_queries ?? seed.pr_monitor_queries ?? [],
     pr_monitor_mentions:
       store.pr_monitor_mentions ?? seed.pr_monitor_mentions ?? [],
+    email_templates: store.email_templates ?? seed.email_templates ?? [],
+    email_audiences: store.email_audiences ?? seed.email_audiences ?? [],
+    email_campaigns: store.email_campaigns ?? seed.email_campaigns ?? [],
+    email_suppressions:
+      store.email_suppressions ?? seed.email_suppressions ?? [],
+    email_events: store.email_events ?? seed.email_events ?? [],
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -299,6 +305,11 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.pr_coverage ||
     !store.pr_monitor_queries ||
     !store.pr_monitor_mentions ||
+    !store.email_templates ||
+    !store.email_audiences ||
+    !store.email_campaigns ||
+    !store.email_suppressions ||
+    !store.email_events ||
     !store.newsroom_settings
   );
 }

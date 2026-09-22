@@ -790,6 +790,117 @@ export type HubStoredFieldDef = {
 
 export type HubFieldExtras = Partial<Record<string, HubStoredFieldDef[]>>;
 
+/** Email marketing campaign lifecycle (Resend send). */
+export type EmailCampaignStatus =
+  | "draft"
+  | "scheduled"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "cancelled";
+
+export type EmailCampaignStats = {
+  recipients: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+  unsubscribed: number;
+};
+
+export type EmailTemplate = {
+  id: string;
+  name: string;
+  subject_default: string;
+  preview_text_default: string;
+  html_body: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailAudienceFilter = {
+  tags: string[];
+  country: string;
+};
+
+export type EmailAudience = {
+  id: string;
+  name: string;
+  description: string;
+  /** Media list ids (`list_kind` marketing preferred). */
+  list_ids: string[];
+  /** Extra contact ids beyond lists. */
+  contact_ids: string[];
+  filter: EmailAudienceFilter;
+  exclude_unsubscribed: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailCampaign = {
+  id: string;
+  title: string;
+  status: EmailCampaignStatus;
+  subject: string;
+  preview_text: string;
+  from_name: string;
+  from_email: string;
+  html_body: string;
+  template_id: string | null;
+  audience_id: string | null;
+  list_ids: string[];
+  recipient_ids: string[];
+  /** Planning notes / brief. */
+  brief: string;
+  /** Optional HubSpot CRM deep link. */
+  hubspot_url: string;
+  theme_id: string | null;
+  /** Linked newsletter / content item. */
+  content_id: string | null;
+  scheduled_at: string | null;
+  sent_at: string | null;
+  stats: EmailCampaignStats;
+  last_error: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailSuppressionReason =
+  | "unsubscribe"
+  | "bounce"
+  | "complaint";
+
+export type EmailSuppression = {
+  id: string;
+  email: string;
+  reason: EmailSuppressionReason;
+  contact_id: string | null;
+  campaign_id: string | null;
+  created_at: string;
+};
+
+export type EmailEventKind =
+  | "sent"
+  | "delivered"
+  | "opened"
+  | "clicked"
+  | "bounced"
+  | "complained"
+  | "unsubscribed";
+
+export type EmailEvent = {
+  id: string;
+  campaign_id: string;
+  contact_id: string | null;
+  email: string;
+  kind: EmailEventKind;
+  resend_message_id: string;
+  meta: string;
+  created_at: string;
+};
+
 /** Public newsroom content / SEO / branding settings (admin-managed). */
 export type NewsroomSettings = {
   /** Display title — e.g. "Peters & May News" (max 150). */
@@ -864,6 +975,16 @@ export type HubStore = {
   pr_monitor_queries: PrMonitorQuery[];
   /** Monitoring inbox mentions. */
   pr_monitor_mentions: PrMonitorMention[];
+  /** Email marketing templates. */
+  email_templates: EmailTemplate[];
+  /** Email marketing audiences. */
+  email_audiences: EmailAudience[];
+  /** Email marketing campaigns (Hub-native send). */
+  email_campaigns: EmailCampaign[];
+  /** Marketing email suppressions (unsub / bounce / complaint). */
+  email_suppressions: EmailSuppression[];
+  /** Delivery / engagement events from Resend webhooks. */
+  email_events: EmailEvent[];
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };
