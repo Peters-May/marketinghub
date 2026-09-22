@@ -91,9 +91,27 @@ function secretsMatch(provided: string, expected: string): boolean {
   }
 }
 
+/** Primary MCP key (ChatGPT OAuth client secret default). */
 export function getMcpApiKey(): string | null {
   const key = process.env.HUB_MCP_API_KEY?.trim();
   return key || null;
+}
+
+/** All static Bearer / x-hub-mcp-key values accepted for tool calls. */
+export function getMcpApiKeys(): string[] {
+  const keys = new Set<string>();
+  const primary = getMcpApiKey();
+  if (primary) keys.add(primary);
+  const grok = process.env.HUB_MCP_GROK_API_KEY?.trim();
+  if (grok) keys.add(grok);
+  const extra = process.env.HUB_MCP_API_KEYS?.trim();
+  if (extra) {
+    for (const part of extra.split(",")) {
+      const k = part.trim();
+      if (k) keys.add(k);
+    }
+  }
+  return [...keys];
 }
 
 export function getMcpOAuthClientId(): string {
@@ -266,9 +284,10 @@ export function verifyMcpAccessToken(
   const token = bearerToken.trim();
   if (!token) return null;
 
-  const apiKey = getMcpApiKey();
-  if (apiKey && secretsMatch(token, apiKey)) {
-    return { clientId: getMcpOAuthClientId(), scope: "mcp:tools" };
+  for (const apiKey of getMcpApiKeys()) {
+    if (secretsMatch(token, apiKey)) {
+      return { clientId: getMcpOAuthClientId(), scope: "mcp:tools" };
+    }
   }
 
   const payload = verifySignedToken(token);
@@ -290,6 +309,10 @@ export function isAllowedRedirectUri(redirectUri: string): boolean {
       host.endsWith(".openai.com") ||
       host === "claude.ai" ||
       host.endsWith(".claude.ai") ||
+      host === "grok.com" ||
+      host.endsWith(".grok.com") ||
+      host === "x.ai" ||
+      host.endsWith(".x.ai") ||
       host === "localhost"
     );
   } catch {
