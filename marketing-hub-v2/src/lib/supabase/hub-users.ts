@@ -1,21 +1,17 @@
 import type { User } from "@supabase/supabase-js";
 import { hasSupabaseConfig } from "@/lib/auth/config";
 import {
+  HUB_ACCESS_ROLE_ORDER,
+  normalizeHubAccessRole,
+} from "@/lib/auth/roles";
+import {
   createAdminClient,
   hasServiceRoleKey,
 } from "@/lib/supabase/admin";
 import type { HubAccessRole, HubUser } from "@/lib/types";
 
-const ROLES: HubAccessRole[] = ["admin", "member", "external"];
-
-export { hasServiceRoleKey };
-
-export function normalizeHubAccessRole(value: unknown): HubAccessRole {
-  const role = String(value ?? "").toLowerCase();
-  return ROLES.includes(role as HubAccessRole)
-    ? (role as HubAccessRole)
-    : "member";
-}
+export { hasServiceRoleKey, normalizeHubAccessRole };
+export { hubRoleToSessionRole } from "@/lib/auth/roles";
 
 /** Public app origin for Auth email redirectTo (must be allow-listed in Supabase). */
 export function getAppUrl() {
@@ -123,8 +119,8 @@ export async function listSupabaseHubUsers(): Promise<HubUser[]> {
   });
 
   return users.sort((a, b) => {
-    const order = { admin: 0, member: 1, external: 2 } as const;
-    const byRole = order[a.role] - order[b.role];
+    const byRole =
+      HUB_ACCESS_ROLE_ORDER[a.role] - HUB_ACCESS_ROLE_ORDER[b.role];
     if (byRole !== 0) return byRole;
     return a.full_name.localeCompare(b.full_name);
   });
@@ -504,10 +500,3 @@ export async function getProfileRoleForUser(
   }
 }
 
-export function hubRoleToSessionRole(
-  role: HubAccessRole
-): "admin" | "staff" | "media_guest" {
-  if (role === "admin") return "admin";
-  if (role === "external") return "media_guest";
-  return "staff";
-}

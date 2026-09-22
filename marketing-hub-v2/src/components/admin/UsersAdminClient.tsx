@@ -37,6 +37,16 @@ const ROLE_OPTIONS: {
     ],
   },
   {
+    value: "seo",
+    label: "SEO",
+    hint: "Enquiries only",
+    process: [
+      "Invite → they set a password from the email.",
+      "Sign in → land on Enquiries only (no other hub pages).",
+      "Use for Google Ads / SEO partners who need lead attribution.",
+    ],
+  },
+  {
     value: "external",
     label: "External",
     hint: "Outside / media access",
@@ -51,6 +61,7 @@ const ROLE_OPTIONS: {
 function roleBadgeClass(role: HubAccessRole) {
   if (role === "admin") return "bg-brand/10 text-brand";
   if (role === "member") return "bg-accent-soft text-brand";
+  if (role === "seo") return "bg-sky-50 text-sky-900";
   return "bg-sand text-muted";
 }
 
@@ -169,6 +180,7 @@ export function UsersAdminClient({
     return {
       admin: items.filter((u) => u.role === "admin").length,
       member: items.filter((u) => u.role === "member").length,
+      seo: items.filter((u) => u.role === "seo").length,
       external: items.filter((u) => u.role === "external").length,
     };
   }, [items]);
@@ -411,7 +423,7 @@ export function UsersAdminClient({
         title="Users"
         description={
           source === "supabase"
-            ? "Supabase Auth users and profile roles — Admin, Member, or External."
+            ? "Supabase Auth users and profile roles — Admin, Member, SEO, or External."
             : "Local demo users. Set SUPABASE_SERVICE_ROLE_KEY to manage live Supabase users."
         }
         actions={
@@ -541,7 +553,7 @@ export function UsersAdminClient({
         </div>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {ROLE_OPTIONS.map((opt) => (
           <button
             key={opt.value}

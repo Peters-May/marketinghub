@@ -6,6 +6,10 @@ import {
   productionAuthMisconfigured,
 } from "@/lib/auth/config";
 import { hubCookieOptions } from "@/lib/auth/cookies";
+import {
+  hubRoleFromAuthMetadata,
+  isSeoAllowedAppPath,
+} from "@/lib/auth/roles";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -67,6 +71,17 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+
+  if (hubRoleFromAuthMetadata(user) === "seo" && !isSeoAllowedAppPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/app/enquiries";
+    url.search = "";
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value);
+    });
+    return redirectResponse;
   }
 
   return response;

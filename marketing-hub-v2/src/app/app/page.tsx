@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HomeModules } from "@/components/home/HomeModules";
@@ -21,6 +22,9 @@ import { hasServiceRoleKey } from "@/lib/supabase/admin";
 export default async function AppHomePage() {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
+  if (user?.role === "seo") {
+    redirect("/app/enquiries");
+  }
   const isAdmin = user?.role === "admin";
 
   const [events, content, sponsorships, themes, mains, tasks, enquiries] =

@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "staff" | "media_guest";
+export type UserRole = "admin" | "staff" | "seo" | "media_guest";
 
 export type Profile = {
   id: string;
@@ -8,7 +8,7 @@ export type Profile = {
 };
 
 /** Hub access directory roles (Admin → Users). */
-export type HubAccessRole = "admin" | "member" | "external";
+export type HubAccessRole = "admin" | "member" | "seo" | "external";
 
 export type HubUser = {
   id: string;

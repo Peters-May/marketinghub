@@ -13,11 +13,19 @@ import { BrandLockup } from "@/components/shell/BrandLockup";
 import { HubTourProvider } from "@/components/tour/HubTour";
 import { cn } from "@/lib/utils";
 import type { HubViewMode } from "@/lib/nav";
+import type { UserRole } from "@/lib/types";
 
 function navTourId(href: string): string {
   if (href === "/app") return "home";
   const slug = href.replace(/^\/app\/?/, "") || "home";
   return slug.split("/")[0] || "home";
+}
+
+function viewLabel(view: HubViewMode) {
+  if (view === "seo") return "SEO";
+  if (view === "admin") return "Admin";
+  if (view === "member") return "Member";
+  return "External";
 }
 
 function ViewToggle({ canToggle }: { canToggle: boolean }) {
@@ -30,9 +38,9 @@ function ViewToggle({ canToggle }: { canToggle: boolean }) {
     return (
       <p
         data-tour="view-toggle"
-        className="rounded-xl border border-border bg-sand/60 px-3 py-2 text-xs font-medium capitalize text-brand"
+        className="rounded-xl border border-border bg-sand/60 px-3 py-2 text-xs font-medium text-brand"
       >
-        {view} view
+        {viewLabel(view)} view
       </p>
     );
   }
@@ -48,6 +56,7 @@ function ViewToggle({ canToggle }: { canToggle: boolean }) {
         [
           { id: "member", label: "Member" },
           { id: "admin", label: "Admin" },
+          { id: "seo", label: "SEO" },
           { id: "external", label: "External" },
         ] as const
       ).map((option) => (
@@ -55,7 +64,7 @@ function ViewToggle({ canToggle }: { canToggle: boolean }) {
           key={option.id}
           type="button"
           className={cn(
-            "flex-1 rounded-lg px-1.5 py-1.5 text-[11px] font-medium transition sm:px-2 sm:text-xs",
+            "flex-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition sm:px-1.5 sm:text-xs",
             view === option.id
               ? "bg-white text-brand shadow-sm"
               : "text-muted hover:text-foreground"
@@ -79,7 +88,7 @@ function ShellInner({
   children: React.ReactNode;
   userName: string;
   userEmail?: string;
-  accessRole?: "admin" | "staff" | "media_guest";
+  accessRole?: UserRole;
   canToggleAdminView: boolean;
 }) {
   const pathname = usePathname();
@@ -149,8 +158,8 @@ function ShellInner({
               userEmail={userEmail}
               accessRole={accessRole}
             />
-            <p className="mt-2 px-1 capitalize text-[11px] text-muted">
-              {view} view
+            <p className="mt-2 px-1 text-[11px] text-muted">
+              {viewLabel(view)} view
             </p>
           </div>
         </aside>
@@ -159,7 +168,7 @@ function ShellInner({
           <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-white/90 px-4 py-3 backdrop-blur md:hidden">
             <BrandLockup size={28} />
             <div className="flex items-center gap-2">
-              <div className="w-48">
+              <div className="w-56">
                 <ViewToggle canToggle={canToggleAdminView} />
               </div>
               <AccountMenu
@@ -210,8 +219,8 @@ export function AppShell({
   children: React.ReactNode;
   userName: string;
   userEmail?: string;
-  /** Session role from profiles — admins may toggle Admin/Member/External UI. */
-  accessRole?: "admin" | "staff" | "media_guest";
+  /** Session role from profiles — admins may toggle Admin/Member/SEO/External UI. */
+  accessRole?: UserRole;
 }) {
   const canToggleAdminView = accessRole === "admin";
   const canAccessBudget = userCanAccessBudget({
@@ -222,7 +231,11 @@ export function AppShell({
   // Allowlisted non-admins (Simon / Tom / Michael) still get it in Member nav.
   const budgetInMemberNav = canAccessBudget && !canToggleAdminView;
   const initialView: HubViewMode =
-    accessRole === "admin" ? "admin" : "member";
+    accessRole === "admin"
+      ? "admin"
+      : accessRole === "seo"
+        ? "seo"
+        : "member";
 
   return (
     <HubViewProvider

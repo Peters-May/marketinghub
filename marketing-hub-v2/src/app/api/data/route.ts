@@ -3,6 +3,7 @@ import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
 import {
   addField,
   addRow,
+  addSelectOption,
   bulkDelete,
   bulkUpdate,
   deleteRow,
@@ -118,6 +119,14 @@ export async function POST(request: NextRequest) {
         newKey: body.newKey,
       });
       return jsonOk({ field });
+    }
+    if (action === "addSelectOption") {
+      const result = await addSelectOption(
+        body.collection,
+        body.key ?? body.name,
+        body.value ?? body.label ?? ""
+      );
+      return jsonOk(result);
     }
     if (action === "removeField") {
       await removeField(body.collection, body.name ?? body.key);

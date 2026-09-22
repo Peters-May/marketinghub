@@ -1,4 +1,8 @@
 import { uid } from "@/lib/utils";
+import {
+  HUB_ACCESS_ROLE_ORDER,
+  normalizeHubAccessRole,
+} from "@/lib/auth/roles";
 import { readStore, updateStore } from "@/lib/store/local";
 import { clothingProductById } from "@/lib/merch/north-sails";
 import {
@@ -1583,20 +1587,11 @@ export async function deleteTask(id: string) {
   });
 }
 
-const HUB_ACCESS_ROLES: HubAccessRole[] = ["admin", "member", "external"];
-
-function normalizeHubAccessRole(value: unknown): HubAccessRole {
-  const role = String(value ?? "").toLowerCase();
-  return HUB_ACCESS_ROLES.includes(role as HubAccessRole)
-    ? (role as HubAccessRole)
-    : "member";
-}
-
 export async function listHubUsers() {
   const store = await readStore();
   return [...(store.hub_users ?? [])].sort((a, b) => {
-    const roleOrder = { admin: 0, member: 1, external: 2 } as const;
-    const byRole = roleOrder[a.role] - roleOrder[b.role];
+    const byRole =
+      HUB_ACCESS_ROLE_ORDER[a.role] - HUB_ACCESS_ROLE_ORDER[b.role];
     if (byRole !== 0) return byRole;
     return a.full_name.localeCompare(b.full_name);
   });

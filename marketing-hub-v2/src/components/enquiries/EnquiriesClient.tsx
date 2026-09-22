@@ -719,8 +719,9 @@ export function EnquiriesClient({
   initial: HubEnquiry[];
   configured: boolean;
 }) {
-  const { canToggleAdminView } = useHubView();
+  const { canToggleAdminView, view } = useHubView();
   const canDelete = canToggleAdminView;
+  const canAddToMarketingList = view !== "seo";
 
   const [items, setItems] = useState(initial);
   const [configured, setConfigured] = useState(initialConfigured);
@@ -1582,7 +1583,7 @@ export function EnquiriesClient({
                 </div>
               ) : null}
 
-              {selected.marketing_emails_consent ? (
+              {selected.marketing_emails_consent && canAddToMarketingList ? (
                 <div className="space-y-2 rounded-lg border border-brand/10 bg-mist/50 p-3">
                   <p className="text-xs text-muted">
                     This enquiry opted in to marketing emails. Add them to a

@@ -19,7 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 
-export type HubViewMode = "admin" | "member" | "external";
+export type HubViewMode = "admin" | "member" | "seo" | "external";
 
 export type NavItem = {
   href: string;
@@ -28,6 +28,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Shown in member (daily) view when true; admin always sees all. */
   member?: boolean;
+  /** Shown in SEO view (enquiries-only partners) when true. */
+  seo?: boolean;
   /** Shown in external (media guest) preview when true. */
   external?: boolean;
   /** Only shown to Hub admins plus the Budget allowlist. */
@@ -109,6 +111,7 @@ export const STAFF_NAV: NavItem[] = [
     description: "Web quote form and WhatsApp tracker",
     icon: Inbox,
     member: true,
+    seo: true,
   },
   {
     href: "/app/reports",
@@ -166,6 +169,10 @@ export function navForView(
 
   if (view === "external") {
     return STAFF_NAV.filter((item) => item.external);
+  }
+
+  if (view === "seo") {
+    return STAFF_NAV.filter((item) => item.seo);
   }
 
   if (view === "admin") {

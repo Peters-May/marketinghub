@@ -7,6 +7,7 @@ import { signOutOfHub } from "@/lib/auth/sign-out";
 import { useHubTour } from "@/components/tour/HubTour";
 import { clearTourCompleted, sessionRoleToTourAudience } from "@/lib/tour/storage";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/lib/types";
 import Link from "next/link";
 
 function getInitials(name: string, email?: string): string {
@@ -22,9 +23,10 @@ function getInitials(name: string, email?: string): string {
   return "?";
 }
 
-function roleLabel(role?: "admin" | "staff" | "media_guest"): string | null {
+function roleLabel(role?: UserRole): string | null {
   if (role === "admin") return "Admin";
   if (role === "staff") return "Member";
+  if (role === "seo") return "SEO";
   if (role === "media_guest") return "Guest";
   return null;
 }
@@ -38,7 +40,7 @@ export function AccountMenu({
 }: {
   userName: string;
   userEmail?: string;
-  accessRole?: "admin" | "staff" | "media_guest";
+  accessRole?: UserRole;
   /** Icon-only trigger for tight headers (e.g. mobile). */
   compact?: boolean;
   className?: string;

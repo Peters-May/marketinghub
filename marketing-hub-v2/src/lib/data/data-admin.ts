@@ -666,6 +666,45 @@ export async function updateField(
   return stored;
 }
 
+/** Append a select/tags option when it is not already on the field. */
+export async function addSelectOption(
+  collection: string,
+  key: string,
+  value: string
+) {
+  if (!isCollectionKey(collection)) throw new Error("Unknown collection");
+  const label = value.trim();
+  if (!label) throw new Error("Option required");
+  if (!key) throw new Error("Field required");
+
+  const table = await getTable(collection);
+  const field = table.fields.find((f) => f.key === key);
+  if (!field) throw new Error("Unknown field");
+  if (field.locked) throw new Error("Cannot edit locked field");
+  if (field.optionsSource) {
+    throw new Error("Options for this field come from another table");
+  }
+  if (field.type !== "select" && field.type !== "tags") {
+    throw new Error("Field does not have selectable options");
+  }
+
+  const current = field.options ?? [];
+  const needle = label.toLowerCase();
+  if (
+    current.some(
+      (o) =>
+        o.value.trim().toLowerCase() === needle ||
+        o.label.trim().toLowerCase() === needle
+    )
+  ) {
+    return { field: { key, label: field.label, type: field.type, options: current }, added: false };
+  }
+
+  const options = [...current, { value: label, label }];
+  const updated = await updateField(collection, key, { options });
+  return { field: updated, added: true };
+}
+
 export async function removeField(collection: string, name: string) {
   if (!isCollectionKey(collection)) throw new Error("Unknown collection");
   const def = getCollection(collection)!;

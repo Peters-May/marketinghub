@@ -1,6 +1,8 @@
 /** Persist product-tour completion so it only shows until dismissed. */
 
-export type TourAudience = "admin" | "member" | "external";
+import type { UserRole } from "@/lib/types";
+
+export type TourAudience = "admin" | "member" | "seo" | "external";
 
 const PREFIX = "mh_tour_done_v1";
 
@@ -37,9 +39,10 @@ export function clearTourCompleted(audience: TourAudience, userKey: string) {
 }
 
 export function sessionRoleToTourAudience(
-  role: "admin" | "staff" | "media_guest" | undefined
+  role: UserRole | undefined
 ): TourAudience {
   if (role === "admin") return "admin";
   if (role === "media_guest") return "external";
+  if (role === "seo") return "seo";
   return "member";
 }

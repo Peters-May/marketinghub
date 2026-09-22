@@ -183,6 +183,16 @@ export function FieldControl({
           value={current}
           allowEmpty
           emptyLabel="—"
+          allowCreate={field.key === "category"}
+          searchPlaceholder={
+            field.key === "category" ? "Search or add a category…" : "Search…"
+          }
+          noResultsLabel={
+            field.key === "category"
+              ? "No matches — add it as a new category"
+              : "No matches"
+          }
+          createLabel={(query) => `Add “${query}”`}
           options={[
             ...field.options,
             ...(current && !known
@@ -362,6 +372,16 @@ export function BulkValueControl({
         value={value}
         allowEmpty
         emptyLabel="—"
+        allowCreate={field.key === "category"}
+        searchPlaceholder={
+          field.key === "category" ? "Search or add a category…" : "Search…"
+        }
+        noResultsLabel={
+          field.key === "category"
+            ? "No matches — add it as a new category"
+            : "No matches"
+        }
+        createLabel={(query) => `Add “${query}”`}
         options={field.options}
         onChange={onChange}
       />

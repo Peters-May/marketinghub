@@ -25,7 +25,10 @@ import {
   selectOptionsWithCurrent,
   type FieldOption,
 } from "@/lib/data/collections";
-import { useManagedFieldOptions } from "@/lib/data/useManagedFieldOptions";
+import {
+  useCreatableSelectOptions,
+  useManagedFieldOptions,
+} from "@/lib/data/useManagedFieldOptions";
 import { isSocialContentItem } from "@/lib/data/normalize";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
@@ -143,11 +146,13 @@ export function ThemesClient({
     "content_type",
     CONTENT_TYPES
   );
-  const categoryOptions = optionsForField(
-    contentFieldOptions,
-    "category",
-    CONTENT_CATEGORIES
-  );
+  const { options: categoryOptions, addOption: addCategoryOption } =
+    useCreatableSelectOptions(
+      "content",
+      "category",
+      contentFieldOptions,
+      CONTENT_CATEGORIES
+    );
   const priorityOptions = optionsForField(
     contentFieldOptions,
     "priority",
@@ -1082,6 +1087,19 @@ export function ThemesClient({
                     allowEmpty
                     emptyLabel="Select…"
                     placeholder="Select…"
+                    searchPlaceholder="Search or add a category…"
+                    noResultsLabel="No matches — add it as a new category"
+                    allowCreate
+                    createLabel={(query) => `Add “${query}”`}
+                    onCreate={(name) => {
+                      const category = addCategoryOption(name);
+                      if (category) {
+                        setContentEdit({
+                          ...contentEdit,
+                          category,
+                        });
+                      }
+                    }}
                     onChange={(category) =>
                       setContentEdit({
                         ...contentEdit,

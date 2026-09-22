@@ -5,16 +5,15 @@ import {
   DEMO_STAFF,
   productionAuthMisconfigured,
 } from "@/lib/auth/config";
-import {
-  getProfileRoleForUser,
-  hubRoleToSessionRole,
-} from "@/lib/supabase/hub-users";
+import type { UserRole } from "@/lib/types";
+import { hubRoleToSessionRole } from "@/lib/auth/roles";
+import { getProfileRoleForUser } from "@/lib/supabase/hub-users";
 
 export type SessionUser = {
   id: string;
   email: string;
   full_name: string;
-  role: "admin" | "staff" | "media_guest";
+  role: UserRole;
 };
 
 async function withProfileRole(base: SessionUser): Promise<SessionUser> {

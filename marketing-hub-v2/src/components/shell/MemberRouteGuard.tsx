@@ -30,7 +30,13 @@ export function MemberRouteGuard({ children }: { children: React.ReactNode }) {
         : pathname === href || pathname.startsWith(`${href}/`)
     );
     if (!ok) {
-      router.replace(view === "external" ? "/app/library" : "/app");
+      router.replace(
+        view === "external"
+          ? "/app/library"
+          : view === "seo"
+            ? "/app/enquiries"
+            : "/app"
+      );
     }
   }, [ready, view, pathname, router, canAccessBudget, budgetInMemberNav]);
 

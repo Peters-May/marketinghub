@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import { jsonError, jsonOk, requireAppUser } from "@/lib/api";
 import {
   createContact,
   ensureContactForUser,
@@ -8,9 +8,9 @@ import {
 } from "@/lib/data/repos";
 import type { Contact } from "@/lib/types";
 
-/** Member (and admin) access to their own linked contact only. */
+/** Member, admin, and SEO access to their own linked contact only. */
 export async function GET() {
-  const { user, error } = await requireStaff();
+  const { user, error } = await requireAppUser();
   if (error) return error;
 
   const contact = await ensureContactForUser({
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { user, error } = await requireStaff();
+  const { user, error } = await requireAppUser();
   if (error) return error;
 
   const body = await request.json();

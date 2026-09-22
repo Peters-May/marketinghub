@@ -393,9 +393,29 @@ export const EXTERNAL_TOUR_STEPS: TourStep[] = [
   },
 ];
 
+const SEO_TOUR_STEPS: TourStep[] = [
+  {
+    id: "seo-enquiries-nav",
+    selector: '[data-tour="nav-enquiries"]',
+    title: "Enquiries",
+    body: "This is your Hub view — web and WhatsApp enquiries, with source and campaign attribution.",
+    href: "/app/enquiries",
+    placement: "right",
+  },
+  {
+    id: "seo-enquiries-list",
+    selector: '[data-tour="enquiries-tab-list"], [data-tour="enquiries-tab-web"]',
+    title: "Filter and export",
+    body: "Search, filter by source, and export CSV. Open a row for the full enquiry.",
+    href: "/app/enquiries",
+    placement: "bottom",
+  },
+];
+
 export function tourStepsFor(audience: TourAudience): TourStep[] {
   if (audience === "admin") return ADMIN_TOUR_STEPS;
   if (audience === "external") return EXTERNAL_TOUR_STEPS;
+  if (audience === "seo") return SEO_TOUR_STEPS;
   return MEMBER_TOUR_STEPS;
 }
 
@@ -413,6 +433,12 @@ export function tourWelcomeCopy(audience: TourAudience): {
     return {
       title: "Welcome to the media gallery",
       body: "A quick look at Logos, Presentations, and downloads. You can skip anytime.",
+    };
+  }
+  if (audience === "seo") {
+    return {
+      title: "Enquiries access",
+      body: "You can view web and WhatsApp enquiries, including where they came from. Other Hub areas stay with the marketing team.",
     };
   }
   return {

@@ -46,6 +46,7 @@ Manage users at **Admin → Users**. With `SUPABASE_SERVICE_ROLE_KEY` set, invit
 |--------------------------------|--------------|-----------------|
 | `admin` | `admin` | `/app` — full hub + user/data admin |
 | `member` | `staff` | `/app` — day-to-day staff modules |
+| `seo` | `seo` | `/app/enquiries` only (Google Ads / SEO partners) |
 | `external` | `media_guest` | `/media` only (redirected out of `/app`) |
 
 ### Request access (public)
@@ -63,7 +64,7 @@ Admins **Accept** / **Deny** pending External requests on **Admin → Users**. A
 
 ### Invite user (admin)
 
-1. **Admin → Users → Invite user** — name, email, role (Admin / Member / External).
+1. **Admin → Users → Invite user** — name, email, role (Admin / Member / SEO / External).
 2. They accept the Supabase invite email and set a password on `/set-password`.
 3. Sign in at `/login` → land per role table above.
 4. Optional for Members: link a **Contact** for **My details** (`/app/me`).

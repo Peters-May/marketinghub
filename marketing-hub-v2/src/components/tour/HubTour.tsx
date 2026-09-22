@@ -20,6 +20,8 @@ import {
 import { tourStepsFor, tourWelcomeCopy, type TourStep } from "@/lib/tour/steps";
 import { dispatchTourPrepare } from "@/lib/tour/bus";
 import { cn } from "@/lib/utils";
+import type { HubViewMode } from "@/lib/nav";
+import type { UserRole } from "@/lib/types";
 
 type TourContextValue = {
   startTour: () => void;
@@ -163,10 +165,10 @@ function tooltipPosition(
 
 type HubTourProps = {
   userKey: string;
-  accessRole?: "admin" | "staff" | "media_guest";
+  accessRole?: UserRole;
   audience?: TourAudience;
   onEnsureAdminView?: () => void;
-  hubView?: "admin" | "member" | "external";
+  hubView?: HubViewMode;
   onOpenMobileNav?: () => void;
   className?: string;
 };

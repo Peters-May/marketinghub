@@ -7,6 +7,7 @@ import {
   listHubUsers,
   updateHubUser,
 } from "@/lib/data/repos";
+import { HUB_ACCESS_ROLES } from "@/lib/auth/roles";
 import type { HubAccessRole } from "@/lib/types";
 import {
   deleteSupabaseHubUser,
@@ -19,7 +20,7 @@ import {
   updateSupabaseHubUser,
 } from "@/lib/supabase/hub-users";
 
-const ROLES: HubAccessRole[] = ["admin", "member", "external"];
+const ROLES: HubAccessRole[] = HUB_ACCESS_ROLES;
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     if (action === "update") {
       const patch = { ...(body.patch ?? {}) } as Record<string, unknown>;
       if (patch.role !== undefined && !ROLES.includes(patch.role as HubAccessRole)) {
-        return jsonError("Role must be admin, member, or external");
+        return jsonError("Role must be admin, member, seo, or external");
       }
 
       if ("contact_id" in patch) {
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     const role = (body.role as HubAccessRole) ?? "member";
     if (!ROLES.includes(role)) {
-      return jsonError("Role must be admin, member, or external");
+      return jsonError("Role must be admin, member, seo, or external");
     }
     if (!String(body.email ?? "").trim()) {
       return jsonError("Email is required");

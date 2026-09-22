@@ -43,6 +43,7 @@ export function SearchSelect({
   noResultsLabel?: string;
   /** Offer adding the current search text when it is not already an option. */
   allowCreate?: boolean;
+  /** Called when the typed value is added. If omitted, the query is selected as the value. */
   onCreate?: (query: string) => void | Promise<void>;
   createLabel?: (query: string) => string;
 }) {
@@ -96,7 +97,6 @@ export function SearchSelect({
 
   const canCreate = Boolean(
     allowCreate &&
-      onCreate &&
       createQuery &&
       !allOptions.some((o) => optionEqualsQuery(o, createQueryKey))
   );
@@ -140,7 +140,11 @@ export function SearchSelect({
   }
 
   async function handleCreate() {
-    if (!canCreate || !onCreate || creating) return;
+    if (!canCreate || creating) return;
+    if (!onCreate) {
+      select(createQuery);
+      return;
+    }
     setCreating(true);
     setCreateError("");
     try {
@@ -148,7 +152,7 @@ export function SearchSelect({
       setOpen(false);
     } catch (err) {
       setCreateError(
-        err instanceof Error ? err.message : "Could not add this person"
+        err instanceof Error ? err.message : "Could not add this option"
       );
     } finally {
       setCreating(false);

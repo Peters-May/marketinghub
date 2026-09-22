@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
+import { jsonError, jsonOk, requireAdmin, requireEnquiriesAccess } from "@/lib/api";
 import { listHubEnquiries } from "@/lib/data/hub-enquiries";
 import {
   deleteWebEnquiry,
@@ -22,7 +22,7 @@ import { syncWebEnquiryToPortal } from "@/lib/sync/portal-enquiries";
  * Staff mutations: POST with session + action update|delete (delete = admin only).
  */
 export async function GET(request: NextRequest) {
-  const { error } = await requireStaff();
+  const { error } = await requireEnquiriesAccess();
   if (error) return error;
 
   if (!hasServiceRoleKey()) {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   // Staff mutations (session auth) — delete is admin-only
   if (action === "update" || action === "delete") {
-    const gate = action === "delete" ? await requireAdmin() : await requireStaff();
+    const gate = action === "delete" ? await requireAdmin() : await requireEnquiriesAccess();
     if (gate.error) return gate.error;
 
     if (!hasServiceRoleKey()) {

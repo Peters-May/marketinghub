@@ -1386,6 +1386,15 @@ export function createSeedStore(): HubStore {
         updated_at: now,
       },
       {
+        id: "usr_seed_dean_seo",
+        email: "dean@uppcyx.co.uk",
+        full_name: "Dean",
+        role: "seo",
+        notes: "Google Ads / SEO — Enquiries only",
+        created_at: now,
+        updated_at: now,
+      },
+      {
         id: "usr_seed_3",
         email: "press@example.com",
         full_name: "External press contact",

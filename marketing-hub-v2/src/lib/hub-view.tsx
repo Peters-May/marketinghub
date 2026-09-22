@@ -44,13 +44,18 @@ export function HubViewProvider({
 
   useEffect(() => {
     if (!canToggleAdminView) {
-      setViewState("member");
+      setViewState(initialView);
       setReady(true);
       return;
     }
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved === "admin" || saved === "member" || saved === "external") {
+      if (
+        saved === "admin" ||
+        saved === "member" ||
+        saved === "external" ||
+        saved === "seo"
+      ) {
         setViewState(saved);
       } else {
         setViewState(initialView);
@@ -63,7 +68,7 @@ export function HubViewProvider({
 
   const setView = useCallback(
     (next: HubViewMode) => {
-      if (!canToggleAdminView && next !== "member") return;
+      if (!canToggleAdminView) return;
       setViewState(next);
       if (!canToggleAdminView) return;
       try {

@@ -47,7 +47,10 @@ import {
   selectOptionsWithCurrent,
   type FieldOption,
 } from "@/lib/data/collections";
-import { useManagedFieldOptions } from "@/lib/data/useManagedFieldOptions";
+import {
+  useCreatableSelectOptions,
+  useManagedFieldOptions,
+} from "@/lib/data/useManagedFieldOptions";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
@@ -212,11 +215,13 @@ export function ContentClient({
     "content_type",
     CONTENT_TYPES
   );
-  const categoryOptions = optionsForField(
-    fieldOptions,
-    "category",
-    CONTENT_CATEGORIES
-  );
+  const { options: categoryOptions, addOption: addCategoryOption } =
+    useCreatableSelectOptions(
+      "content",
+      "category",
+      fieldOptions,
+      CONTENT_CATEGORIES
+    );
   const priorityOptions = optionsForField(
     fieldOptions,
     "priority",
@@ -868,6 +873,14 @@ export function ContentClient({
               allowEmpty
               emptyLabel="Select…"
               placeholder="Select…"
+              searchPlaceholder="Search or add a category…"
+              noResultsLabel="No matches — add it as a new category"
+              allowCreate
+              createLabel={(query) => `Add “${query}”`}
+              onCreate={(name) => {
+                const category = addCategoryOption(name);
+                if (category) setForm({ ...form, category });
+              }}
               onChange={(category) => setForm({ ...form, category })}
               options={categoryOptions}
             />
@@ -1225,6 +1238,14 @@ export function ContentClient({
                     allowEmpty
                     emptyLabel="Select…"
                     placeholder="Select…"
+                    searchPlaceholder="Search or add a category…"
+                    noResultsLabel="No matches — add it as a new category"
+                    allowCreate
+                    createLabel={(query) => `Add “${query}”`}
+                    onCreate={(name) => {
+                      const category = addCategoryOption(name);
+                      if (category) setEdit({ ...edit, category });
+                    }}
                     onChange={(category) =>
                       setEdit({ ...edit, category })
                     }
