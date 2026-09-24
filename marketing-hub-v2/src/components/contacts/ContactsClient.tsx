@@ -69,7 +69,13 @@ function parseTags(tags: string | string[]) {
         .filter(Boolean);
 }
 
-export function ContactsClient({ initial }: { initial: Contact[] }) {
+export function ContactsClient({
+  initial,
+  initialSelectedId,
+}: {
+  initial: Contact[];
+  initialSelectedId?: string;
+}) {
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
 
@@ -78,7 +84,9 @@ export function ContactsClient({ initial }: { initial: Contact[] }) {
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [tagFilter, setTagFilter] = useState("all");
-  const [selected, setSelected] = useState<Contact | null>(null);
+  const [selected, setSelected] = useState<Contact | null>(
+    () => initial.find((contact) => contact.id === initialSelectedId) ?? null
+  );
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);

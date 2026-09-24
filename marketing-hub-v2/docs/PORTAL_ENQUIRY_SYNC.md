@@ -46,4 +46,4 @@ node scripts/backfill-portal-enquiries.mjs --web
 ## Later
 
 - Meta WhatsApp API → Hub (still SoT) → same Portal sync path.
-- Campaign / email linking across Hub ↔ Portal.
+- Marketing email uses the Portal opted-in list. Hub `POST /api/email/audience/sync` pulls `GET /api/marketing/audience` and writes sends and unsubscribes to `POST /api/marketing/hub-sync`. See the Portal doc `docs/HUB_AUDIENCE_SYNC.md`.

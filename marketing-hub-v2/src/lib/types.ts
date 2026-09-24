@@ -186,6 +186,8 @@ export type Contact = {
    * true = may include on marketing lists / email export.
    */
   marketing_consent: boolean | null;
+  /** Portal CRM contact id when this person was synced from the customer list. */
+  portal_contact_id?: string | null;
   created_at: string;
   updated_at: string;
 };

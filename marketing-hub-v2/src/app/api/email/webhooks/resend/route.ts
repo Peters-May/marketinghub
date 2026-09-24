@@ -8,6 +8,7 @@ import {
   listContacts,
   updateContact,
 } from "@/lib/data/repos";
+import { notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 import type { EmailEventKind } from "@/lib/types";
 
 /**
@@ -74,6 +75,11 @@ export async function POST(request: NextRequest) {
       if (contact && kind === "complained") {
         await updateContact(contact.id, { marketing_consent: false });
       }
+      await notifyPortalSuppression({
+        email,
+        portalContactId: contact?.portal_contact_id,
+        reason: kind === "complained" ? "complaint" : "bounce",
+      });
     }
   }
 

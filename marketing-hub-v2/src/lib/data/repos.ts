@@ -391,6 +391,7 @@ function normalizeContact(c: Contact): Contact {
         : c.marketing_consent === false
           ? false
           : null,
+    portal_contact_id: c.portal_contact_id ?? null,
   };
 }
 
@@ -519,6 +520,7 @@ export async function createContact(
         : input.marketing_consent === false
           ? false
           : null,
+    portal_contact_id: input.portal_contact_id ?? null,
     id: uid("ctc"),
     created_at: nowIso(),
     updated_at: nowIso(),

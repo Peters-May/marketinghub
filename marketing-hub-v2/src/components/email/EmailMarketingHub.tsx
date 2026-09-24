@@ -36,6 +36,7 @@ export function EmailMarketingHub({
   initialLists,
   initialThemes,
   initialNewsletters,
+  initialCampaignId,
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
@@ -43,12 +44,15 @@ export function EmailMarketingHub({
   initialLists: MediaList[];
   initialThemes: QuarterlyTheme[];
   initialNewsletters: ContentItem[];
+  initialCampaignId?: string;
 }) {
-  const [tab, setTab] = useState<Tab>("calendar");
+  const [tab, setTab] = useState<Tab>(initialCampaignId ? "campaigns" : "calendar");
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [templates, setTemplates] = useState(initialTemplates);
   const [audiences, setAudiences] = useState(initialAudiences);
-  const [focusCampaignId, setFocusCampaignId] = useState<string | null>(null);
+  const [focusCampaignId, setFocusCampaignId] = useState<string | null>(
+    initialCampaignId ?? null
+  );
 
   const refreshCampaigns = useCallback(async () => {
     const res = await fetch("/api/email/campaigns");

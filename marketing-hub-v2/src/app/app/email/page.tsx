@@ -11,7 +11,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function EmailPage() {
+export default async function EmailPage({
+  searchParams,
+}: {
+  searchParams?: { campaign?: string };
+}) {
   const [campaigns, templates, audiences, lists, themes, content] =
     await Promise.all([
       listEmailCampaigns(),
@@ -49,6 +53,7 @@ export default async function EmailPage() {
       initialLists={marketingLists}
       initialThemes={themes}
       initialNewsletters={newsletters}
+      initialCampaignId={searchParams?.campaign}
     />
   );
 }

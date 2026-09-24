@@ -8,6 +8,7 @@ import {
   updateContact,
 } from "@/lib/data/repos";
 import { parseUnsubscribeToken } from "@/lib/email/unsubscribe-token";
+import { notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
@@ -35,6 +36,12 @@ export async function POST(request: NextRequest) {
   if (contact) {
     await updateContact(contact.id, { marketing_consent: false });
   }
+
+  await notifyPortalSuppression({
+    email: parsed.email,
+    portalContactId: contact?.portal_contact_id,
+    reason: "unsubscribe",
+  });
 
   if (parsed.campaignId) {
     await appendEmailEvent({

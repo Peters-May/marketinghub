@@ -102,6 +102,8 @@ export function EmailCampaignsPanel({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [syncingPortal, setSyncingPortal] = useState(false);
+  const [portalNote, setPortalNote] = useState("");
   const [error, setError] = useState("");
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
 
@@ -309,25 +311,58 @@ export function EmailCampaignsPanel({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted">
-          Draft, schedule, and send e-shots. Recipients need marketing consent.
+          Draft, schedule, and send e-shots. Choose the Portal customers audience
+          for people who opted in on the Portal.
         </p>
-        <button
-          type="button"
-          className="btn-primary inline-flex items-center gap-1.5"
-          onClick={() => {
-            setCreating(true);
-            setEditing(true);
-            setSelected(null);
-            setForm(emptyForm());
-            setError("");
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          New campaign
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={syncingPortal}
+            onClick={() => {
+              setSyncingPortal(true);
+              setPortalNote("");
+              setError("");
+              void fetch("/api/email/audience/sync", { method: "POST" })
+                .then(async (res) => {
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(data.error || "Portal sync failed");
+                  if (data.skipped) {
+                    setPortalNote("Portal sync is not configured.");
+                    return;
+                  }
+                  setPortalNote(
+                    `Portal list updated. ${data.upserted ?? 0} opted in, ${data.removed ?? 0} removed.`
+                  );
+                  onRefresh();
+                })
+                .catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : "Portal sync failed");
+                })
+                .finally(() => setSyncingPortal(false));
+            }}
+          >
+            {syncingPortal ? "Syncing Portal…" : "Sync Portal list"}
+          </button>
+          <button
+            type="button"
+            className="btn-primary inline-flex items-center gap-1.5"
+            onClick={() => {
+              setCreating(true);
+              setEditing(true);
+              setSelected(null);
+              setForm(emptyForm());
+              setError("");
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            New campaign
+          </button>
+        </div>
       </div>
+      {portalNote ? <p className="mb-3 text-sm text-muted">{portalNote}</p> : null}
 
       {sorted.length === 0 && !creating ? (
         <EmptyState

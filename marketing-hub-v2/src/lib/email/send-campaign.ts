@@ -7,6 +7,10 @@ import {
 } from "@/lib/data/repos";
 import { applyEmailMerge, ensureUnsubscribeFooter } from "@/lib/email/merge";
 import { unsubscribeUrlFor } from "@/lib/email/unsubscribe-token";
+import {
+  notifyPortalCampaignSend,
+  syncPortalMarketingAudience,
+} from "@/lib/sync/portal-marketing";
 import type { EmailCampaign } from "@/lib/types";
 
 const BATCH_PAUSE_MS = 80;
@@ -66,6 +70,12 @@ export async function sendEmailCampaign(
       failed: 0,
       error: "Email not configured (RESEND_API_KEY)",
     };
+  }
+
+  try {
+    await syncPortalMarketingAudience();
+  } catch (err) {
+    console.error("[send-campaign] portal audience", err);
   }
 
   const recipients = await resolveEmailRecipients({
@@ -162,6 +172,12 @@ export async function sendEmailCampaign(
           email,
           kind: "sent",
           resend_message_id: messageId,
+        });
+        await notifyPortalCampaignSend({
+          contact,
+          campaignId,
+          campaignTitle: latest.title || latest.subject || "Marketing email",
+          sentAt: new Date().toISOString(),
         });
       }
     } catch (err) {

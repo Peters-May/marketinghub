@@ -144,6 +144,7 @@ function migrateContacts(
         : item.marketing_consent === false
           ? false
           : null,
+    portal_contact_id: item.portal_contact_id ?? null,
   }));
 }
 
