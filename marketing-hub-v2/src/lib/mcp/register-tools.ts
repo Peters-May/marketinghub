@@ -228,7 +228,7 @@ export function registerEnquiryMcpTools(server: McpServer) {
     {
       title: "List enquiries",
       description:
-        "List all Marketing Hub enquiries for a calendar year (default: current year). Use channel whatsapp for the WhatsApp tracker. Optional limit caps the result; omit limit to return the full year.",
+        "List all Marketing Hub enquiries for a calendar year (default: current year). Use channel web or whatsapp. Each web row includes marketing_source, is_google_ads, gclid, utm_campaign, and campaign, derived from stored tracking. Optional limit caps the result; omit limit to return the full year.",
       annotations: readOnlyAnnotations,
       inputSchema: z.object({
         channel: z.string().optional().describe("web or whatsapp"),

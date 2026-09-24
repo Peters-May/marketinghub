@@ -8,6 +8,7 @@ import {
   getWhatsAppEnquiry,
   type WhatsAppEnquiryInput,
 } from "@/lib/data/whatsapp-enquiries";
+import { getEnquiryAttribution } from "@/lib/data/web-enquiries-stats";
 import type { EnquiryIntake, HubEnquiry } from "@/lib/types";
 
 /** Match listHubEnquiries ceiling — enough for a full calendar year of enquiries. */
@@ -35,7 +36,22 @@ export type EnquirySummary = {
   sent_to_office_at: string | null;
   follow_up_at: string | null;
   email_subject: string;
+  /** Tracker source when set (WhatsApp). Otherwise the Hub marketing label. */
   source: string;
+  /** Same label as the Enquiries screen (Google Ads, Organic search, …). */
+  marketing_source: string;
+  is_google_ads: boolean;
+  gclid: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_term: string;
+  utm_content: string;
+  /** Google Ads campaign name, or Campaign {hsa_cam} when the name is missing. */
+  campaign: string;
+  heard_about: string;
+  page_url: string;
+  referrer: string;
   message: string;
   notes: string;
   created_at: string | null;
@@ -64,7 +80,9 @@ function enquiryMessage(e: HubEnquiry): string {
   return asString(make.message);
 }
 
-function toSummary(e: HubEnquiry): EnquirySummary {
+export function toEnquirySummary(e: HubEnquiry): EnquirySummary {
+  const attr = getEnquiryAttribution(e);
+  const trackerSource = (e.tracker_source ?? "").trim();
   return {
     id: e.id,
     external_id: e.submission_id,
@@ -87,7 +105,19 @@ function toSummary(e: HubEnquiry): EnquirySummary {
     sent_to_office_at: e.sent_to_office_at ?? e.created_at,
     follow_up_at: e.follow_up_at ?? null,
     email_subject: e.email_subject ?? "",
-    source: e.tracker_source ?? "",
+    source: trackerSource || attr.sourceLabel,
+    marketing_source: attr.sourceLabel,
+    is_google_ads: attr.isGoogleAds,
+    gclid: attr.gclid,
+    utm_source: attr.utmSource,
+    utm_medium: attr.utmMedium,
+    utm_campaign: attr.utmCampaign,
+    utm_term: attr.utmTerm,
+    utm_content: attr.utmContent,
+    campaign: attr.adsGroupLabel,
+    heard_about: attr.heardAbout,
+    page_url: attr.pageUrl,
+    referrer: attr.referrer,
     message: enquiryMessage(e),
     notes: e.routing_reason,
     created_at: e.created_at,
@@ -127,7 +157,7 @@ export async function createWhatsAppEnquiryFromMcp(
   input: WhatsAppEnquiryInput
 ): Promise<EnquirySummary> {
   const item = await createWhatsAppHubEnquiry(input);
-  return toSummary(item);
+  return toEnquirySummary(item);
 }
 
 export async function updateWhatsAppEnquiryFromMcp(
@@ -139,7 +169,7 @@ export async function updateWhatsAppEnquiryFromMcp(
       `WhatsApp enquiry not found (${input.external_id || input.id || "missing id"})`
     );
   }
-  return toSummary(item);
+  return toEnquirySummary(item);
 }
 
 function enquiryYear(e: HubEnquiry): number | null {
@@ -176,7 +206,7 @@ export async function listEnquiriesForMcp(input: {
     items = items.slice(0, limit);
   }
 
-  return items.map(toSummary);
+  return items.map(toEnquirySummary);
 }
 
 export async function getEnquiryForMcp(
@@ -189,12 +219,12 @@ export async function getEnquiryForMcp(
   const direct = await getWhatsAppEnquiry(
     looksExternal ? { external_id: needle } : { id: needle }
   );
-  if (direct) return toSummary(whatsappToHubEnquiry(direct));
+  if (direct) return toEnquirySummary(whatsappToHubEnquiry(direct));
 
   const alt = await getWhatsAppEnquiry(
     looksExternal ? { id: needle } : { external_id: needle }
   );
-  if (alt) return toSummary(whatsappToHubEnquiry(alt));
+  if (alt) return toEnquirySummary(whatsappToHubEnquiry(alt));
 
   // Web / older rows: scan full store (not year-capped) so fetch always works.
   const items = await listEnquiriesForMcp({
