@@ -8,7 +8,10 @@ import {
   getWhatsAppEnquiry,
   type WhatsAppEnquiryInput,
 } from "@/lib/data/whatsapp-enquiries";
-import { getEnquiryAttribution } from "@/lib/data/web-enquiries-stats";
+import {
+  getEnquiryAttribution,
+  type EnquiryAttribution,
+} from "@/lib/data/web-enquiries-stats";
 import type { EnquiryIntake, HubEnquiry } from "@/lib/types";
 
 /** Match listHubEnquiries ceiling — enough for a full calendar year of enquiries. */
@@ -36,10 +39,15 @@ export type EnquirySummary = {
   sent_to_office_at: string | null;
   follow_up_at: string | null;
   email_subject: string;
-  /** Tracker source when set (WhatsApp). Otherwise the Hub marketing label. */
+  /**
+   * Marketing code for web rows (`google_ads` when a gclid or Ads signal is
+   * present). WhatsApp rows keep the tracker source when one is set.
+   */
   source: string;
   /** Same label as the Enquiries screen (Google Ads, Organic search, …). */
   marketing_source: string;
+  /** Slim copy of raw_payload.tracking plus URL-derived click ids. */
+  tracking: EnquiryTracking;
   is_google_ads: boolean;
   gclid: string;
   utm_source: string;
@@ -57,6 +65,61 @@ export type EnquirySummary = {
   created_at: string | null;
   received_at: string;
 };
+
+export type EnquiryTracking = {
+  gclid: string;
+  gbraid: string;
+  wbraid: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  utm_term: string;
+  utm_content: string;
+  hsa_cam: string;
+  hsa_ad: string;
+  hsa_grp: string;
+  page_url: string;
+  referrer: string;
+  heard_about: string;
+};
+
+function trackingFromAttribution(attr: EnquiryAttribution): EnquiryTracking {
+  return {
+    gclid: attr.gclid,
+    gbraid: attr.gbraid,
+    wbraid: attr.wbraid,
+    utm_source: attr.utmSource,
+    utm_medium: attr.utmMedium,
+    utm_campaign: attr.utmCampaign,
+    utm_term: attr.utmTerm,
+    utm_content: attr.utmContent,
+    hsa_cam: attr.hsaCam,
+    hsa_ad: attr.hsaAd,
+    hsa_grp: attr.hsaGrp,
+    page_url: attr.pageUrl,
+    referrer: attr.referrer,
+    heard_about: attr.heardAbout,
+  };
+}
+
+/** Stable code for the connector. Blank when the Hub label is Unknown. */
+function marketingSourceCode(attr: EnquiryAttribution): string {
+  if (attr.gclid || attr.isGoogleAds) return "google_ads";
+  switch (attr.sourceLabel) {
+    case "Meta Ads":
+      return "meta_ads";
+    case "Organic search":
+      return "organic";
+    case "Referral":
+      return "referral";
+    case "WhatsApp":
+      return "whatsapp";
+    case "Unknown":
+      return "";
+    default:
+      return attr.sourceLabel.trim().toLowerCase().replace(/\s+/g, "_");
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -82,7 +145,12 @@ function enquiryMessage(e: HubEnquiry): string {
 
 export function toEnquirySummary(e: HubEnquiry): EnquirySummary {
   const attr = getEnquiryAttribution(e);
+  const tracking = trackingFromAttribution(attr);
   const trackerSource = (e.tracker_source ?? "").trim();
+  const source =
+    e.channel === "whatsapp"
+      ? trackerSource || marketingSourceCode(attr)
+      : marketingSourceCode(attr);
   return {
     id: e.id,
     external_id: e.submission_id,
@@ -105,8 +173,9 @@ export function toEnquirySummary(e: HubEnquiry): EnquirySummary {
     sent_to_office_at: e.sent_to_office_at ?? e.created_at,
     follow_up_at: e.follow_up_at ?? null,
     email_subject: e.email_subject ?? "",
-    source: trackerSource || attr.sourceLabel,
+    source,
     marketing_source: attr.sourceLabel,
+    tracking,
     is_google_ads: attr.isGoogleAds,
     gclid: attr.gclid,
     utm_source: attr.utmSource,

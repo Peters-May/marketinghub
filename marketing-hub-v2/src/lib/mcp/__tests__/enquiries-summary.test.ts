@@ -43,10 +43,12 @@ function webEnquiry(overrides: Partial<HubEnquiry> = {}): HubEnquiry {
 describe("toEnquirySummary attribution", () => {
   it("maps tracking payload onto Google Ads fields for web enquiries", () => {
     const summary = toEnquirySummary(webEnquiry());
-    expect(summary.source).toBe("Google Ads");
+    expect(summary.source).toBe("google_ads");
     expect(summary.marketing_source).toBe("Google Ads");
     expect(summary.is_google_ads).toBe(true);
     expect(summary.gclid).toBe("click-123");
+    expect(summary.tracking.gclid).toBe("click-123");
+    expect(summary.tracking.utm_campaign).toBe("yacht-spring");
     expect(summary.utm_source).toBe("google");
     expect(summary.utm_medium).toBe("cpc");
     expect(summary.utm_campaign).toBe("yacht-spring");
