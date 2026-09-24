@@ -193,9 +193,19 @@ body {
     padding: 0.1em 0.35em;
     border-radius: 0.35rem;
   }
-  .ProseMirror.rich-text-editor {
+  .rich-text-field {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .ProseMirror.rich-text-editor,
+  .ProseMirror.rich-text-editor pre {
     outline: none;
     min-height: inherit;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .ProseMirror.rich-text-editor p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);

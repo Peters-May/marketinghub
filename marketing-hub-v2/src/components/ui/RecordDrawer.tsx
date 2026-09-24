@@ -108,7 +108,9 @@ export function RecordDrawer({
           </button>
         </div>
         {banner}
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 [&>*]:min-w-0 [&>*]:max-w-full">
+          {children}
+        </div>
         {footer ? (
           <div className="border-t border-border px-4 py-3">{footer}</div>
         ) : null}

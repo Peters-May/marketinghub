@@ -177,7 +177,7 @@ export function RichTextEditorImpl({
   }
 
   return (
-    <div className={cn("rich-text-field overflow-hidden rounded-xl border border-border bg-white", className)}>
+    <div className={cn("rich-text-field w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-white", className)}>
       <div
         className="flex flex-wrap items-center gap-0.5 border-b border-border bg-sand/40 px-1.5 py-1"
         onMouseDown={handleToolbarMouseDown}
@@ -241,8 +241,8 @@ export function RichTextEditorImpl({
           <LinkIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
       </div>
-      <div className="overflow-auto" style={{ minHeight }}>
-        <EditorContent editor={editor} />
+      <div className="max-w-full overflow-x-hidden overflow-y-auto" style={{ minHeight }}>
+        <EditorContent editor={editor} className="max-w-full" />
       </div>
     </div>
   );

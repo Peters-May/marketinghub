@@ -1175,7 +1175,7 @@ export function ContentClient({
                   />
                 </div>
               ) : null}
-              <fieldset disabled={editLocked} className="grid gap-2 disabled:opacity-80">
+              <fieldset disabled={editLocked} className="grid min-w-0 max-w-full gap-2 disabled:opacity-80 [&>*]:min-w-0">
                 <div>
                   <label className="label">Title</label>
                   <input
