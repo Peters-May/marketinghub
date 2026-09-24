@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import {
   backfillPortalCampaignSends,
@@ -6,7 +5,7 @@ import {
 } from "@/lib/sync/portal-marketing";
 
 /** Pull opted-in Portal customers into the Hub "Portal customers" audience. */
-export async function POST(_request: NextRequest) {
+export async function POST() {
   const { error } = await requireAdmin();
   if (error) return error;
 
