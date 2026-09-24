@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
-import { jsonOk, requireStaff } from "@/lib/api";
+import { jsonOk, requireAdmin } from "@/lib/api";
 import {
   listEmailCampaigns,
   listEmailEvents,
 } from "@/lib/data/repos";
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireStaff();
+  const { error } = await requireAdmin();
   if (error) return error;
 
   const { searchParams } = new URL(request.url);

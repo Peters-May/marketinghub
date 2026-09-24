@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import {
   createEmailCampaign,
   deleteEmailCampaign,
@@ -16,7 +16,7 @@ import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
 import type { EmailCampaignStatus } from "@/lib/types";
 
 export async function GET() {
-  const { error } = await requireStaff();
+  const { error } = await requireAdmin();
   if (error) return error;
 
   // Fire due scheduled sends (best-effort; does not block listing on failure)
@@ -54,7 +54,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { error, user } = await requireStaff();
+  const { error, user } = await requireAdmin();
   if (error) return error;
   const body = await request.json();
   const action = body.action as string | undefined;

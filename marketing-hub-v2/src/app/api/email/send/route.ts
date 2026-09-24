@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
-import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import { sendEmailCampaign } from "@/lib/email/send-campaign";
 import { getEmailCampaign, updateEmailCampaign } from "@/lib/data/repos";
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireStaff();
+  const { error } = await requireAdmin();
   if (error) return error;
 
   const body = await request.json();

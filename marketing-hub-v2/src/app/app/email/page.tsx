@@ -1,4 +1,7 @@
+import { redirect } from "next/navigation";
 import { EmailMarketingHub } from "@/components/email/EmailMarketingHub";
+import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
+import { getSessionUser } from "@/lib/auth/session";
 import {
   listContent,
   listEmailAudiences,
@@ -16,6 +19,12 @@ export default async function EmailPage({
 }: {
   searchParams?: { campaign?: string };
 }) {
+  const user =
+    (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
+  if (!user || user.role !== "admin") {
+    redirect("/app");
+  }
+
   const [campaigns, templates, audiences, lists, themes, content] =
     await Promise.all([
       listEmailCampaigns(),

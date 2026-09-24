@@ -62,9 +62,8 @@ export const STAFF_NAV: NavItem[] = [
   {
     href: "/app/email",
     label: "Email",
-    description: "E-shots, audiences, templates, and performance",
+    description: "E-shots, audiences, and results — admin only until campaigns are ready",
     icon: Mail,
-    member: true,
   },
   {
     href: "/app/pr",
