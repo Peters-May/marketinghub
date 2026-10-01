@@ -10,6 +10,7 @@ import { HubViewProvider, useHubView } from "@/lib/hub-view";
 import { MemberRouteGuard } from "@/components/shell/MemberRouteGuard";
 import { AccountMenu, SignOutLink } from "@/components/shell/AccountMenu";
 import { BrandLockup } from "@/components/shell/BrandLockup";
+import { HubCommandBar } from "@/components/shell/HubCommandBar";
 import { HubTourProvider } from "@/components/tour/HubTour";
 import { cn } from "@/lib/utils";
 import type { HubViewMode } from "@/lib/nav";
@@ -200,6 +201,12 @@ function ShellInner({
               </div>
             </div>
           )}
+
+          {accessRole === "admin" || accessRole === "staff" ? (
+            <div className="sticky top-16 z-20 border-b border-border bg-white/95 px-4 py-3 backdrop-blur md:top-0 md:px-8">
+              <HubCommandBar />
+            </div>
+          ) : null}
 
           <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
             <MemberRouteGuard>{children}</MemberRouteGuard>

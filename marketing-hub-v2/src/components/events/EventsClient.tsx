@@ -16,6 +16,7 @@ import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { useHubView } from "@/lib/hub-view";
 import { onTourPrepare } from "@/lib/tour/bus";
 import {
@@ -828,6 +829,10 @@ export function EventsClient({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useHubDataRefresh("events", () => {
+    void refresh();
+  });
 
   useEffect(() => {
     if (!canManageAttendees) return;

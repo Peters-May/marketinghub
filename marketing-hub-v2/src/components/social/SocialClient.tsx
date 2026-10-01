@@ -12,6 +12,7 @@ import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { cn } from "@/lib/utils";
 import { CONTENT_STATUS } from "@/lib/data/collections";
 import type { ContentItem, ContentStatus } from "@/lib/types";
@@ -632,6 +633,10 @@ export function SocialClient({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useHubDataRefresh("content", () => {
+    void load();
+  });
 
   const statuses = useMemo(() => {
     const set = new Set(posts.map((p) => p.status).filter(Boolean));

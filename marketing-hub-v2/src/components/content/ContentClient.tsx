@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { TimelineChart } from "@/components/ui/TimelineChart";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { cn } from "@/lib/utils";
 import {
   formatChannels,
@@ -263,6 +264,10 @@ export function ContentClient({
     const data = await res.json();
     setItems(data.content ?? []);
   }, []);
+
+  useHubDataRefresh("content", () => {
+    void refresh();
+  });
 
   const scopedItems = useMemo(() => {
     if (scope === "social") return items.filter(isSocialContentItem);

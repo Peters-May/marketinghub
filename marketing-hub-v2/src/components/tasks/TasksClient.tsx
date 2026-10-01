@@ -17,6 +17,7 @@ import { TimelineChart } from "@/components/ui/TimelineChart";
 import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import {
   TASK_CATEGORIES,
@@ -188,6 +189,10 @@ export function TasksClient({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useHubDataRefresh("tasks", () => {
+    void refresh();
+  });
 
   const owners = useMemo(() => {
     const set = new Set(items.map((i) => i.owner.trim()).filter(Boolean));
