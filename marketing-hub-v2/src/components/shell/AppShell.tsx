@@ -202,15 +202,20 @@ function ShellInner({
             </div>
           )}
 
+          <main
+            className={cn(
+              "flex-1 px-4 py-6 md:px-8 md:py-8",
+              (accessRole === "admin" || accessRole === "staff") && "pb-40"
+            )}
+          >
+            <MemberRouteGuard>{children}</MemberRouteGuard>
+          </main>
+
           {accessRole === "admin" || accessRole === "staff" ? (
-            <div className="sticky top-16 z-20 border-b border-border bg-white/95 px-4 py-3 backdrop-blur md:top-0 md:px-8">
+            <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-white/95 px-4 py-3 backdrop-blur md:left-sidebar md:px-8">
               <HubCommandBar />
             </div>
           ) : null}
-
-          <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-            <MemberRouteGuard>{children}</MemberRouteGuard>
-          </main>
         </div>
       </div>
     </HubTourProvider>
