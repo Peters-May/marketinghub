@@ -115,10 +115,11 @@ const CHANNELS: Record<string, string> = {
 const CHANNEL_PATTERN =
   "linkedin|instagram|facebook|tiktok|youtube|newsletter|twitter|x";
 
-const TARGET_PATTERN = "social post|to-do|to do|todo|task|event|content|post";
+const TARGET_PATTERN =
+  "social media post|social post|to-do|to do|todo|task|event|content|post";
 
 const KEYWORD =
-  "due|deadline|owner|status|location|notes|details|caption|channel|type|title|on|by|in|at|as|to";
+  "due|deadline|owner|status|location|notes|details|caption|channel|type|title|called|named|on|by|for|in|at|as|to";
 
 const WEEKDAYS: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
   sunday: 0,
@@ -162,7 +163,7 @@ function cleanTitle(value: string) {
     .replace(/^[\s:–—-]+/, "")
     .replace(/^["“]+|["”]+$/g, "")
     .replace(/[,:\s]+$/g, "")
-    .replace(/^(to|about|called|titled)\s+/i, "")
+    .replace(/^(to|about|called|named|titled)\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -173,7 +174,8 @@ function targetOf(word: string): Target {
   if (
     value === "post" ||
     value === "content" ||
-    value === "social post"
+    value === "social post" ||
+    value === "social media post"
   ) {
     return "content";
   }
@@ -375,7 +377,13 @@ type Look =
 function lookAhead(keyword: string, after: string, target: Target, now: Date): Look {
   const key = keyword.toLowerCase();
   const rest = after.trim();
-  if (key === "due" || key === "deadline" || key === "by" || key === "to") {
+  if (
+    key === "due" ||
+    key === "deadline" ||
+    key === "by" ||
+    key === "to" ||
+    key === "for"
+  ) {
     return takeDate(rest, now) ? { key: "due" } : { key: null };
   }
   if (key === "on") {
@@ -408,7 +416,9 @@ function lookAhead(keyword: string, after: string, target: Target, now: Date): L
     return takeChannels(rest) ? { key: "channel" } : { key: null };
   }
   if (key === "type") return rest ? { key: "type" } : { key: null };
-  if (key === "title") return rest ? { key: "title" } : { key: null };
+  if (key === "title" || key === "called" || key === "named") {
+    return rest ? { key: "title" } : { key: null };
+  }
   return { key: null };
 }
 
@@ -612,6 +622,7 @@ function fromFields(
   }
 
   if (verb === "Add") {
+    title = cleanTitle(fields.title || title);
     if (!title) {
       return fail("Add a name. For example: Add a task to call the organiser, due Friday.");
     }
@@ -800,7 +811,7 @@ export function parseHubCommand(input: string, now = new Date()): ParseResult {
 
   const create = text.match(
     new RegExp(
-      `^(?:add|create|new)\\s+(?:a\\s+|an\\s+)?(?:(${CHANNEL_PATTERN})\\s+)?(${TARGET_PATTERN})\\b[:\\s-]*(.*)$`,
+      `^(?:add|create|new)\\s+(?:a\\s+|an\\s+|the\\s+)?(?:new\\s+)?(?:(${CHANNEL_PATTERN})\\s+)?(${TARGET_PATTERN})\\b[:\\s-]*(.*)$`,
       "i"
     )
   );

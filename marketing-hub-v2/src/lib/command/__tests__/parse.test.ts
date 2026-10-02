@@ -31,6 +31,19 @@ describe("parseHubCommand", () => {
     expect(parsed.location).toBe("Monaco");
   });
 
+  it("adds a social post for next Friday by name", () => {
+    const friday = new Date(2026, 9, 2, 12, 0, 0);
+    const parsed = parseHubCommand(
+      "Add a new social media post for next Friday called test hub",
+      friday
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.command.kind !== "create_content") return;
+    expect(parsed.command.title).toBe("test hub");
+    expect(parsed.command.due_date).toBe("2026-10-09");
+    expect(parsed.command.channel).toEqual(["LinkedIn"]);
+  });
+
   it("adds a LinkedIn post", () => {
     const parsed = command(
       "Add a LinkedIn post about autumn yacht moves, due next Tuesday"
