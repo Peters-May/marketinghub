@@ -27,6 +27,10 @@ import { allowDemoAuth } from "@/lib/auth/config";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { cache } from "react";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
+import {
+  applyReleaseLibrary,
+  needsReleaseLibrary,
+} from "@/lib/pr/release-library";
 
 const DATA_DIR = getDataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
@@ -244,7 +248,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       store.newsroom_settings ?? seed.newsroom_settings
     ),
   };
-  return syncThemeIdsOntoContent(base);
+  return applyReleaseLibrary(syncThemeIdsOntoContent(base));
 }
 
 /** Demo seed rows use ids like `ctc_seed_1` / `evt_seed_2`. Real Core imports use `sb_*`. */
@@ -311,7 +315,8 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_campaigns ||
     !store.email_suppressions ||
     !store.email_events ||
-    !store.newsroom_settings
+    !store.newsroom_settings ||
+    needsReleaseLibrary(store)
   );
 }
 
@@ -508,7 +513,8 @@ async function ensureStore(): Promise<StoreRead> {
   if (
     needsKeyMigration(parsed) ||
     needsDefaultBudgetPaymentMigration(parsed.budget_payments) ||
-    needsDroneFilmingBudgetMigration(parsed.budget_lines, parsed.budget_meta)
+    needsDroneFilmingBudgetMigration(parsed.budget_lines, parsed.budget_meta) ||
+    needsReleaseLibrary(parsed)
   ) {
     await writeLocalFile(merged);
   }

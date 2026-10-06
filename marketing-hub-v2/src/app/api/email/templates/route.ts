@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
     subject_default: body.subject_default ?? "",
     preview_text_default: body.preview_text_default ?? "",
     html_body: body.html_body ?? "",
+    design: body.design ?? null,
   });
   return jsonOk({ item }, { status: 201 });
 }

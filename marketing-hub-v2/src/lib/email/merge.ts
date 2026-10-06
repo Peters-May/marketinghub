@@ -11,8 +11,10 @@ export function applyEmailMerge(
   ctx: MergeContext
 ): string {
   const c = ctx.contact;
+  const first = (c?.name ?? "").trim().split(/\s+/)[0] ?? "";
   const map: Record<string, string> = {
     name: c?.name ?? "",
+    first_name: first,
     organisation: c?.organisation ?? "",
     organization: c?.organisation ?? "",
     role: c?.role ?? "",

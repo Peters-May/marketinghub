@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function EmailPage({
   searchParams,
 }: {
-  searchParams?: { campaign?: string };
+  searchParams?: { campaign?: string; tab?: string };
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
@@ -63,6 +63,7 @@ export default async function EmailPage({
       initialThemes={themes}
       initialNewsletters={newsletters}
       initialCampaignId={searchParams?.campaign}
+      initialTab={searchParams?.tab === "templates" ? "templates" : undefined}
     />
   );
 }

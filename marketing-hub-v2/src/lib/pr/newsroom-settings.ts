@@ -19,6 +19,7 @@ export const DEFAULT_NEWSROOM_SETTINGS: Omit<NewsroomSettings, "updated_at"> = {
   theme_color: "#007DC5",
   logo_url: "",
   background_url: "",
+  release_library_version: 0,
 };
 
 export function normalizeNewsroomSettings(
@@ -48,6 +49,10 @@ export function normalizeNewsroomSettings(
       DEFAULT_NEWSROOM_SETTINGS.theme_color,
     logo_url: String(input?.logo_url ?? "").trim(),
     background_url: String(input?.background_url ?? "").trim(),
+    release_library_version: Math.max(
+      0,
+      Number(input?.release_library_version) || 0
+    ),
     updated_at: input?.updated_at || new Date().toISOString(),
   };
 }

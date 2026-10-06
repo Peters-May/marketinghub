@@ -3,6 +3,7 @@ import {
   getNewsroomSettings,
   listContacts,
   listContent,
+  listEmailCampaigns,
   listMediaLists,
   listPrCoverage,
   listPrMonitorMentions,
@@ -56,6 +57,7 @@ export default async function PrSectionPage({
     pitches,
     coverage,
     content,
+    campaigns,
     queries,
     mentions,
     newsroom,
@@ -65,6 +67,7 @@ export default async function PrSectionPage({
     listPrPitches(),
     listPrCoverage(),
     listContent(),
+    listEmailCampaigns(),
     listPrMonitorQueries(),
     listPrMonitorMentions(),
     getNewsroomSettings(),
@@ -77,6 +80,7 @@ export default async function PrSectionPage({
       initialPitches={pitches}
       initialCoverage={coverage}
       initialContent={content}
+      initialCampaigns={campaigns}
       initialQueries={queries}
       initialMentions={mentions}
       initialNewsroom={newsroom}

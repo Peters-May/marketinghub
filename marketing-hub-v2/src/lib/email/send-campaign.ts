@@ -173,7 +173,7 @@ export async function sendEmailCampaign(
           kind: "sent",
           resend_message_id: messageId,
         });
-        await notifyPortalCampaignSend({
+        void notifyPortalCampaignSend({
           contact,
           campaignId,
           campaignTitle: latest.title || latest.subject || "Marketing email",

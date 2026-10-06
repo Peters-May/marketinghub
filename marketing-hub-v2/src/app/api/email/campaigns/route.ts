@@ -3,6 +3,7 @@ import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import {
   createEmailCampaign,
   deleteEmailCampaign,
+  getEmailCampaign,
   listContent,
   listEmailAudiences,
   listEmailCampaigns,
@@ -91,6 +92,38 @@ export async function POST(request: NextRequest) {
     return jsonOk({ item });
   }
 
+  if (action === "follow_up") {
+    const existing = await getEmailCampaign(String(body.id ?? ""));
+    if (!existing) return jsonError("Not found", 404);
+    const item = await createEmailCampaign({
+      title: `Follow-up: ${existing.title}`,
+      status: "draft",
+      subject: existing.subject,
+      preview_text: existing.preview_text,
+      from_name: existing.from_name,
+      from_email: existing.from_email,
+      html_body: existing.html_body,
+      design: existing.design,
+      template_id: existing.template_id,
+      audience_id: existing.audience_id,
+      list_ids: existing.list_ids,
+      recipient_ids: [],
+      brief: existing.brief,
+      hubspot_url: existing.hubspot_url,
+      theme_id: existing.theme_id,
+      content_id: existing.content_id,
+      folder: existing.folder,
+      follow_up_of: existing.id,
+      adj_open_rate: null,
+      adj_click_rate: null,
+      scheduled_at: null,
+      sent_at: null,
+      last_error: "",
+      created_by: user?.email || user?.id || "",
+    });
+    return jsonOk({ item }, { status: 201 });
+  }
+
   if (action === "preview_recipients") {
     const count = (
       await resolveEmailRecipients({
@@ -112,6 +145,7 @@ export async function POST(request: NextRequest) {
     from_name: body.from_name ?? "Peters & May Marketing",
     from_email: body.from_email ?? "marketing@petersandmay.com",
     html_body: body.html_body ?? "",
+    design: body.design ?? null,
     template_id: body.template_id || null,
     audience_id: body.audience_id || null,
     list_ids: Array.isArray(body.list_ids) ? body.list_ids : [],
@@ -120,6 +154,10 @@ export async function POST(request: NextRequest) {
     hubspot_url: body.hubspot_url ?? "",
     theme_id: body.theme_id || null,
     content_id: body.content_id || null,
+    folder: typeof body.folder === "string" ? body.folder : "",
+    follow_up_of: null,
+    adj_open_rate: null,
+    adj_click_rate: null,
     scheduled_at: body.scheduled_at || null,
     sent_at: null,
     last_error: "",

@@ -37,6 +37,7 @@ export function EmailMarketingHub({
   initialThemes,
   initialNewsletters,
   initialCampaignId,
+  initialTab,
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
@@ -45,8 +46,11 @@ export function EmailMarketingHub({
   initialThemes: QuarterlyTheme[];
   initialNewsletters: ContentItem[];
   initialCampaignId?: string;
+  initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>(initialCampaignId ? "campaigns" : "calendar");
+  const [tab, setTab] = useState<Tab>(
+    initialCampaignId ? "campaigns" : initialTab ?? "calendar"
+  );
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [templates, setTemplates] = useState(initialTemplates);
   const [audiences, setAudiences] = useState(initialAudiences);

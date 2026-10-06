@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ExternalLink, Plus } from "lucide-react";
 import type {
   ContentItem,
@@ -9,10 +10,16 @@ import type {
   EmailTemplate,
   QuarterlyTheme,
 } from "@/lib/types";
+import type { EmailDesign } from "@/lib/email/design";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { cn } from "@/lib/utils";
+import {
+  campaignClickRateLabel,
+  campaignMetaLine,
+  campaignOpenRateLabel,
+} from "@/lib/email/display";
 
 const STATUS_LABEL: Record<EmailCampaign["status"], string> = {
   draft: "Draft",
@@ -30,12 +37,14 @@ type FormState = {
   from_name: string;
   from_email: string;
   html_body: string;
+  design: EmailDesign | null;
   template_id: string;
   audience_id: string;
   brief: string;
   hubspot_url: string;
   theme_id: string;
   content_id: string;
+  folder: string;
   scheduled_at: string;
 };
 
@@ -46,12 +55,14 @@ const emptyForm = (): FormState => ({
   from_name: "Peters & May Marketing",
   from_email: "marketing@petersandmay.com",
   html_body: "",
+  design: null,
   template_id: "",
   audience_id: "",
   brief: "",
   hubspot_url: "",
   theme_id: "",
   content_id: "",
+  folder: "",
   scheduled_at: "",
 });
 
@@ -63,12 +74,14 @@ function toForm(c: EmailCampaign): FormState {
     from_name: c.from_name,
     from_email: c.from_email,
     html_body: c.html_body,
+    design: c.design,
     template_id: c.template_id ?? "",
     audience_id: c.audience_id ?? "",
     brief: c.brief,
     hubspot_url: c.hubspot_url,
     theme_id: c.theme_id ?? "",
     content_id: c.content_id ?? "",
+    folder: c.folder ?? "",
     scheduled_at: c.scheduled_at
       ? c.scheduled_at.slice(0, 16)
       : "",
@@ -106,6 +119,7 @@ export function EmailCampaignsPanel({
   const [portalNote, setPortalNote] = useState("");
   const [error, setError] = useState("");
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!focusId) return;
@@ -156,10 +170,11 @@ export function EmailCampaignsPanel({
       subject: f.subject || t?.subject_default || "",
       preview_text: f.preview_text || t?.preview_text_default || "",
       html_body: t?.html_body || f.html_body,
+      design: t ? t.design : f.design,
     }));
   }
 
-  async function save() {
+  async function save(): Promise<EmailCampaign | null> {
     setSaving(true);
     setError("");
     try {
@@ -170,12 +185,14 @@ export function EmailCampaignsPanel({
         from_name: form.from_name,
         from_email: form.from_email,
         html_body: form.html_body,
+        design: form.design,
         template_id: form.template_id || null,
         audience_id: form.audience_id || null,
         brief: form.brief,
         hubspot_url: form.hubspot_url,
         theme_id: form.theme_id || null,
         content_id: form.content_id || null,
+        folder: form.folder,
       };
 
       if (creating) {
@@ -191,6 +208,7 @@ export function EmailCampaignsPanel({
         setCreating(false);
         setEditing(true);
         setForm(toForm(data.item));
+        return data.item as EmailCampaign;
       } else if (selected) {
         const res = await fetch("/api/email/campaigns", {
           method: "POST",
@@ -207,12 +225,47 @@ export function EmailCampaignsPanel({
           prev.map((c) => (c.id === data.item.id ? data.item : c))
         );
         setSelected(data.item);
+        return data.item as EmailCampaign;
       }
+      return null;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
+      return null;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function followUp(campaign: EmailCampaign) {
+    setError("");
+    try {
+      const res = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "follow_up", id: campaign.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not create the follow-up");
+      setCampaigns((prev) => [data.item, ...prev]);
+      setSelected(data.item);
+      setCreating(false);
+      setEditing(true);
+      setForm(toForm(data.item));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the follow-up");
+    }
+  }
+
+  async function openDesigner() {
+    const locked =
+      selected?.status === "sent" || selected?.status === "sending";
+    if (selected && locked) {
+      router.push(`/app/email/design/campaign/${selected.id}`);
+      return;
+    }
+    const saved = await save();
+    if (!saved) return;
+    router.push(`/app/email/design/campaign/${saved.id}`);
   }
 
   async function schedule() {
@@ -313,8 +366,10 @@ export function EmailCampaignsPanel({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted">
-          Draft, schedule, and send e-shots. Choose the Portal customers audience
-          for people who opted in on the Portal.
+          Draft, schedule, and send e-shots. Sync Portal lists, then choose one
+          as the audience. Portal customers is everyone who can receive general
+          marketing. A list such as sailing schedules appears after you mark it
+          for Marketing Hub.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -334,7 +389,7 @@ export function EmailCampaignsPanel({
                     return;
                   }
                   setPortalNote(
-                    `Portal list updated. ${data.upserted ?? 0} opted in, ${data.removed ?? 0} removed.`
+                    `Portal lists updated. ${data.upserted ?? 0} people, ${data.lists ?? 0} shared lists, ${data.removed ?? 0} removed.`
                   );
                   onRefresh();
                 })
@@ -370,40 +425,69 @@ export function EmailCampaignsPanel({
           description="Create an e-shot, attach an audience and template, then schedule or send."
         />
       ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-white">
-          {sorted.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                className={cn(
-                  "flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50",
-                  selected?.id === c.id && "bg-slate-50"
-                )}
-                onClick={() => {
-                  setSelected(c);
-                  setEditing(true);
-                  setCreating(false);
-                  setForm(toForm(c));
-                  setError("");
-                }}
-              >
-                <div>
-                  <div className="font-medium text-brand">{c.title}</div>
-                  <div className="mt-0.5 text-xs text-muted">
-                    {c.subject || "No subject"}
-                    {c.scheduled_at
-                      ? ` · scheduled ${new Date(c.scheduled_at).toLocaleString()}`
-                      : null}
-                    {c.sent_at
-                      ? ` · sent ${new Date(c.sent_at).toLocaleString()}`
-                      : null}
-                  </div>
-                </div>
-                <StatusPill status={c.status} label={STATUS_LABEL[c.status]} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto rounded-xl border border-border bg-white">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-border text-xs text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Email name</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+                <th className="px-3 py-3 font-medium">Recipients</th>
+                <th className="px-3 py-3 font-medium">Open rate</th>
+                <th className="px-3 py-3 font-medium">Click rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((c) => (
+                <tr
+                  key={c.id}
+                  className={cn(
+                    "border-b border-border last:border-0",
+                    selected?.id === c.id && "bg-slate-50"
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    {c.folder ? (
+                      <div className="text-xs text-muted">{c.folder}</div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="text-left font-medium text-brand hover:underline"
+                      onClick={() => {
+                        setSelected(c);
+                        setEditing(true);
+                        setCreating(false);
+                        setForm(toForm(c));
+                        setError("");
+                      }}
+                    >
+                      {c.title}
+                    </button>
+                    <div className="text-xs text-muted">{campaignMetaLine(c)}</div>
+                    {c.status === "sent" ? (
+                      <button
+                        type="button"
+                        className="mt-1 text-xs text-accent underline"
+                        onClick={() => void followUp(c)}
+                      >
+                        Create follow-up
+                      </button>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-3">
+                    <StatusPill status={c.status} label={STATUS_LABEL[c.status]} />
+                  </td>
+                  <td className="px-3 py-3 tabular-nums">{c.stats.recipients}</td>
+                  <td className="px-3 py-3 tabular-nums">
+                    {campaignOpenRateLabel(c)}
+                  </td>
+                  <td className="px-3 py-3 tabular-nums">
+                    {campaignClickRateLabel(c)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <RecordDrawer
@@ -491,6 +575,16 @@ export function EmailCampaignsPanel({
           </label>
 
           <label className="block text-sm">
+            <span className="text-muted">Folder</span>
+            <input
+              className="input mt-1 w-full"
+              value={form.folder}
+              onChange={(e) => setForm({ ...form, folder: e.target.value })}
+              placeholder="Commercial, Forwarding…"
+            />
+          </label>
+
+          <label className="block text-sm">
             <span className="text-muted">Audience</span>
             <select
               className="input mt-1 w-full"
@@ -514,18 +608,22 @@ export function EmailCampaignsPanel({
             ) : null}
           </label>
 
-          <label className="block text-sm">
-            <span className="text-muted">HTML body</span>
-            <textarea
-              className="input mt-1 min-h-[160px] w-full font-mono text-xs"
-              value={form.html_body}
-              onChange={(e) => setForm({ ...form, html_body: e.target.value })}
-            />
-            <span className="mt-1 block text-xs text-muted">
-              Merge fields: {"{{name}}"}, {"{{organisation}}"},{" "}
-              {"{{unsubscribe_url}}"}
-            </span>
-          </label>
+          <div className="rounded-lg border border-border p-3">
+            <p className="text-sm text-muted">
+              Design the message with sections and blocks. Merge fields such as{" "}
+              {"{{name}}"} stay in the text.
+            </p>
+            <button
+              type="button"
+              className="btn-secondary mt-3 text-sm"
+              disabled={saving}
+              onClick={() => void openDesigner()}
+            >
+              {selected?.status === "sent" || selected?.status === "sending"
+                ? "View email"
+                : "Design email"}
+            </button>
+          </div>
 
           <label className="block text-sm">
             <span className="text-muted">Brief</span>

@@ -30,8 +30,10 @@ export default async function NewsroomPage() {
     listContacts(),
   ]);
 
-  const featured = releases[0] ?? null;
-  const rest = releases.slice(1);
+  const pinned = releases.filter((r) => r.pin_homepage);
+  const featured = pinned[0] ?? releases[0] ?? null;
+  const slider = releases.filter((r) => r.in_slider);
+  const rest = releases.filter((r) => r.id !== featured?.id);
   const spokespeople = contacts
     .filter(isPressContact)
     .filter((c) => c.email || c.phone)
@@ -64,6 +66,7 @@ export default async function NewsroomPage() {
 
       {featured ? (
         <section
+          id={featured.id}
           className="relative overflow-hidden"
           style={{
             background: settings.background_url
@@ -104,6 +107,24 @@ export default async function NewsroomPage() {
       ) : null}
 
       <main className="mx-auto max-w-5xl px-6 py-12">
+        {slider.length > 0 ? (
+          <section className="mb-12" aria-label="Slider">
+            <h2 className="font-display text-2xl">Highlights</h2>
+            <ul className="mt-4 flex gap-4 overflow-x-auto pb-2">
+              {slider.map((r) => (
+                <li
+                  key={r.id}
+                  className="min-w-[16rem] max-w-xs flex-1 rounded-xl border border-brand/10 p-4"
+                >
+                  <h3 className="font-display text-lg leading-snug">{r.title}</h3>
+                  <p className="mt-2 text-xs text-muted">
+                    {(r.due_date || r.updated_at || "").slice(0, 10)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section id="news">
           <h2 className="font-display text-2xl">Latest releases</h2>
           {rest.length === 0 && !featured ? (
@@ -115,6 +136,7 @@ export default async function NewsroomPage() {
               {(featured ? rest : releases).map((r) => (
                 <li
                   key={r.id}
+                  id={r.id}
                   className="overflow-hidden rounded-xl border border-brand/10 bg-mist/40"
                 >
                   <div

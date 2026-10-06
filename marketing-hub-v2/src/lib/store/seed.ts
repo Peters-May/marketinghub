@@ -1463,6 +1463,7 @@ export function createSeedStore(): HubStore {
     <a href="{{unsubscribe_url}}">Unsubscribe</a>
   </p>
 </body></html>`,
+        design: null,
         created_at: now,
         updated_at: now,
       },
@@ -1499,6 +1500,7 @@ export function createSeedStore(): HubStore {
       theme_color: "#007DC5",
       logo_url: "",
       background_url: "",
+      release_library_version: 0,
       updated_at: now,
     },
   };

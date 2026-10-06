@@ -4,6 +4,7 @@ import {
   createContent,
   deleteContent,
   listContent,
+  setNewsroomPlacement,
   updateContent,
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
@@ -62,6 +63,26 @@ export async function POST(request: NextRequest) {
   if (error) return error;
   const body = await request.json();
   const action = body.action as string | undefined;
+
+  if (action === "newsroom_placement") {
+    const id = String(body.id ?? "");
+    if (!id) return jsonError("id required", 400);
+    const patch: {
+      pin_homepage?: boolean;
+      in_slider?: boolean;
+      newsroom_name?: string;
+    } = {};
+    if (typeof body.pin_homepage === "boolean") {
+      patch.pin_homepage = body.pin_homepage;
+    }
+    if (typeof body.in_slider === "boolean") patch.in_slider = body.in_slider;
+    if (typeof body.newsroom_name === "string") {
+      patch.newsroom_name = body.newsroom_name;
+    }
+    const item = await setNewsroomPlacement(id, patch);
+    if (!item) return jsonError("Not found", 404);
+    return jsonOk({ item });
+  }
 
   if (action === "update") {
     const existingList = await listContent();

@@ -1,3 +1,5 @@
+import type { EmailDesign } from "@/lib/email/design/types";
+
 export type UserRole = "admin" | "staff" | "seo" | "media_guest";
 
 export type Profile = {
@@ -110,6 +112,15 @@ export type ContentItem = {
   /** Asset / Canva URLs (newline-separated when multiple) */
   asset_url: string;
   notes: string;
+  /** Homepage hero on the public newsroom. */
+  pin_homepage?: boolean;
+  /** Included in the public newsroom slider. */
+  in_slider?: boolean;
+  /**
+   * Newsroom this story is filed under.
+   * Undefined uses the default newsroom. Empty string means not assigned.
+   */
+  newsroom_name?: string;
   created_at: string;
   updated_at: string;
 };
@@ -205,6 +216,8 @@ export type MediaList = {
   list_kind: EmailListKind;
   /** How the list was populated. */
   source: string;
+  /** Portal contact_lists id when this list is synced from the Portal. */
+  portal_list_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -817,6 +830,8 @@ export type EmailTemplate = {
   subject_default: string;
   preview_text_default: string;
   html_body: string;
+  /** Visual builder document. Null for hand-written HTML. */
+  design: EmailDesign | null;
   created_at: string;
   updated_at: string;
 };
@@ -836,6 +851,8 @@ export type EmailAudience = {
   contact_ids: string[];
   filter: EmailAudienceFilter;
   exclude_unsubscribed: boolean;
+  /** Portal contact_lists id when this audience is synced from the Portal. */
+  portal_list_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -849,6 +866,8 @@ export type EmailCampaign = {
   from_name: string;
   from_email: string;
   html_body: string;
+  /** Visual builder document. Null for hand-written HTML. */
+  design: EmailDesign | null;
   template_id: string | null;
   audience_id: string | null;
   list_ids: string[];
@@ -860,6 +879,17 @@ export type EmailCampaign = {
   theme_id: string | null;
   /** Linked newsletter / content item. */
   content_id: string | null;
+  /** Folder such as Commercial or Forwarding. */
+  folder: string;
+  /** Parent campaign when this draft is a follow-up. */
+  follow_up_of: string | null;
+  /**
+   * Adjusted open rate 0–100 from an imported send.
+   * Null means derive a rate from delivery stats.
+   */
+  adj_open_rate: number | null;
+  /** Adjusted click rate 0–100. Null derives from delivery stats. */
+  adj_click_rate: number | null;
   scheduled_at: string | null;
   sent_at: string | null;
   stats: EmailCampaignStats;
@@ -925,6 +955,11 @@ export type NewsroomSettings = {
   logo_url: string;
   /** Hero / background image URL. */
   background_url: string;
+  /**
+   * Imported Mailchimp / newsroom release library.
+   * Once set, deleted library rows stay deleted.
+   */
+  release_library_version: number;
   updated_at: string;
 };
 

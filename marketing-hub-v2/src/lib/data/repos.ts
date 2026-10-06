@@ -1,4 +1,5 @@
 import { uid } from "@/lib/utils";
+import { normalizeEmailDesign } from "@/lib/email/design";
 import {
   HUB_ACCESS_ROLE_ORDER,
   normalizeHubAccessRole,
@@ -91,6 +92,9 @@ export function withContentPlanableDefaults(
       : [],
     last_synced_at: item.last_synced_at ?? null,
     sync_source: item.sync_source ?? "",
+    pin_homepage: item.pin_homepage === true,
+    in_slider: item.in_slider === true,
+    newsroom_name: item.newsroom_name,
   };
 }
 
@@ -249,6 +253,35 @@ export async function updateContent(
       id,
       updated_at: nowIso(),
     };
+    s.content[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function setNewsroomPlacement(
+  id: string,
+  patch: {
+    pin_homepage?: boolean;
+    in_slider?: boolean;
+    newsroom_name?: string;
+  }
+): Promise<ContentItem | null> {
+  let updated: ContentItem | null = null;
+  await updateStore((s) => {
+    if (patch.pin_homepage === true) {
+      s.content = s.content.map((c) =>
+        c.id === id ? c : { ...c, pin_homepage: false }
+      );
+    }
+    const idx = s.content.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    const next = withContentPlanableDefaults({
+      ...s.content[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    });
     s.content[idx] = next;
     updated = next;
   });
@@ -1918,6 +1951,7 @@ function normalizeMediaList(list: MediaList): MediaList {
     contact_ids: Array.isArray(list.contact_ids) ? list.contact_ids : [],
     list_kind: kind,
     source: list.source ?? "",
+    portal_list_id: list.portal_list_id ?? null,
   };
 }
 
@@ -2268,6 +2302,7 @@ export async function listPublishedPressReleases() {
         channels.includes("pr")
       );
     })
+    .filter((c) => c.newsroom_name !== "")
     .sort((a, b) => {
       const da = a.due_date || a.updated_at;
       const db = b.due_date || b.updated_at;
@@ -2344,6 +2379,7 @@ function normalizeEmailTemplate(
     subject_default: t.subject_default ?? "",
     preview_text_default: t.preview_text_default ?? "",
     html_body: t.html_body ?? "",
+    design: normalizeEmailDesign(t.design),
     created_at: t.created_at ?? nowIso(),
     updated_at: t.updated_at ?? nowIso(),
   };
@@ -2360,6 +2396,7 @@ function normalizeEmailAudience(
     contact_ids: Array.isArray(a.contact_ids) ? a.contact_ids : [],
     filter: normalizeAudienceFilter(a.filter),
     exclude_unsubscribed: a.exclude_unsubscribed !== false,
+    portal_list_id: a.portal_list_id ?? null,
     created_at: a.created_at ?? nowIso(),
     updated_at: a.updated_at ?? nowIso(),
   };
@@ -2377,6 +2414,7 @@ function normalizeEmailCampaign(
     from_name: c.from_name ?? "Peters & May Marketing",
     from_email: c.from_email ?? "marketing@petersandmay.com",
     html_body: c.html_body ?? "",
+    design: normalizeEmailDesign(c.design),
     template_id: c.template_id ?? null,
     audience_id: c.audience_id ?? null,
     list_ids: Array.isArray(c.list_ids) ? c.list_ids : [],
@@ -2385,6 +2423,16 @@ function normalizeEmailCampaign(
     hubspot_url: c.hubspot_url ?? "",
     theme_id: c.theme_id ?? null,
     content_id: c.content_id ?? null,
+    folder: c.folder ?? "",
+    follow_up_of: c.follow_up_of ?? null,
+    adj_open_rate:
+      c.adj_open_rate == null || Number.isNaN(Number(c.adj_open_rate))
+        ? null
+        : Number(c.adj_open_rate),
+    adj_click_rate:
+      c.adj_click_rate == null || Number.isNaN(Number(c.adj_click_rate))
+        ? null
+        : Number(c.adj_click_rate),
     scheduled_at: c.scheduled_at ?? null,
     sent_at: c.sent_at ?? null,
     stats: normalizeEmailStats(c.stats),
@@ -2400,6 +2448,12 @@ export async function listEmailTemplates() {
   return [...(store.email_templates ?? [])]
     .map(normalizeEmailTemplate)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getEmailTemplate(id: string) {
+  const store = await readStore();
+  const found = (store.email_templates ?? []).find((x) => x.id === id);
+  return found ? normalizeEmailTemplate(found) : null;
 }
 
 export async function createEmailTemplate(
@@ -2524,8 +2578,22 @@ export async function getEmailCampaign(id: string) {
 }
 
 export async function createEmailCampaign(
-  input: Omit<EmailCampaign, "id" | "created_at" | "updated_at" | "stats"> & {
+  input: Omit<
+    EmailCampaign,
+    | "id"
+    | "created_at"
+    | "updated_at"
+    | "stats"
+    | "folder"
+    | "follow_up_of"
+    | "adj_open_rate"
+    | "adj_click_rate"
+  > & {
     stats?: EmailCampaignStats;
+    folder?: string;
+    follow_up_of?: string | null;
+    adj_open_rate?: number | null;
+    adj_click_rate?: number | null;
   }
 ) {
   const item = normalizeEmailCampaign({

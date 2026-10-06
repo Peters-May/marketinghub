@@ -5,6 +5,7 @@ import Link from "next/link";
 import type {
   Contact,
   ContentItem,
+  EmailCampaign,
   MediaList,
   NewsroomSettings,
   PrCoverage,
@@ -16,8 +17,10 @@ import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
-import { isPressContact } from "@/lib/pr/pitch-eml";
+import { mentionsToCsv } from "@/lib/pr/mentions-csv";
+import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
+import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
 
 export type PrSection =
   | "contacts"
@@ -90,6 +93,7 @@ type Props = {
   initialPitches: PrPitch[];
   initialCoverage: PrCoverage[];
   initialContent: ContentItem[];
+  initialCampaigns: EmailCampaign[];
   initialQueries: PrMonitorQuery[];
   initialMentions: PrMonitorMention[];
   initialNewsroom: NewsroomSettings;
@@ -97,6 +101,18 @@ type Props = {
   initialSection?: PrSection | null;
   prefillContentId?: string | null;
 };
+
+function exportMentionsCsv(
+  rows: PrMonitorMention[],
+  queries: PrMonitorQuery[]
+) {
+  const day = new Date().toISOString().slice(0, 10);
+  downloadTextFile(
+    `mentions-${day}.csv`,
+    `\uFEFF${mentionsToCsv(rows, queries)}`,
+    "text/csv;charset=utf-8"
+  );
+}
 
 function isPressRelease(c: ContentItem): boolean {
   const type = (c.content_type || "").toLowerCase();
@@ -116,6 +132,7 @@ export function PrClient({
   initialPitches,
   initialCoverage,
   initialContent,
+  initialCampaigns,
   initialQueries,
   initialMentions,
   initialNewsroom,
@@ -132,6 +149,7 @@ export function PrClient({
   const [pitches, setPitches] = useState(initialPitches);
   const [coverage, setCoverage] = useState(initialCoverage);
   const [content, setContent] = useState(initialContent);
+  const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [queries, setQueries] = useState(initialQueries);
   const [mentions, setMentions] = useState(initialMentions);
   const [newsroom, setNewsroom] = useState(initialNewsroom);
@@ -791,63 +809,28 @@ export function PrClient({
       ) : null}
 
       {tab === "releases" ? (
-        <div className="space-y-4">
-          <p className="text-sm text-muted">
-            Press releases live in{" "}
-            <Link href="/app/content" className="text-accent underline">
-              Content & Social
-            </Link>{" "}
-            (type PR / category Press release). Published items appear on the{" "}
-            <Link href="/newsroom" className="text-accent underline">
-              public newsroom
-            </Link>
-            .
-          </p>
-          {releases.length === 0 ? (
-            <EmptyState
-              title="No PR releases"
-              description="Create a content item with type PR or category Press release."
-              action={
-                <Link
-                  href="/app/content"
-                  className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                >
-                  Open Content
-                </Link>
+        <ReleasesPanel
+          releases={releases}
+          campaigns={campaigns}
+          newsroomTitle={newsroom.title}
+          onRelease={(item) =>
+            setContent((prev) => {
+              const without = prev.filter((c) => c.id !== item.id);
+              if (item.pin_homepage) {
+                return [
+                  item,
+                  ...without.map((c) =>
+                    c.id === item.id ? c : { ...c, pin_homepage: false }
+                  ),
+                ];
               }
-            />
-          ) : (
-            <ul className="space-y-2">
-              {releases.map((r) => (
-                <li
-                  key={r.id}
-                  className="surface-card flex flex-wrap items-center justify-between gap-2 p-4"
-                >
-                  <div>
-                    <div className="font-medium text-brand">{r.title}</div>
-                    <div className="text-xs text-muted">
-                      {r.status} · {r.category || r.content_type}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Link
-                      href={`/app/pr/emails?content_id=${encodeURIComponent(r.id)}`}
-                      className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                    >
-                      Pitch the story
-                    </Link>
-                    <Link
-                      href="/app/content"
-                      className="text-sm text-accent underline self-center"
-                    >
-                      Edit in Content
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+              return [item, ...without];
+            })
+          }
+          onCampaign={(item) =>
+            setCampaigns((prev) => [item, ...prev.filter((c) => c.id !== item.id)])
+          }
+        />
       ) : null}
 
       {tab === "pitches" ? (
@@ -1001,7 +984,17 @@ export function PrClient({
             </ul>
           </div>
           <div>
-            <h2 className="mb-3 font-display text-lg text-brand">Inbox</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-lg text-brand">Inbox</h2>
+              <button
+                type="button"
+                disabled={mentions.length === 0}
+                onClick={() => exportMentionsCsv(mentions, queries)}
+                className="rounded-lg bg-mist px-3 py-1.5 text-sm text-brand disabled:opacity-50"
+              >
+                Export mentions
+              </button>
+            </div>
             <ul className="space-y-2">
               {mentions.filter((m) => m.status === "new").length === 0 ? (
                 <p className="text-sm text-muted">No new mentions.</p>
