@@ -61,7 +61,11 @@ function portalBaseUrl(): string {
 }
 
 function portalSyncSecret(): string {
-  return (process.env.PORTAL_ENQUIRY_SYNC_SECRET ?? "").trim();
+  return (
+    process.env.PORTAL_ENQUIRY_SYNC_SECRET ??
+    process.env.WEB_ENQUIRY_WEBHOOK_SECRET ??
+    ""
+  ).trim();
 }
 
 export function hubAppOrigin(): string {
