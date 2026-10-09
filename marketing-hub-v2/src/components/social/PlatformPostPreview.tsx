@@ -16,11 +16,30 @@ function layoutForPlatform(platform: PlatformKey, count: number): LayoutMode {
   return "collage";
 }
 
+const PLATFORM_SCANS: { key: PlatformKey; re: RegExp }[] = [
+  { key: "instagram", re: /\binstagram\b|\breels?\b/i },
+  { key: "facebook", re: /\bfacebook\b/i },
+  { key: "linkedin", re: /\blinkedin\b/i },
+  { key: "tiktok", re: /\btiktok\b/i },
+  { key: "youtube", re: /\byoutube\b/i },
+  { key: "x", re: /\btwitter\b|\btweet\b|\bx\b/i },
+];
+
 function uniquePlatformKeys(platforms: string[]): PlatformKey[] {
   const keys: PlatformKey[] = [];
-  for (const p of platforms) {
-    const key = platformKey(p);
-    if (!keys.includes(key)) keys.push(key);
+  const push = (key: PlatformKey) => {
+    if (key !== "social" && !keys.includes(key)) keys.push(key);
+  };
+  for (const raw of platforms) {
+    const parts = raw
+      .split(/[,;|/]/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    for (const part of parts.length ? parts : [raw]) {
+      const hits = PLATFORM_SCANS.filter(({ re }) => re.test(part)).map(({ key }) => key);
+      if (hits.length) hits.forEach(push);
+      else push(platformKey(part));
+    }
   }
   return keys.length ? keys : ["social"];
 }
@@ -322,23 +341,32 @@ export function PlatformPostPreview({
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {keys.length > 1 ? (
-        <div className="flex gap-1 border-b border-slate-100 bg-slate-50 px-2 py-1.5">
+        <div
+          className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2"
+          role="tablist"
+          aria-label="Platform preview"
+        >
           {keys.map((key) => {
             const m = PLATFORM_META[key];
+            const selected = platform === key;
             return (
               <button
                 key={key}
                 type="button"
-                aria-pressed={platform === key}
+                role="tab"
+                aria-selected={selected}
+                aria-label={m.label}
+                title={m.label}
                 className={cn(
-                  "rounded-full px-2.5 py-0.5 text-[11px] font-medium",
-                  platform === key
-                    ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200"
-                    : "text-slate-500 hover:text-slate-700"
+                  "inline-flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold transition",
+                  selected
+                    ? "ring-2 ring-slate-800 ring-offset-2"
+                    : "opacity-45 hover:opacity-100"
                 )}
+                style={{ backgroundColor: m.bg, color: m.fg }}
                 onClick={() => setActiveKey(key)}
               >
-                {m.label}
+                {m.short}
               </button>
             );
           })}
