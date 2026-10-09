@@ -95,7 +95,7 @@ export function SocialIdeasPanel({
   onPlace,
   onPark,
 }: {
-  panelRef: RefObject<HTMLElement | null>;
+  panelRef: RefObject<HTMLElement>;
   parked: IdeaPanelPost[];
   placed: IdeaPanelPost[];
   creating: boolean;
