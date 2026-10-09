@@ -39,6 +39,7 @@ import {
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
 import { PostShareControls } from "@/components/social/PostShareControls";
+import { SocialIdeasPanel } from "@/components/social/SocialIdeasPanel";
 
 type SocialPost = {
   id: string;
@@ -289,6 +290,20 @@ function statusTone(status: string) {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+function isHubIdea(post: SocialPost): boolean {
+  return (
+    post.source === "hub" &&
+    (post.statusValue === "idea" || post.status.toLowerCase() === "idea")
+  );
+}
+
+/** Ideas and drafts can leave the calendar and sit in the Ideas panel. */
+function canParkAsIdea(post: SocialPost): boolean {
+  if (post.source !== "hub") return false;
+  const raw = (post.statusValue || post.status).toLowerCase();
+  return raw === "idea" || raw === "draft";
+}
+
 function looksLikeHtml(input: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(input);
 }
@@ -360,6 +375,7 @@ function PostCard({
     <div
       className={cn(
         "hub-cal-card flex w-full flex-col overflow-hidden rounded-lg border border-slate-200/90 bg-white text-left shadow-sm",
+        post.status.toLowerCase() === "idea" && "border-dashed bg-sand/40",
         compact ? "gap-1 p-1.5" : "gap-1.5 p-2"
       )}
     >
@@ -437,8 +453,13 @@ export function SocialClient({
     status: ContentStatus;
   } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingIdea, setCreatingIdea] = useState(false);
+  const [parkingId, setParkingId] = useState<string | null>(null);
+  const [parkingActive, setParkingActive] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const createFormRef = useRef<HTMLDivElement>(null);
+  const ideasPanelRef = useRef<HTMLElement>(null);
+  const ignoreNextDateClick = useRef(false);
 
   useEffect(() => {
     if (!overflowDay) return;
@@ -474,7 +495,12 @@ export function SocialClient({
       setOpenUrl(planable.openUrl ?? "https://app.planable.io");
 
       const fromHub: SocialPost[] = contentItems
-        .filter((c) => isSocialContentItem(c) && !!c.due_date)
+        .filter((c) => {
+          if (!isSocialContentItem(c)) return false;
+          if (c.due_date) return true;
+          // Undated ideas live in the Ideas panel, not on the calendar.
+          return !memberView && c.status === "idea";
+        })
         .map((c) => {
           const unique = platformsFromChannel(
             c.channel,
@@ -691,6 +717,41 @@ export function SocialClient({
   const calendarPosts = datedPosts;
 
   /** List is future-focused unless When filter is changed. */
+  const ideaMatches = useCallback(
+    (p: SocialPost) => {
+      if (
+        !matchesSearch(search, [p.text, p.status, p.platform, ...p.platforms])
+      ) {
+        return false;
+      }
+      if (
+        platformFilter !== "all" &&
+        !(p.platforms.length ? p.platforms : [p.platform]).includes(
+          platformFilter
+        )
+      ) {
+        return false;
+      }
+      return true;
+    },
+    [search, platformFilter]
+  );
+
+  const parkedIdeas = useMemo(
+    () => posts.filter((p) => isHubIdea(p) && !p.scheduledAt && ideaMatches(p)),
+    [posts, ideaMatches]
+  );
+
+  const placedIdeas = useMemo(
+    () =>
+      posts
+        .filter((p) => isHubIdea(p) && !!p.scheduledAt && ideaMatches(p))
+        .sort((a, b) =>
+          String(a.scheduledAt).localeCompare(String(b.scheduledAt))
+        ),
+    [posts, ideaMatches]
+  );
+
   const listPosts = useMemo(() => {
     const today = startOfDay(new Date()).getTime();
     return datedPosts.filter((p) => {
@@ -737,41 +798,101 @@ export function SocialClient({
     [calendarPosts, memberView]
   );
 
-  async function rescheduleHubPost(id: string, dueDate: string) {
-    if (memberView) return;
+  async function updateHubSchedule(
+    id: string,
+    dueDate: string | null,
+    options?: { asIdea?: boolean }
+  ) {
+    if (memberView) return false;
     const post = posts.find((p) => p.id === id);
-    if (!post || post.source !== "hub") return;
-    if (post.status.toLowerCase() === "published") return;
-    const previousScheduledAt = post.scheduledAt;
+    if (!post || post.source !== "hub") return false;
+    if (post.status.toLowerCase() === "published") return false;
+    if (options?.asIdea && !canParkAsIdea(post)) return false;
+    const previous = post;
     setError(null);
     setPosts((prev) =>
       prev.map((p) =>
         p.id === id
-          ? { ...p, scheduledAt: `${dueDate}T09:00:00.000Z` }
+          ? {
+              ...p,
+              scheduledAt: dueDate ? `${dueDate}T09:00:00.000Z` : null,
+              ...(options?.asIdea
+                ? { status: "Idea", statusValue: "idea" as const }
+                : {}),
+            }
           : p
       )
     );
+    const patch: { due_date: string | null; status?: ContentStatus } = {
+      due_date: dueDate,
+    };
+    if (options?.asIdea) patch.status = "idea";
     const res = await fetch("/api/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "update",
         id,
-        patch: { due_date: dueDate },
+        patch,
       }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, scheduledAt: previousScheduledAt } : p
-        )
-      );
+      setPosts((prev) => prev.map((p) => (p.id === id ? previous : p)));
       setError(data.error || "Could not update date");
-      return;
+      return false;
     }
     if (data.planableSyncError) {
       setError(data.planableSyncError);
+    }
+    return true;
+  }
+
+  async function rescheduleHubPost(id: string, dueDate: string) {
+    await updateHubSchedule(id, dueDate);
+  }
+
+  async function parkHubPost(id: string) {
+    setParkingId(id);
+    try {
+      return await updateHubSchedule(id, null, { asIdea: true });
+    } finally {
+      setParkingId(null);
+    }
+  }
+
+  async function createIdea(title: string, caption: string) {
+    if (memberView) return false;
+    setCreatingIdea(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim() || "Untitled idea",
+          caption,
+          due_date: null,
+          content_type: "Social",
+          channel: ["LinkedIn"],
+          status: "idea",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Could not create idea");
+        return false;
+      }
+      if (data.planableSyncError) {
+        setError(data.planableSyncError);
+      }
+      await load();
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create idea");
+      return false;
+    } finally {
+      setCreatingIdea(false);
     }
   }
 
@@ -948,7 +1069,7 @@ export function SocialClient({
         onSearchChange={setSearch}
         searchPlaceholder="Search posts, platform, status…"
         resultCount={listPosts.length}
-        totalCount={posts.length}
+        totalCount={posts.filter((p) => p.scheduledAt).length}
         selects={[
           {
             id: "status",
@@ -1035,6 +1156,7 @@ export function SocialClient({
             />
             <p className="mt-1 text-xs text-muted">
               Approved sends a Facebook draft to Planable with the due date.
+              For a filler with no date, add it in Ideas instead.
             </p>
           </div>
           <div className="md:col-span-2">
@@ -1077,15 +1199,17 @@ export function SocialClient({
             {error ? ` · ${error}` : ""}
           </p>
 
+          <div className="flex flex-col items-start gap-4 xl:flex-row">
           <div
             className={cn(
-              "hub-fc surface-card overflow-hidden p-3 md:p-4",
+              "hub-fc surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 xl:w-auto xl:flex-1",
               !memberView && "hub-fc--day-create"
             )}
           >
             {!memberView ? (
               <p className="mb-3 text-xs text-muted">
                 Click an empty day to add a post. Drag Hub drafts to reschedule.
+                Park fillers in Ideas, then drag them onto a day when you need them.
               </p>
             ) : null}
             <FullCalendar
@@ -1114,10 +1238,64 @@ export function SocialClient({
               eventStartEditable={!memberView}
               eventDurationEditable={false}
               eventDragMinDistance={8}
+              droppable={!memberView}
+              drop={(info) => {
+                if (memberView) return;
+                ignoreNextDateClick.current = true;
+                requestAnimationFrame(() => {
+                  ignoreNextDateClick.current = false;
+                });
+                const id = info.draggedEl.getAttribute("data-idea-id");
+                const next = info.dateStr.slice(0, 10);
+                if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+                void updateHubSchedule(id, next);
+              }}
+              eventDragStart={(info) => {
+                const id = String(
+                  info.event.extendedProps.postId ?? info.event.id
+                );
+                const post = posts.find((p) => p.id === id);
+                setParkingActive(Boolean(post && canParkAsIdea(post)));
+              }}
+              eventDragStop={(info) => {
+                const panel = ideasPanelRef.current;
+                const rect = panel?.getBoundingClientRect();
+                const x = info.jsEvent.clientX;
+                const y = info.jsEvent.clientY;
+                const over = Boolean(
+                  rect &&
+                    x >= rect.left &&
+                    x <= rect.right &&
+                    y >= rect.top &&
+                    y <= rect.bottom
+                );
+                setParkingActive(false);
+                if (!over) return;
+                const id = String(
+                  info.event.extendedProps.postId ?? info.event.id
+                );
+                const post = posts.find((p) => p.id === id);
+                if (!post || !canParkAsIdea(post)) {
+                  if (
+                    post?.source === "hub" &&
+                    post.status.toLowerCase() !== "published"
+                  ) {
+                    setError(
+                      "Approved and scheduled posts stay on the calendar. Set the status to Idea if this is a filler."
+                    );
+                  }
+                  return;
+                }
+                void parkHubPost(id);
+              }}
               dateClick={
                 memberView
                   ? undefined
                   : (info) => {
+                      if (ignoreNextDateClick.current) {
+                        ignoreNextDateClick.current = false;
+                        return;
+                      }
                       const target = info.jsEvent.target as HTMLElement | null;
                       if (
                         target?.closest(
@@ -1177,6 +1355,25 @@ export function SocialClient({
                 return <PostCard post={post} compact />;
               }}
             />
+          </div>
+          {!memberView ? (
+            <SocialIdeasPanel
+              panelRef={ideasPanelRef}
+              parked={parkedIdeas}
+              placed={placedIdeas}
+              creating={creatingIdea}
+              parkingId={parkingId}
+              parkingActive={parkingActive}
+              onOpen={setSelectedId}
+              onCreate={createIdea}
+              onPlace={(id, dueDate) => {
+                void updateHubSchedule(id, dueDate);
+              }}
+              onPark={(id) => {
+                void parkHubPost(id);
+              }}
+            />
+          ) : null}
           </div>
 
           <div className="surface-card overflow-hidden">
@@ -1413,8 +1610,21 @@ export function SocialClient({
                       parseISO(selected.scheduledAt),
                       "EEEE d MMMM yyyy · HH:mm"
                     )
-                  : "No schedule date"}
+                  : "In Ideas — no calendar date"}
               </p>
+              {!memberView &&
+              selected.source === "hub" &&
+              selected.scheduledAt &&
+              canParkAsIdea(selected) ? (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={parkingId === selected.id}
+                  onClick={() => void parkHubPost(selected.id)}
+                >
+                  {parkingId === selected.id ? "Moving…" : "Move to ideas"}
+                </button>
+              ) : null}
               {!memberView ? (
                 <p className="text-xs text-muted">
                   Source:{" "}

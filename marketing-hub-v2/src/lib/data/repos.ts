@@ -1,3 +1,10 @@
+import {
+  emptyPlannerFields,
+  plannerFieldsFromBody,
+  readPlannerFields,
+  suggestPlannerSlug,
+  type PlannerFields,
+} from "@/lib/events/planner";
 import { uid } from "@/lib/utils";
 import { normalizeEmailDesign } from "@/lib/email/design";
 import {
@@ -103,7 +110,7 @@ export function withContentPlanableDefaults(
 
 export async function listEvents() {
   const store = await readStore();
-  return [...store.events].sort((a, b) => {
+  return store.events.map((event) => ({ ...emptyPlannerFields(), ...event })).sort((a, b) => {
     if (!a.starts_at && !b.starts_at) return a.title.localeCompare(b.title);
     if (!a.starts_at) return 1;
     if (!b.starts_at) return -1;
@@ -112,10 +119,13 @@ export async function listEvents() {
 }
 
 export async function createEvent(
-  input: Omit<EventItem, "id" | "created_at" | "updated_at">
+  input: Omit<EventItem, "id" | "created_at" | "updated_at" | keyof PlannerFields> &
+    Partial<PlannerFields>
 ) {
   const item: EventItem = {
+    ...emptyPlannerFields(),
     ...input,
+    ...plannerFieldsFromBody({ ...input, title: input.title, starts_at: input.starts_at }),
     id: uid("evt"),
     created_at: nowIso(),
     updated_at: nowIso(),
@@ -131,12 +141,21 @@ export async function updateEvent(id: string, patch: Partial<EventItem>) {
   await updateStore((s) => {
     const idx = s.events.findIndex((e) => e.id === id);
     if (idx === -1) return;
-    s.events[idx] = {
+    const next = {
+      ...emptyPlannerFields(),
       ...s.events[idx],
       ...patch,
       id,
       updated_at: nowIso(),
     };
+    const planner = readPlannerFields(next);
+    if (!planner.planner_slug) {
+      planner.planner_slug = suggestPlannerSlug(next.title, next.starts_at);
+    }
+    if (!next.starts_at && planner.date_status === "confirmed") {
+      planner.date_status = "tbc";
+    }
+    s.events[idx] = { ...next, ...planner };
     updated = s.events[idx];
   });
   return updated;

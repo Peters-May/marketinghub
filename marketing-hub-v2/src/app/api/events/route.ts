@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
+import { plannerFieldsFromBody } from "@/lib/events/planner";
 import {
   createEvent,
   deleteEvent,
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
     reached_out_for_pr_to_organisers: Boolean(
       body.reached_out_for_pr_to_organisers
     ),
+    ...plannerFieldsFromBody(body),
     created_by: user.id,
   });
   return jsonOk({ event }, { status: 201 });

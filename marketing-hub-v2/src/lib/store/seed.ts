@@ -1,4 +1,5 @@
-﻿import type { HubStore } from "@/lib/types";
+﻿import { emptyPlannerFields } from "@/lib/events/planner";
+import type { HubStore } from "@/lib/types";
 import {
   createDefaultBudgetLines,
   createDefaultBudgetMeta,
@@ -12,6 +13,7 @@ export function createSeedStore(): HubStore {
   return {
     events: [
       {
+        ...emptyPlannerFields(),
         id: "evt_seed_1",
         title: "Monaco Yacht Show",
         starts_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 40).toISOString(),
@@ -29,6 +31,7 @@ export function createSeedStore(): HubStore {
         updated_at: now,
       },
       {
+        ...emptyPlannerFields(),
         id: "evt_seed_2",
         title: "Internal Q3 planning day",
         starts_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 10).toISOString(),

@@ -1,4 +1,5 @@
 import type { EmailDesign } from "@/lib/email/design/types";
+import type { PlannerFields } from "@/lib/events/planner";
 
 export type UserRole = "admin" | "staff" | "seo" | "media_guest";
 
@@ -28,7 +29,7 @@ export type HubUser = {
   updated_at: string;
 };
 
-export type EventItem = {
+export type EventItem = PlannerFields & {
   id: string;
   title: string;
   /** Null when the date still needs adding (not shown on calendar). */

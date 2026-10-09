@@ -51,6 +51,12 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { createPersonContact } from "@/lib/contacts/create-person";
+import {
+  emptyPlannerForm,
+  EventPlannerFields,
+} from "@/components/events/EventPlannerFields";
+import { LinkedSailings } from "@/components/events/LinkedSailings";
+import { readPlannerFields } from "@/lib/events/planner";
 
 const ATTENDANCE_OPTIONS: { value: EventAttendanceStatus; label: string }[] = [
   { value: "attending", label: "Attending" },
@@ -71,6 +77,7 @@ const emptyForm = {
   social_media_post_completed: false,
   personal_social_media_graphics_completed: false,
   reached_out_for_pr_to_organisers: false,
+  ...emptyPlannerForm,
 };
 
 type EventForm = typeof emptyForm;
@@ -84,6 +91,7 @@ function toLocalInput(iso: string | null | undefined): string {
 }
 
 function toEditForm(event: EventItem): EventForm {
+  const planner = readPlannerFields(event);
   return {
     title: event.title,
     starts_at: toLocalInput(event.starts_at),
@@ -100,6 +108,9 @@ function toEditForm(event: EventItem): EventForm {
     reached_out_for_pr_to_organisers: Boolean(
       event.reached_out_for_pr_to_organisers
     ),
+    ...planner,
+    recommended_arrival_start: planner.recommended_arrival_start || "",
+    recommended_arrival_end: planner.recommended_arrival_end || "",
   };
 }
 
@@ -384,6 +395,7 @@ function EventFields({
           minHeight="88px"
         />
       </div>
+      <EventPlannerFields form={form} onChange={onChange} />
       {showAdminChecks ? (
         <div className="md:col-span-2 space-y-2 rounded-lg border border-border bg-sand/40 px-3 py-3">
           <p className="label !mb-1">Admin checklist</p>
@@ -1274,6 +1286,20 @@ export function EventsClient({
             division: edit.division || "",
             notes: edit.notes,
             link_url: edit.link_url,
+            transport_relevant: edit.transport_relevant,
+            show_in_transport_planner: edit.show_in_transport_planner,
+            planner_category: edit.planner_category,
+            recommended_arrival_start: edit.recommended_arrival_start || null,
+            recommended_arrival_end: edit.recommended_arrival_end || null,
+            transport_destination_region: edit.transport_destination_region,
+            transport_destination_port: edit.transport_destination_port,
+            transport_origin_regions: edit.transport_origin_regions,
+            planner_priority: edit.planner_priority,
+            date_status: edit.date_status,
+            recurring_event: edit.recurring_event,
+            event_series_id: edit.event_series_id,
+            planner_slug: edit.planner_slug,
+            pm_attendance: edit.pm_attendance,
             ...(showAdminChecks
               ? {
                   social_media_post_completed: edit.social_media_post_completed,
@@ -1802,6 +1828,7 @@ export function EventsClient({
                     <dt className="label !mb-0.5">Location</dt>
                     <dd>{selected.location || "—"}</dd>
                   </div>
+                  <LinkedSailings eventId={selected.id} />
                   {selected.link_url ? (
                     <div>
                       <dt className="label !mb-0.5">Link</dt>

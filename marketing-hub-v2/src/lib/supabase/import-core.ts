@@ -1,3 +1,4 @@
+import { emptyPlannerFields } from "@/lib/events/planner";
 import { uid } from "@/lib/utils";
 import type {
   AwardEntry,
@@ -232,6 +233,7 @@ export async function importFromCoreData(): Promise<ImportResult> {
           }
         }
         return {
+          ...emptyPlannerFields(),
           id: `sb_${id}`,
           title: cleaned.title,
           starts_at: starts,

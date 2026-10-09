@@ -1220,6 +1220,7 @@ export function ThemesClient({
                   className="mt-4"
                   relatedType="content"
                   relatedId={editingContentId}
+                  suggestedTitle={contentEdit.title}
                 />
               </div>
         </RecordDrawer>
