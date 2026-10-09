@@ -1412,12 +1412,11 @@ export function ContentClient({
                     onChange={(asset_url) => setEdit({ ...edit, asset_url })}
                   />
                 </div>
+                <RelatedTasksPanel
+                  relatedType="content"
+                  relatedId={editingId}
+                />
               </fieldset>
-              <RelatedTasksPanel
-                relatedType="content"
-                relatedId={editingId}
-                suggestedTitle={edit.title}
-              />
         </RecordDrawer>
       ) : null}
     </div>
