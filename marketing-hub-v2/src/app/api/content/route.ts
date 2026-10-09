@@ -4,10 +4,12 @@ import {
   createContent,
   deleteContent,
   listContent,
+  setContentPostShare,
   setNewsroomPlacement,
   updateContent,
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
+import { postSharePath } from "@/lib/social/post-share";
 import {
   isSocialContentItem,
   normalizeChannels,
@@ -41,11 +43,17 @@ async function maybePushPlanable(
 
 /** Members only see scheduled/published social — not drafts/pipeline. */
 function contentVisibleToMember(items: ContentItem[]): ContentItem[] {
-  return items.filter(
-    (c) =>
-      isSocialContentItem(c) &&
-      (c.status === "scheduled" || c.status === "published")
-  );
+  return items
+    .filter(
+      (c) =>
+        isSocialContentItem(c) &&
+        (c.status === "scheduled" || c.status === "published")
+    )
+    .map((c) => {
+      const copy = { ...c };
+      delete copy.share_token;
+      return copy;
+    });
 }
 
 export async function GET() {
@@ -84,6 +92,18 @@ export async function POST(request: NextRequest) {
     return jsonOk({ item });
   }
 
+  if (action === "set_post_share") {
+    const id = String(body.id ?? "");
+    if (!id) return jsonError("id required", 400);
+    const result = await setContentPostShare(id, body.enabled === true);
+    if (!result) return jsonError("Not found", 404);
+    return jsonOk({
+      share_enabled: result.share_enabled,
+      share_token: result.share_token,
+      path: result.share_enabled ? postSharePath(result.share_token) : "",
+    });
+  }
+
   if (action === "update") {
     const existingList = await listContent();
     const existing = existingList.find((c) => c.id === body.id);
@@ -97,6 +117,8 @@ export async function POST(request: NextRequest) {
     }
 
     const patch = { ...(body.patch ?? {}) } as Record<string, unknown>;
+    delete patch.share_token;
+    delete patch.share_enabled;
     if (patch.status === "published") {
       return jsonError(
         "Publish only in Planable. Sync from Planable to mark it published in the Hub.",

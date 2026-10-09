@@ -92,6 +92,8 @@ export function withContentPlanableDefaults(
       : [],
     last_synced_at: item.last_synced_at ?? null,
     sync_source: item.sync_source ?? "",
+    share_token: item.share_token ?? "",
+    share_enabled: item.share_enabled === true,
     pin_homepage: item.pin_homepage === true,
     in_slider: item.in_slider === true,
     newsroom_name: item.newsroom_name,
@@ -222,6 +224,50 @@ export async function deleteEventAttendance(eventId: string, userId: string) {
 export async function listContent() {
   const store = await readStore();
   return store.content.map(withContentPlanableDefaults);
+}
+
+/** Turn the unlisted staff preview on or off. The token stays so the same link can be restored. */
+export async function setContentPostShare(
+  id: string,
+  enabled: boolean
+): Promise<{ share_token: string; share_enabled: boolean } | null> {
+  const { generateShareToken, isShareToken } = await import(
+    "@/lib/social/post-share"
+  );
+  const { isSocialContentItem } = await import("@/lib/data/normalize");
+  let result: { share_token: string; share_enabled: boolean } | null = null;
+  await updateStore((s) => {
+    const idx = s.content.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    const current = withContentPlanableDefaults(s.content[idx]);
+    if (!isSocialContentItem(current)) return;
+    const share_token = isShareToken(current.share_token ?? "")
+      ? current.share_token!
+      : generateShareToken();
+    s.content[idx] = {
+      ...current,
+      share_token,
+      share_enabled: enabled,
+      updated_at: nowIso(),
+    };
+    result = { share_token, share_enabled: enabled };
+  });
+  return result;
+}
+
+/** Public staff preview. Null when the token is unknown or the link is off. */
+export async function getPublicPostByShareToken(token: string) {
+  const { isShareToken, toPublicSocialPreview } = await import(
+    "@/lib/social/post-share"
+  );
+  const trimmed = token.trim();
+  if (!isShareToken(trimmed)) return null;
+  const store = await readStore();
+  const item = store.content
+    .map(withContentPlanableDefaults)
+    .find((c) => c.share_enabled && c.share_token === trimmed);
+  if (!item) return null;
+  return toPublicSocialPreview(item);
 }
 
 export async function createContent(

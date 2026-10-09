@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   formatChannels,
   imageAssetUrls,
+  previewAssetUrls,
   isSocialContentItem,
   parseChannels,
   primaryCanvaUrl,
@@ -35,6 +36,7 @@ import {
   CompactMultiImageThumb,
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
+import { PostShareControls } from "@/components/social/PostShareControls";
 import { ChannelMultiSelect } from "@/components/ui/ChannelMultiSelect";
 import {
   CHANNELS,
@@ -1175,9 +1177,28 @@ export function ContentClient({
                     platforms={edit.channel}
                     caption={stripHtml(edit.caption || edit.title)}
                     captionHtml={edit.caption}
-                    images={imageAssetUrls(edit.asset_url)}
+                    images={previewAssetUrls(edit.asset_url)}
                     canvaUrl={primaryCanvaUrl(edit.asset_url) || null}
                   />
+                  <div className="mt-3">
+                    <PostShareControls
+                      contentId={editingItem.id}
+                      enabled={editingItem.share_enabled === true}
+                      onUpdated={(next) => {
+                        setItems((prev) =>
+                          prev.map((item) =>
+                            item.id === editingItem.id
+                              ? {
+                                  ...item,
+                                  share_enabled: next.share_enabled,
+                                  share_token: next.share_token,
+                                }
+                              : item
+                          )
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
               ) : null}
               <fieldset disabled={editLocked} className="grid min-w-0 max-w-full gap-2 disabled:opacity-80 [&>*]:min-w-0">

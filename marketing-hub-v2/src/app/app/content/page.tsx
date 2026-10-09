@@ -16,11 +16,17 @@ export default async function ContentPage() {
   const initialContent =
     user?.role === "admin"
       ? content
-      : content.filter(
-          (c) =>
-            isSocialContentItem(c) &&
-            (c.status === "scheduled" || c.status === "published")
-        );
+      : content
+          .filter(
+            (c) =>
+              isSocialContentItem(c) &&
+              (c.status === "scheduled" || c.status === "published")
+          )
+          .map((c) => {
+            const copy = { ...c };
+            delete copy.share_token;
+            return copy;
+          });
 
   return (
     <ContentSocialHub

@@ -112,6 +112,13 @@ export type ContentItem = {
   /** Asset / Canva URLs (newline-separated when multiple) */
   asset_url: string;
   notes: string;
+  /**
+   * Unlisted staff preview token. Anyone with the link can see the social
+   * mock; the Hub login is not required. Empty when a link has never been created.
+   */
+  share_token?: string;
+  /** When false, an existing token does not open the public preview. */
+  share_enabled?: boolean;
   /** Homepage hero on the public newsroom. */
   pin_homepage?: boolean;
   /** Included in the public newsroom slider. */

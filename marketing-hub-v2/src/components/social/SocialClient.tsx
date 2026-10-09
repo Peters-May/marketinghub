@@ -38,6 +38,7 @@ import {
   CompactMultiImageThumb,
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
+import { PostShareControls } from "@/components/social/PostShareControls";
 
 type SocialPost = {
   id: string;
@@ -54,6 +55,7 @@ type SocialPost = {
   mediaUrl: string | null;
   mediaUrls: string[];
   source: "planable" | "hub";
+  shareEnabled?: boolean;
   /** Planable cross-post group — used to collapse platform copies in member view. */
   planableGroupId?: string | null;
   /** All Planable sibling ids in the same group (member-view dedupe). */
@@ -496,6 +498,7 @@ export function SocialClient({
             mediaUrl: preview[0] || canva || null,
             mediaUrls: preview,
             source: "hub" as const,
+            shareEnabled: c.share_enabled === true,
           };
         })
         .sort((a, b) =>
@@ -1381,6 +1384,21 @@ export function SocialClient({
                     Add LinkedIn and Instagram there, then schedule, approve and publish.
                   </p>
                 </div>
+              ) : null}
+              {!memberView && selected.source === "hub" ? (
+                <PostShareControls
+                  contentId={selected.id}
+                  enabled={selected.shareEnabled === true}
+                  onUpdated={(next) => {
+                    setPosts((prev) =>
+                      prev.map((p) =>
+                        p.id === selected.id
+                          ? { ...p, shareEnabled: next.share_enabled }
+                          : p
+                      )
+                    );
+                  }}
+                />
               ) : null}
               <p className="text-sm text-muted">
                 {selected.scheduledAt
