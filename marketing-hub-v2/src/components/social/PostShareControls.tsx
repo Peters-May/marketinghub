@@ -8,13 +8,19 @@ type ShareState = {
   share_token: string;
 };
 
+function shareUrl(token: string): string {
+  return `${window.location.origin}/share/post/${encodeURIComponent(token)}`;
+}
+
 export function PostShareControls({
   contentId,
   enabled,
+  shareToken,
   onUpdated,
 }: {
   contentId: string;
   enabled: boolean;
+  shareToken?: string;
   onUpdated: (next: ShareState) => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -23,16 +29,53 @@ export function PostShareControls({
   const [link, setLink] = useState("");
 
   async function copyText(url: string) {
+    setLink(url);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt("Copy this staff link:", url);
+      window.prompt("Copy this link:", url);
     }
   }
 
-  async function setShare(nextEnabled: boolean) {
+  async function createOrCopy() {
+    if (busy) return;
+    setError(null);
+    if (enabled && shareToken) {
+      await copyText(shareUrl(shareToken));
+      return;
+    }
+    setBusy(true);
+    setCopied(false);
+    try {
+      const res = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_post_share",
+          id: contentId,
+          enabled: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Could not create the link");
+        return;
+      }
+      const token = String(data.share_token ?? "");
+      onUpdated({ share_enabled: true, share_token: token });
+      if (data.path) {
+        await copyText(`${window.location.origin}${data.path}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function turnOff() {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -44,77 +87,49 @@ export function PostShareControls({
         body: JSON.stringify({
           action: "set_post_share",
           id: contentId,
-          enabled: nextEnabled,
+          enabled: false,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Could not update the staff link");
+        setError(data.error || "Could not turn off the link");
         return;
       }
-      const share_token = String(data.share_token ?? "");
-      const share_enabled = data.share_enabled === true;
-      onUpdated({ share_enabled, share_token });
-      if (share_enabled && data.path) {
-        const url = `${window.location.origin}${data.path}`;
-        setLink(url);
-        await copyText(url);
-      } else {
-        setLink("");
-      }
+      onUpdated({
+        share_enabled: false,
+        share_token: String(data.share_token ?? shareToken ?? ""),
+      });
+      setLink("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update the staff link");
+      setError(e instanceof Error ? e.message : "Could not turn off the link");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="rounded-xl border border-border bg-slate-50 px-3 py-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
-        Staff link
-      </p>
-      <p className="mt-1 text-xs text-muted">
-        Anyone with the link can see this draft as it will look on social media,
-        without signing in to the Hub. Save caption or image changes first.
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {enabled ? (
-          <>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={busy}
-              onClick={() => void setShare(true)}
-            >
-              <Link2 className="h-4 w-4" />
-              {busy ? "Updating…" : copied ? "Link copied" : "Copy staff link"}
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={busy}
-              onClick={() => void setShare(false)}
-            >
-              Turn off link
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={busy}
-            onClick={() => void setShare(true)}
-          >
-            <Link2 className="h-4 w-4" />
-            {busy ? "Creating…" : "Create staff link"}
-          </button>
-        )}
-      </div>
-      {link ? (
-        <p className="mt-2 break-all text-xs text-slate-600">{link}</p>
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className="btn-secondary"
+        disabled={busy}
+        onClick={() => void createOrCopy()}
+      >
+        <Link2 className="h-4 w-4" />
+        {busy ? "Creating…" : copied ? "Link copied" : enabled ? "Copy link" : "Create link"}
+      </button>
+      {enabled ? (
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={busy}
+          onClick={() => void turnOff()}
+        >
+          Turn off
+        </button>
       ) : null}
-      {error ? <p className="mt-2 text-xs text-[var(--danger)]">{error}</p> : null}
+      {link ? <p className="w-full break-all text-xs text-slate-600">{link}</p> : null}
+      {error ? <p className="w-full text-xs text-[var(--danger)]">{error}</p> : null}
     </div>
   );
 }

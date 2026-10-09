@@ -5,6 +5,7 @@ import {
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
 import { readStore, updateStore } from "@/lib/store/local";
+import { createServiceClient } from "@/lib/supabase/admin";
 import { clothingProductById } from "@/lib/merch/north-sails";
 import {
   normalizeMerchOrderItems,
@@ -226,6 +227,14 @@ export async function listContent() {
   return store.content.map(withContentPlanableDefaults);
 }
 
+function isMissingShareRpc(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST202" ||
+    /hub_set_content_share|hub_content_by_share_token|schema cache/i.test(message)
+  );
+}
+
 /** Turn the unlisted staff preview on or off. The token stays so the same link can be restored. */
 export async function setContentPostShare(
   id: string,
@@ -235,6 +244,24 @@ export async function setContentPostShare(
     "@/lib/social/post-share"
   );
   const { isSocialContentItem } = await import("@/lib/data/normalize");
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_set_content_share", {
+    p_content_id: id,
+    p_enabled: enabled,
+    p_new_token: generateShareToken(),
+  });
+  if (!error && data && typeof data === "object") {
+    const row = data as { share_token?: string; share_enabled?: boolean };
+    const share_token = String(row.share_token ?? "");
+    if (isShareToken(share_token)) {
+      return { share_token, share_enabled: row.share_enabled === true };
+    }
+    return null;
+  }
+  if (error && !isMissingShareRpc(error)) {
+    throw new Error(error.message);
+  }
+
   let result: { share_token: string; share_enabled: boolean } | null = null;
   await updateStore((s) => {
     const idx = s.content.findIndex((c) => c.id === id);
@@ -262,6 +289,19 @@ export async function getPublicPostByShareToken(token: string) {
   );
   const trimmed = token.trim();
   if (!isShareToken(trimmed)) return null;
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_content_by_share_token", {
+    p_token: trimmed,
+  });
+  if (!error) {
+    if (!data || typeof data !== "object") return null;
+    return toPublicSocialPreview(
+      withContentPlanableDefaults(data as ContentItem)
+    );
+  }
+  if (!isMissingShareRpc(error)) throw new Error(error.message);
+
   const store = await readStore();
   const item = store.content
     .map(withContentPlanableDefaults)

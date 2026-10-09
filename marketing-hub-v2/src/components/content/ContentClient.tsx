@@ -1184,6 +1184,7 @@ export function ContentClient({
                     <PostShareControls
                       contentId={editingItem.id}
                       enabled={editingItem.share_enabled === true}
+                      shareToken={editingItem.share_token}
                       onUpdated={(next) => {
                         setItems((prev) =>
                           prev.map((item) =>
@@ -1411,11 +1412,12 @@ export function ContentClient({
                     onChange={(asset_url) => setEdit({ ...edit, asset_url })}
                   />
                 </div>
-                <RelatedTasksPanel
-                  relatedType="content"
-                  relatedId={editingId}
-                />
               </fieldset>
+              <RelatedTasksPanel
+                relatedType="content"
+                relatedId={editingId}
+                suggestedTitle={edit.title}
+              />
         </RecordDrawer>
       ) : null}
     </div>

@@ -56,6 +56,7 @@ type SocialPost = {
   mediaUrls: string[];
   source: "planable" | "hub";
   shareEnabled?: boolean;
+  shareToken?: string;
   /** Planable cross-post group — used to collapse platform copies in member view. */
   planableGroupId?: string | null;
   /** All Planable sibling ids in the same group (member-view dedupe). */
@@ -499,6 +500,7 @@ export function SocialClient({
             mediaUrls: preview,
             source: "hub" as const,
             shareEnabled: c.share_enabled === true,
+            shareToken: c.share_token || "",
           };
         })
         .sort((a, b) =>
@@ -1389,11 +1391,16 @@ export function SocialClient({
                 <PostShareControls
                   contentId={selected.id}
                   enabled={selected.shareEnabled === true}
+                  shareToken={selected.shareToken}
                   onUpdated={(next) => {
                     setPosts((prev) =>
                       prev.map((p) =>
                         p.id === selected.id
-                          ? { ...p, shareEnabled: next.share_enabled }
+                          ? {
+                              ...p,
+                              shareEnabled: next.share_enabled,
+                              shareToken: next.share_token,
+                            }
                           : p
                       )
                     );
