@@ -435,7 +435,7 @@ export function EmailDesigner({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Send failed");
       setReviewOpen(false);
-      router.push(backHref);
+      router.push(`/app/email/campaign/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Send failed");
     } finally {
@@ -462,7 +462,7 @@ export function EmailDesigner({
     whenMode === "later" ? londonDateTimeToIso(scheduleDate, scheduleTime) : null;
 
   return (
-    <div className="-mx-4 -mt-6 flex min-h-[calc(100vh-8rem)] flex-col md:-mx-8 md:-mt-8">
+    <div className="-mx-4 -mt-6 flex h-[calc(100dvh-8rem)] flex-col overflow-hidden md:-mx-8 md:-mt-8">
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2">
         <Link href={backHref} className="btn-secondary px-3 py-1.5 text-sm">
           Back
@@ -673,7 +673,7 @@ export function EmailDesigner({
         <div className="min-w-0 flex-1 overflow-auto">
           {previewing ? (
             <div
-              className="min-h-full px-6 py-8"
+              className="min-h-full px-6 pb-16 pt-8"
               style={{ background: history.design.styles.pageBackground }}
             >
               <EmailInboxBar

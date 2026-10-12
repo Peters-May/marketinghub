@@ -46,5 +46,5 @@ export {
   updateSection,
 } from "@/lib/email/design/document";
 
-export { compileEmailDesign, safeEmailUrl } from "@/lib/email/design/compile";
+export { compileEmailDesign, emailImageSrc, safeEmailUrl } from "@/lib/email/design/compile";
 export { previewMerge } from "@/lib/email/design/preview";

@@ -244,6 +244,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     email_suppressions:
       store.email_suppressions ?? seed.email_suppressions ?? [],
     email_events: store.email_events ?? seed.email_events ?? [],
+    email_gallery: store.email_gallery ?? seed.email_gallery ?? [],
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -315,6 +316,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_campaigns ||
     !store.email_suppressions ||
     !store.email_events ||
+    !store.email_gallery ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );

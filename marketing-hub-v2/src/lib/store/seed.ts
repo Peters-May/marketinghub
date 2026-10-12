@@ -1487,6 +1487,7 @@ export function createSeedStore(): HubStore {
     email_campaigns: [],
     email_suppressions: [],
     email_events: [],
+    email_gallery: [],
     newsroom_settings: {
       title: "Peters & May News",
       language: "en",

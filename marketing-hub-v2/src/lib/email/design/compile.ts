@@ -18,6 +18,9 @@ function escapeAttr(value: string): string {
   return escapeHtml(value).replace(/'/g, "&#39;");
 }
 
+const GALLERY_PATH =
+  /^\/api\/email\/gallery\/file\/[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
+
 /** Allow http(s), mailto, and merge tokens. */
 export function safeEmailUrl(url: string): string {
   const trimmed = url.trim();
@@ -26,6 +29,22 @@ export function safeEmailUrl(url: string): string {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^mailto:/i.test(trimmed)) return trimmed;
   return "";
+}
+
+function appOrigin(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (explicit) return explicit;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3001";
+}
+
+/** Image src for the canvas, or an absolute URL when the email is compiled. */
+export function emailImageSrc(url: string, absolute: boolean): string {
+  const trimmed = url.trim();
+  if (GALLERY_PATH.test(trimmed)) {
+    return absolute ? `${appOrigin()}${trimmed}` : trimmed;
+  }
+  return safeEmailUrl(trimmed);
 }
 
 const RICH_TAGS = new Set([
@@ -99,7 +118,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     case "text":
       return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${sanitizeRichEmailHtml(block.html)}</div>`;
     case "image": {
-      const src = safeEmailUrl(block.src);
+      const src = emailImageSrc(block.src, true);
       if (!src) {
         return "";
       }
@@ -110,7 +129,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
       return `<div style="${pad}${align}">${linked}</div>`;
     }
     case "logo": {
-      const src = safeEmailUrl(block.src);
+      const src = emailImageSrc(block.src, true);
       const href = safeEmailUrl(block.href);
       const inner = src
         ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt || "Peters & May")}" width="${block.width}" style="display:block;border:0;max-width:100%;height:auto;width:${block.width}px;" />`

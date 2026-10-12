@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
 import {
   campaignClickRateLabel,
+  campaignOpenHref,
   campaignOpenRateLabel,
   campaignUpdatedBy,
   formatLondonUpdated,
@@ -170,15 +171,18 @@ export function EmailCampaignsPanel({
             <tbody>
               {rows.map((c) => {
                 const updated = formatLondonUpdated(c.updated_at);
+                const href = campaignOpenHref(c);
                 return (
-                  <tr key={c.id} className="border-b border-border last:border-0">
+                  <tr
+                    key={c.id}
+                    className="cursor-pointer border-b border-border last:border-0 hover:bg-slate-50"
+                    onClick={() => router.push(href)}
+                  >
                     <td className="px-4 py-3">
                       <button
                         type="button"
                         className="inline-flex items-center gap-2 text-left font-medium text-brand hover:underline"
-                        onClick={() =>
-                          router.push(`/app/email/design/campaign/${c.id}`)
-                        }
+                        onClick={() => router.push(href)}
                       >
                         <span className={cn("h-2 w-2 shrink-0 rounded-full", statusDot(c.status))} />
                         {c.title}

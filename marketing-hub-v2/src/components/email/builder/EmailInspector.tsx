@@ -9,6 +9,7 @@ import type {
   SocialNetwork,
 } from "@/lib/email/design";
 import { EMAIL_COLOUR_SWATCHES, ENSIGN_RED } from "@/lib/email/design";
+import { EmailImageField } from "@/components/email/builder/EmailImageField";
 
 const MERGE_TOKENS = [
   { token: "{{first_name}}", label: "First name" },
@@ -322,7 +323,10 @@ function BlockFields({
       ) : null}
       {block.type === "image" || block.type === "logo" ? (
         <>
-          <TextInput label="Image URL" value={block.src} onChange={(src) => onBlock({ src } as Partial<EmailBlock>)} />
+          <EmailImageField
+            src={block.src}
+            onChange={(src) => onBlock({ src } as Partial<EmailBlock>)}
+          />
           <TextInput label="Alt text" value={block.alt} onChange={(alt) => onBlock({ alt } as Partial<EmailBlock>)} />
           <TextInput label="Link" value={block.href} onChange={(href) => onBlock({ href } as Partial<EmailBlock>)} />
           {block.type === "image" ? (

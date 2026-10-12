@@ -43,12 +43,14 @@ export default async function EmailDesignPage({
     listEmailAudiences(),
   ]);
   if (!campaign) notFound();
-  const readOnly = campaign.status === "sent" || campaign.status === "sending";
+  if (campaign.status === "sent" || campaign.status === "sending") {
+    redirect(`/app/email/campaign/${encodeURIComponent(campaign.id)}`);
+  }
   return (
     <EmailDesigner
       kind="campaign"
       id={campaign.id}
-      readOnly={readOnly}
+      readOnly={false}
       backHref="/app/email"
       initialName={campaign.title}
       initialSubject={campaign.subject}

@@ -34,6 +34,14 @@ export function formatLondonStamp(iso: string): string {
   return `${get("day")} ${month} ${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
+/** Drafts and scheduled emails open the designer. Sent emails open the summary. */
+export function campaignOpenHref(c: Pick<EmailCampaign, "id" | "status">): string {
+  if (c.status === "sent" || c.status === "sending") {
+    return `/app/email/campaign/${c.id}`;
+  }
+  return `/app/email/design/campaign/${c.id}`;
+}
+
 export function campaignMetaLine(c: EmailCampaign): string {
   const who = campaignUpdatedBy(c);
   if (c.sent_at) return `${who} • Sent on ${formatLondonStamp(c.sent_at)}`;

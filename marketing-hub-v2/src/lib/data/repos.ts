@@ -70,6 +70,7 @@ import type {
   EmailSuppressionReason,
   EmailEvent,
   EmailEventKind,
+  EmailGalleryImage,
 } from "@/lib/types";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 
@@ -2898,6 +2899,30 @@ export async function deleteEmailAudience(id: string) {
   await updateStore((s) => {
     s.email_audiences = (s.email_audiences ?? []).filter((x) => x.id !== id);
   });
+}
+
+export async function listEmailGallery(): Promise<EmailGalleryImage[]> {
+  const store = await readStore();
+  return [...(store.email_gallery ?? [])].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
+export async function addEmailGalleryImage(input: {
+  name: string;
+  url: string;
+}): Promise<EmailGalleryImage> {
+  const item: EmailGalleryImage = {
+    id: uid("egimg"),
+    name: input.name.slice(0, 200),
+    url: input.url,
+    created_at: nowIso(),
+  };
+  await updateStore((s) => {
+    if (!s.email_gallery) s.email_gallery = [];
+    s.email_gallery.unshift(item);
+  });
+  return item;
 }
 
 export async function listEmailCampaigns() {

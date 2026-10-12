@@ -4,6 +4,7 @@ import {
   announcementDesign,
   compileEmailDesign,
   designFromLegacyHtml,
+  emailImageSrc,
   moveBlock,
   newsletterDesign,
   normalizeEmailDesign,
@@ -66,6 +67,15 @@ describe("email design compiler", () => {
     });
     expect(moved.sections[1].columns[0].blocks.find((block) => block.id === from.id)).toBeUndefined();
     expect(moved.sections[0].columns[0].blocks.some((block) => block.id === from.id)).toBe(true);
+  });
+
+  it("turns a gallery image into an absolute address for the sent email", () => {
+    const path = "/api/email/gallery/file/photo.png";
+    expect(emailImageSrc(path, false)).toBe(path);
+    expect(emailImageSrc(path, true)).toMatch(
+      /^https?:\/\/.+\/api\/email\/gallery\/file\/photo.png$/
+    );
+    expect(emailImageSrc("javascript:alert(1)", true)).toBe("");
   });
 
   it("rejects a document that is not version 1", () => {

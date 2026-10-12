@@ -16,9 +16,17 @@ export type UploadedAsset = {
   storage: "supabase";
 };
 
+export type UploadProgress = {
+  loaded: number;
+  total: number;
+  /** 0–100 for this file. Stays at 99 until storage confirms the upload. */
+  percent: number;
+};
+
 export type UploadAssetOptions = {
   /** Pass admin max when uploading from admin media manage UI. */
   maxBytes?: number;
+  onProgress?: (progress: UploadProgress) => void;
 };
 
 async function readErrorMessage(res: Response, fallback: string, maxBytes: number) {
@@ -33,6 +41,84 @@ async function readErrorMessage(res: Response, fallback: string, maxBytes: numbe
     return `File too large for upload (max ${Math.round(maxBytes / (1024 * 1024))}MB).`;
   }
   return text.trim().slice(0, 180) || fallback;
+}
+
+function reportProgress(
+  onProgress: ((progress: UploadProgress) => void) | undefined,
+  loaded: number,
+  total: number,
+  force: boolean,
+  lastEmit: { at: number }
+) {
+  if (!onProgress) return;
+  const now = Date.now();
+  if (!force && now - lastEmit.at < 150) return;
+  lastEmit.at = now;
+  const safeTotal = total > 0 ? total : 0;
+  const raw =
+    safeTotal > 0 ? Math.round((Math.min(loaded, safeTotal) / safeTotal) * 100) : 0;
+  onProgress({
+    loaded,
+    total: safeTotal,
+    percent: Math.min(force ? 100 : 99, Math.max(0, raw)),
+  });
+}
+
+/** PUT with upload progress. Fetch cannot report bytes sent. */
+function putFileWithProgress(
+  url: string,
+  file: File,
+  onProgress?: (progress: UploadProgress) => void
+): Promise<void> {
+  if (typeof XMLHttpRequest === "undefined") {
+    return fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    }).then(async (putRes) => {
+      if (putRes.ok) {
+        onProgress?.({ loaded: file.size, total: file.size, percent: 100 });
+        return;
+      }
+      const detail = await putRes.text().catch(() => "");
+      throw new Error(
+        `Storage upload failed for ${file.name}${detail ? `: ${detail.slice(0, 120)}` : ""}`
+      );
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const lastEmit = { at: 0 };
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (event) => {
+      const total = event.lengthComputable ? event.total : file.size;
+      reportProgress(onProgress, event.loaded, total, false, lastEmit);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        reportProgress(onProgress, file.size, file.size, true, lastEmit);
+        resolve();
+        return;
+      }
+      const detail = (xhr.responseText || "").slice(0, 120);
+      reject(
+        new Error(
+          `Storage upload failed for ${file.name}${detail ? `: ${detail}` : ""}`
+        )
+      );
+    };
+    xhr.onerror = () => {
+      reject(new Error(`Storage upload failed for ${file.name}`));
+    };
+    xhr.onabort = () => {
+      reject(new Error(`Upload cancelled for ${file.name}`));
+    };
+    xhr.send(file);
+  });
 }
 
 export async function uploadAssetDirect(
@@ -81,20 +167,7 @@ export async function uploadAssetDirect(
     throw new Error(intent.error || `Could not start upload for ${file.name}`);
   }
 
-  const putRes = await fetch(intent.signedUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-    },
-    body: file,
-  });
-
-  if (!putRes.ok) {
-    const detail = await putRes.text().catch(() => "");
-    throw new Error(
-      `Storage upload failed for ${file.name}${detail ? `: ${detail.slice(0, 120)}` : ""}`
-    );
-  }
+  await putFileWithProgress(intent.signedUrl, file, opts?.onProgress);
 
   return {
     url: intent.publicUrl,

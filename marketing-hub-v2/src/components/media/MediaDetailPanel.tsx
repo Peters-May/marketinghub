@@ -7,6 +7,7 @@ import {
   Lock,
   Shield,
   Trash2,
+  Loader2,
   Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
@@ -35,6 +36,10 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import {
+  UploadProgressBar,
+  type FileUploadProgress,
+} from "@/components/ui/UploadProgress";
 
 const NEW_SUBFOLDER_VALUE = "__new_subfolder__";
 const MEDIA_ACCEPT = UPLOAD_ACCEPT;
@@ -178,6 +183,9 @@ export function MediaDetailPanel({
   const [fileName, setFileName] = useState(focusedFile?.name ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress | null>(
+    null
+  );
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -376,11 +384,34 @@ export function MediaDetailPanel({
         size?: number | null;
       }[] = [];
 
+      if (incoming.length > 0) {
+        setUploadProgress({
+          current: 1,
+          total: incoming.length,
+          name: incoming[0].name,
+          percent: 0,
+          loaded: 0,
+          size: incoming[0].size,
+          phase: "upload",
+        });
+      }
+
       for (let i = 0; i < incoming.length; i++) {
         const file = incoming[i];
         try {
           const uploadedFile = await uploadAssetDirect(file, {
             maxBytes: MAX_UPLOAD_BYTES_ADMIN,
+            onProgress: (event) => {
+              setUploadProgress({
+                current: i + 1,
+                total: incoming.length,
+                name: file.name,
+                percent: event.percent,
+                loaded: event.loaded,
+                size: event.total || file.size,
+                phase: "upload",
+              });
+            },
           });
           uploaded.push({
             url: uploadedFile.url,
@@ -396,6 +427,12 @@ export function MediaDetailPanel({
           );
         }
       }
+
+      setUploadProgress((prev) =>
+        prev
+          ? { ...prev, phase: "save", percent: 100, loaded: prev.size }
+          : null
+      );
 
       const res = await fetch("/api/media", {
         method: "POST",
@@ -418,6 +455,7 @@ export function MediaDetailPanel({
       setError(e instanceof Error ? e.message : "Could not upload files");
     } finally {
       setUploading(false);
+      setUploadProgress(null);
       setDragActive(false);
     }
   }
@@ -681,7 +719,7 @@ export function MediaDetailPanel({
                   dragActive
                     ? "border-brand bg-brand/5"
                     : "border-border bg-sand/30 hover:border-brand/40 hover:bg-sand/50",
-                  (uploading || saving) && "pointer-events-none opacity-70"
+                  (uploading || saving) && "pointer-events-none"
                 )}
                 onClick={() => fileInputRef.current?.click()}
                 onKeyDown={(e) => {
@@ -695,26 +733,37 @@ export function MediaDetailPanel({
                 onDragLeave={onDragLeave}
                 onDrop={onDropFiles}
               >
-                <Upload
-                  className={cn(
-                    "mx-auto h-6 w-6",
-                    dragActive ? "text-brand" : "text-muted"
-                  )}
-                />
-                <p className="mt-1.5 text-sm font-medium text-brand">
-                  {uploading
-                    ? "Uploading…"
-                    : needsPreviewImage
-                      ? "Drop, click, or paste (Ctrl+V) a preview image"
-                      : "Drop files here, click, or paste (Ctrl+V)"}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  Images, PDF, or short video · max{" "}
-                  {Math.round(MAX_UPLOAD_BYTES_ADMIN / (1024 * 1024))}MB each
-                  {needsPreviewImage
-                    ? " · screenshots become the gallery thumbnail"
-                    : ""}
-                </p>
+                {uploading ? (
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-brand" />
+                ) : (
+                  <Upload
+                    className={cn(
+                      "mx-auto h-6 w-6",
+                      dragActive ? "text-brand" : "text-muted"
+                    )}
+                  />
+                )}
+                {uploading && uploadProgress ? (
+                  <UploadProgressBar
+                    progress={uploadProgress}
+                    className="mx-auto mt-3 max-w-sm text-left"
+                  />
+                ) : (
+                  <>
+                    <p className="mt-1.5 text-sm font-medium text-brand">
+                      {needsPreviewImage
+                        ? "Drop, click, or paste (Ctrl+V) a preview image"
+                        : "Drop files here, click, or paste (Ctrl+V)"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      Images, PDF, or short video · max{" "}
+                      {Math.round(MAX_UPLOAD_BYTES_ADMIN / (1024 * 1024))}MB each
+                      {needsPreviewImage
+                        ? " · screenshots become the gallery thumbnail"
+                        : ""}
+                    </p>
+                  </>
+                )}
                 <input
                   ref={fileInputRef}
                   className="hidden"

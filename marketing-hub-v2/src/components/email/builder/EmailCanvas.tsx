@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp, Copy, GripVertical, Trash2 } from "lucide-react";
 import type { EmailBlock, EmailDesign } from "@/lib/email/design";
-import { safeEmailUrl, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
+import { emailImageSrc, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { readDrag, writeDrag, type DesignerDrag } from "@/components/email/builder/drag";
 import { previewMerge } from "@/lib/email/design/preview";
@@ -80,7 +80,7 @@ export function EmailCanvas({
 
   return (
     <div
-      className="min-h-full px-6 py-8"
+      className="min-h-full px-6 pb-16 pt-8"
       style={{ background: design.styles.pageBackground }}
       onClick={() => onSelect({ type: "email" })}
     >
@@ -136,7 +136,7 @@ export function EmailCanvas({
                   {section.columns.map((column) => (
                     <div
                       key={column.id}
-                      className="min-h-[48px] flex-1"
+                      className="min-h-[48px] min-w-0 flex-1"
                       style={{ width: device === "mobile" ? "100%" : `${column.width}%` }}
                       onDragOver={(event) => {
                         if (!readOnly) event.preventDefault();
@@ -382,7 +382,7 @@ function BlockView({
   }
 
   if (block.type === "image" || block.type === "logo") {
-    const src = safeEmailUrl(block.src);
+    const src = emailImageSrc(block.src, false);
     return (
       <div style={style}>
         {src ? (
@@ -390,14 +390,14 @@ function BlockView({
           <img
             src={src}
             alt={block.alt}
-            className="inline-block max-w-full"
+            className="block h-auto max-w-full"
             style={{
               width: block.type === "image" ? `${block.widthPercent}%` : block.width,
             }}
           />
         ) : (
           <div className="rounded border border-dashed border-border px-3 py-8 text-sm text-muted">
-            {block.type === "logo" ? block.alt || "Peters & May" : "Add an image URL"}
+            {block.type === "logo" ? block.alt || "Peters & May" : "Upload an image"}
           </div>
         )}
       </div>

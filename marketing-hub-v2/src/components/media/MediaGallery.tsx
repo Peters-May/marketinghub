@@ -51,6 +51,11 @@ import {
 import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { SearchSelect } from "@/components/ui/SearchSelect";
+import {
+  UploadProgressBar,
+  overallUploadPercent,
+  type FileUploadProgress,
+} from "@/components/ui/UploadProgress";
 import { mediaCategoryTourId, onTourPrepare } from "@/lib/tour/bus";
 
 type ListResponse = {
@@ -613,6 +618,10 @@ export function MediaGallery({
   );
   const [newSubfolderName, setNewSubfolderName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [filePercents, setFilePercents] = useState<number[] | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress | null>(
+    null
+  );
   const [dragActive, setDragActive] = useState(false);
   const [saving, setSaving] = useState(false);
   const [visibilitySaving, setVisibilitySaving] = useState<string | null>(null);
@@ -1043,11 +1052,42 @@ export function MediaGallery({
         size?: number | null;
       }[] = [];
 
+      if (files.length > 0) {
+        setFilePercents(files.map(() => 0));
+        setUploadProgress({
+          current: 1,
+          total: files.length,
+          name: files[0].name,
+          percent: 0,
+          loaded: 0,
+          size: files[0].size,
+          phase: "upload",
+        });
+      }
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         try {
           const uploadedFile = await uploadAssetDirect(file, {
             maxBytes: maxUploadBytes,
+            onProgress: (event) => {
+              const percent = event.percent;
+              setFilePercents((prev) => {
+                if (!prev || prev[i] === percent) return prev;
+                const next = prev.slice();
+                next[i] = percent;
+                return next;
+              });
+              setUploadProgress({
+                current: i + 1,
+                total: files.length,
+                name: file.name,
+                percent,
+                loaded: event.loaded,
+                size: event.total || file.size,
+                phase: "upload",
+              });
+            },
           });
           uploaded.push({
             url: uploadedFile.url,
@@ -1062,6 +1102,20 @@ export function MediaGallery({
               : `Upload failed for ${file.name} (${i + 1}/${files.length})`
           );
         }
+      }
+
+      if (files.length > 0) {
+        setFilePercents(files.map(() => 100));
+        setUploadProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                phase: "save",
+                percent: 100,
+                loaded: prev.size,
+              }
+            : null
+        );
       }
 
       const shared = {
@@ -1160,6 +1214,8 @@ export function MediaGallery({
       setFormError(e instanceof Error ? e.message : "Could not save media");
     } finally {
       setSaving(false);
+      setUploadProgress(null);
+      setFilePercents(null);
     }
   }
 
@@ -1681,7 +1737,8 @@ export function MediaGallery({
                 "cursor-pointer rounded-2xl border-2 border-dashed px-4 py-8 text-center transition",
                 dragActive
                   ? "border-brand bg-brand/5"
-                  : "border-border bg-sand/30 hover:border-brand/40 hover:bg-sand/50"
+                  : "border-border bg-sand/30 hover:border-brand/40 hover:bg-sand/50",
+                saving && "pointer-events-none"
               )}
               onClick={() => fileInputRef.current?.click()}
               onKeyDown={(e) => {
@@ -1714,6 +1771,7 @@ export function MediaGallery({
                 type="file"
                 multiple
                 accept={MEDIA_ACCEPT}
+                disabled={saving}
                 onChange={(e) => {
                   addFiles(filesFromList(e.target.files));
                   e.target.value = "";
@@ -1722,24 +1780,43 @@ export function MediaGallery({
             </div>
             {files.length > 0 ? (
               <ul className="mt-3 divide-y divide-border rounded-xl border border-border bg-white">
-                {files.map((file, index) => (
+                {files.map((file, index) => {
+                  const percent = filePercents?.[index];
+                  return (
                   <li
                     key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                    className="px-3 py-2 text-sm"
                   >
-                    <span className="min-w-0 truncate">{file.name}</span>
-                    <button
-                      type="button"
-                      className="btn-ghost shrink-0 px-2 py-1 text-xs text-[var(--danger)]"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setFiles((prev) => prev.filter((_, i) => i !== index));
-                      }}
-                    >
-                      Remove
-                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate">{file.name}</span>
+                      {percent != null ? (
+                        <span className="shrink-0 tabular-nums text-xs text-muted">
+                          {percent}%
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-ghost shrink-0 px-2 py-1 text-xs text-[var(--danger)]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFiles((prev) => prev.filter((_, i) => i !== index));
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {percent != null ? (
+                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-sand">
+                        <div
+                          className="h-full rounded-full bg-brand transition-[width] duration-150 ease-out"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             ) : null}
           </div>
@@ -1757,6 +1834,11 @@ export function MediaGallery({
               {formError}
             </p>
           ) : null}
+          {uploadProgress ? (
+            <div className="md:col-span-2">
+              <UploadProgressBar progress={uploadProgress} />
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <button
               type="button"
@@ -1765,9 +1847,11 @@ export function MediaGallery({
               onClick={() => void createMedia()}
             >
               {saving
-                ? files.length > 1
-                  ? `Saving ${files.length} assets…`
-                  : "Saving…"
+                ? uploadProgress?.phase === "upload"
+                  ? `Uploading ${overallUploadPercent(uploadProgress)}%`
+                  : files.length > 1
+                    ? `Saving ${files.length} assets…`
+                    : "Saving…"
                 : files.length > 1
                   ? `Save ${files.length} assets`
                   : "Save"}

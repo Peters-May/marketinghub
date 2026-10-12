@@ -25,6 +25,10 @@ import {
 } from "@/lib/upload/allowed-types";
 import { cn } from "@/lib/utils";
 import { CanvaPreviewTile } from "@/components/content/CanvaPreviewTile";
+import {
+  UploadProgressBar,
+  type FileUploadProgress,
+} from "@/components/ui/UploadProgress";
 
 type SingleProps = {
   multiple?: false;
@@ -68,9 +72,7 @@ export function AssetUploadField({
 } & (SingleProps | MultiProps)) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState<{ current: number; total: number } | null>(
-    null
-  );
+  const [progress, setProgress] = useState<FileUploadProgress | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [reorderFrom, setReorderFrom] = useState<number | null>(null);
   const [reorderOver, setReorderOver] = useState<number | null>(null);
@@ -118,12 +120,41 @@ export function AssetUploadField({
         ? "This field takes one file — using the first dropped file."
         : null
     );
-    setProgress({ current: 0, total: toUpload.length });
+    setProgress({
+      current: 1,
+      total: toUpload.length,
+      name: toUpload[0]?.name ?? "file",
+      percent: 0,
+      loaded: 0,
+      size: toUpload[0]?.size ?? 0,
+      phase: "upload",
+    });
     try {
       const added: string[] = [];
       for (let i = 0; i < toUpload.length; i++) {
-        setProgress({ current: i + 1, total: toUpload.length });
-        const data = await uploadAssetDirect(toUpload[i]);
+        const file = toUpload[i];
+        setProgress({
+          current: i + 1,
+          total: toUpload.length,
+          name: file.name,
+          percent: 0,
+          loaded: 0,
+          size: file.size,
+          phase: "upload",
+        });
+        const data = await uploadAssetDirect(file, {
+          onProgress: (event) => {
+            setProgress({
+              current: i + 1,
+              total: toUpload.length,
+              name: file.name,
+              percent: event.percent,
+              loaded: event.loaded,
+              size: event.total || file.size,
+              phase: "upload",
+            });
+          },
+        });
         added.push(data.url);
       }
       commit(multiple ? [...urls, ...added] : added);
@@ -213,9 +244,7 @@ export function AssetUploadField({
   }
 
   const dropTitle = uploading
-    ? progress && progress.total > 1
-      ? `Uploading ${progress.current} of ${progress.total}…`
-      : "Uploading…"
+    ? "Uploading…"
     : needsPreviewImage
       ? "Drop, click, or paste (Ctrl+V) a preview image"
       : multiple
@@ -239,7 +268,7 @@ export function AssetUploadField({
         dragActive
           ? "border-brand bg-brand/5"
           : "border-border bg-sand/30 hover:border-brand/40 hover:bg-sand/50",
-        uploading && "pointer-events-none opacity-70"
+        uploading && "pointer-events-none"
       )}
       onClick={openPicker}
       onKeyDown={(e) => {
@@ -260,8 +289,14 @@ export function AssetUploadField({
           className={cn("mx-auto h-6 w-6", dragActive ? "text-brand" : "text-muted")}
         />
       )}
-      <p className="mt-1.5 text-sm font-medium text-brand">{dropTitle}</p>
-      <p className="mt-1 text-xs text-muted">{dropHint}</p>
+      {uploading && progress ? (
+        <UploadProgressBar progress={progress} className="mx-auto mt-3 max-w-sm text-left" />
+      ) : (
+        <>
+          <p className="mt-1.5 text-sm font-medium text-brand">{dropTitle}</p>
+          <p className="mt-1 text-xs text-muted">{dropHint}</p>
+        </>
+      )}
       <input
         ref={inputRef}
         type="file"

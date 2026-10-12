@@ -941,6 +941,14 @@ export type EmailEvent = {
   created_at: string;
 };
 
+/** Image uploaded for marketing emails. Reused from the email gallery. */
+export type EmailGalleryImage = {
+  id: string;
+  name: string;
+  url: string;
+  created_at: string;
+};
+
 /** Public newsroom content / SEO / branding settings (admin-managed). */
 export type NewsroomSettings = {
   /** Display title — e.g. "Peters & May News" (max 150). */
@@ -1030,6 +1038,8 @@ export type HubStore = {
   email_suppressions: EmailSuppression[];
   /** Delivery / engagement events from Resend webhooks. */
   email_events: EmailEvent[];
+  /** Images uploaded for marketing emails. */
+  email_gallery: EmailGalleryImage[];
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };
