@@ -13,7 +13,7 @@ Hub ingest **always succeeds** even if Portal sync fails (logged; re-run backfil
 
 | Var | Purpose |
 |-----|---------|
-| `PORTAL_BASE_URL` | Portal origin, e.g. `https://portal.petersandmay.com` (no trailing slash) |
+| `PORTAL_BASE_URL` | Portal origin, e.g. `https://pmportal.petersandmay.com` (no trailing slash) |
 | `PORTAL_ENQUIRY_SYNC_SECRET` | Must match Portal `WEB_ENQUIRY_WEBHOOK_SECRET` |
 | `WEB_ENQUIRY_WEBHOOK_SECRET` | WordPress → Hub (unchanged) |
 | `HUB_MCP_API_KEY` | ChatGPT → Hub (unchanged) |

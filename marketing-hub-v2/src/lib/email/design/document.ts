@@ -28,6 +28,9 @@ export const EMAIL_COLOUR_SWATCHES = [
 
 export const ENSIGN_RED = COLORS.ensignRed.hex;
 
+export const OFFICE_FOOTER =
+  "Peters & May\nUnit 9, Goodwood Road\nEastleigh, Hampshire SO50 4NT\nUnited Kingdom\n+44 (0)2380 480480";
+
 const SOCIAL_NETWORKS: SocialNetwork[] = [
   "linkedin",
   "instagram",
@@ -163,7 +166,7 @@ export function createBlock(
       return {
         ...base,
         type: "footer",
-        text: "Peters & May",
+        text: OFFICE_FOOTER,
         align: "center",
         ...pick(partial, ["text", "align", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]),
       };
@@ -519,6 +522,14 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
   }
   if (type === "text") {
     return { ...(merged as EmailBlock), type: "text", fontSize: num(raw.fontSize, 16, 12, 28) } as EmailBlock;
+  }
+  if (type === "footer") {
+    const text = str(raw.text, OFFICE_FOOTER).trim();
+    return {
+      ...(merged as EmailBlock),
+      type: "footer",
+      text: text === "Peters & May" || text === "" ? OFFICE_FOOTER : str(raw.text, OFFICE_FOOTER),
+    } as EmailBlock;
   }
   return merged as EmailBlock;
 }

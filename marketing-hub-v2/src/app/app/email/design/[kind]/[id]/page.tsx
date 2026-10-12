@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { EmailDesigner } from "@/components/email/builder/EmailDesigner";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
-import { getEmailCampaign, getEmailTemplate } from "@/lib/data/repos";
+import { getEmailCampaign, getEmailTemplate, listEmailAudiences } from "@/lib/data/repos";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,10 @@ export default async function EmailDesignPage({
     );
   }
 
-  const campaign = await getEmailCampaign(id);
+  const [campaign, audiences] = await Promise.all([
+    getEmailCampaign(id),
+    listEmailAudiences(),
+  ]);
   if (!campaign) notFound();
   const readOnly = campaign.status === "sent" || campaign.status === "sending";
   return (
@@ -46,12 +49,19 @@ export default async function EmailDesignPage({
       kind="campaign"
       id={campaign.id}
       readOnly={readOnly}
-      backHref={`/app/email?campaign=${encodeURIComponent(campaign.id)}`}
+      backHref="/app/email"
       initialName={campaign.title}
       initialSubject={campaign.subject}
       initialPreview={campaign.preview_text}
       initialDesign={campaign.design}
       initialHtml={campaign.html_body}
+      audiences={audiences.map((audience) => ({
+        id: audience.id,
+        name: audience.name,
+      }))}
+      initialFromName={campaign.from_name}
+      initialFromEmail={campaign.from_email}
+      initialAudienceId={campaign.audience_id ?? ""}
     />
   );
 }

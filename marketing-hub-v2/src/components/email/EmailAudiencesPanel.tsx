@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import type { MediaList } from "@/lib/types";
 import type { AudienceWithCount } from "@/components/email/EmailMarketingHub";
 import { EmptyState } from "@/components/ui/PageHeader";
@@ -43,17 +43,50 @@ export function EmailAudiencesPanel({
   audiences,
   setAudiences,
   lists,
+  setLists,
 }: {
   audiences: AudienceWithCount[];
   setAudiences: React.Dispatch<React.SetStateAction<AudienceWithCount[]>>;
   lists: MediaList[];
+  setLists: React.Dispatch<React.SetStateAction<MediaList[]>>;
 }) {
   const [selected, setSelected] = useState<AudienceWithCount | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  async function syncPortalLists() {
+    setSyncing(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch("/api/email/audience/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Portal sync failed");
+      if (data.skipped) {
+        throw new Error(data.reason || "Portal sync is not configured");
+      }
+      const refresh = await fetch("/api/email/audiences");
+      const next = await refresh.json();
+      if (!refresh.ok) throw new Error(next.error || "Could not refresh audiences");
+      setAudiences(next.audiences ?? []);
+      setLists(next.lists ?? []);
+      const count = typeof data.lists === "number" ? data.lists : 0;
+      setNotice(
+        data.error
+          ? `Synced ${count} portal list${count === 1 ? "" : "s"}. ${data.error}`
+          : `Synced ${count} portal list${count === 1 ? "" : "s"}.`
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Portal sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   function toggleList(id: string) {
     setForm((f) => ({
@@ -137,7 +170,17 @@ export function EmailAudiencesPanel({
           Built from marketing lists. Only contacts with marketing consent are
           counted and sent.
         </p>
-        <button
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-secondary inline-flex items-center gap-1.5"
+            disabled={syncing}
+            onClick={() => void syncPortalLists()}
+          >
+            <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+            {syncing ? "Syncing…" : "Sync portal lists"}
+          </button>
+          <button
           type="button"
           className="btn-primary inline-flex items-center gap-1.5"
           onClick={() => {
@@ -151,7 +194,19 @@ export function EmailAudiencesPanel({
           <Plus className="h-4 w-4" />
           New audience
         </button>
+        </div>
       </div>
+
+      {notice ? (
+        <p className="mb-3 rounded-lg border border-border bg-slate-50 px-3 py-2 text-sm text-brand">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </p>
+      ) : null}
 
       {audiences.length === 0 ? (
         <EmptyState

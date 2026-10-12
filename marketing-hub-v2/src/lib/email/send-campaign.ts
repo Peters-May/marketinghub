@@ -11,7 +11,7 @@ import {
   notifyPortalCampaignSend,
   syncPortalMarketingAudience,
 } from "@/lib/sync/portal-marketing";
-import type { EmailCampaign } from "@/lib/types";
+import type { Contact, EmailCampaign } from "@/lib/types";
 
 const BATCH_PAUSE_MS = 80;
 
@@ -73,7 +73,7 @@ export async function sendEmailCampaign(
   }
 
   try {
-    await syncPortalMarketingAudience();
+    await syncPortalMarketingAudience({ includeLists: false });
   } catch (err) {
     console.error("[send-campaign] portal audience", err);
   }
@@ -207,4 +207,59 @@ export async function sendEmailCampaign(
     failed,
     error: sent === 0 ? errors[0] || "All sends failed" : undefined,
   };
+}
+
+/** One copy to the signed-in sender. Does not change the campaign. */
+export async function sendTestEmail(input: {
+  to: string;
+  toName: string;
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  html: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const to = input.to.trim();
+  if (!to) return { ok: false, error: "No email address on your account" };
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) return { ok: false, error: "Email is not configured" };
+
+  const fromEmail =
+    input.fromEmail.trim() ||
+    process.env.RESEND_FROM_EMAIL?.trim() ||
+    "marketing@petersandmay.com";
+  const from = input.fromName.trim()
+    ? `${input.fromName.trim()} <${fromEmail}>`
+    : fromEmail;
+  const contact = {
+    id: "test",
+    name: input.toName || to,
+    email: to,
+    organisation: "Peters & May",
+    role: "",
+    outlet: "",
+    country: "United Kingdom",
+  } as Contact;
+  const unsub = unsubscribeUrlFor({ email: to, campaignId: "test", contactId: "test" });
+  const html = applyEmailMerge(ensureUnsubscribeFooter(input.html || "<p></p>"), {
+    contact,
+    unsubscribeUrl: unsub,
+  });
+  const subject = applyEmailMerge(input.subject || "Test email", {
+    contact,
+    unsubscribeUrl: unsub,
+  });
+
+  try {
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({
+      from,
+      to,
+      subject: subject.startsWith("Test:") ? subject : `Test: ${subject}`,
+      html,
+    });
+    if (result.error) return { ok: false, error: result.error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Test send failed" };
+  }
 }

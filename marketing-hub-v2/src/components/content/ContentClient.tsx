@@ -37,6 +37,7 @@ import {
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
 import { PostShareControls } from "@/components/social/PostShareControls";
+import { SocialIdeasPanel } from "@/components/social/SocialIdeasPanel";
 import { ChannelMultiSelect } from "@/components/ui/ChannelMultiSelect";
 import {
   CHANNELS,
@@ -174,6 +175,28 @@ function statusLabel(status: ContentStatus) {
   return COLUMNS.find((c) => c.id === status)?.label ?? status;
 }
 
+function toIdeaPanelPost(item: ContentItem) {
+  const channels = parseChannels(item.channel);
+  const type = item.content_type || "Content";
+  return {
+    id: item.id,
+    text: item.title || "Untitled idea",
+    scheduledAt: item.due_date
+      ? `${item.due_date.slice(0, 10)}T09:00:00.000Z`
+      : null,
+    platform: type,
+    platforms: channels.length ? channels : [type],
+  };
+}
+
+function channelForNewIdea(contentType: string): string[] {
+  if (isSocialContentItem({ content_type: contentType, channel: [] })) {
+    return ["LinkedIn"];
+  }
+  if (contentType.toLowerCase() === "newsletter") return ["Newsletter"];
+  return ["Editorial"];
+}
+
 function parseDue(item: ContentItem): Date | null {
   if (!item.due_date) return null;
   try {
@@ -237,6 +260,11 @@ export function ContentClient({
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(() => emptyFormForScope(scope));
   const formRef = useRef<HTMLDivElement>(null);
+  const ideasPanelRef = useRef<HTMLElement>(null);
+  const ignoreNextDateClick = useRef(false);
+  const [creatingIdea, setCreatingIdea] = useState(false);
+  const [parkingId, setParkingId] = useState<string | null>(null);
+  const [parkingActive, setParkingActive] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
@@ -348,6 +376,43 @@ export function ContentClient({
         return matchesDateWindow(item, datedOnly);
       }),
     [filtered, datedOnly]
+  );
+
+  const parkedIdeas = useMemo(
+    () =>
+      scopedItems
+        .filter(
+          (item) =>
+            item.status === "idea" &&
+            !item.due_date &&
+            matchesSearch(search, [
+              item.title,
+              item.content_type,
+              formatChannels(item.channel),
+              item.caption,
+            ])
+        )
+        .map(toIdeaPanelPost),
+    [scopedItems, search]
+  );
+
+  const placedIdeas = useMemo(
+    () =>
+      scopedItems
+        .filter(
+          (item) =>
+            item.status === "idea" &&
+            !!item.due_date &&
+            matchesSearch(search, [
+              item.title,
+              item.content_type,
+              formatChannels(item.channel),
+              item.caption,
+            ])
+        )
+        .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
+        .map(toIdeaPanelPost),
+    [scopedItems, search]
   );
 
   const editingItem = editingId
@@ -548,41 +613,111 @@ export function ContentClient({
     await refresh();
   }
 
-  async function reschedule(id: string, dueDate: string) {
+  async function updateSchedule(
+    id: string,
+    dueDate: string | null,
+    asIdea = false
+  ) {
     const item = items.find((i) => i.id === id);
-    if (item?.status === "published") return;
-    const previousDueDate = item?.due_date ?? null;
+    if (!item || item.status === "published") return false;
+    if (asIdea && item.status !== "idea" && item.status !== "draft") {
+      return false;
+    }
+    const previous = item;
     setSyncMessage(null);
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, due_date: dueDate } : i))
+      prev.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              due_date: dueDate,
+              ...(asIdea ? { status: "idea" as const } : {}),
+            }
+          : i
+      )
     );
     if (editingId === id && edit) {
-      setEdit({ ...edit, due_date: dueDate });
+      setEdit({
+        ...edit,
+        due_date: dueDate ?? "",
+        ...(asIdea ? { status: "idea" as const } : {}),
+      });
     }
+    const patch: { due_date: string | null; status?: ContentStatus } = {
+      due_date: dueDate,
+    };
+    if (asIdea) patch.status = "idea";
     const res = await fetch("/api/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "update",
         id,
-        patch: { due_date: dueDate },
+        patch,
       }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === id ? { ...i, due_date: previousDueDate } : i
-        )
-      );
+      setItems((prev) => prev.map((i) => (i.id === id ? previous : i)));
       if (editingId === id && edit) {
-        setEdit({ ...edit, due_date: previousDueDate ?? "" });
+        setEdit(toEditForm(previous));
       }
       setSyncMessage(data.error || "Could not update date");
-      return;
+      return false;
     }
     if (data.planableSyncError) {
       setSyncMessage(data.planableSyncError);
+    }
+    return true;
+  }
+
+  async function reschedule(id: string, dueDate: string) {
+    await updateSchedule(id, dueDate);
+  }
+
+  async function parkContent(id: string) {
+    setParkingId(id);
+    try {
+      return await updateSchedule(id, null, true);
+    } finally {
+      setParkingId(null);
+    }
+  }
+
+  async function createIdea(title: string, caption: string, kind?: string) {
+    const contentType =
+      kind || (scope === "content" ? "Editorial" : "Social");
+    setCreatingIdea(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim() || "Untitled idea",
+          caption,
+          notes: caption,
+          due_date: null,
+          content_type: contentType,
+          channel: channelForNewIdea(contentType),
+          status: "idea",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSyncMessage(data.error || "Could not create idea");
+        return false;
+      }
+      if (data.planableSyncError) {
+        setSyncMessage(data.planableSyncError);
+      }
+      await refresh();
+      return true;
+    } catch (e) {
+      setSyncMessage(e instanceof Error ? e.message : "Could not create idea");
+      return false;
+    } finally {
+      setCreatingIdea(false);
     }
   }
 
@@ -1024,11 +1159,12 @@ export function ContentClient({
           ) : null}
 
           {view === "calendar" ? (
-            <div className="hub-fc hub-fc--day-create surface-card overflow-hidden p-3 md:p-4">
+            <div className="flex flex-col items-start gap-4 lg:flex-row">
+            <div className="hub-fc hub-fc--day-create surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 lg:flex-1">
               <p className="mb-3 text-xs text-muted">
                 {scope === "all"
-                  ? "Content and Social on one calendar. Click an empty day to add a piece, drag cards to reschedule, or click a card to edit."
-                  : "Click an empty day to add a piece, drag cards to reschedule, or click a card to edit."}
+                  ? "Content and Social on one calendar. Park fillers in Ideas, then drag them onto a day. Click an empty day to add a dated piece."
+                  : "Park fillers in Ideas, then drag them onto a day. Click an empty day to add a dated piece, or drag a card to reschedule."}
               </p>
               <FullCalendar
                 plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -1046,9 +1182,60 @@ export function ContentClient({
                 eventStartEditable
                 eventDurationEditable={false}
                 eventDragMinDistance={8}
+                droppable
                 events={calendarEvents}
                 eventClassNames="!border-0 !bg-transparent cursor-grab active:cursor-grabbing"
+                drop={(info) => {
+                  ignoreNextDateClick.current = true;
+                  requestAnimationFrame(() => {
+                    ignoreNextDateClick.current = false;
+                  });
+                  const id = info.draggedEl.getAttribute("data-idea-id");
+                  const next = info.dateStr.slice(0, 10);
+                  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+                  void updateSchedule(id, next);
+                }}
+                eventDragStart={(info) => {
+                  const id = String(
+                    info.event.extendedProps.itemId ?? info.event.id
+                  );
+                  const item = items.find((i) => i.id === id);
+                  setParkingActive(
+                    item?.status === "idea" || item?.status === "draft"
+                  );
+                }}
+                eventDragStop={(info) => {
+                  const panel = ideasPanelRef.current;
+                  const rect = panel?.getBoundingClientRect();
+                  const x = info.jsEvent.clientX;
+                  const y = info.jsEvent.clientY;
+                  const over = Boolean(
+                    rect &&
+                      x >= rect.left &&
+                      x <= rect.right &&
+                      y >= rect.top &&
+                      y <= rect.bottom
+                  );
+                  setParkingActive(false);
+                  if (!over) return;
+                  const id = String(
+                    info.event.extendedProps.itemId ?? info.event.id
+                  );
+                  const item = items.find((i) => i.id === id);
+                  if (!item || item.status === "published") return;
+                  if (item.status !== "idea" && item.status !== "draft") {
+                    setSyncMessage(
+                      "Approved and scheduled pieces stay on the calendar. Set the status to Idea if this is a filler."
+                    );
+                    return;
+                  }
+                  void parkContent(id);
+                }}
                 dateClick={(info) => {
+                  if (ignoreNextDateClick.current) {
+                    ignoreNextDateClick.current = false;
+                    return;
+                  }
                   const target = info.jsEvent.target as HTMLElement | null;
                   if (
                     target?.closest(
@@ -1097,9 +1284,40 @@ export function ContentClient({
               />
               {calendarEvents.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">
-                  No dated pieces yet — add a due date when editing.
+                  No dated pieces yet — add a due date when editing, or place an idea from the panel.
                 </p>
               ) : null}
+            </div>
+            <SocialIdeasPanel
+              panelRef={ideasPanelRef}
+              parked={parkedIdeas}
+              placed={placedIdeas}
+              creating={creatingIdea}
+              parkingId={parkingId}
+              parkingActive={parkingActive}
+              kinds={
+                scope === "content"
+                  ? contentTypeOptions.filter(
+                      (option) =>
+                        !isSocialContentItem({
+                          content_type: option.value,
+                          channel: [],
+                        })
+                    )
+                  : contentTypeOptions
+              }
+              onOpen={(id) => {
+                const item = items.find((i) => i.id === id);
+                if (item) openEdit(item);
+              }}
+              onCreate={createIdea}
+              onPlace={(id, dueDate) => {
+                void updateSchedule(id, dueDate);
+              }}
+              onPark={(id) => {
+                void parkContent(id);
+              }}
+            />
             </div>
           ) : null}
 
@@ -1255,7 +1473,23 @@ export function ContentClient({
                   />
                   <p className="mt-1 text-xs text-muted">
                     Publish or go-live date — used on calendar and timeline.
+                    Clear it, or use Ideas, to keep a filler off the calendar.
                   </p>
+                  {editingItem &&
+                  editingItem.status !== "published" &&
+                  (edit.status === "idea" || edit.status === "draft") &&
+                  edit.due_date ? (
+                    <button
+                      type="button"
+                      className="btn-secondary mt-2 px-3 py-1.5 text-xs"
+                      disabled={parkingId === editingItem.id}
+                      onClick={() => void parkContent(editingItem.id)}
+                    >
+                      {parkingId === editingItem.id
+                        ? "Moving…"
+                        : "Move to ideas"}
+                    </button>
+                  ) : null}
                 </div>
                 <div>
                   <label className="label">Category</label>

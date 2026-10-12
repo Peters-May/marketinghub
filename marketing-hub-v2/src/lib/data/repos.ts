@@ -2146,6 +2146,240 @@ export async function deleteMediaList(id: string) {
   });
 }
 
+export type PortalListMemberInput = {
+  portalContactId: string;
+  email: string;
+  name: string;
+  organisation: string;
+};
+
+function portalContactFromMember(
+  member: PortalListMemberInput,
+  existing: Contact | null,
+  now: string
+): Contact {
+  const email = member.email.trim().toLowerCase();
+  const name = member.name.trim() || existing?.name?.trim() || email;
+  const organisation =
+    existing?.organisation?.trim() || member.organisation.trim();
+  const tags = new Set(existing?.tags ?? []);
+  tags.add("portal");
+  return normalizeContact({
+    ...(existing ?? {
+      id: uid("ctc"),
+      kind: "person",
+      role: "",
+      phone: "",
+      website: "",
+      services: "",
+      notes: "",
+      user_id: null,
+      is_press: false,
+      beat: "",
+      outlet: "",
+      country: "",
+      preferred_topics: "",
+      last_contacted_at: null,
+      created_at: now,
+    }),
+    name,
+    organisation,
+    email,
+    tags: [...tags],
+    marketing_consent: true,
+    portal_contact_id: member.portalContactId || existing?.portal_contact_id || null,
+    updated_at: now,
+  });
+}
+
+/** Create or refresh one Portal list and its members in a single store write. */
+export async function applyPortalSharedList(input: {
+  portalListId: string;
+  name: string;
+  description: string;
+  members: PortalListMemberInput[];
+}): Promise<number> {
+  let count = 0;
+  await updateStore((s) => {
+    if (!s.contacts) s.contacts = [];
+    if (!s.media_lists) s.media_lists = [];
+    if (!s.email_audiences) s.email_audiences = [];
+    const now = nowIso();
+    const byEmail = new Map<string, number>();
+    s.contacts.forEach((contact, index) => {
+      const email = (contact.email || "").trim().toLowerCase();
+      if (email && !byEmail.has(email)) byEmail.set(email, index);
+    });
+
+    const contactIds: string[] = [];
+    const seen = new Set<string>();
+    for (const member of input.members) {
+      const email = member.email.trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      const idx = byEmail.get(email);
+      const existing = idx == null ? null : normalizeContact(s.contacts[idx]);
+      const next = portalContactFromMember(member, existing, now);
+      if (idx == null) {
+        byEmail.set(email, s.contacts.length);
+        s.contacts.push(next);
+      } else {
+        s.contacts[idx] = next;
+      }
+      contactIds.push(next.id);
+    }
+
+    const source = `portal-list:${input.portalListId}`;
+    let listIdx = s.media_lists.findIndex(
+      (item) =>
+        item.portal_list_id === input.portalListId || item.source === source
+    );
+    if (listIdx === -1) {
+      s.media_lists.push(
+        normalizeMediaList({
+          id: uid("ml"),
+          name: input.name,
+          description: input.description,
+          contact_ids: contactIds,
+          list_kind: "marketing",
+          source,
+          portal_list_id: input.portalListId,
+          created_at: now,
+          updated_at: now,
+        })
+      );
+      listIdx = s.media_lists.length - 1;
+    } else {
+      const prev = normalizeMediaList(s.media_lists[listIdx]);
+      s.media_lists[listIdx] = normalizeMediaList({
+        ...prev,
+        name: input.name,
+        description: input.description,
+        contact_ids: contactIds,
+        list_kind: "marketing",
+        source,
+        portal_list_id: input.portalListId,
+        updated_at: now,
+      });
+    }
+
+    const mediaId = s.media_lists[listIdx].id;
+    const audIdx = s.email_audiences.findIndex(
+      (item) => item.portal_list_id === input.portalListId
+    );
+    if (audIdx === -1) {
+      s.email_audiences.push(
+        normalizeEmailAudience({
+          id: uid("eaud"),
+          name: input.name,
+          description: input.description,
+          list_ids: [mediaId],
+          contact_ids: [],
+          filter: { tags: [], country: "" },
+          exclude_unsubscribed: true,
+          portal_list_id: input.portalListId,
+          created_at: now,
+          updated_at: now,
+        })
+      );
+    } else {
+      const prev = normalizeEmailAudience(s.email_audiences[audIdx]);
+      const listIds = prev.list_ids.includes(mediaId)
+        ? prev.list_ids
+        : [...prev.list_ids, mediaId];
+      s.email_audiences[audIdx] = normalizeEmailAudience({
+        ...prev,
+        name: input.name,
+        description: input.description,
+        list_ids: listIds,
+        exclude_unsubscribed: true,
+        portal_list_id: input.portalListId,
+        updated_at: now,
+      });
+    }
+    count = contactIds.length;
+  });
+  return count;
+}
+
+export async function clearRetiredPortalLists(activeIds: string[]) {
+  const active = new Set(activeIds);
+  await updateStore((s) => {
+    if (!s.media_lists) return;
+    const now = nowIso();
+    for (let i = 0; i < s.media_lists.length; i++) {
+      const list = s.media_lists[i];
+      if (!list.portal_list_id || active.has(list.portal_list_id)) continue;
+      if ((list.contact_ids ?? []).length === 0) continue;
+      s.media_lists[i] = normalizeMediaList({
+        ...normalizeMediaList(list),
+        contact_ids: [],
+        updated_at: now,
+      });
+    }
+  });
+}
+
+/** Upsert Portal opt-in contacts in one store write. Returns hub contact ids. */
+export async function upsertPortalAudienceContacts(
+  members: PortalListMemberInput[]
+): Promise<string[]> {
+  const ids: string[] = [];
+  await updateStore((s) => {
+    if (!s.contacts) s.contacts = [];
+    const now = nowIso();
+    const byEmail = new Map<string, number>();
+    s.contacts.forEach((contact, index) => {
+      const email = (contact.email || "").trim().toLowerCase();
+      if (email && !byEmail.has(email)) byEmail.set(email, index);
+    });
+    ids.length = 0;
+    const seen = new Set<string>();
+    for (const member of members) {
+      const email = member.email.trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      const idx = byEmail.get(email);
+      const existing = idx == null ? null : normalizeContact(s.contacts[idx]);
+      const next = portalContactFromMember(member, existing, now);
+      if (idx == null) {
+        byEmail.set(email, s.contacts.length);
+        s.contacts.push(next);
+      } else {
+        s.contacts[idx] = next;
+      }
+      ids.push(next.id);
+    }
+  });
+  return ids;
+}
+
+export async function revokePortalConsentExcept(keepIds: Set<string>) {
+  let removed = 0;
+  await updateStore((s) => {
+    removed = 0;
+    const now = nowIso();
+    const listed = new Set<string>();
+    for (const list of s.media_lists ?? []) {
+      if (!list.portal_list_id && list.source !== "portal") continue;
+      for (const id of list.contact_ids ?? []) listed.add(id);
+    }
+    for (let i = 0; i < (s.contacts ?? []).length; i++) {
+      const contact = normalizeContact(s.contacts[i]);
+      if (!contact.portal_contact_id) continue;
+      if (keepIds.has(contact.id) || listed.has(contact.id)) continue;
+      if (contact.marketing_consent === false) continue;
+      s.contacts[i] = {
+        ...contact,
+        marketing_consent: false,
+        updated_at: now,
+      };
+      removed += 1;
+    }
+  });
+  return removed;
+}
+
 export async function listPrPitches() {
   const store = await readStore();
   return [...(store.pr_pitches ?? [])]

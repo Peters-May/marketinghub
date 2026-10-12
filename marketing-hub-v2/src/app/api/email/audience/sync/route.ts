@@ -4,7 +4,9 @@ import {
   syncPortalMarketingAudience,
 } from "@/lib/sync/portal-marketing";
 
-/** Pull opted-in Portal customers into the Hub "Portal customers" audience. */
+export const maxDuration = 300;
+
+/** Pull Portal lists marked for the hub, then the opted-in Portal audience. */
 export async function POST() {
   const { error } = await requireAdmin();
   if (error) return error;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Monitor, Redo2, Smartphone, Undo2 } from "lucide-react";
@@ -20,14 +20,13 @@ import {
   removeSection,
   resolveEmailDesign,
   setSectionPreset,
-  starterDesign,
   updateBlock,
   updateSection,
   type EmailBlockType,
   type SectionPreset,
-  type StarterLayout,
 } from "@/lib/email/design";
 import { previewMerge } from "@/lib/email/design/preview";
+import { formatLondonStamp, londonDateTimeToIso } from "@/lib/email/display";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
 import { EmailInspector } from "@/components/email/builder/EmailInspector";
 import { EmailPalette } from "@/components/email/builder/EmailPalette";
@@ -117,6 +116,10 @@ export function EmailDesigner({
   initialPreview,
   initialDesign,
   initialHtml,
+  audiences = [],
+  initialFromName = "Peters & May Marketing",
+  initialFromEmail = "marketing@petersandmay.com",
+  initialAudienceId = "",
 }: {
   kind: "template" | "campaign";
   id: string;
@@ -127,6 +130,10 @@ export function EmailDesigner({
   initialPreview: string;
   initialDesign: EmailDesign | null;
   initialHtml: string;
+  audiences?: { id: string; name: string }[];
+  initialFromName?: string;
+  initialFromEmail?: string;
+  initialAudienceId?: string;
 }) {
   const router = useRouter();
   const history = useDesignHistory(() =>
@@ -135,6 +142,16 @@ export function EmailDesigner({
   const [name, setName] = useState(initialName);
   const [subject, setSubject] = useState(initialSubject);
   const [previewText, setPreviewText] = useState(initialPreview);
+  const [fromName, setFromName] = useState(initialFromName);
+  const [fromEmail, setFromEmail] = useState(initialFromEmail);
+  const [audienceId, setAudienceId] = useState(initialAudienceId);
+  const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [previewMenu, setPreviewMenu] = useState(false);
+  const [whenMode, setWhenMode] = useState<"now" | "later">("later");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [sending, setSending] = useState(false);
   const [selection, setSelection] = useState<CanvasSelection>({ type: "email" });
   const [tab, setTab] = useState<"content" | "layouts">("content");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
@@ -142,6 +159,31 @@ export function EmailDesigner({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
+
+  useEffect(() => {
+    if (kind !== "campaign" || !audienceId) {
+      setRecipientCount(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/email/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "preview_recipients", audience_id: audienceId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) {
+          setRecipientCount(typeof data.count === "number" ? data.count : null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRecipientCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audienceId, kind]);
 
   const section =
     selection.type === "email"
@@ -257,7 +299,7 @@ export function EmailDesigner({
   }
 
   async function save() {
-    if (readOnly) return;
+    if (readOnly) return false;
     setSaving(true);
     setError("");
     setSavedNote("");
@@ -273,9 +315,12 @@ export function EmailDesigner({
             html_body,
           }
         : {
-            title: name || "Untitled campaign",
+            title: name || "Untitled email",
             subject,
             preview_text: previewText,
+            from_name: fromName,
+            from_email: fromEmail,
+            audience_id: audienceId || null,
             design,
             html_body,
           };
@@ -291,10 +336,110 @@ export function EmailDesigner({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
       setSavedNote("Saved");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+      return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function scheduleSend() {
+    if (kind !== "campaign" || readOnly) return;
+    const iso = londonDateTimeToIso(scheduleDate, scheduleTime);
+    if (!iso) {
+      setError("Choose a date and time");
+      return;
+    }
+    if (new Date(iso).getTime() <= Date.now()) {
+      setError("Choose a time in the future");
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      const saved = await save();
+      if (!saved) return;
+      const res = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "schedule",
+          id,
+          scheduled_at: iso,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Schedule failed");
+      setReviewOpen(false);
+      router.push(backHref);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Schedule failed");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendTest() {
+    if (kind !== "campaign" || readOnly) return;
+    setPreviewMenu(false);
+    setSending(true);
+    setError("");
+    setSavedNote("");
+    try {
+      const res = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          test: true,
+          from_name: fromName,
+          from_email: fromEmail,
+          subject,
+          html_body: compileEmailDesign(history.designRef.current),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Test send failed");
+      setSavedNote(data.to ? `Test sent to ${data.to}` : "Test sent");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Test send failed");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function copyLink() {
+    setPreviewMenu(false);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setSavedNote("Link copied");
+    } catch {
+      setError("Could not copy the link");
+    }
+  }
+
+  async function sendNow() {
+    if (kind !== "campaign" || readOnly) return;
+    if (!window.confirm("Send this email now to the selected audience?")) return;
+    setSending(true);
+    setError("");
+    try {
+      const saved = await save();
+      if (!saved) return;
+      const res = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaign_id: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Send failed");
+      setReviewOpen(false);
+      router.push(backHref);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Send failed");
+    } finally {
+      setSending(false);
     }
   }
 
@@ -311,6 +456,10 @@ export function EmailDesigner({
 
   const compiled = compileEmailDesign(history.design);
   const frameWidth = device === "mobile" ? 375 : history.design.styles.contentWidth;
+  const audienceName =
+    audiences.find((audience) => audience.id === audienceId)?.name ?? "";
+  const plannedIso =
+    whenMode === "later" ? londonDateTimeToIso(scheduleDate, scheduleTime) : null;
 
   return (
     <div className="-mx-4 -mt-6 flex min-h-[calc(100vh-8rem)] flex-col md:-mx-8 md:-mt-8">
@@ -319,27 +468,11 @@ export function EmailDesigner({
           Back
         </Link>
         <input
-          className="input w-40"
-          aria-label={kind === "template" ? "Template name" : "Campaign title"}
+          className="input min-w-[12rem] flex-1"
+          aria-label={kind === "template" ? "Template name" : "Email name"}
           value={name}
           disabled={readOnly}
           onChange={(event) => setName(event.target.value)}
-        />
-        <input
-          className="input min-w-[12rem] flex-1"
-          aria-label="Subject"
-          placeholder="Subject"
-          value={subject}
-          disabled={readOnly}
-          onChange={(event) => setSubject(event.target.value)}
-        />
-        <input
-          className="input hidden min-w-[10rem] flex-1 lg:block"
-          aria-label="Preview text"
-          placeholder="Preview text"
-          value={previewText}
-          disabled={readOnly}
-          onChange={(event) => setPreviewText(event.target.value)}
         />
         <button
           type="button"
@@ -375,24 +508,71 @@ export function EmailDesigner({
         >
           <Smartphone className="h-4 w-4" />
         </button>
-        <button
-          type="button"
-          className="btn-secondary px-3 py-1.5 text-sm"
-          onClick={() => setPreviewing((value) => !value)}
-        >
-          {previewing ? "Edit" : "Preview"}
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1.5 text-sm"
+            onClick={() => setPreviewMenu((open) => !open)}
+          >
+            Preview and test
+          </button>
+          {previewMenu ? (
+            <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-border bg-white py-1 shadow-lg">
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                onClick={() => {
+                  setPreviewMenu(false);
+                  setPreviewing((value) => !value);
+                }}
+              >
+                {previewing ? "Back to edit" : "Preview"}
+              </button>
+              {kind === "campaign" && !readOnly ? (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  disabled={sending}
+                  onClick={() => void sendTest()}
+                >
+                  Send test email
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                onClick={() => void copyLink()}
+              >
+                Copy link
+              </button>
+            </div>
+          ) : null}
+        </div>
         {readOnly ? (
           <span className="text-sm text-muted">Sent — view only</span>
         ) : (
-          <button
-            type="button"
-            className="btn-primary px-3 py-1.5 text-sm"
-            disabled={saving}
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn-secondary px-3 py-1.5 text-sm"
+              disabled={saving || sending}
+              onClick={() => void save()}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {kind === "campaign" ? (
+              <button
+                type="button"
+                className="btn-primary px-3 py-1.5 text-sm"
+                onClick={() => {
+                  setPreviewMenu(false);
+                  setReviewOpen(true);
+                }}
+              >
+                Review and schedule
+              </button>
+            ) : null}
+          </>
         )}
         {kind === "template" && !readOnly ? (
           <button
@@ -414,6 +594,74 @@ export function EmailDesigner({
           {savedNote}
         </p>
       ) : null}
+      <div className="border-b border-border bg-white px-4 py-3 text-sm">
+        <div className="mx-auto grid max-w-3xl gap-2">
+          {kind === "campaign" ? (
+            <>
+              <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+                <span className="text-muted">Send to</span>
+                <span>
+                  <select
+                    className="input w-full"
+                    value={audienceId}
+                    disabled={readOnly}
+                    onChange={(event) => setAudienceId(event.target.value)}
+                  >
+                    <option value="">Choose an audience</option>
+                    {audiences.map((audience) => (
+                      <option key={audience.id} value={audience.id}>
+                        {audience.name}
+                      </option>
+                    ))}
+                  </select>
+                  {audienceId && recipientCount !== null ? (
+                    <span className="mt-1 block text-xs text-muted">
+                      {recipientCount} consented recipient{recipientCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+              <div className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+                <span className="text-muted">From</span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    className="input w-full"
+                    aria-label="From name"
+                    value={fromName}
+                    disabled={readOnly}
+                    onChange={(event) => setFromName(event.target.value)}
+                  />
+                  <input
+                    className="input w-full"
+                    aria-label="From email"
+                    value={fromEmail}
+                    disabled={readOnly}
+                    onChange={(event) => setFromEmail(event.target.value)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+          <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+            <span className="text-muted">Subject line</span>
+            <input
+              className="input w-full"
+              value={subject}
+              disabled={readOnly}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+          </label>
+          <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+            <span className="text-muted">Preview text</span>
+            <input
+              className="input w-full"
+              value={previewText}
+              disabled={readOnly}
+              onChange={(event) => setPreviewText(event.target.value)}
+            />
+          </label>
+        </div>
+      </div>
       <div className="flex min-h-0 flex-1">
         <EmailPalette
           tab={tab}
@@ -421,12 +669,6 @@ export function EmailDesigner({
           disabled={readOnly}
           onAddBlock={addBlock}
           onAddSection={(preset) => addSection(preset)}
-          onStarter={(layout: StarterLayout) => {
-            if (readOnly) return;
-            if (!window.confirm("Replace the current email layout?")) return;
-            history.commit(starterDesign(layout));
-            setSelection({ type: "email" });
-          }}
         />
         <div className="min-w-0 flex-1 overflow-auto">
           {previewing ? (
@@ -509,6 +751,144 @@ export function EmailDesigner({
           }}
         />
       </div>
+      {reviewOpen && kind === "campaign" ? (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/20 md:left-sidebar"
+            onClick={() => setReviewOpen(false)}
+          />
+          <aside className="fixed bottom-0 right-0 top-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-white">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="font-display text-lg text-brand">Review and schedule</h2>
+              <button
+                type="button"
+                className="btn-secondary px-2 py-1 text-sm"
+                onClick={() => setReviewOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+              <dl className="space-y-3">
+                <div>
+                  <dt className="text-muted">From name</dt>
+                  <dd>{fromName || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">From address</dt>
+                  <dd>{fromEmail || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Subject line</dt>
+                  <dd>{subject || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Preview text</dt>
+                  <dd>{previewText || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Send to</dt>
+                  <dd>{audienceName || "Choose an audience"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Total recipients</dt>
+                  <dd>
+                    {recipientCount === null
+                      ? "—"
+                      : `${recipientCount} consented`}
+                  </dd>
+                </div>
+              </dl>
+              <fieldset className="space-y-2">
+                <legend className="text-muted">When will you send the email?</legend>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="when"
+                    checked={whenMode === "now"}
+                    onChange={() => setWhenMode("now")}
+                  />
+                  Send now
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="when"
+                    checked={whenMode === "later"}
+                    onChange={() => setWhenMode("later")}
+                  />
+                  Schedule for later
+                </label>
+              </fieldset>
+              {whenMode === "later" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <label>
+                    <span className="text-muted">Date</span>
+                    <input
+                      type="date"
+                      className="input mt-1 w-full"
+                      value={scheduleDate}
+                      onChange={(event) => setScheduleDate(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span className="text-muted">Time (London)</span>
+                    <input
+                      type="time"
+                      className="input mt-1 w-full"
+                      value={scheduleTime}
+                      onChange={(event) => setScheduleTime(event.target.value)}
+                    />
+                  </label>
+                </div>
+              ) : null}
+              {plannedIso ? (
+                <p className="text-muted">
+                  Send time {formatLondonStamp(plannedIso)} London. Everyone receives it at that time.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2 border-t border-border px-4 py-3">
+              {whenMode === "later" ? (
+                <button
+                  type="button"
+                  className="btn-primary px-3 py-1.5 text-sm"
+                  disabled={sending || saving || !audienceId}
+                  onClick={() => void scheduleSend()}
+                >
+                  Schedule
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary px-3 py-1.5 text-sm"
+                  disabled={sending || saving || !audienceId}
+                  onClick={() => void sendNow()}
+                >
+                  {sending ? "Sending…" : "Send now"}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-sm"
+                onClick={() => {
+                  setReviewOpen(false);
+                  setPreviewing(true);
+                }}
+              >
+                Preview
+              </button>
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-sm"
+                onClick={() => setReviewOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </aside>
+        </>
+      ) : null}
     </div>
   );
 }

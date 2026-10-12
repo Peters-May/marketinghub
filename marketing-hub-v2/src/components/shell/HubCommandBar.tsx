@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { notifyHubDataChanged, type HubDataArea } from "@/lib/command/refresh";
 
 type Preview = { summary: string; verb: "Add" | "Update"; href: string };
@@ -15,6 +15,7 @@ export function HubCommandBar() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const forceConfirm = useRef(false);
 
   async function submit(confirm: boolean) {
     const value = text.trim();
@@ -36,6 +37,13 @@ export function HubCommandBar() {
         return;
       }
       if (data.preview) {
+        if (confirm) {
+          setPreview(null);
+          setNotice({
+            message: "The hub did not save that. Press Confirm again.",
+          });
+          return;
+        }
         setPreview(data.preview);
         setPreviewText(value);
         return;
@@ -65,8 +73,11 @@ export function HubCommandBar() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const ready = preview && text.trim() === previewText;
-    void submit(Boolean(ready));
+    const forced = forceConfirm.current;
+    forceConfirm.current = false;
+    const ready =
+      forced || Boolean(preview && text.trim() === previewText);
+    void submit(ready);
   }
 
   return (
@@ -95,8 +106,11 @@ export function HubCommandBar() {
             type="submit"
             className="btn-primary shrink-0 px-4 py-2 disabled:opacity-50"
             disabled={busy || !text.trim()}
+            onClick={() => {
+              if (preview) forceConfirm.current = true;
+            }}
           >
-            {busy ? "Working…" : preview ? preview.verb : "Run"}
+            {busy ? "Working…" : preview ? "Confirm" : "Run"}
           </button>
           {preview ? (
             <button
@@ -112,7 +126,7 @@ export function HubCommandBar() {
 
       <div className="mt-2 min-h-5 text-sm" aria-live="polite">
         {preview ? (
-          <p className="text-brand">{preview.summary} Confirm to save.</p>
+          <p className="text-brand">{preview.summary} Press Confirm to save.</p>
         ) : notice ? (
           <p className={notice.href ? "text-brand" : "text-muted"}>
             {notice.message}{" "}

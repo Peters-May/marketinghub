@@ -1199,10 +1199,10 @@ export function SocialClient({
             {error ? ` · ${error}` : ""}
           </p>
 
-          <div className="flex flex-col items-start gap-4 xl:flex-row">
+          <div className="flex flex-col items-start gap-4 lg:flex-row">
           <div
             className={cn(
-              "hub-fc surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 xl:w-auto xl:flex-1",
+              "hub-fc surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 lg:w-auto lg:flex-1",
               !memberView && "hub-fc--day-create"
             )}
           >

@@ -219,6 +219,9 @@ export function parseDatePhrase(input: string, now = new Date()): string | null 
   const uk = text.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
   if (uk) return ymd(Number(uk[3]), Number(uk[2]) - 1, Number(uk[1]));
 
+  const ordinal = text.match(/^(\d{1,2})(?:st|nd|rd|th)$/);
+  if (ordinal) return nextOrdinalDay(Number(ordinal[1]), now);
+
   const weekday = text.match(
     /^(?:(this|next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/
   );
@@ -247,6 +250,24 @@ export function parseDatePhrase(input: string, now = new Date()): string | null 
     return dated(Number(monthFirst[2]), month, monthFirst[3], now);
   }
 
+  return null;
+}
+
+/** "the 31st" means that day this month, or the next month that still has it. */
+function nextOrdinalDay(day: number, now: Date): string | null {
+  if (day < 1 || day > 31) return null;
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  const today = startOfDay(now);
+  for (let i = 0; i < 14; i += 1) {
+    const value = ymd(year, month, day);
+    if (value && new Date(year, month, day) >= today) return value;
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
   return null;
 }
 

@@ -1,32 +1,22 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
-import { EmailCalendarPanel } from "@/components/email/EmailCalendarPanel";
 import { EmailCampaignsPanel } from "@/components/email/EmailCampaignsPanel";
 import { EmailAudiencesPanel } from "@/components/email/EmailAudiencesPanel";
 import { EmailTemplatesPanel } from "@/components/email/EmailTemplatesPanel";
 import { EmailReportsPanel } from "@/components/email/EmailReportsPanel";
-import type {
-  ContentItem,
-  EmailAudience,
-  EmailCampaign,
-  EmailTemplate,
-  MediaList,
-  QuarterlyTheme,
-} from "@/lib/types";
+import type { EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
 
 export type AudienceWithCount = EmailAudience & { recipient_count: number };
 
-type Tab = "calendar" | "campaigns" | "audiences" | "templates" | "reports";
+type Tab = "emails" | "templates" | "analyse";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "calendar", label: "Calendar" },
-  { id: "campaigns", label: "Campaigns" },
-  { id: "audiences", label: "Audiences" },
+  { id: "emails", label: "Emails" },
   { id: "templates", label: "Templates" },
-  { id: "reports", label: "Reports" },
+  { id: "analyse", label: "Analyse" },
 ];
 
 export function EmailMarketingHub({
@@ -34,99 +24,67 @@ export function EmailMarketingHub({
   initialTemplates,
   initialAudiences,
   initialLists,
-  initialThemes,
-  initialNewsletters,
-  initialCampaignId,
   initialTab,
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
   initialAudiences: AudienceWithCount[];
   initialLists: MediaList[];
-  initialThemes: QuarterlyTheme[];
-  initialNewsletters: ContentItem[];
-  initialCampaignId?: string;
   initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>(
-    initialCampaignId ? "campaigns" : initialTab ?? "calendar"
-  );
-  const [campaigns, setCampaigns] = useState(initialCampaigns);
+  const [tab, setTab] = useState<Tab>(initialTab ?? "emails");
+  const [audiencesOpen, setAudiencesOpen] = useState(false);
   const [templates, setTemplates] = useState(initialTemplates);
   const [audiences, setAudiences] = useState(initialAudiences);
-  const [focusCampaignId, setFocusCampaignId] = useState<string | null>(
-    initialCampaignId ?? null
-  );
-
-  const refreshCampaigns = useCallback(async () => {
-    const res = await fetch("/api/email/campaigns");
-    const data = await res.json();
-    setCampaigns(data.campaigns ?? []);
-    if (data.templates) setTemplates(data.templates);
-    if (data.audiences) {
-      /* audiences refreshed via audiences panel */
-    }
-  }, []);
-
-  const openCampaign = useCallback((id: string) => {
-    setFocusCampaignId(id);
-    setTab("campaigns");
-  }, []);
+  const [lists, setLists] = useState(initialLists);
+  const countLabel = `${initialCampaigns.length} marketing email${initialCampaigns.length === 1 ? "" : "s"}`;
 
   return (
     <div>
-      <PageHeader
-        title="Email"
-        description="Plan and send marketing e-shots — audiences, templates, calendar, and performance. Distinct from PR Outlook pitches."
-      />
+      <PageHeader title="Email" description={countLabel} />
 
       <SegmentFilter
         label="Email section"
         value={tab}
-        onChange={setTab}
+        onChange={(next) => {
+          setAudiencesOpen(false);
+          setTab(next);
+        }}
         options={TABS}
         size="lg"
         tourIdPrefix="email-tab"
       />
 
-      {tab === "calendar" ? (
-        <EmailCalendarPanel
-          campaigns={campaigns}
-          onOpenCampaign={openCampaign}
-          onRefresh={() => void refreshCampaigns()}
-        />
+      {tab === "emails" && audiencesOpen ? (
+        <div>
+          <button
+            type="button"
+            className="btn-secondary mb-4"
+            onClick={() => setAudiencesOpen(false)}
+          >
+            Back to emails
+          </button>
+          <EmailAudiencesPanel
+            audiences={audiences}
+            setAudiences={setAudiences}
+            lists={lists}
+            setLists={setLists}
+          />
+        </div>
       ) : null}
 
-      {tab === "campaigns" ? (
+      {tab === "emails" && !audiencesOpen ? (
         <EmailCampaignsPanel
-          campaigns={campaigns}
-          setCampaigns={setCampaigns}
-          templates={templates}
-          audiences={audiences}
-          themes={initialThemes}
-          newsletters={initialNewsletters}
-          focusId={focusCampaignId}
-          onFocusHandled={() => setFocusCampaignId(null)}
-          onRefresh={() => void refreshCampaigns()}
-        />
-      ) : null}
-
-      {tab === "audiences" ? (
-        <EmailAudiencesPanel
-          audiences={audiences}
-          setAudiences={setAudiences}
-          lists={initialLists}
+          campaigns={initialCampaigns}
+          onOpenAudiences={() => setAudiencesOpen(true)}
         />
       ) : null}
 
       {tab === "templates" ? (
-        <EmailTemplatesPanel
-          templates={templates}
-          setTemplates={setTemplates}
-        />
+        <EmailTemplatesPanel templates={templates} setTemplates={setTemplates} />
       ) : null}
 
-      {tab === "reports" ? <EmailReportsPanel /> : null}
+      {tab === "analyse" ? <EmailReportsPanel /> : null}
     </div>
   );
 }

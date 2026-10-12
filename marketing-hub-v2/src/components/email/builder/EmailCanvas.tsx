@@ -458,7 +458,7 @@ function BlockView({
   if (block.type === "footer") {
     return (
       <div style={{ ...style, fontSize: 12, color: "#666666" }}>
-        <div>{block.text}</div>
+        <div className="whitespace-pre-line">{block.text}</div>
         <div className="mt-1 underline" style={{ color: design.styles.linkColor }}>
           Unsubscribe
         </div>

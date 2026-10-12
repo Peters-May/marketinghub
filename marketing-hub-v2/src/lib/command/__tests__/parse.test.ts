@@ -44,6 +44,28 @@ describe("parseHubCommand", () => {
     expect(parsed.command.channel).toEqual(["LinkedIn"]);
   });
 
+  it("adds a social post on a day of the month", () => {
+    const parsed = parseHubCommand(
+      "Add a social post for the 31st called test",
+      new Date(2026, 9, 12, 12, 0, 0)
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.command.kind !== "create_content") return;
+    expect(parsed.command.title).toBe("test");
+    expect(parsed.command.due_date).toBe("2026-10-31");
+    expect(parsed.command.summary).toContain("due 31 Oct 2026");
+  });
+
+  it("rolls a bare day forward when that day has passed", () => {
+    const parsed = parseHubCommand(
+      "Add a task for the 5th called follow up",
+      new Date(2026, 9, 12, 12, 0, 0)
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.command.kind !== "create_task") return;
+    expect(parsed.command.due_date).toBe("2026-11-05");
+  });
+
   it("adds a LinkedIn post", () => {
     const parsed = command(
       "Add a LinkedIn post about autumn yacht moves, due next Tuesday"

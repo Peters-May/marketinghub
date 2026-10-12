@@ -4,7 +4,7 @@ import type {
   EmailDesign,
   EmailSection,
 } from "@/lib/email/design/types";
-import { extractEmailBody } from "@/lib/email/design/document";
+import { extractEmailBody, OFFICE_FOOTER } from "@/lib/email/design/document";
 
 function escapeHtml(value: string): string {
   return value
@@ -149,7 +149,9 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     case "html":
       return `<div style="${pad}">${sanitizeHtmlBlock(block.html)}</div>`;
     case "footer":
-      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(block.text)}<p style="margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Unsubscribe</a></p></div>`;
+      const footerText =
+        block.text.trim() === "Peters & May" ? OFFICE_FOOTER : block.text;
+      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}<p style="margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Unsubscribe</a></p></div>`;
     default:
       return "";
   }

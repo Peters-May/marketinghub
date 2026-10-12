@@ -90,6 +90,7 @@ export function SocialIdeasPanel({
   creating,
   parkingId,
   parkingActive,
+  kinds,
   onOpen,
   onCreate,
   onPlace,
@@ -101,14 +102,17 @@ export function SocialIdeasPanel({
   creating: boolean;
   parkingId: string | null;
   parkingActive: boolean;
+  /** When set, a new idea can be social, editorial, or another type. */
+  kinds?: { value: string; label: string }[];
   onOpen: (id: string) => void;
-  onCreate: (title: string, caption: string) => Promise<boolean>;
+  onCreate: (title: string, caption: string, kind?: string) => Promise<boolean>;
   onPlace: (id: string, dueDate: string) => void;
   onPark: (id: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
+  const [kind, setKind] = useState(kinds?.[0]?.value ?? "");
 
   useEffect(() => {
     const el = listRef.current;
@@ -133,7 +137,7 @@ export function SocialIdeasPanel({
     const nextCaption = caption;
     setTitle("");
     setCaption("");
-    const ok = await onCreate(nextTitle, nextCaption);
+    const ok = await onCreate(nextTitle, nextCaption, kind || undefined);
     if (!ok) {
       setTitle(nextTitle);
       setCaption(nextCaption);
@@ -144,7 +148,7 @@ export function SocialIdeasPanel({
     <aside
       ref={panelRef}
       className={cn(
-        "surface-card flex w-full shrink-0 flex-col xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:w-80 xl:overflow-y-auto",
+        "surface-card flex w-full shrink-0 flex-col lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-72 lg:overflow-y-auto",
         parkingActive && "ring-2 ring-sky-300"
       )}
       aria-label="Idea posts"
@@ -152,8 +156,8 @@ export function SocialIdeasPanel({
       <div className="border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-brand">Ideas</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Fillers stay here, off the calendar, until you need them. Drag one
-          onto a day, or drop a placed idea back here. They stay ideas.
+          Ideas stay here, off the calendar, until you schedule them. Drag one
+          onto a day, or drop it back here. They stay ideas.
         </p>
         {parkingActive ? (
           <p className="mt-2 text-xs font-medium text-sky-800">
@@ -186,6 +190,25 @@ export function SocialIdeasPanel({
             onChange={(event) => setCaption(event.target.value)}
           />
         </div>
+        {kinds && kinds.length > 0 ? (
+          <div>
+            <label className="label" htmlFor="idea-kind">
+              Type
+            </label>
+            <select
+              id="idea-kind"
+              className="field"
+              value={kind}
+              onChange={(event) => setKind(event.target.value)}
+            >
+              {kinds.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <button type="submit" className="btn-primary w-full" disabled={creating}>
           {creating ? "Saving…" : "Add idea"}
         </button>

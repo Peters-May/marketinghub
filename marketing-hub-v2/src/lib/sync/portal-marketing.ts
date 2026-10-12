@@ -1,6 +1,7 @@
 import {
   addEmailSuppression,
-  createContact,
+  applyPortalSharedList,
+  clearRetiredPortalLists,
   createEmailAudience,
   createMediaList,
   getContactByEmail,
@@ -9,15 +10,19 @@ import {
   listEmailAudiences,
   listEmailEvents,
   listMediaLists,
+  revokePortalConsentExcept,
   updateContact,
   updateEmailAudience,
   updateMediaList,
+  upsertPortalAudienceContacts,
 } from "@/lib/data/repos";
 import type { Contact, EmailSuppressionReason } from "@/lib/types";
 
 const PORTAL_LIST_NAME = "Portal customers";
 const PAGE_LIMIT = 500;
 const MAX_PAGES = 40;
+/** Skip a list saved in this window so a timed-out sync can continue on retry. */
+const LIST_RESUME_MS = 20 * 60 * 1000;
 
 type AudienceContact = {
   id: string;
@@ -139,56 +144,6 @@ async function postPortalMarketing(
   });
 }
 
-function blankContact(
-  email: string,
-  name: string,
-  organisation: string,
-  portalContactId: string
-): Omit<Contact, "id" | "created_at" | "updated_at"> {
-  return {
-    kind: "person",
-    name,
-    organisation,
-    role: "",
-    email,
-    phone: "",
-    website: "",
-    services: "",
-    tags: ["portal"],
-    notes: "",
-    user_id: null,
-    is_press: false,
-    beat: "",
-    outlet: "",
-    country: "",
-    preferred_topics: "",
-    last_contacted_at: null,
-    marketing_consent: true,
-    portal_contact_id: portalContactId,
-  };
-}
-
-async function upsertPortalContact(row: AudienceContact): Promise<Contact> {
-  const email = row.email_normalized.trim().toLowerCase();
-  const name = (row.name ?? "").trim() || email;
-  const organisation = (row.primary_company ?? "").trim();
-  const existing = await getContactByEmail(email);
-  if (!existing) {
-    return createContact(blankContact(email, name, organisation, row.id));
-  }
-  const tags = existing.tags.includes("portal")
-    ? existing.tags
-    : [...existing.tags, "portal"];
-  const updated = await updateContact(existing.id, {
-    portal_contact_id: row.id,
-    marketing_consent: true,
-    name: existing.name.trim() || name,
-    organisation: existing.organisation.trim() || organisation,
-    tags,
-  });
-  return updated ?? existing;
-}
-
 async function dropPortalEmail(
   email: string,
   reason: EmailSuppressionReason
@@ -240,7 +195,6 @@ async function pullSharedLists(): Promise<PortalSharedList[]> {
   const result = await portalFetch("/api/marketing/lists");
   if (result.ok && result.skipped) return [];
   if (!result.ok) {
-    if (result.status === 404) return [];
     throw new Error(result.error || "Portal lists request failed");
   }
   const body = (result.body ?? {}) as { lists?: PortalSharedList[] };
@@ -267,72 +221,6 @@ async function pullListMembers(listId: string): Promise<AudienceContact[]> {
     offset = body.next_offset;
   }
   return contacts;
-}
-
-async function upsertPortalNamedList(
-  list: PortalSharedList,
-  contactIds: string[]
-) {
-  const source = `portal-list:${list.id}`;
-  const description =
-    (list.description ?? "").trim() ||
-    `Synced from the Portal. Topic: ${list.topic.replace(/_/g, " ")}.`;
-  const lists = await listMediaLists();
-  let media = lists.find(
-    (item) => item.portal_list_id === list.id || item.source === source
-  );
-  if (!media) {
-    media = await createMediaList({
-      name: list.name,
-      description,
-      contact_ids: contactIds,
-      list_kind: "marketing",
-      source,
-      portal_list_id: list.id,
-    });
-  } else {
-    await updateMediaList(media.id, {
-      name: list.name,
-      description,
-      contact_ids: contactIds,
-      list_kind: "marketing",
-      source,
-      portal_list_id: list.id,
-    });
-  }
-
-  const audiences = await listEmailAudiences();
-  const audience = audiences.find((item) => item.portal_list_id === list.id);
-  if (!audience) {
-    await createEmailAudience({
-      name: list.name,
-      description,
-      list_ids: [media.id],
-      contact_ids: [],
-      filter: { tags: [], country: "" },
-      exclude_unsubscribed: true,
-      portal_list_id: list.id,
-    });
-  } else {
-    const listIds = audience.list_ids.includes(media.id)
-      ? audience.list_ids
-      : [...audience.list_ids, media.id];
-    await updateEmailAudience(audience.id, {
-      name: list.name,
-      description,
-      list_ids: listIds,
-      exclude_unsubscribed: true,
-      portal_list_id: list.id,
-    });
-  }
-}
-
-async function retirePortalLists(activeIds: Set<string>) {
-  const lists = await listMediaLists();
-  for (const list of lists) {
-    if (!list.portal_list_id || activeIds.has(list.portal_list_id)) continue;
-    await updateMediaList(list.id, { contact_ids: [] });
-  }
 }
 
 async function replacePortalAudience(contactIds: string[]) {
@@ -369,7 +257,48 @@ async function replacePortalAudience(contactIds: string[]) {
   }
 }
 
-export async function syncPortalMarketingAudience(): Promise<PortalAudienceSyncResult> {
+function listDescription(list: PortalSharedList) {
+  return (
+    (list.description ?? "").trim() ||
+    `Synced from the Portal. Topic: ${list.topic.replace(/_/g, " ")}.`
+  );
+}
+
+async function syncSharedLists(): Promise<number> {
+  const shared = await pullSharedLists();
+  const existing = await listMediaLists();
+  const now = Date.now();
+  for (const list of shared) {
+    const saved = existing.find(
+      (item) =>
+        item.portal_list_id === list.id || item.source === `portal-list:${list.id}`
+    );
+    const resumed =
+      saved != null &&
+      saved.contact_ids.length > 0 &&
+      now - Date.parse(saved.updated_at) < LIST_RESUME_MS;
+    if (resumed) continue;
+    const members = await pullListMembers(list.id);
+    await applyPortalSharedList({
+      portalListId: list.id,
+      name: list.name,
+      description: listDescription(list),
+      members: members.map((row) => ({
+        portalContactId: row.id,
+        email: row.email_normalized,
+        name: row.name ?? "",
+        organisation: row.primary_company ?? "",
+      })),
+    });
+  }
+  await clearRetiredPortalLists(shared.map((list) => list.id));
+  return shared.length;
+}
+
+export async function syncPortalMarketingAudience(options?: {
+  includeLists?: boolean;
+  includeAudience?: boolean;
+}): Promise<PortalAudienceSyncResult> {
   if (!portalBaseUrl() || !portalSyncSecret()) {
     return {
       ok: true,
@@ -381,88 +310,46 @@ export async function syncPortalMarketingAudience(): Promise<PortalAudienceSyncR
   }
 
   try {
-    const { contacts, page } = await pullAudience(null);
-    if (!page && contacts.length === 0 && !portalBaseUrl()) {
-      return {
-        ok: true,
-        skipped: true,
-        reason: "PORTAL_BASE_URL or PORTAL_ENQUIRY_SYNC_SECRET not set",
-        upserted: 0,
-        removed: 0,
-      };
-    }
-
-    const sendableHubIds = new Set<string>();
-    const hubIds: string[] = [];
-    for (const row of contacts) {
-      const email = row.email_normalized.trim().toLowerCase();
-      if (!email) continue;
-      const hub = await upsertPortalContact(row);
-      hubIds.push(hub.id);
-      sendableHubIds.add(hub.id);
-      const linked = await postPortalMarketing({
-        event: "link",
-        contact_id: row.id,
-        email,
-        hub_contact_id: hub.id,
-        hub_contact_url: hubContactRecordUrl(hub.id),
-      });
-      if (!linked.ok) {
-        console.error("[portal-marketing] link", email, linked.error);
-      }
-    }
-
-    await replacePortalAudience(hubIds);
-
-    const shared = await pullSharedLists();
-    const sharedIds = new Set<string>();
-    for (const list of shared) {
-      sharedIds.add(list.id);
-      const members = await pullListMembers(list.id);
-      const memberHubIds: string[] = [];
-      for (const row of members) {
-        const email = row.email_normalized.trim().toLowerCase();
-        if (!email) continue;
-        const hub = await upsertPortalContact(row);
-        memberHubIds.push(hub.id);
-        sendableHubIds.add(hub.id);
-        const linked = await postPortalMarketing({
-          event: "link",
-          contact_id: row.id,
-          email,
-          hub_contact_id: hub.id,
-          hub_contact_url: hubContactRecordUrl(hub.id),
-        });
-        if (!linked.ok) {
-          console.error("[portal-marketing] link", email, linked.error);
-        }
-      }
-      await upsertPortalNamedList(list, memberHubIds);
-    }
-    await retirePortalLists(sharedIds);
-
+    const includeLists = options?.includeLists !== false;
+    const includeAudience = options?.includeAudience !== false;
+    const lists = includeLists ? await syncSharedLists() : 0;
+    let upserted = 0;
     let removed = 0;
-    const current = await listContacts();
-    for (const contact of current) {
-      if (!contact.portal_contact_id) continue;
-      if (sendableHubIds.has(contact.id)) continue;
-      if (contact.marketing_consent === false) continue;
-      await updateContact(contact.id, { marketing_consent: false });
-      removed += 1;
+    if (!includeAudience) {
+      return { ok: true, upserted, removed, lists };
+    }
+    try {
+      const { contacts, page } = await pullAudience(null);
+      const members = contacts
+        .filter((row) => row.email_normalized.trim())
+        .map((row) => ({
+          portalContactId: row.id,
+          email: row.email_normalized,
+          name: row.name ?? "",
+          organisation: row.primary_company ?? "",
+        }));
+      const hubIds = await upsertPortalAudienceContacts(members);
+      upserted = hubIds.length;
+      await replacePortalAudience(hubIds);
+      removed = await revokePortalConsentExcept(new Set(hubIds));
+
+      for (const row of page?.suppressed ?? []) {
+        const reason = row.marketing_suppressed_reason ?? "unsubscribe";
+        if (await dropPortalEmail(row.email_normalized, reason)) removed += 1;
+      }
+      for (const row of page?.retired ?? []) {
+        if (await dropPortalEmail(row.merged_email, "unsubscribe")) removed += 1;
+      }
+      for (const row of page?.erased ?? []) {
+        if (await dropPortalEmail(row.email_normalized, "unsubscribe")) removed += 1;
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "Portal audience sync failed";
+      console.error("[portal-marketing] audience", error);
+      return { ok: true, upserted, removed, lists, error };
     }
 
-    for (const row of page?.suppressed ?? []) {
-      const reason = row.marketing_suppressed_reason ?? "unsubscribe";
-      if (await dropPortalEmail(row.email_normalized, reason)) removed += 1;
-    }
-    for (const row of page?.retired ?? []) {
-      if (await dropPortalEmail(row.merged_email, "unsubscribe")) removed += 1;
-    }
-    for (const row of page?.erased ?? []) {
-      if (await dropPortalEmail(row.email_normalized, "unsubscribe")) removed += 1;
-    }
-
-    return { ok: true, upserted: sendableHubIds.size, removed, lists: shared.length };
+    return { ok: true, upserted, removed, lists };
   } catch (err) {
     const error = err instanceof Error ? err.message : "Portal audience sync failed";
     console.error("[portal-marketing]", error);

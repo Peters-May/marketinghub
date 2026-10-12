@@ -11,11 +11,11 @@ import type {
 import { EMAIL_COLOUR_SWATCHES, ENSIGN_RED } from "@/lib/email/design";
 
 const MERGE_TOKENS = [
-  "{{name}}",
-  "{{first_name}}",
-  "{{organisation}}",
-  "{{email}}",
-  "{{country}}",
+  { token: "{{first_name}}", label: "First name" },
+  { token: "{{name}}", label: "Name" },
+  { token: "{{organisation}}", label: "Organisation" },
+  { token: "{{email}}", label: "Email" },
+  { token: "{{country}}", label: "Country" },
 ] as const;
 
 const PRESETS: { id: SectionPreset; label: string }[] = [
@@ -200,16 +200,27 @@ export function EmailInspector({
               value={section.columnGap}
               onChange={(columnGap) => onSection({ columnGap })}
             />
+            <p className="text-sm font-medium text-brand">Padding</p>
             <div className="grid grid-cols-2 gap-2">
               <NumberField
-                label="Padding top"
+                label="Top"
                 value={section.paddingTop}
                 onChange={(paddingTop) => onSection({ paddingTop })}
               />
               <NumberField
-                label="Padding bottom"
+                label="Bottom"
                 value={section.paddingBottom}
                 onChange={(paddingBottom) => onSection({ paddingBottom })}
+              />
+              <NumberField
+                label="Left"
+                value={section.paddingLeft}
+                onChange={(paddingLeft) => onSection({ paddingLeft })}
+              />
+              <NumberField
+                label="Right"
+                value={section.paddingRight}
+                onChange={(paddingRight) => onSection({ paddingRight })}
               />
             </div>
           </>
@@ -390,14 +401,24 @@ function BlockFields({
         </label>
       ) : null}
       {block.type === "footer" ? (
-        <TextInput label="Text" value={block.text} onChange={(text) => onBlock({ text } as Partial<EmailBlock>)} />
+        <label className="block text-sm">
+          <span className="text-muted">Address</span>
+          <textarea
+            className="input mt-1 min-h-[120px] w-full"
+            value={block.text}
+            onChange={(event) => onBlock({ text: event.target.value } as Partial<EmailBlock>)}
+          />
+        </label>
       ) : null}
       {block.type !== "spacer" && block.type !== "divider" ? (
         <AlignField value={block.align} onChange={(align) => onBlock({ align })} />
       ) : null}
+      <p className="text-sm font-medium text-brand">Padding</p>
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label="Pad top" value={block.paddingTop} onChange={(paddingTop) => onBlock({ paddingTop })} />
-        <NumberField label="Pad bottom" value={block.paddingBottom} onChange={(paddingBottom) => onBlock({ paddingBottom })} />
+        <NumberField label="Top" value={block.paddingTop} onChange={(paddingTop) => onBlock({ paddingTop })} />
+        <NumberField label="Bottom" value={block.paddingBottom} onChange={(paddingBottom) => onBlock({ paddingBottom })} />
+        <NumberField label="Left" value={block.paddingLeft} onChange={(paddingLeft) => onBlock({ paddingLeft })} />
+        <NumberField label="Right" value={block.paddingRight} onChange={(paddingRight) => onBlock({ paddingRight })} />
       </div>
     </>
   );
@@ -406,7 +427,7 @@ function BlockFields({
 function MergeInsert({ onInsert }: { onInsert: (token: string) => void }) {
   return (
     <label className="block text-sm">
-      <span className="text-muted">Insert merge field</span>
+      <span className="text-muted">Personalise</span>
       <select
         className="input mt-1 w-full"
         value=""
@@ -415,9 +436,9 @@ function MergeInsert({ onInsert }: { onInsert: (token: string) => void }) {
         }}
       >
         <option value="">Choose…</option>
-        {MERGE_TOKENS.map((token) => (
-          <option key={token} value={token}>
-            {token}
+        {MERGE_TOKENS.map((item) => (
+          <option key={item.token} value={item.token}>
+            {item.label}
           </option>
         ))}
       </select>
