@@ -56,6 +56,7 @@ type SocialPost = {
   mediaUrl: string | null;
   mediaUrls: string[];
   source: "planable" | "hub";
+  category?: string;
   shareEnabled?: boolean;
   shareToken?: string;
   /** Planable cross-post group — used to collapse platform copies in member view. */
@@ -290,18 +291,11 @@ function statusTone(status: string) {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
-function isHubIdea(post: SocialPost): boolean {
-  return (
-    post.source === "hub" &&
-    (post.statusValue === "idea" || post.status.toLowerCase() === "idea")
-  );
-}
-
-/** Ideas and drafts can leave the calendar and sit in the Ideas panel. */
+/** Hub posts that are not published can leave the calendar and wait without a date. */
 function canParkAsIdea(post: SocialPost): boolean {
   if (post.source !== "hub") return false;
   const raw = (post.statusValue || post.status).toLowerCase();
-  return raw === "idea" || raw === "draft";
+  return raw !== "published";
 }
 
 function looksLikeHtml(input: string): boolean {
@@ -498,8 +492,8 @@ export function SocialClient({
         .filter((c) => {
           if (!isSocialContentItem(c)) return false;
           if (c.due_date) return true;
-          // Undated ideas live in the Ideas panel, not on the calendar.
-          return !memberView && c.status === "idea";
+          // Undated pieces stay in the side list, not on the calendar.
+          return !memberView && c.status !== "published";
         })
         .map((c) => {
           const unique = platformsFromChannel(
@@ -522,6 +516,7 @@ export function SocialClient({
             url: c.planable_url || null,
             platform,
             platforms: unique,
+            category: c.category || "",
             mediaUrl: preview[0] || canva || null,
             mediaUrls: preview,
             source: "hub" as const,
@@ -686,7 +681,13 @@ export function SocialClient({
   const filtered = useMemo(() => {
     return posts.filter((p) => {
       if (
-        !matchesSearch(search, [p.text, p.status, p.platform, ...p.platforms])
+        !matchesSearch(search, [
+          p.text,
+          p.status,
+          p.platform,
+          p.category,
+          ...p.platforms,
+        ])
       ) {
         return false;
       }
@@ -720,7 +721,13 @@ export function SocialClient({
   const ideaMatches = useCallback(
     (p: SocialPost) => {
       if (
-        !matchesSearch(search, [p.text, p.status, p.platform, ...p.platforms])
+        !matchesSearch(search, [
+          p.text,
+          p.status,
+          p.platform,
+          p.category,
+          ...p.platforms,
+        ])
       ) {
         return false;
       }
@@ -738,17 +745,24 @@ export function SocialClient({
   );
 
   const parkedIdeas = useMemo(
-    () => posts.filter((p) => isHubIdea(p) && !p.scheduledAt && ideaMatches(p)),
-    [posts, ideaMatches]
-  );
-
-  const placedIdeas = useMemo(
     () =>
       posts
-        .filter((p) => isHubIdea(p) && !!p.scheduledAt && ideaMatches(p))
-        .sort((a, b) =>
-          String(a.scheduledAt).localeCompare(String(b.scheduledAt))
-        ),
+        .filter(
+          (p) =>
+            p.source === "hub" &&
+            !p.scheduledAt &&
+            (p.statusValue || p.status).toLowerCase() !== "published" &&
+            ideaMatches(p)
+        )
+        .map((p) => ({
+          id: p.id,
+          text: p.text,
+          scheduledAt: null,
+          platform: p.platform,
+          platforms: p.platforms,
+          category: p.category || "",
+          status: p.status,
+        })),
     [posts, ideaMatches]
   );
 
@@ -808,6 +822,7 @@ export function SocialClient({
     if (!post || post.source !== "hub") return false;
     if (post.status.toLowerCase() === "published") return false;
     if (options?.asIdea && !canParkAsIdea(post)) return false;
+    if (!dueDate && !canParkAsIdea(post)) return false;
     const previous = post;
     setError(null);
     setPosts((prev) =>
@@ -855,7 +870,7 @@ export function SocialClient({
   async function parkHubPost(id: string) {
     setParkingId(id);
     try {
-      return await updateHubSchedule(id, null, { asIdea: true });
+      return await updateHubSchedule(id, null);
     } finally {
       setParkingId(null);
     }
@@ -1199,17 +1214,23 @@ export function SocialClient({
             {error ? ` · ${error}` : ""}
           </p>
 
-          <div className="flex flex-col items-start gap-4 lg:flex-row">
           <div
             className={cn(
-              "hub-fc surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 lg:w-auto lg:flex-1",
+              "grid items-start gap-4",
+              !memberView && "lg:grid-cols-[minmax(0,1fr)_18rem]"
+            )}
+          >
+          <div
+            className={cn(
+              "hub-fc surface-card min-w-0 overflow-x-auto p-3 md:p-4",
               !memberView && "hub-fc--day-create"
             )}
           >
             {!memberView ? (
               <p className="mb-3 text-xs text-muted">
-                Click an empty day to add a post. Drag Hub drafts to reschedule.
-                Park fillers in Ideas, then drag them onto a day when you need them.
+                Undated posts stay in the side list. Drag one onto a day, or
+                drop a card back there to hold it. Click an empty day to add a
+                dated post.
               </p>
             ) : null}
             <FullCalendar
@@ -1275,17 +1296,7 @@ export function SocialClient({
                   info.event.extendedProps.postId ?? info.event.id
                 );
                 const post = posts.find((p) => p.id === id);
-                if (!post || !canParkAsIdea(post)) {
-                  if (
-                    post?.source === "hub" &&
-                    post.status.toLowerCase() !== "published"
-                  ) {
-                    setError(
-                      "Approved and scheduled posts stay on the calendar. Set the status to Idea if this is a filler."
-                    );
-                  }
-                  return;
-                }
+                if (!post || !canParkAsIdea(post)) return;
                 void parkHubPost(id);
               }}
               dateClick={
@@ -1360,7 +1371,7 @@ export function SocialClient({
             <SocialIdeasPanel
               panelRef={ideasPanelRef}
               parked={parkedIdeas}
-              placed={placedIdeas}
+              placed={[]}
               creating={creatingIdea}
               parkingId={parkingId}
               parkingActive={parkingActive}
@@ -1610,7 +1621,7 @@ export function SocialClient({
                       parseISO(selected.scheduledAt),
                       "EEEE d MMMM yyyy · HH:mm"
                     )
-                  : "In Ideas — no calendar date"}
+                  : "Unscheduled — no calendar date"}
               </p>
               {!memberView &&
               selected.source === "hub" &&
@@ -1622,7 +1633,7 @@ export function SocialClient({
                   disabled={parkingId === selected.id}
                   onClick={() => void parkHubPost(selected.id)}
                 >
-                  {parkingId === selected.id ? "Moving…" : "Move to ideas"}
+                  {parkingId === selected.id ? "Moving…" : "Hold without a date"}
                 </button>
               ) : null}
               {!memberView ? (

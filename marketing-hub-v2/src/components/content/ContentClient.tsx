@@ -180,12 +180,14 @@ function toIdeaPanelPost(item: ContentItem) {
   const type = item.content_type || "Content";
   return {
     id: item.id,
-    text: item.title || "Untitled idea",
+    text: item.title || "Untitled",
     scheduledAt: item.due_date
       ? `${item.due_date.slice(0, 10)}T09:00:00.000Z`
       : null,
     platform: type,
     platforms: channels.length ? channels : [type],
+    category: item.category || "",
+    status: statusLabel(item.status),
   };
 }
 
@@ -383,34 +385,16 @@ export function ContentClient({
       scopedItems
         .filter(
           (item) =>
-            item.status === "idea" &&
             !item.due_date &&
+            item.status !== "published" &&
             matchesSearch(search, [
               item.title,
               item.content_type,
+              item.category,
               formatChannels(item.channel),
               item.caption,
             ])
         )
-        .map(toIdeaPanelPost),
-    [scopedItems, search]
-  );
-
-  const placedIdeas = useMemo(
-    () =>
-      scopedItems
-        .filter(
-          (item) =>
-            item.status === "idea" &&
-            !!item.due_date &&
-            matchesSearch(search, [
-              item.title,
-              item.content_type,
-              formatChannels(item.channel),
-              item.caption,
-            ])
-        )
-        .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
         .map(toIdeaPanelPost),
     [scopedItems, search]
   );
@@ -613,40 +597,23 @@ export function ContentClient({
     await refresh();
   }
 
-  async function updateSchedule(
-    id: string,
-    dueDate: string | null,
-    asIdea = false
-  ) {
+  async function updateSchedule(id: string, dueDate: string | null) {
     const item = items.find((i) => i.id === id);
     if (!item || item.status === "published") return false;
-    if (asIdea && item.status !== "idea" && item.status !== "draft") {
-      return false;
-    }
     const previous = item;
     setSyncMessage(null);
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? {
-              ...i,
-              due_date: dueDate,
-              ...(asIdea ? { status: "idea" as const } : {}),
-            }
-          : i
-      )
+      prev.map((i) => (i.id === id ? { ...i, due_date: dueDate } : i))
     );
     if (editingId === id && edit) {
       setEdit({
         ...edit,
         due_date: dueDate ?? "",
-        ...(asIdea ? { status: "idea" as const } : {}),
       });
     }
-    const patch: { due_date: string | null; status?: ContentStatus } = {
+    const patch: { due_date: string | null } = {
       due_date: dueDate,
     };
-    if (asIdea) patch.status = "idea";
     const res = await fetch("/api/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -678,7 +645,7 @@ export function ContentClient({
   async function parkContent(id: string) {
     setParkingId(id);
     try {
-      return await updateSchedule(id, null, true);
+      return await updateSchedule(id, null);
     } finally {
       setParkingId(null);
     }
@@ -1159,12 +1126,12 @@ export function ContentClient({
           ) : null}
 
           {view === "calendar" ? (
-            <div className="flex flex-col items-start gap-4 lg:flex-row">
-            <div className="hub-fc hub-fc--day-create surface-card w-full min-w-0 overflow-hidden p-3 md:p-4 lg:flex-1">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="hub-fc hub-fc--day-create surface-card min-w-0 overflow-x-auto p-3 md:p-4">
               <p className="mb-3 text-xs text-muted">
                 {scope === "all"
-                  ? "Content and Social on one calendar. Park fillers in Ideas, then drag them onto a day. Click an empty day to add a dated piece."
-                  : "Park fillers in Ideas, then drag them onto a day. Click an empty day to add a dated piece, or drag a card to reschedule."}
+                  ? "Content and Social on one calendar. Undated posts stay in the side list. Drag one onto a day, or drop a card back there to hold it."
+                  : "Undated posts stay in the side list. Drag one onto a day, drop a card back there to hold it, or click an empty day to add a dated piece."}
               </p>
               <FullCalendar
                 plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
@@ -1200,9 +1167,7 @@ export function ContentClient({
                     info.event.extendedProps.itemId ?? info.event.id
                   );
                   const item = items.find((i) => i.id === id);
-                  setParkingActive(
-                    item?.status === "idea" || item?.status === "draft"
-                  );
+                  setParkingActive(Boolean(item && item.status !== "published"));
                 }}
                 eventDragStop={(info) => {
                   const panel = ideasPanelRef.current;
@@ -1223,12 +1188,6 @@ export function ContentClient({
                   );
                   const item = items.find((i) => i.id === id);
                   if (!item || item.status === "published") return;
-                  if (item.status !== "idea" && item.status !== "draft") {
-                    setSyncMessage(
-                      "Approved and scheduled pieces stay on the calendar. Set the status to Idea if this is a filler."
-                    );
-                    return;
-                  }
                   void parkContent(id);
                 }}
                 dateClick={(info) => {
@@ -1284,14 +1243,14 @@ export function ContentClient({
               />
               {calendarEvents.length === 0 ? (
                 <p className="mt-4 text-sm text-muted">
-                  No dated pieces yet — add a due date when editing, or place an idea from the panel.
+                  No dated pieces yet — drag one from Unscheduled, or click an empty day.
                 </p>
               ) : null}
             </div>
             <SocialIdeasPanel
               panelRef={ideasPanelRef}
               parked={parkedIdeas}
-              placed={placedIdeas}
+              placed={[]}
               creating={creatingIdea}
               parkingId={parkingId}
               parkingActive={parkingActive}

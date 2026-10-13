@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { format, parseISO } from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
 import { GripVertical } from "lucide-react";
@@ -12,11 +12,20 @@ export type IdeaPanelPost = {
   scheduledAt: string | null;
   platform: string;
   platforms: string[];
+  category?: string;
+  status?: string;
 };
+
+const UNCATEGORISED = "Uncategorised";
 
 function platformLabel(post: IdeaPanelPost): string {
   const names = post.platforms.length ? post.platforms : [post.platform];
   return names.filter(Boolean).join(" · ") || "Social";
+}
+
+function categoryOf(post: IdeaPanelPost): string {
+  const value = (post.category || "").trim();
+  return value || UNCATEGORISED;
 }
 
 function ParkedIdeaCard({
@@ -36,7 +45,7 @@ function ParkedIdeaCard({
         role="button"
         tabIndex={0}
         data-idea-id={post.id}
-        data-idea-title={post.text || "Idea"}
+        data-idea-title={post.text || "Untitled"}
         className="flex cursor-grab items-start gap-2 px-2.5 py-2 text-left active:cursor-grabbing"
         onClick={() => onOpen(post.id)}
         onKeyDown={(event) => {
@@ -52,10 +61,12 @@ function ParkedIdeaCard({
         />
         <span className="min-w-0">
           <span className="block line-clamp-2 text-xs font-medium leading-snug text-slate-800">
-            {post.text || "Untitled idea"}
+            {post.text || "Untitled"}
           </span>
           <span className="mt-0.5 block text-[10px] text-muted">
-            {platformLabel(post)}
+            {[post.status, platformLabel(post), categoryOf(post)]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </span>
       </div>
@@ -113,6 +124,28 @@ export function SocialIdeasPanel({
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
   const [kind, setKind] = useState(kinds?.[0]?.value ?? "");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [adding, setAdding] = useState(false);
+
+  const categories = useMemo(() => {
+    const present = new Set(parked.map(categoryOf));
+    return Array.from(present).sort((a, b) => {
+      if (a === UNCATEGORISED) return 1;
+      if (b === UNCATEGORISED) return -1;
+      return a.localeCompare(b);
+    });
+  }, [parked]);
+
+  const visibleParked = useMemo(() => {
+    if (categoryFilter === "all") return parked;
+    return parked.filter((post) => categoryOf(post) === categoryFilter);
+  }, [parked, categoryFilter]);
+
+  useEffect(() => {
+    if (categoryFilter !== "all" && !categories.includes(categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [categories, categoryFilter]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -123,7 +156,7 @@ export function SocialIdeasPanel({
       appendTo: document.body,
       eventData(eventEl) {
         return {
-          title: eventEl.getAttribute("data-idea-title") || "Idea",
+          title: eventEl.getAttribute("data-idea-title") || "Untitled",
           create: false,
         };
       },
@@ -141,32 +174,67 @@ export function SocialIdeasPanel({
     if (!ok) {
       setTitle(nextTitle);
       setCaption(nextCaption);
+      return;
     }
+    setAdding(false);
   }
 
   return (
     <aside
       ref={panelRef}
       className={cn(
-        "surface-card flex w-full shrink-0 flex-col lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:w-72 lg:overflow-y-auto",
+        "surface-card flex max-h-[28rem] w-full shrink-0 flex-col overflow-hidden max-lg:order-first lg:sticky lg:top-4 lg:order-none lg:h-[calc(100vh-11rem)] lg:max-h-[calc(100vh-11rem)]",
         parkingActive && "ring-2 ring-sky-300"
       )}
-      aria-label="Idea posts"
+      aria-label="Unscheduled posts"
     >
       <div className="border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-brand">Ideas</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-brand">Unscheduled</h2>
+          <span className="text-[11px] text-muted">{parked.length}</span>
+        </div>
         <p className="mt-1 text-xs leading-relaxed text-muted">
-          Ideas stay here, off the calendar, until you schedule them. Drag one
-          onto a day, or drop it back here. They stay ideas.
+          Posts without a date stay here. Drag one onto a day, or drop a card
+          back here to hold it for later.
         </p>
         {parkingActive ? (
           <p className="mt-2 text-xs font-medium text-sky-800">
-            Drop here to park this post as an idea.
+            Drop here to take the date off and keep this post.
           </p>
         ) : null}
+        <label className="mt-3 block">
+          <span className="sr-only">Filter by category</span>
+          <select
+            className="field px-2 py-1.5 text-xs"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            aria-label="Filter unscheduled posts by category"
+          >
+            <option value="all">All categories</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <form onSubmit={(event) => void submit(event)} className="space-y-2 border-b border-border p-4">
+      <div className="border-b border-border px-4 py-3">
+        <button
+          type="button"
+          className="btn-secondary w-full px-2.5 py-1.5 text-xs"
+          onClick={() => setAdding((open) => !open)}
+        >
+          {adding ? "Close" : "Add idea"}
+        </button>
+      </div>
+
+      {adding ? (
+      <form
+        onSubmit={(event) => void submit(event)}
+        className="space-y-2 border-b border-border p-4"
+      >
         <div>
           <label className="label" htmlFor="idea-title">
             New idea
@@ -213,14 +281,20 @@ export function SocialIdeasPanel({
           {creating ? "Saving…" : "Add idea"}
         </button>
       </form>
+      ) : null}
 
-      <div ref={listRef} className="space-y-2 p-3">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {parked.length === 0 ? (
           <p className="px-1 py-3 text-xs text-muted">
-            No parked ideas. Add one here so it does not take a calendar slot.
+            Nothing waiting. Add an idea here, or drag a card off the calendar
+            to hold it without a date.
+          </p>
+        ) : visibleParked.length === 0 ? (
+          <p className="px-1 py-3 text-xs text-muted">
+            Nothing in {categoryFilter}. Choose All categories to see the rest.
           </p>
         ) : (
-          parked.map((post) => (
+          visibleParked.map((post) => (
             <ParkedIdeaCard
               key={post.id}
               post={post}
@@ -232,7 +306,7 @@ export function SocialIdeasPanel({
       </div>
 
       {placed.length > 0 ? (
-        <div className="border-t border-border p-3">
+        <div className="max-h-40 overflow-y-auto border-t border-border p-3">
           <h3 className="px-1 pb-2 text-xs font-semibold text-brand">
             On the calendar
           </h3>
@@ -248,7 +322,7 @@ export function SocialIdeasPanel({
                   onClick={() => onOpen(post.id)}
                 >
                   <span className="block line-clamp-2 text-xs font-medium leading-snug text-slate-800">
-                    {post.text || "Untitled idea"}
+                    {post.text || "Untitled"}
                   </span>
                   <span className="mt-0.5 block text-[10px] text-muted">
                     {post.scheduledAt
@@ -264,7 +338,7 @@ export function SocialIdeasPanel({
                   disabled={parkingId === post.id}
                   onClick={() => onPark(post.id)}
                 >
-                  {parkingId === post.id ? "Moving…" : "Move to ideas"}
+                  {parkingId === post.id ? "Moving…" : "Hold without a date"}
                 </button>
               </li>
             ))}
