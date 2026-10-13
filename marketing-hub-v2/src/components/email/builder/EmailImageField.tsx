@@ -9,62 +9,6 @@ type GalleryImage = {
   url: string;
 };
 
-type AssetFile = { url?: string; name?: string; type?: string };
-type AssetItem = {
-  id?: string;
-  name?: string;
-  display_name?: string;
-  cover_url?: string | null;
-  document_url?: string;
-  document_link?: string;
-  files?: AssetFile[];
-};
-
-function isRasterImage(name: string, type: string) {
-  if (type.startsWith("image/") && type !== "image/svg+xml") return true;
-  return /\.(png|jpe?g|gif|webp)$/i.test(name);
-}
-
-function driveThumb(url: string): string | null {
-  try {
-    const parsed = new URL(url.trim());
-    if (!parsed.hostname.toLowerCase().includes("google.com")) return null;
-    const pathMatch = parsed.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    const id = pathMatch?.[1] || parsed.searchParams.get("id");
-    return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w800` : null;
-  } catch {
-    return null;
-  }
-}
-
-function assetImages(items: AssetItem[]): GalleryImage[] {
-  const images: GalleryImage[] = [];
-  const seen = new Set<string>();
-  const add = (id: string, name: string, url: string | null | undefined) => {
-    const next = url?.trim() || "";
-    if (!next || seen.has(next) || images.length >= 48) return;
-    seen.add(next);
-    images.push({ id, name: name || "Image", url: next });
-  };
-
-  items.forEach((item, index) => {
-    const label = item.display_name?.trim() || item.name?.trim() || "Image";
-    const itemId = item.id || `asset-${index}`;
-    for (const file of item.files ?? []) {
-      const name = file.name || label;
-      const raw = file.url?.trim() || "";
-      if (!raw || !isRasterImage(name, file.type || "")) continue;
-      const url = raw.includes("google.com") ? driveThumb(raw) || raw : raw;
-      add(`${itemId}-${raw}`, name, url);
-    }
-    const cover = item.cover_url?.trim() || "";
-    if (cover && isRasterImage(cover, "")) {
-      add(`${itemId}-cover`, label, cover.includes("google.com") ? driveThumb(cover) || cover : cover);
-    }
-  });
-  return images;
-}
-
 export function EmailImageField({
   src,
   onChange,
@@ -75,6 +19,7 @@ export function EmailImageField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [assets, setAssets] = useState<GalleryImage[]>([]);
+  const [assetsNote, setAssetsNote] = useState("Loading the asset gallery…");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
@@ -88,13 +33,22 @@ export function EmailImageField({
       .catch(() => {
         if (!cancelled) setImages([]);
       });
-    void fetch("/api/media/list?scope=all&limit=200")
-      .then((res) => res.json())
+    void fetch("/api/email/assets")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not load the asset gallery");
+        return data;
+      })
       .then((data) => {
-        if (!cancelled && Array.isArray(data.items)) setAssets(assetImages(data.items));
+        if (cancelled) return;
+        setAssets(Array.isArray(data.images) ? data.images : []);
+        setAssetsNote("No images in the asset gallery yet.");
       })
       .catch(() => {
-        if (!cancelled) setAssets([]);
+        if (!cancelled) {
+          setAssets([]);
+          setAssetsNote("The asset gallery could not be loaded.");
+        }
       });
     return () => {
       cancelled = true;
@@ -130,7 +84,7 @@ export function EmailImageField({
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
         >
-          {uploading ? "Uploading…" : "Upload image"}
+          {uploading ? "Uploading…" : "Upload new"}
         </button>
         <input
           ref={inputRef}
@@ -154,16 +108,16 @@ export function EmailImageField({
         />
       ) : null}
       <ImageChoices
-        label="Email gallery"
-        empty="Images you upload here are kept for later emails."
-        images={images}
+        label="Asset gallery"
+        empty={assetsNote}
+        images={assets}
         selected={src}
         onSelect={onChange}
       />
       <ImageChoices
-        label="Asset gallery"
-        empty="Images from the library will appear here."
-        images={assets}
+        label="Uploaded for email"
+        empty="Images you upload here are kept for later emails."
+        images={images}
         selected={src}
         onSelect={onChange}
       />
@@ -198,7 +152,7 @@ function ImageChoices({
       {images.length === 0 ? (
         <p className="mt-1 text-xs text-muted">{empty}</p>
       ) : (
-        <div className="mt-1 grid max-h-36 grid-cols-3 gap-1 overflow-y-auto">
+        <div className="mt-1 grid max-h-52 grid-cols-3 gap-1 overflow-y-auto">
           {images.map((image) => (
             <button
               key={image.id}

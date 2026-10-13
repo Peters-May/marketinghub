@@ -952,7 +952,7 @@ export function EnquiriesClient({
           }),
         });
         setListHint(
-          `Added to marketing list “${marketingList.name}”. Open Emails to draft.`
+          `Added to marketing list “${marketingList.name}”. Open Email to draft.`
         );
       } else {
         setListHint(

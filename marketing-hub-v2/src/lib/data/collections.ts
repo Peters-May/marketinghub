@@ -614,8 +614,8 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
   },
   {
     key: "pr_pitches",
-    label: "Emails",
-    description: "PR and marketing email drafts (Outlook export)",
+    label: "Pitches",
+    description: "PR pitch drafts (Outlook export)",
     fields: [
       f("id", { type: "readonly", locked: true }),
       f("title"),

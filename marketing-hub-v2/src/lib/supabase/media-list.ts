@@ -231,6 +231,10 @@ export async function listMediaFromSupabase(options?: {
   /** Max rows per request (default 200). Use offset for pagination. */
   limit?: number;
   offset?: number;
+  /** When set, only these hub categories are read (newest first). */
+  categories?: string[];
+  /** Read the newest rows first. The default media list order is unchanged. */
+  newestFirst?: boolean;
 }): Promise<{
   items: MediaListItem[];
   tableName: string | null;
@@ -241,6 +245,10 @@ export async function listMediaFromSupabase(options?: {
   const includeAdmin = options?.includeAdmin === true;
   const limit = Math.min(Math.max(options?.limit ?? 200, 1), 1000);
   const offset = Math.max(options?.offset ?? 0, 0);
+  const categories = (options?.categories ?? [])
+    .map((category) => category.trim())
+    .filter(Boolean);
+  const newestFirst = options?.newestFirst === true;
   const tables = await listCoreTables();
   const mediaTable = findMediaTable(tables);
   if (!mediaTable) {
@@ -252,10 +260,14 @@ export async function listMediaFromSupabase(options?: {
     .from(mediaTable.supabase_table)
     .select("*", { count: "exact", head: true });
 
-  const { data, error } = await supabase
-    .from(mediaTable.supabase_table)
-    .select("*")
-    .range(offset, offset + limit - 1);
+  let listQuery = supabase.from(mediaTable.supabase_table).select("*");
+  if (categories.length > 0) {
+    listQuery = listQuery.is("deleted_at", null).in("hub_category", categories);
+  }
+  if (newestFirst || categories.length > 0) {
+    listQuery = listQuery.order("updated_at", { ascending: false });
+  }
+  const { data, error } = await listQuery.range(offset, offset + limit - 1);
 
   if (error) {
     throw new Error(error.message);

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import type {
   Contact,
   ContentItem,
@@ -17,7 +16,6 @@ import {
   buildEml,
   downloadEmlBlob,
   downloadTextFile,
-  hasMarketingConsent,
   insertNewsroomLink,
   insertReleaseBlock,
   mailtoHref,
@@ -48,10 +46,8 @@ function isPressRelease(c: ContentItem): boolean {
   );
 }
 
-function isNewsletter(c: ContentItem): boolean {
-  const type = (c.content_type || "").toLowerCase();
-  const channels = (c.channel || []).map((x) => x.toLowerCase());
-  return type === "newsletter" || channels.includes("newsletter");
+function isPitch(p: PrPitch): boolean {
+  return p.channel !== "marketing";
 }
 
 type Props = {
@@ -59,7 +55,7 @@ type Props = {
   initialLists: MediaList[];
   initialContacts: Contact[];
   initialContent: ContentItem[];
-  /** Prefill from release / newsletter deep-link. */
+  /** Prefill from a press release deep-link. */
   prefillContentId?: string | null;
   onListsChanged?: () => void;
 };
@@ -79,9 +75,6 @@ export function EmailsClient({
   const [step, setStep] = useState<WizardStep>("write");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [channelFilter, setChannelFilter] = useState<"all" | EmailChannel>(
-    "all"
-  );
   const [statusFilter, setStatusFilter] = useState("all");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -119,11 +112,10 @@ export function EmailsClient({
   useEffect(() => {
     if (!prefillContentId) return;
     const piece = content.find((x) => x.id === prefillContentId);
-    if (!piece) return;
-    const channel: EmailChannel = isNewsletter(piece) ? "marketing" : "pr";
+    if (!piece || !isPressRelease(piece)) return;
     setForm((f) => ({
       ...f,
-      channel,
+      channel: "pr",
       title: piece.title,
       subject: piece.title,
       content_id: piece.id,
@@ -144,11 +136,13 @@ export function EmailsClient({
   }, [contacts]);
 
   const releases = useMemo(
-    () => content.filter((c) => isPressRelease(c) || isNewsletter(c)),
+    () => content.filter((c) => isPressRelease(c)),
     [content]
   );
 
-  const selected = pitches.find((p) => p.id === selectedId) ?? null;
+  const pitchesOnly = useMemo(() => pitches.filter(isPitch), [pitches]);
+
+  const selected = pitchesOnly.find((p) => p.id === selectedId) ?? null;
 
   function resolveRecipients(pitch: {
     list_ids?: string[];
@@ -167,18 +161,13 @@ export function EmailsClient({
       const list = lists.find((l) => l.id === lid);
       list?.contact_ids.forEach((id) => ids.add(id));
     }
-    let people = Array.from(ids)
+    return Array.from(ids)
       .map((id) => contactById.get(id))
       .filter((c): c is Contact => Boolean(c));
-    if (pitch.channel === "marketing") {
-      people = people.filter(hasMarketingConsent);
-    }
-    return people;
   }
 
   const filtered = useMemo(() => {
-    return pitches.filter((p) => {
-      if (channelFilter !== "all" && p.channel !== channelFilter) return false;
+    return pitchesOnly.filter((p) => {
       if (statusFilter !== "all" && p.status !== statusFilter) return false;
       return matchesSearch(search, [
         p.title,
@@ -186,34 +175,29 @@ export function EmailsClient({
         p.campaign_tag,
         p.created_by,
         p.status,
-        p.channel,
       ]);
     });
-  }, [pitches, search, channelFilter, statusFilter]);
+  }, [pitchesOnly, search, statusFilter]);
 
   const stats = useMemo(() => {
     const now = Date.now();
     const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
-    const recent = pitches.filter(
+    const recent = pitchesOnly.filter(
       (p) => new Date(p.updated_at).getTime() >= monthAgo
     );
     return {
-      drafts: pitches.filter((p) => p.status === "draft").length,
-      exported: pitches.filter((p) => p.status === "exported").length,
-      sentExternal: pitches.filter((p) => p.status === "sent_external").length,
+      drafts: pitchesOnly.filter((p) => p.status === "draft").length,
+      exported: pitchesOnly.filter((p) => p.status === "exported").length,
+      sentExternal: pitchesOnly.filter((p) => p.status === "sent_external").length,
       recent: recent.length,
-      pr: pitches.filter((p) => p.channel === "pr").length,
-      marketing: pitches.filter((p) => p.channel === "marketing").length,
     };
-  }, [pitches]);
+  }, [pitchesOnly]);
 
   const listsForChannel = useMemo(() => {
-    return lists.filter((l) => {
-      if (form.channel === "pr")
-        return l.list_kind === "press" || l.list_kind === "mixed";
-      return l.list_kind === "marketing" || l.list_kind === "mixed";
-    });
-  }, [lists, form.channel]);
+    return lists.filter(
+      (l) => l.list_kind === "press" || l.list_kind === "mixed"
+    );
+  }, [lists]);
 
   const previewContact =
     contactById.get(previewContactId) ||
@@ -224,16 +208,13 @@ export function EmailsClient({
     })[0] ||
     contacts[0];
 
-  function startNew(channel: EmailChannel = "pr") {
+  function startNew() {
     setForm({
       title: "",
-      subject: channel === "pr" ? "Pitch from Peters & May" : "Peters & May update",
-      body:
-        channel === "pr"
-          ? "{{greeting}},\n\nI thought this might interest {{outlet}}.\n\nBest regards,\nMarketing\nPeters & May"
-          : "{{greeting}},\n\nHere is the latest from Peters & May.\n\nBest regards,\nMarketing",
+      subject: "Pitch from Peters & May",
+      body: "{{greeting}},\n\nI thought this might interest {{outlet}}.\n\nBest regards,\nMarketing\nPeters & May",
       preview_text: "",
-      channel,
+      channel: "pr",
       from_name: "Peters & May Marketing",
       from_email: "marketing@petersandmay.com",
       campaign_tag: "",
@@ -281,7 +262,7 @@ export function EmailsClient({
   async function exportOutlook(mode: "bcc" | "each") {
     const pitch =
       selected ||
-      pitches.find((p) => p.id === selectedId) ||
+      pitchesOnly.find((p) => p.id === selectedId) ||
       null;
     if (!pitch && !form.title) {
       await saveDraft();
@@ -317,18 +298,15 @@ export function EmailsClient({
       await refresh();
     }
 
-    const full = (await fetch("/api/pr/pitches").then((r) => r.json()))
-      .pitches as PrPitch[];
+    const full = (
+      (await fetch("/api/pr/pitches").then((r) => r.json())).pitches as PrPitch[]
+    ).filter(isPitch);
     const current = full.find((p) => p.id === id);
     if (!current) return;
 
     const recipients = resolveRecipients(current);
     if (!recipients.length) {
-      setMessage(
-        current.channel === "marketing"
-          ? "No recipients with marketing consent on the selected lists."
-          : "Add a list with contacts first."
-      );
+      setMessage("Add a list with contacts first.");
       return;
     }
 
@@ -375,7 +353,7 @@ export function EmailsClient({
       await saveDraft();
       id = selectedId;
     }
-    const full = pitches.find((p) => p.id === id) || selected;
+    const full = pitchesOnly.find((p) => p.id === id) || selected;
     const draft = full || {
       list_ids: form.list_ids,
       media_list_id: form.list_ids[0] || null,
@@ -384,16 +362,10 @@ export function EmailsClient({
     };
     const recipients = resolveRecipients(draft);
     if (!recipients.length) {
-      setMessage(
-        form.channel === "marketing"
-          ? "No consented marketing recipients to export."
-          : "Add a list with contacts first."
-      );
+      setMessage("Add a list with contacts first.");
       return;
     }
-    const csv = recipientsToCsv(recipients, {
-      requireMarketingConsent: form.channel === "marketing",
-    });
+    const csv = recipientsToCsv(recipients);
     downloadTextFile("email-recipients.csv", csv, "text/csv");
     const emails = recipients.map((c) => c.email).filter(Boolean).join("; ");
     try {
@@ -456,7 +428,7 @@ export function EmailsClient({
             className="text-sm text-accent underline"
             onClick={() => setView("dashboard")}
           >
-            ← Back to Emails
+            ← Back to pitches
           </button>
           <div className="flex flex-wrap gap-2">
             {STEPS.map((s, i) => (
@@ -485,23 +457,6 @@ export function EmailsClient({
 
         {step === "write" ? (
           <div className="surface-card space-y-3 p-5">
-            <label className="block text-sm">
-              <span className="text-muted">Channel</span>
-              <select
-                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                value={form.channel}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    channel: e.target.value === "marketing" ? "marketing" : "pr",
-                    list_ids: [],
-                  }))
-                }
-              >
-                <option value="pr">PR pitch (Outlook)</option>
-                <option value="marketing">Marketing (Outlook)</option>
-              </select>
-            </label>
             <input
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
               placeholder="Internal title"
@@ -566,7 +521,7 @@ export function EmailsClient({
                   if (e.target.value) embedRelease(e.target.value);
                 }}
               >
-                <option value="">Add press release / newsletter…</option>
+                <option value="">Add press release…</option>
                 {releases.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.title}
@@ -592,9 +547,7 @@ export function EmailsClient({
         {step === "recipients" ? (
           <div className="surface-card space-y-3 p-5">
             <p className="text-sm text-muted">
-              {form.channel === "marketing"
-                ? "Only marketing lists and contacts with marketing consent are used."
-                : "Select press / mixed media lists."}
+              Select press or mixed media lists.
             </p>
             <ul className="space-y-2">
               {listsForChannel.map((l) => {
@@ -709,8 +662,7 @@ export function EmailsClient({
           <div className="surface-card space-y-4 p-5">
             <p className="text-sm text-muted">
               Hub does not send blasts. Download a .eml and open it in Outlook to
-              send — same path for PR and marketing. CSV is optional for
-              records or another tool.
+              send. CSV is optional for records.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -769,7 +721,7 @@ export function EmailsClient({
           className="text-sm text-accent underline"
           onClick={() => setView("dashboard")}
         >
-          ← Back to Emails
+          ← Back to pitches
         </button>
         {message ? (
           <p className="rounded-lg border border-brand/15 bg-mist px-3 py-2 text-sm">
@@ -783,7 +735,7 @@ export function EmailsClient({
                 {selected.title}
               </h2>
               <p className="mt-1 text-sm text-muted">
-                {selected.status} · {selected.channel}
+                {selected.status}
                 {selected.campaign_tag ? ` · ${selected.campaign_tag}` : ""}
               </p>
             </div>
@@ -857,28 +809,19 @@ export function EmailsClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl text-brand">Emails</h2>
+          <h2 className="font-display text-xl text-brand">Email pitches</h2>
           <p className="text-sm text-muted">
-            PR pitches and marketing drafts — shared contacts and lists. Send
-            via Outlook (.eml); Hub never blast-sends.
+            Draft a press pitch, then download .eml and send from Outlook. Hub
+            never blast-sends.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => startNew("pr")}
-            className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-          >
-            New PR pitch
-          </button>
-          <button
-            type="button"
-            onClick={() => startNew("marketing")}
-            className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand"
-          >
-            New marketing email
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => startNew()}
+          className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+        >
+          New pitch
+        </button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -895,69 +838,11 @@ export function EmailsClient({
         ))}
       </div>
 
-      {content.filter(isNewsletter).length > 0 ? (
-        <div className="surface-card space-y-3 p-4">
-          <h3 className="font-display text-lg text-brand">
-            Draft from newsletter
-          </h3>
-          <ul className="space-y-2">
-            {content.filter(isNewsletter).slice(0, 6).map((n) => (
-              <li
-                key={n.id}
-                className="flex flex-wrap items-center justify-between gap-2 text-sm"
-              >
-                <span className="text-brand">{n.title}</span>
-                <button
-                  type="button"
-                  className="rounded-lg border border-brand/20 px-3 py-1.5 text-brand"
-                  onClick={() => {
-                    setForm((f) => ({
-                      ...f,
-                      channel: "marketing",
-                      title: n.title,
-                      subject: n.title,
-                      content_id: n.id,
-                      preview_text: plainTextFromHtml(n.caption || "").slice(
-                        0,
-                        140
-                      ),
-                      body: insertReleaseBlock(
-                        f.body,
-                        { title: n.title, caption: n.caption, id: n.id },
-                        typeof window !== "undefined"
-                          ? window.location.origin
-                          : ""
-                      ),
-                    }));
-                    setView("wizard");
-                    setStep("write");
-                  }}
-                >
-                  Draft email
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       <FilterBar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search emails…"
+        searchPlaceholder="Search pitches…"
         selects={[
-          {
-            id: "channel",
-            label: "Channel",
-            value: channelFilter,
-            onChange: (v) =>
-              setChannelFilter(v as "all" | EmailChannel),
-            options: [
-              { value: "all", label: "All channels" },
-              { value: "pr", label: "PR" },
-              { value: "marketing", label: "Marketing" },
-            ],
-          },
           {
             id: "status",
             label: "Status",
@@ -982,15 +867,15 @@ export function EmailsClient({
 
       {filtered.length === 0 ? (
         <EmptyState
-          title="No emails yet"
-          description="Create a PR pitch or marketing email, then download .eml for Outlook."
+          title="No pitches yet"
+          description="Create a pitch, then download .eml for Outlook."
           action={
             <button
               type="button"
               className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-              onClick={() => startNew("pr")}
+              onClick={() => startNew()}
             >
-              New PR pitch
+              New pitch
             </button>
           }
         />
@@ -1017,7 +902,7 @@ export function EmailsClient({
                     </div>
                   </div>
                   <span className="rounded-full bg-mist px-2 py-0.5 text-xs text-brand">
-                    {p.channel} · {p.status}
+                    {p.status}
                   </span>
                 </div>
               </button>
@@ -1027,11 +912,7 @@ export function EmailsClient({
       )}
 
       <p className="text-xs text-muted">
-        Linked newsletter content:{" "}
-        <Link href="/app/content" className="text-accent underline">
-          Content &amp; Social
-        </Link>
-        . Open tracking is not available for Outlook exports.
+        Open tracking is not available for Outlook exports.
       </p>
     </div>
   );

@@ -51,7 +51,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "contacts", label: "Press contacts" },
   { id: "lists", label: "Media lists" },
   { id: "releases", label: "Releases" },
-  { id: "pitches", label: "Emails" },
+  { id: "pitches", label: "Pitches" },
   { id: "coverage", label: "Coverage" },
   { id: "monitor", label: "Monitoring" },
   { id: "newsroom", label: "Newsroom" },
