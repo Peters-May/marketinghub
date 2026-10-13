@@ -89,7 +89,6 @@ export function RichTextEditorImpl({
   placeholder = "Start typing…",
   className,
   minHeight = "96px",
-  compact = false,
   variant = "default",
   textStyle,
 }: RichTextEditorProps) {
