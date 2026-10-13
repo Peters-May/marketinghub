@@ -35,9 +35,8 @@ export default async function NewsroomPage() {
   const slider = releases.filter((r) => r.in_slider);
   const rest = releases.filter((r) => r.id !== featured?.id);
   const spokespeople = contacts
-    .filter(isPressContact)
-    .filter((c) => c.email || c.phone)
-    .slice(0, 6);
+    .filter((c) => c.is_spokesperson && !isPressContact(c))
+    .filter((c) => c.email || c.phone);
 
   const accent = settings.theme_color || COLORS.pmBlue.hex;
 
@@ -170,7 +169,10 @@ export default async function NewsroomPage() {
 
         {spokespeople.length > 0 ? (
           <section className="mt-16">
-            <h2 className="font-display text-2xl">Media contacts</h2>
+            <h2 className="font-display text-2xl">Spokespeople</h2>
+            <p className="mt-2 text-sm text-muted">
+              Peters &amp; May contacts for media enquiries.
+            </p>
             <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {spokespeople.map((c) => (
                 <li
@@ -179,9 +181,7 @@ export default async function NewsroomPage() {
                 >
                   <div className="font-medium text-brand">{c.name}</div>
                   <div className="text-muted">
-                    {[c.role, c.organisation || c.outlet]
-                      .filter(Boolean)
-                      .join(" at ")}
+                    {[c.role, c.organisation].filter(Boolean).join(", ")}
                   </div>
                   {c.email ? (
                     <a

@@ -137,6 +137,7 @@ function migrateContacts(
     services: item.services ?? "",
     user_id: item.user_id ?? null,
     is_press: Boolean(item.is_press),
+    is_spokesperson: Boolean(item.is_spokesperson),
     beat: item.beat ?? "",
     outlet: item.outlet ?? "",
     country: item.country ?? "",

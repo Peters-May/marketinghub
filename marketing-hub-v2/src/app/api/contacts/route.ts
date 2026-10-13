@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     notes: body.notes ?? "",
     user_id: kind === "company" ? null : body.user_id ?? null,
     is_press: Boolean(body.is_press),
+    is_spokesperson: Boolean(body.is_spokesperson) && !body.is_press,
     beat: body.beat ?? "",
     outlet: body.outlet ?? "",
     country: body.country ?? "",

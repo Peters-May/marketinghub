@@ -19,6 +19,7 @@ import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { mentionsToCsv } from "@/lib/pr/mentions-csv";
 import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
+import { isContactSegment } from "@/lib/contacts/segments";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
 import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
 
@@ -186,9 +187,9 @@ export function PrClient({
   const [listForm, setListForm] = useState({
     name: "",
     description: "",
-    list_kind: "press" as "press" | "marketing" | "mixed",
   });
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [listMemberSearch, setListMemberSearch] = useState("");
 
   const [clipForm, setClipForm] = useState({
     title: "",
@@ -241,6 +242,11 @@ export function PrClient({
     void refreshAll();
   }, [refreshAll]);
 
+  const contactLists = useMemo(
+    () => lists.filter(isContactSegment),
+    [lists]
+  );
+
   const pressContacts = useMemo(
     () => contacts.filter(isPressContact),
     [contacts]
@@ -267,7 +273,25 @@ export function PrClient({
     [content]
   );
 
-  const selectedList = lists.find((l) => l.id === selectedListId) ?? null;
+  const selectedList = contactLists.find((l) => l.id === selectedListId) ?? null;
+
+  const listMembers = useMemo(() => {
+    if (!selectedList) return [];
+    const onList = new Set(selectedList.contact_ids);
+    const query = listMemberSearch.trim();
+    const pool = query
+      ? contacts.filter((contact) =>
+          matchesSearch(query, [
+            contact.name,
+            contact.email,
+            contact.organisation,
+            contact.outlet,
+            contact.role,
+          ])
+        )
+      : contacts.filter((contact) => onList.has(contact.id));
+    return pool.slice(0, 80);
+  }, [contacts, listMemberSearch, selectedList]);
 
   async function createPressContact() {
     setBusy(true);
@@ -337,10 +361,14 @@ export function PrClient({
       const res = await fetch("/api/pr/media-lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(listForm),
+        body: JSON.stringify({
+          ...listForm,
+          list_kind: "press",
+          source: "contacts",
+        }),
       });
       if (!res.ok) throw new Error("Could not create list");
-      setListForm({ name: "", description: "", list_kind: "press" });
+      setListForm({ name: "", description: "" });
       await refreshAll();
     } finally {
       setBusy(false);
@@ -601,7 +629,7 @@ export function PrClient({
                   onChange={(e) => setImportListId(e.target.value)}
                 >
                   <option value="">—</option>
-                  {lists.map((l) => (
+                  {contactLists.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>
@@ -670,6 +698,10 @@ export function PrClient({
           <div className="space-y-4">
             <div className="surface-card space-y-3 p-4">
               <h2 className="font-display text-lg text-brand">New media list</h2>
+              <p className="text-sm text-muted">
+                Members come from Contacts. Portal lists are not used here.
+                You can also manage these lists under Contacts.
+              </p>
               <input
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
                 placeholder="List name"
@@ -686,26 +718,6 @@ export function PrClient({
                   setListForm((f) => ({ ...f, description: e.target.value }))
                 }
               />
-              <label className="block text-sm">
-                <span className="text-muted">List kind</span>
-                <select
-                  className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                  value={listForm.list_kind}
-                  onChange={(e) =>
-                    setListForm((f) => ({
-                      ...f,
-                      list_kind: e.target.value as
-                        | "press"
-                        | "marketing"
-                        | "mixed",
-                    }))
-                  }
-                >
-                  <option value="press">Press (journalists)</option>
-                  <option value="marketing">Marketing</option>
-                  <option value="mixed">Mixed</option>
-                </select>
-              </label>
               <button
                 type="button"
                 disabled={busy || !listForm.name.trim()}
@@ -714,13 +726,22 @@ export function PrClient({
               >
                 Create list
               </button>
+              <Link
+                href="/app/contacts?view=lists"
+                className="inline-block text-sm text-accent underline"
+              >
+                Open lists in Contacts
+              </Link>
             </div>
             <ul className="space-y-2">
-              {lists.map((l) => (
+              {contactLists.map((l) => (
                 <li key={l.id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedListId(l.id)}
+                    onClick={() => {
+                      setSelectedListId(l.id);
+                      setListMemberSearch("");
+                    }}
                     className={cn(
                       "w-full rounded-xl border px-4 py-3 text-left",
                       selectedListId === l.id
@@ -730,7 +751,7 @@ export function PrClient({
                   >
                     <div className="font-medium text-brand">{l.name}</div>
                     <div className="text-xs text-muted">
-                      {l.list_kind || "press"} · {l.contact_ids.length} contact
+                      {l.contact_ids.length} contact
                       {l.contact_ids.length === 1 ? "" : "s"}
                     </div>
                   </button>
@@ -744,11 +765,25 @@ export function PrClient({
                 <h2 className="font-display text-lg text-brand">
                   {selectedList.name}
                 </h2>
-                <p className="mb-4 text-sm text-muted">
-                  {selectedList.description || "Toggle press contacts on this list."}
+                <p className="mb-3 text-sm text-muted">
+                  {selectedList.description ||
+                    "Search contacts to add them. An empty search shows who is already on the list."}
                 </p>
+                <input
+                  className="mb-3 w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                  placeholder="Search contacts to add…"
+                  value={listMemberSearch}
+                  onChange={(e) => setListMemberSearch(e.target.value)}
+                />
+                {listMembers.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    {listMemberSearch.trim()
+                      ? "No contacts match that search."
+                      : "This list is empty. Search for a contact to add them."}
+                  </p>
+                ) : (
                 <ul className="max-h-[28rem] space-y-2 overflow-y-auto">
-                  {pressContacts.map((c) => {
+                  {listMembers.map((c) => {
                     const on = selectedList.contact_ids.includes(c.id);
                     return (
                       <li
@@ -759,7 +794,7 @@ export function PrClient({
                           {c.name}
                           <span className="text-muted">
                             {" "}
-                            — {c.outlet || c.organisation}
+                            — {c.organisation || c.outlet || c.email || "No email"}
                           </span>
                         </span>
                         <button
@@ -780,6 +815,7 @@ export function PrClient({
                     );
                   })}
                 </ul>
+                )}
                 {canDelete ? (
                   <button
                     type="button"
@@ -1062,7 +1098,8 @@ export function PrClient({
               <p className="mt-1 text-sm text-muted">
                 Change your newsroom title to describe its purpose. Select the
                 interface language, add a description and a home page welcome
-                message.
+                message. Spokespeople on the public page are Peters &amp; May
+                contacts marked on their contact record, not press contacts.
               </p>
             </div>
             <label className="block text-sm">
@@ -1234,7 +1271,7 @@ export function PrClient({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Press contacts", value: pressContacts.length },
-              { label: "Media lists", value: lists.length },
+              { label: "Media lists", value: contactLists.length },
               { label: "Pitch drafts", value: pitches.length },
               { label: "Coverage clips", value: coverage.length },
               {

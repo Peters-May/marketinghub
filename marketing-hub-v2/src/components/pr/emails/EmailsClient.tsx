@@ -22,6 +22,7 @@ import {
   MERGE_TOKEN_HELP,
   recipientsToCsv,
 } from "@/lib/email/compose";
+import { isContactSegment } from "@/lib/contacts/segments";
 import { plainTextFromHtml } from "@/lib/plain-text";
 
 type WizardStep = "write" | "recipients" | "personalize" | "export";
@@ -193,11 +194,10 @@ export function EmailsClient({
     };
   }, [pitchesOnly]);
 
-  const listsForChannel = useMemo(() => {
-    return lists.filter(
-      (l) => l.list_kind === "press" || l.list_kind === "mixed"
-    );
-  }, [lists]);
+  const listsForChannel = useMemo(
+    () => lists.filter(isContactSegment),
+    [lists]
+  );
 
   const previewContact =
     contactById.get(previewContactId) ||
@@ -547,7 +547,7 @@ export function EmailsClient({
         {step === "recipients" ? (
           <div className="surface-card space-y-3 p-5">
             <p className="text-sm text-muted">
-              Select press or mixed media lists.
+            Select a contact list. Portal lists are not included.
             </p>
             <ul className="space-y-2">
               {listsForChannel.map((l) => {
@@ -582,7 +582,7 @@ export function EmailsClient({
             </ul>
             {listsForChannel.length === 0 ? (
               <p className="text-sm text-muted">
-                No matching lists. Create one under Media lists / Contacts.
+                No lists yet. Create one under Contacts, then come back to choose it.
               </p>
             ) : null}
             <div className="flex gap-2">

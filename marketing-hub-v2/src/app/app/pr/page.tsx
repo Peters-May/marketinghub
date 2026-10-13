@@ -9,6 +9,7 @@ import {
   listPrPitches,
 } from "@/lib/data/repos";
 import { isPressContact } from "@/lib/pr/pitch-eml";
+import { isContactSegment } from "@/lib/contacts/segments";
 import { PrHome } from "@/components/pr/PrHome";
 import { getSessionUser } from "@/lib/auth/session";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
@@ -50,7 +51,7 @@ export default async function PrHomePage() {
     <PrHome
       stats={{
         pressContacts: contacts.filter(isPressContact).length,
-        lists: lists.length,
+        lists: lists.filter(isContactSegment).length,
         pitches: pitches.length,
         coverage: coverage.length,
         releases: releases.length,

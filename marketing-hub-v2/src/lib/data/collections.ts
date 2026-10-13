@@ -570,6 +570,14 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
           { value: "false", label: "No" },
         ],
       }),
+      f("is_spokesperson", {
+        type: "select",
+        label: "Newsroom spokesperson",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+      }),
       f("beat", { label: "Beat" }),
       f("outlet", { label: "Outlet" }),
       f("country"),

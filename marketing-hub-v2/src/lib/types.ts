@@ -190,6 +190,8 @@ export type Contact = {
   user_id: string | null;
   /** Journalist / media contact (shown in PR module). */
   is_press: boolean;
+  /** Peters & May spokesperson shown on the public newsroom. */
+  is_spokesperson?: boolean;
   /** Coverage beat — e.g. yachting, freight, logistics. */
   beat: string;
   /** Publication / outlet name when distinct from organisation. */

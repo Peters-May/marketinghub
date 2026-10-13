@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Contact, ContactKind, HubUser } from "@/lib/types";
+import type { Contact, ContactKind, HubUser, MediaList } from "@/lib/types";
 import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
+import { ContactListsPanel } from "@/components/contacts/ContactListsPanel";
+import { isContactSegment } from "@/lib/contacts/segments";
+import { cn } from "@/lib/utils";
 import { useHubView } from "@/lib/hub-view";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
@@ -27,6 +30,7 @@ const emptyForm = {
   notes: "",
   user_id: "",
   is_press: false,
+  is_spokesperson: false,
   beat: "",
   outlet: "",
   country: "",
@@ -49,6 +53,7 @@ function toForm(c: Contact): ContactForm {
     notes: c.notes,
     user_id: c.user_id ?? "",
     is_press: Boolean(c.is_press),
+    is_spokesperson: Boolean(c.is_spokesperson),
     beat: c.beat ?? "",
     outlet: c.outlet ?? "",
     country: c.country ?? "",
@@ -72,18 +77,26 @@ function parseTags(tags: string | string[]) {
 export function ContactsClient({
   initial,
   initialSelectedId,
+  initialView = "directory",
 }: {
   initial: Contact[];
   initialSelectedId?: string;
+  initialView?: "directory" | "lists";
 }) {
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
 
   const [items, setItems] = useState(initial);
   const [users, setUsers] = useState<HubUser[]>([]);
+  const [lists, setLists] = useState<MediaList[]>([]);
   const [search, setSearch] = useState("");
+  const [directoryView, setDirectoryView] = useState<"directory" | "lists">(
+    initialView
+  );
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [listFilter, setListFilter] = useState("all");
+  const [listBusy, setListBusy] = useState(false);
   const [selected, setSelected] = useState<Contact | null>(
     () => initial.find((contact) => contact.id === initialSelectedId) ?? null
   );
@@ -97,6 +110,16 @@ export function ContactsClient({
     const res = await fetch("/api/contacts");
     const data = await res.json();
     setItems(data.contacts ?? []);
+  }, []);
+
+  const refreshLists = useCallback(async () => {
+    const res = await fetch("/api/pr/media-lists");
+    if (!res.ok) return;
+    const data = await res.json();
+    const next = ((data.media_lists ?? []) as MediaList[]).filter(
+      isContactSegment
+    );
+    setLists(next);
   }, []);
 
   const refreshUsers = useCallback(async () => {
@@ -113,7 +136,8 @@ export function ContactsClient({
   useEffect(() => {
     void refresh();
     void refreshUsers();
-  }, [refresh, refreshUsers]);
+    void refreshLists();
+  }, [refresh, refreshUsers, refreshLists]);
 
   useEffect(() => {
     if (!selected) return;
@@ -159,9 +183,73 @@ export function ContactsClient({
         return false;
       }
       if (tagFilter !== "all" && !c.tags.includes(tagFilter)) return false;
+      if (listFilter !== "all") {
+        const segment = lists.find((list) => list.id === listFilter);
+        if (!segment?.contact_ids.includes(c.id)) return false;
+      }
       return true;
     });
-  }, [items, search, kindFilter, tagFilter, userById]);
+  }, [items, search, kindFilter, tagFilter, listFilter, lists, userById]);
+
+  async function createList(input: { name: string; description: string }) {
+    setListBusy(true);
+    try {
+      const res = await fetch("/api/pr/media-lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: input.name,
+          description: input.description,
+          list_kind: "press",
+          source: "contacts",
+          contact_ids: [],
+        }),
+      });
+      if (!res.ok) return;
+      await refreshLists();
+    } finally {
+      setListBusy(false);
+    }
+  }
+
+  async function toggleListMember(listId: string, contactId: string) {
+    const list = lists.find((item) => item.id === listId);
+    if (!list) return;
+    const has = list.contact_ids.includes(contactId);
+    const contact_ids = has
+      ? list.contact_ids.filter((id) => id !== contactId)
+      : [...list.contact_ids, contactId];
+    setListBusy(true);
+    try {
+      await fetch("/api/pr/media-lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          id: listId,
+          patch: { contact_ids },
+        }),
+      });
+      await refreshLists();
+    } finally {
+      setListBusy(false);
+    }
+  }
+
+  async function deleteList(listId: string) {
+    setListBusy(true);
+    try {
+      await fetch("/api/pr/media-lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id: listId }),
+      });
+      if (listFilter === listId) setListFilter("all");
+      await refreshLists();
+    } finally {
+      setListBusy(false);
+    }
+  }
 
   async function create() {
     await fetch("/api/contacts", {
@@ -220,6 +308,7 @@ export function ContactsClient({
             notes: edit.notes,
             user_id: isCompany(edit.kind) ? null : edit.user_id || null,
             is_press: edit.is_press,
+            is_spokesperson: edit.is_spokesperson && !edit.is_press,
             beat: edit.beat,
             outlet: edit.outlet,
             country: edit.country,
@@ -258,24 +347,49 @@ export function ContactsClient({
     <div>
       <PageHeader
         title="Contacts"
-        description="People, press, and supplier companies (North Sails, printers, and similar)."
+        description="People, press, and supplier companies. Lists here are the groups used for PR pitches."
         actions={
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              setForm({
-                ...emptyForm,
-                kind: kindFilter === "company" ? "company" : "person",
-              });
-              setShowForm(true);
-            }}
-          >
-            Add {kindFilter === "company" ? "company" : "contact"}
-          </button>
+          directoryView === "directory" ? (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setForm({
+                  ...emptyForm,
+                  kind: kindFilter === "company" ? "company" : "person",
+                });
+                setShowForm(true);
+              }}
+            >
+              Add {kindFilter === "company" ? "company" : "contact"}
+            </button>
+          ) : null
         }
       />
 
+      <SegmentFilter
+        label="Contacts view"
+        value={directoryView}
+        onChange={setDirectoryView}
+        options={[
+          { id: "directory", label: "Directory" },
+          { id: "lists", label: "Lists" },
+        ]}
+        size="md"
+      />
+
+      {directoryView === "lists" ? (
+        <ContactListsPanel
+          contacts={items}
+          lists={lists}
+          canDelete={canDelete}
+          busy={listBusy}
+          onCreate={createList}
+          onToggle={toggleListMember}
+          onDelete={deleteList}
+        />
+      ) : (
+        <>
       <SegmentFilter
         label="Contact type"
         value={kindFilter}
@@ -303,6 +417,16 @@ export function ContactsClient({
             options: [
               { value: "all", label: "All tags" },
               ...tags.map((t) => ({ value: t, label: t })),
+            ],
+          },
+          {
+            id: "list",
+            label: "List",
+            value: listFilter,
+            onChange: setListFilter,
+            options: [
+              { value: "all", label: "All lists" },
+              ...lists.map((list) => ({ value: list.id, label: list.name })),
             ],
           },
         ]}
@@ -497,6 +621,12 @@ export function ContactsClient({
                     )}
                   </dd>
                 </div>
+                {selected.is_spokesperson ? (
+                  <div>
+                    <dt className="label !mb-0.5">Newsroom</dt>
+                    <dd>Spokesperson</dd>
+                  </div>
+                ) : null}
                 {selected.is_press ? (
                   <>
                     <div>
@@ -551,6 +681,44 @@ export function ContactsClient({
                   </dd>
                 </div>
                 <div>
+                  <dt className="label !mb-0.5">Lists</dt>
+                  <dd>
+                    {lists.length === 0 ? (
+                      <button
+                        type="button"
+                        className="text-sm text-accent underline"
+                        onClick={() => setDirectoryView("lists")}
+                      >
+                        Create a list
+                      </button>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {lists.map((list) => {
+                          const on = list.contact_ids.includes(selected.id);
+                          return (
+                            <button
+                              key={list.id}
+                              type="button"
+                              disabled={listBusy}
+                              onClick={() =>
+                                void toggleListMember(list.id, selected.id)
+                              }
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs",
+                                on
+                                  ? "bg-brand text-white"
+                                  : "bg-sand text-muted"
+                              )}
+                            >
+                              {list.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </dd>
+                </div>
+                <div>
                   <dt className="label !mb-0.5">Notes</dt>
                   <dd>
                     <RichTextView html={selected.notes} />
@@ -585,6 +753,8 @@ export function ContactsClient({
           )}
         </aside>
       </div>
+        </>
+      )}
 
       {edit && editingId ? (
         <RecordDrawer
@@ -721,10 +891,33 @@ function ContactFields({
           id="contact-is-press"
           type="checkbox"
           checked={form.is_press}
-          onChange={(e) => onChange({ ...form, is_press: e.target.checked })}
+          onChange={(e) =>
+            onChange({
+              ...form,
+              is_press: e.target.checked,
+              is_spokesperson: e.target.checked ? false : form.is_spokesperson,
+            })
+          }
         />
         <label htmlFor="contact-is-press" className="text-sm text-brand">
           Press / media contact
+        </label>
+      </div>
+      <div className="md:col-span-2 flex items-center gap-2">
+        <input
+          id="contact-is-spokesperson"
+          type="checkbox"
+          checked={Boolean(form.is_spokesperson)}
+          onChange={(e) =>
+            onChange({
+              ...form,
+              is_spokesperson: e.target.checked,
+              is_press: e.target.checked ? false : form.is_press,
+            })
+          }
+        />
+        <label htmlFor="contact-is-spokesperson" className="text-sm text-brand">
+          Peters &amp; May spokesperson (shown on the newsroom)
         </label>
       </div>
       {form.is_press ? (
