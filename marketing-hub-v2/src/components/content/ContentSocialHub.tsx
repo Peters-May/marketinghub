@@ -126,16 +126,13 @@ export function ContentSocialHub({
         size="lg"
       />
 
-      {scope === "social" ? (
-        <SocialClient hideHeader initialContent={initialContent} />
-      ) : (
-        <ContentClient
-          initial={initialContent}
-          hideHeader
-          scope={scope === "all" ? "all" : "content"}
-          fieldOptions={fieldOptions}
-        />
-      )}
+      <ContentClient
+        key={scope}
+        initial={initialContent}
+        hideHeader
+        scope={scope}
+        fieldOptions={fieldOptions}
+      />
     </div>
   );
 }

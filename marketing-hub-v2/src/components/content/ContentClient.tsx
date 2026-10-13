@@ -321,6 +321,21 @@ export function ContentClient({
     return orderedFilterValues(contentTypeOptions, present);
   }, [scopedItems, contentTypeOptions]);
 
+  const scopedTypeOptions = useMemo(() => {
+    const matched = contentTypeOptions.filter((option) => {
+      const social = isSocialContentItem({
+        content_type: option.value,
+        channel: [],
+      });
+      if (scope === "social") return social;
+      if (scope === "content") return !social;
+      return true;
+    });
+    if (matched.length > 0) return matched;
+    if (scope === "social") return [{ value: "Social", label: "Social" }];
+    return contentTypeOptions;
+  }, [contentTypeOptions, scope]);
+
   const filtered = useMemo(() => {
     return scopedItems.filter((item) => {
       if (
@@ -940,7 +955,7 @@ export function ContentClient({
                   channel: social ? ["LinkedIn"] : ["Editorial"],
                 });
               }}
-              options={contentTypeOptions}
+              options={scopedTypeOptions}
             />
           </div>
           <div>
@@ -1254,17 +1269,7 @@ export function ContentClient({
               creating={creatingIdea}
               parkingId={parkingId}
               parkingActive={parkingActive}
-              kinds={
-                scope === "content"
-                  ? contentTypeOptions.filter(
-                      (option) =>
-                        !isSocialContentItem({
-                          content_type: option.value,
-                          channel: [],
-                        })
-                    )
-                  : contentTypeOptions
-              }
+              kinds={scopedTypeOptions}
               onOpen={(id) => {
                 const item = items.find((i) => i.id === id);
                 if (item) openEdit(item);
@@ -1415,7 +1420,7 @@ export function ContentClient({
                       });
                     }}
                     options={selectOptionsWithCurrent(
-                      contentTypeOptions,
+                      scopedTypeOptions,
                       edit.content_type
                     )}
                   />
