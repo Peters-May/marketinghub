@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -45,6 +45,9 @@ type RichTextEditorProps = {
   className?: string;
   minHeight?: string;
   compact?: boolean;
+  /** Email canvas: same type and spacing as the unselected block. */
+  variant?: "default" | "email";
+  textStyle?: CSSProperties;
 };
 
 function ToolbarButton({
@@ -87,6 +90,8 @@ export function RichTextEditorImpl({
   className,
   minHeight = "96px",
   compact = false,
+  variant = "default",
+  textStyle,
 }: RichTextEditorProps) {
   const editorRef = useRef<ReturnType<typeof useEditor> | null>(null);
 
@@ -112,10 +117,11 @@ export function RichTextEditorImpl({
     editorProps: {
       attributes: {
         class: cn(
-          "rich-text-editor prose-hub max-w-none px-3 py-2 focus:outline-none",
-          compact ? "text-sm" : "text-sm"
+          "rich-text-editor max-w-none focus:outline-none",
+          variant === "email" ? "email-rich-text" : "prose-hub px-3 py-2",
+          variant === "default" && "text-sm"
         ),
-        style: `min-height: ${minHeight};`,
+        style: `min-height: ${variant === "email" ? "0" : minHeight};`,
       },
       handlePaste: (_view, event) => {
         const html = event.clipboardData?.getData("text/html")?.trim();
@@ -177,7 +183,16 @@ export function RichTextEditorImpl({
   }
 
   return (
-    <div className={cn("rich-text-field w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-white", className)}>
+    <div
+      className={cn(
+        "rich-text-field w-full min-w-0 max-w-full",
+        variant === "email"
+          ? "overflow-visible"
+          : "overflow-hidden rounded-xl border border-border bg-white",
+        className
+      )}
+      style={variant === "email" ? textStyle : undefined}
+    >
       <div
         className="flex flex-wrap items-center gap-0.5 border-b border-border bg-sand/40 px-1.5 py-1"
         onMouseDown={handleToolbarMouseDown}

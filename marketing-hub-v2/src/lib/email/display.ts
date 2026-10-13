@@ -34,6 +34,13 @@ export function formatLondonStamp(iso: string): string {
   return `${get("day")} ${month} ${get("year")} ${get("hour")}:${get("minute")}`;
 }
 
+/** A draft with no send time can be removed. Scheduled and sent emails stay. */
+export function canDeleteUnsentDraft(
+  c: Pick<EmailCampaign, "status" | "sent_at">
+): boolean {
+  return c.status === "draft" && !c.sent_at;
+}
+
 /** Drafts and scheduled emails open the designer. Sent emails open the summary. */
 export function campaignOpenHref(c: Pick<EmailCampaign, "id" | "status">): string {
   if (c.status === "sent" || c.status === "sending") {

@@ -87,6 +87,15 @@ export function sanitizeRichEmailHtml(html: string): string {
   });
 }
 
+/** Paragraph spacing shared with the canvas and the selected editor. */
+function emailRichHtml(html: string): string {
+  return sanitizeRichEmailHtml(html)
+    .replace(/<p>/g, '<p style="margin:0 0 12px;">')
+    .replace(/<h2>/g, '<h2 style="margin:12px 0 6px;font-size:1.15em;line-height:1.3;">')
+    .replace(/<ul>/g, '<ul style="margin:0 0 12px;padding-left:20px;">')
+    .replace(/<ol>/g, '<ol style="margin:0 0 12px;padding-left:20px;">');
+}
+
 /** HTML blocks keep layout markup, without scripts or event handlers. */
 export function sanitizeHtmlBlock(html: string): string {
   return extractEmailBody(html)
@@ -116,14 +125,14 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     case "heading":
       return `<h1 style="margin:0;${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.2;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</h1>`;
     case "text":
-      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${sanitizeRichEmailHtml(block.html)}</div>`;
+      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html)}</div>`;
     case "image": {
       const src = emailImageSrc(block.src, true);
       if (!src) {
         return "";
       }
       const width = Math.round((styles.contentWidth * block.widthPercent) / 100);
-      const img = `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt)}" width="${width}" style="display:block;border:0;max-width:100%;height:auto;width:${block.widthPercent}%;margin:${block.align === "center" ? "0 auto" : block.align === "right" ? "0 0 0 auto" : "0"};" />`;
+      const img = `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt)}" width="${width}" style="display:inline-block;border:0;max-width:100%;height:auto;width:${block.widthPercent}%;" />`;
       const href = safeEmailUrl(block.href);
       const linked = href ? `<a href="${escapeAttr(href)}">${img}</a>` : img;
       return `<div style="${pad}${align}">${linked}</div>`;
@@ -132,7 +141,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
       const src = emailImageSrc(block.src, true);
       const href = safeEmailUrl(block.href);
       const inner = src
-        ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt || "Peters & May")}" width="${block.width}" style="display:block;border:0;max-width:100%;height:auto;width:${block.width}px;" />`
+        ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt || "Peters & May")}" width="${block.width}" style="display:inline-block;border:0;max-width:100%;height:auto;width:${block.width}px;" />`
         : `<span style="font-family:${styles.headingFontFamily};font-size:18px;font-weight:600;color:${styles.textColor};">${escapeHtml(block.alt || "Peters & May")}</span>`;
       const linked = href ? `<a href="${escapeAttr(href)}" style="text-decoration:none;color:${styles.textColor};">${inner}</a>` : inner;
       return `<div style="${pad}${align}">${linked}</div>`;

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { EmailDesigner } from "@/components/email/builder/EmailDesigner";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
+import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { getEmailCampaign, getEmailTemplate, listEmailAudiences } from "@/lib/data/repos";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,7 @@ export default async function EmailDesignPage({
       initialFromName={campaign.from_name}
       initialFromEmail={campaign.from_email}
       initialAudienceId={campaign.audience_id ?? ""}
+      canDelete={canDeleteUnsentDraft(campaign)}
     />
   );
 }

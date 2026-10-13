@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import type { EmailCampaign } from "@/lib/types";
@@ -12,6 +12,7 @@ import {
   campaignOpenHref,
   campaignOpenRateLabel,
   campaignUpdatedBy,
+  canDeleteUnsentDraft,
   formatLondonUpdated,
 } from "@/lib/email/display";
 
@@ -49,11 +50,17 @@ export function EmailCampaignsPanel({
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [items, setItems] = useState(campaigns);
+
+  useEffect(() => {
+    setItems(campaigns);
+  }, [campaigns]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...campaigns]
+    return [...items]
       .filter((c) => matchesFilter(c.status, filter))
       .filter((c) => {
         if (!q) return true;
@@ -66,7 +73,7 @@ export function EmailCampaignsPanel({
         (a, b) =>
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
-  }, [campaigns, filter, query]);
+  }, [items, filter, query]);
 
   async function createEmail() {
     setCreating(true);
@@ -90,6 +97,30 @@ export function EmailCampaignsPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the email");
       setCreating(false);
+    }
+  }
+
+  async function removeDraft(campaign: EmailCampaign) {
+    if (!canDeleteUnsentDraft(campaign) || deletingId) return;
+    if (!window.confirm("Delete this draft? It has not been sent.")) return;
+    setDeletingId(campaign.id);
+    setError("");
+    const previous = items;
+    setItems((current) => current.filter((item) => item.id !== campaign.id));
+    try {
+      const res = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id: campaign.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not delete this email");
+      router.refresh();
+    } catch (err) {
+      setItems(previous);
+      setError(err instanceof Error ? err.message : "Could not delete this email");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -145,7 +176,7 @@ export function EmailCampaignsPanel({
         />
       </div>
 
-      {campaigns.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState
           title="No emails yet"
           description="Create an email, choose who it goes to, then preview and schedule it."
@@ -166,6 +197,9 @@ export function EmailCampaignsPanel({
                 <th className="px-3 py-3 font-medium">Click rate</th>
                 <th className="px-3 py-3 font-medium">Last updated</th>
                 <th className="px-3 py-3 font-medium">Last updated by</th>
+                <th className="px-3 py-3 font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -196,6 +230,21 @@ export function EmailCampaignsPanel({
                       <div className="text-xs text-muted">{updated.time}</div>
                     </td>
                     <td className="px-3 py-3">{campaignUpdatedBy(c)}</td>
+                    <td className="px-3 py-3 text-right">
+                      {canDeleteUnsentDraft(c) ? (
+                        <button
+                          type="button"
+                          className="btn-secondary px-2.5 py-1 text-xs text-red-700"
+                          disabled={deletingId === c.id}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void removeDraft(c);
+                          }}
+                        >
+                          {deletingId === c.id ? "Deleting…" : "Delete"}
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}

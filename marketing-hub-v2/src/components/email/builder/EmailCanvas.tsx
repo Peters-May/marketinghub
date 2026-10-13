@@ -362,13 +362,20 @@ function BlockView({
             value={block.html}
             onChange={(html) => onLive({ html } as Partial<EmailBlock>)}
             onBlur={() => onCommit()}
-            minHeight="80px"
+            variant="email"
+            textStyle={{
+              color: block.color,
+              fontSize: block.fontSize,
+              fontFamily: design.styles.fontFamily,
+              lineHeight: 1.5,
+            }}
           />
         </div>
       );
     }
     return (
       <div
+        className="email-rich-text"
         style={{
           ...style,
           color: block.color,
@@ -383,6 +390,8 @@ function BlockView({
 
   if (block.type === "image" || block.type === "logo") {
     const src = emailImageSrc(block.src, false);
+    const frame =
+      block.type === "image" ? `${block.widthPercent}%` : block.width;
     return (
       <div style={style}>
         {src ? (
@@ -390,13 +399,14 @@ function BlockView({
           <img
             src={src}
             alt={block.alt}
-            className="block h-auto max-w-full"
-            style={{
-              width: block.type === "image" ? `${block.widthPercent}%` : block.width,
-            }}
+            className="inline-block h-auto max-w-full"
+            style={{ width: frame }}
           />
         ) : (
-          <div className="rounded border border-dashed border-border px-3 py-8 text-sm text-muted">
+          <div
+            className="inline-block rounded border border-dashed border-border px-3 py-8 text-center text-sm text-muted"
+            style={{ width: frame, maxWidth: "100%" }}
+          >
             {block.type === "logo" ? block.alt || "Peters & May" : "Upload an image"}
           </div>
         )}

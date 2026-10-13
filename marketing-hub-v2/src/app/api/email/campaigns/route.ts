@@ -13,6 +13,7 @@ import {
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
+import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
 import type { EmailCampaignStatus } from "@/lib/types";
 
@@ -67,7 +68,12 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "delete") {
-    await deleteEmailCampaign(body.id);
+    const existing = await getEmailCampaign(String(body.id ?? ""));
+    if (!existing) return jsonError("Not found", 404);
+    if (!canDeleteUnsentDraft(existing)) {
+      return jsonError("Only a draft that has not been sent can be deleted", 400);
+    }
+    await deleteEmailCampaign(existing.id);
     return jsonOk({ ok: true });
   }
 

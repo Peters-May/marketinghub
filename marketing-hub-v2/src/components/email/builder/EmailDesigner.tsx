@@ -120,6 +120,7 @@ export function EmailDesigner({
   initialFromName = "Peters & May Marketing",
   initialFromEmail = "marketing@petersandmay.com",
   initialAudienceId = "",
+  canDelete = false,
 }: {
   kind: "template" | "campaign";
   id: string;
@@ -134,6 +135,8 @@ export function EmailDesigner({
   initialFromName?: string;
   initialFromEmail?: string;
   initialAudienceId?: string;
+  /** Unsent drafts only. Scheduled and sent emails cannot be deleted. */
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const history = useDesignHistory(() =>
@@ -454,6 +457,24 @@ export function EmailDesigner({
     router.push(backHref);
   }
 
+  async function removeDraft() {
+    if (kind !== "campaign" || !canDelete || readOnly) return;
+    if (!window.confirm("Delete this draft? It has not been sent.")) return;
+    setError("");
+    try {
+      const res = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not delete this email");
+      router.push(backHref);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this email");
+    }
+  }
+
   const compiled = compileEmailDesign(history.design);
   const frameWidth = device === "mobile" ? 375 : history.design.styles.contentWidth;
   const audienceName =
@@ -462,7 +483,7 @@ export function EmailDesigner({
     whenMode === "later" ? londonDateTimeToIso(scheduleDate, scheduleTime) : null;
 
   return (
-    <div className="-mx-4 -mt-6 flex h-[calc(100dvh-8rem)] flex-col overflow-hidden md:-mx-8 md:-mt-8">
+    <div className="-mx-4 -mt-6 flex min-h-[calc(100dvh-8rem)] flex-col md:-mx-8 md:-mt-8">
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2">
         <Link href={backHref} className="btn-secondary px-3 py-1.5 text-sm">
           Back
@@ -583,6 +604,16 @@ export function EmailDesigner({
             Delete
           </button>
         ) : null}
+        {kind === "campaign" && canDelete && !readOnly ? (
+          <button
+            type="button"
+            className="btn-secondary px-3 py-1.5 text-sm text-red-700"
+            disabled={saving || sending}
+            onClick={() => void removeDraft()}
+          >
+            Delete
+          </button>
+        ) : null}
       </header>
       {error ? (
         <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
@@ -662,7 +693,7 @@ export function EmailDesigner({
           </label>
         </div>
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-[70vh] flex-1">
         <EmailPalette
           tab={tab}
           onTab={setTab}
