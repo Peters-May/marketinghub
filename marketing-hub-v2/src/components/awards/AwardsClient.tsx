@@ -14,6 +14,7 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { statusEventColor } from "@/lib/ui/statusTokens";
 
@@ -152,7 +153,7 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
 
   async function create() {
     if (!isAdmin) return;
-    await fetch("/api/awards", {
+    const res = await fetch("/api/awards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -161,9 +162,12 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
         ceremony_at: form.ceremony_at || null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<AwardEntry>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
   }
 
   function openEdit(item: AwardEntry) {
@@ -181,7 +185,7 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
     if (!isAdmin || !editingId || !edit) return;
     setSaving(true);
     try {
-      await fetch("/api/awards", {
+      const res = await fetch("/api/awards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -199,8 +203,11 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<AwardEntry>(data);
+      if (!res.ok || !item) return;
+      setItems((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -209,14 +216,15 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
   async function remove(id: string) {
     if (!isAdmin) return;
     if (!window.confirm("Remove this award entry?")) return;
-    await fetch("/api/awards", {
+    const res = await fetch("/api/awards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
     if (selected?.id === id) setSelected(null);
-    await refresh();
   }
 
   function statusLabel(status: AwardStatus) {

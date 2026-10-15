@@ -28,6 +28,7 @@ import {
   type FieldOption,
 } from "@/lib/data/collections";
 import { useManagedFieldOptions } from "@/lib/data/useManagedFieldOptions";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   TaskRelatedChip,
   TaskRelatedFields,
@@ -314,14 +315,10 @@ export function TasksClient({
         return;
       }
       if (data.item) {
-        setItems((prev) => {
-          if (prev.some((t) => t.id === data.item.id)) return prev;
-          return [...prev, data.item as HubTask];
-        });
+        setItems((prev) => upsertById(prev, data.item as HubTask));
       }
       setShowForm(false);
       setForm(emptyForm);
-      await refresh();
     } catch {
       setFormError("Could not save task");
     } finally {
@@ -360,9 +357,11 @@ export function TasksClient({
         );
         return;
       }
+      const item = rowFromResponse<HubTask>(data);
+      if (!item) return;
+      setItems((prev) => upsertById(prev, item));
       setEditingId(null);
       setEdit(null);
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -380,8 +379,10 @@ export function TasksClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update", id, patch: { status } }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error("Failed to update status");
-      await refresh();
+      const item = rowFromResponse<HubTask>(data);
+      if (item) setItems((prev) => upsertById(prev, item));
     } catch {
       if (previous !== undefined) {
         setItems((prev) =>
@@ -407,8 +408,10 @@ export function TasksClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update", id, patch: { owner } }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error("Failed to update owner");
-      await refresh();
+      const item = rowFromResponse<HubTask>(data);
+      if (item) setItems((prev) => upsertById(prev, item));
     } catch {
       if (previous !== undefined) {
         setItems((prev) =>
@@ -447,8 +450,10 @@ export function TasksClient({
           patch: { start_date: startDate, due_date: dueDate },
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error("Failed to update dates");
-      await refresh();
+      const item = rowFromResponse<HubTask>(data);
+      if (item) setItems((prev) => upsertById(prev, item));
     } catch {
       setItems((prev) =>
         prev.map((item) =>
@@ -505,16 +510,17 @@ export function TasksClient({
 
   async function remove(id: string) {
     if (!window.confirm("Delete this task?")) return;
-    await fetch("/api/tasks", {
+    const res = await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) {
       setEditingId(null);
       setEdit(null);
     }
-    await refresh();
   }
 
   return (

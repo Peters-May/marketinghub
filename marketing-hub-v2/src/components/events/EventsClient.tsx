@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubDataRefresh } from "@/lib/command/refresh";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import { useHubView } from "@/lib/hub-view";
 import { onTourPrepare } from "@/lib/tour/bus";
 import {
@@ -1239,7 +1240,7 @@ export function EventsClient({
   }, [flashSyncNotice]);
 
   async function createEvent() {
-    await fetch("/api/events", {
+    const res = await fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1250,9 +1251,12 @@ export function EventsClient({
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const event = rowFromResponse<EventItem>(data, "event");
+    if (!res.ok || !event) return;
+    setEvents((prev) => upsertById(prev, event));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
   }
 
   function openEdit(event: EventItem) {
@@ -1269,7 +1273,7 @@ export function EventsClient({
     if (!editingId || !edit) return;
     setSaving(true);
     try {
-      await fetch("/api/events", {
+      const res = await fetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1312,8 +1316,11 @@ export function EventsClient({
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const event = rowFromResponse<EventItem>(data, "event");
+      if (!res.ok || !event) return;
+      setEvents((prev) => upsertById(prev, event));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -1356,14 +1363,16 @@ export function EventsClient({
   async function removeEvent(id: string) {
     if (!canDelete) return;
     if (!window.confirm("Delete this event?")) return;
-    await fetch("/api/events", {
+    const res = await fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setEvents((prev) => removeById(prev, id));
+    setAllAttendance((prev) => prev.filter((row) => row.event_id !== id));
     if (editingId === id) closeEdit();
     setSelected(null);
-    await refresh();
   }
 
   async function rescheduleEvent(

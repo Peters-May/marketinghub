@@ -14,6 +14,7 @@ import { SearchSelect } from "@/components/ui/SearchSelect";
 import { cn } from "@/lib/utils";
 import { PaidCampaignLinkFields } from "@/components/reports/PaidCampaignLinkFields";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 const STATUS_OPTIONS: FieldOption[] = [
   { value: "draft", label: "Draft" },
@@ -172,31 +173,31 @@ export function PaidMediaPanel({
         form.landing_clicks === null ? null : Number(form.landing_clicks),
     };
 
-    if (editingId) {
-      await fetch("/api/paid-campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "update", id: editingId, patch: payload }),
-      });
-    } else {
-      await fetch("/api/paid-campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
+    const res = await fetch("/api/paid-campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        editingId
+          ? { action: "update", id: editingId, patch: payload }
+          : payload
+      ),
+    });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<PaidCampaign>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     closeDrawer();
-    await refresh();
   }
 
   async function remove(id: string) {
-    await fetch("/api/paid-campaigns", {
+    const res = await fetch("/api/paid-campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeDrawer();
-    await refresh();
   }
 
   function numField(

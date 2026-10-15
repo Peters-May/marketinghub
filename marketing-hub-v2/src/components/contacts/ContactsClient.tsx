@@ -14,6 +14,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 type KindFilter = "all" | ContactKind;
 
@@ -205,8 +206,12 @@ export function ContactsClient({
           contact_ids: [],
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) return;
-      await refreshLists();
+      const item = rowFromResponse<MediaList>(data);
+      if (item && isContactSegment(item)) {
+        setLists((prev) => upsertById(prev, item));
+      }
     } finally {
       setListBusy(false);
     }
@@ -221,7 +226,7 @@ export function ContactsClient({
       : [...list.contact_ids, contactId];
     setListBusy(true);
     try {
-      await fetch("/api/pr/media-lists", {
+      const res = await fetch("/api/pr/media-lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -230,7 +235,10 @@ export function ContactsClient({
           patch: { contact_ids },
         }),
       });
-      await refreshLists();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      const item = rowFromResponse<MediaList>(data);
+      if (item) setLists((prev) => upsertById(prev, item));
     } finally {
       setListBusy(false);
     }
@@ -239,20 +247,21 @@ export function ContactsClient({
   async function deleteList(listId: string) {
     setListBusy(true);
     try {
-      await fetch("/api/pr/media-lists", {
+      const res = await fetch("/api/pr/media-lists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", id: listId }),
       });
+      if (!res.ok) return;
       if (listFilter === listId) setListFilter("all");
-      await refreshLists();
+      setLists((prev) => removeById(prev, listId));
     } finally {
       setListBusy(false);
     }
   }
 
   async function create() {
-    await fetch("/api/contacts", {
+    const res = await fetch("/api/contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -268,9 +277,12 @@ export function ContactsClient({
         preferred_topics: form.preferred_topics,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<Contact>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
   }
 
   function openEdit(contact: Contact) {
@@ -287,7 +299,7 @@ export function ContactsClient({
     if (!editingId || !edit) return;
     setSaving(true);
     try {
-      await fetch("/api/contacts", {
+      const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -316,8 +328,11 @@ export function ContactsClient({
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<Contact>(data);
+      if (!res.ok || !item) return;
+      setItems((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -326,14 +341,15 @@ export function ContactsClient({
   async function remove(id: string) {
     if (!canDelete) return;
     if (!window.confirm("Delete this contact?")) return;
-    await fetch("/api/contacts", {
+    const res = await fetch("/api/contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (selected?.id === id) setSelected(null);
     if (editingId === id) closeEdit();
-    await refresh();
   }
 
   function linkedLabel(userId: string | null | undefined) {

@@ -9,6 +9,7 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { AssetUploadField } from "@/components/content/AssetUploadField";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   ClothingThumb,
   type ClothingProductCardItem,
@@ -548,7 +549,7 @@ export function InventoryClient({
     : null;
 
   async function create() {
-    await fetch("/api/merch/inventory", {
+    const res = await fetch("/api/merch/inventory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -556,10 +557,13 @@ export function InventoryClient({
         quantity: Number(form.quantity) || 0,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<MerchInventoryItem>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
-    await refreshCatalogue();
+    void refreshCatalogue();
   }
 
   function openEdit(row: MerchInventoryItem) {
@@ -576,7 +580,7 @@ export function InventoryClient({
     if (!editingId || !edit) return;
     setSaving(true);
     try {
-      await fetch("/api/merch/inventory", {
+      const res = await fetch("/api/merch/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -589,9 +593,12 @@ export function InventoryClient({
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<MerchInventoryItem>(data);
+      if (!res.ok || !item) return;
+      setItems((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
-      await refreshCatalogue();
+      void refreshCatalogue();
     } finally {
       setSaving(false);
     }
@@ -600,11 +607,12 @@ export function InventoryClient({
   async function adjustQty(id: string, delta: number) {
     const row = items.find((o) => o.id === id);
     if (!row) return;
-    const next = Math.max(0, row.quantity + delta);
+    const previous = row.quantity;
+    const next = Math.max(0, previous + delta);
     setItems((prev) =>
       prev.map((o) => (o.id === id ? { ...o, quantity: next } : o))
     );
-    await fetch("/api/merch/inventory", {
+    const res = await fetch("/api/merch/inventory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -613,19 +621,30 @@ export function InventoryClient({
         patch: { quantity: next },
       }),
     });
-    await refresh();
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<MerchInventoryItem>(data);
+    if (!res.ok || !item) {
+      setItems((prev) =>
+        prev.map((current) =>
+          current.id === id ? { ...current, quantity: previous } : current
+        )
+      );
+      return;
+    }
+    setItems((prev) => upsertById(prev, item));
   }
 
   async function remove(id: string) {
     if (!window.confirm("Remove this stock line?")) return;
-    await fetch("/api/merch/inventory", {
+    const res = await fetch("/api/merch/inventory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
-    await refresh();
-    await refreshCatalogue();
+    void refreshCatalogue();
   }
 
   return (

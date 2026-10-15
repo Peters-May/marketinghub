@@ -26,6 +26,7 @@ import {
   primaryCanvaUrl,
   stripHtml,
 } from "@/lib/data/normalize";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   ContentCalendarCard,
   HUB_CALENDAR_CSS,
@@ -509,12 +510,19 @@ export function ContentClient({
       }),
     });
     const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSyncMessage(
+        typeof data.error === "string" ? data.error : "Could not save content"
+      );
+      return;
+    }
     if (data.planableSyncError) {
       setSyncMessage(data.planableSyncError);
     }
+    const item = rowFromResponse<ContentItem>(data);
+    if (item) setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyFormForScope(scope));
-    await refresh();
   }
 
   function openEdit(item: ContentItem) {
@@ -581,8 +589,9 @@ export function ContentClient({
       if (data.planableSyncError) {
         setSyncMessage(data.planableSyncError);
       }
+      const item = rowFromResponse<ContentItem>(data);
+      if (item) setItems((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -606,10 +615,11 @@ export function ContentClient({
     if (data.planableSyncError) {
       setSyncMessage(data.planableSyncError);
     }
-    if (editingId === id && edit) {
-      setEdit({ ...edit, status });
+    const saved = rowFromResponse<ContentItem>(data);
+    if (saved) setItems((prev) => upsertById(prev, saved));
+    if (editingId === id && edit && saved) {
+      setEdit({ ...edit, status: saved.status });
     }
-    await refresh();
   }
 
   async function updateSchedule(id: string, dueDate: string | null) {
@@ -650,6 +660,8 @@ export function ContentClient({
     if (data.planableSyncError) {
       setSyncMessage(data.planableSyncError);
     }
+    const saved = rowFromResponse<ContentItem>(data);
+    if (saved) setItems((prev) => upsertById(prev, saved));
     return true;
   }
 
@@ -693,7 +705,8 @@ export function ContentClient({
       if (data.planableSyncError) {
         setSyncMessage(data.planableSyncError);
       }
-      await refresh();
+      const item = rowFromResponse<ContentItem>(data);
+      if (item) setItems((prev) => upsertById(prev, item));
       return true;
     } catch (e) {
       setSyncMessage(e instanceof Error ? e.message : "Could not create idea");
@@ -705,13 +718,20 @@ export function ContentClient({
 
   async function remove(id: string) {
     if (!window.confirm("Delete this content piece?")) return;
-    await fetch("/api/content", {
+    const res = await fetch("/api/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSyncMessage(
+        typeof data.error === "string" ? data.error : "Could not delete"
+      );
+      return;
+    }
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
-    await refresh();
   }
 
   function CardSummary({ item }: { item: ContentItem }) {
@@ -1270,6 +1290,11 @@ export function ContentClient({
               parkingId={parkingId}
               parkingActive={parkingActive}
               kinds={scopedTypeOptions}
+              renderPreview={(post) => {
+                const item = items.find((i) => i.id === post.id);
+                if (!item) return null;
+                return <ContentCalendarCard item={item} compact />;
+              }}
               onOpen={(id) => {
                 const item = items.find((i) => i.id === id);
                 if (item) openEdit(item);

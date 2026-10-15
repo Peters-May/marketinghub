@@ -22,6 +22,7 @@ import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { statusEventColor } from "@/lib/ui/statusTokens";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 const STATUSES: { id: SponsorshipStatus; label: string }[] = [
   { id: "prospect", label: "Prospect" },
@@ -267,7 +268,7 @@ export function SponsorshipsClient({
   async function create() {
     if (!canCreate) return;
     const { value, ...rest } = form;
-    await fetch("/api/sponsorships", {
+    const res = await fetch("/api/sponsorships", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -282,9 +283,12 @@ export function SponsorshipsClient({
         ends_at: form.ends_at || null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<Sponsorship>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
   }
 
   function openEdit(item: Sponsorship) {
@@ -305,7 +309,7 @@ export function SponsorshipsClient({
     setSaving(true);
     try {
       const { value, ...rest } = edit;
-      await fetch("/api/sponsorships", {
+      const res = await fetch("/api/sponsorships", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -320,8 +324,11 @@ export function SponsorshipsClient({
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<Sponsorship>(data);
+      if (!res.ok || !item) return;
+      setItems((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -330,27 +337,31 @@ export function SponsorshipsClient({
   async function setStatus(id: string, status: SponsorshipStatus) {
     const item = items.find((i) => i.id === id);
     if (!item || !canManageItem(item)) return;
-    await fetch("/api/sponsorships", {
+    const res = await fetch("/api/sponsorships", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update", id, patch: { status } }),
     });
-    if (editingId === id && edit) setEdit({ ...edit, status });
-    await refresh();
+    const data = await res.json().catch(() => ({}));
+    const saved = rowFromResponse<Sponsorship>(data);
+    if (!res.ok || !saved) return;
+    setItems((prev) => upsertById(prev, saved));
+    if (editingId === id && edit) setEdit({ ...edit, status: saved.status });
   }
 
   async function remove(id: string) {
     const item = items.find((i) => i.id === id);
     if (!item || !canManageItem(item)) return;
     if (!window.confirm(`Delete this ${noun}?`)) return;
-    await fetch("/api/sponsorships", {
+    const res = await fetch("/api/sponsorships", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
     if (selected?.id === id) setSelected(null);
-    await refresh();
   }
 
   const editingItem = editingId

@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
     const input = lineFromBody(body);
     if (typeof input === "string") return jsonError(input, 400);
     const item = await createBudgetLine(input);
-    return jsonOk({ item, ...(await snapshot()) }, { status: 201 });
+    return jsonOk({ item }, { status: 201 });
   }
 
   if (action === "update_line") {
@@ -235,19 +235,19 @@ export async function POST(request: NextRequest) {
     if (typeof parsed === "string") return jsonError(parsed, 400);
     const item = await updateBudgetLine(String(body.id), parsed);
     if (!item) return jsonError("Not found", 404);
-    return jsonOk({ item, ...(await snapshot()) });
+    return jsonOk({ item });
   }
 
   if (action === "delete_line") {
     await deleteBudgetLine(String(body.id));
-    return jsonOk({ ok: true, ...(await snapshot()) });
+    return jsonOk({ ok: true });
   }
 
   if (action === "create_payment") {
     const input = await paymentFromBody(body, user);
     if (typeof input === "string") return jsonError(input, 400);
     const item = await createBudgetPayment(input);
-    return jsonOk({ item, ...(await snapshot()) }, { status: 201 });
+    return jsonOk({ item }, { status: 201 });
   }
 
   if (action === "update_payment") {
@@ -257,12 +257,12 @@ export async function POST(request: NextRequest) {
     if (typeof parsed === "string") return jsonError(parsed, 400);
     const item = await updateBudgetPayment(String(body.id), parsed);
     if (!item) return jsonError("Not found", 404);
-    return jsonOk({ item, ...(await snapshot()) });
+    return jsonOk({ item });
   }
 
   if (action === "delete_payment") {
     await deleteBudgetPayment(String(body.id));
-    return jsonOk({ ok: true, ...(await snapshot()) });
+    return jsonOk({ ok: true });
   }
 
   return jsonError("Unknown action", 400);

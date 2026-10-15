@@ -16,6 +16,7 @@ import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
 import { ChannelMultiSelect } from "@/components/ui/ChannelMultiSelect";
 import { AssetUploadField } from "@/components/content/AssetUploadField";
 import { cn } from "@/lib/utils";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   CHANNELS,
   CONTENT_CATEGORIES,
@@ -299,7 +300,10 @@ export function ThemesClient({
         return;
       }
       setMainForm({ title: "", channel: "", owner: "" });
-      await refresh();
+      const item = rowFromResponse<ThemeMainContent>(data);
+      const linked = rowFromResponse<ContentItem>(data, "content");
+      if (item) setMains((prev) => upsertById(prev, item));
+      if (linked) setContent((prev) => upsertById(prev, linked));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save main content.");
     } finally {
@@ -332,7 +336,8 @@ export function ThemesClient({
       }
       setOffshootForm({ title: "", channel: "", owner: "" });
       setOffshootFor(null);
-      await refresh();
+      const item = rowFromResponse<ThemeOffshoot>(data);
+      if (item) setOffshoots((prev) => upsertById(prev, item));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save offshoot.");
     }
@@ -371,7 +376,8 @@ export function ThemesClient({
         return;
       }
       setYearTab(year);
-      await refresh();
+      const item = rowFromResponse<QuarterlyTheme>(data);
+      if (item) setThemes((prev) => upsertById(prev, item));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save theme.");
     } finally {
@@ -387,18 +393,21 @@ export function ThemesClient({
     ) {
       return;
     }
-    await fetch("/api/themes", {
+    const res = await fetch("/api/themes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", entity: "theme", id }),
     });
-    const res = await fetch("/api/themes");
-    const data = await res.json();
-    const nextThemes = (data.themes ?? []) as QuarterlyTheme[];
+    if (!res.ok) return;
+    const removedMainIds = mains
+      .filter((main) => main.theme_id === id)
+      .map((main) => main.id);
+    const nextThemes = themes.filter((theme) => theme.id !== id);
     setThemes(nextThemes);
-    setMains(data.mains ?? []);
-    setOffshoots(data.offshoots ?? []);
-    setContent(data.content ?? []);
+    setMains((prev) => prev.filter((main) => main.theme_id !== id));
+    setOffshoots((prev) =>
+      prev.filter((offshoot) => !removedMainIds.includes(offshoot.main_content_id))
+    );
     const remainingInYear = nextThemes.filter((t) => t.year === yearTab);
     if (remainingInYear.length > 0) {
       setSelectedId((current) => {
@@ -431,8 +440,11 @@ export function ThemesClient({
         });
         const data = await res.json();
         if (!res.ok || !data.content) return;
-        item = data.content as ContentItem;
-        await refresh();
+        const created = data.content as ContentItem;
+        item = created;
+        const linkedMain = rowFromResponse<ThemeMainContent>(data, "main");
+        setContent((prev) => upsertById(prev, created));
+        if (linkedMain) setMains((prev) => upsertById(prev, linkedMain));
       }
       setEditingMainId(main.id);
       setEditingContentId(item.id);
@@ -488,7 +500,10 @@ export function ThemesClient({
         );
         return;
       }
-      await refresh();
+      const saved = rowFromResponse<ContentItem>(data, "content");
+      const main = rowFromResponse<ThemeMainContent>(data, "main");
+      if (saved) setContent((prev) => upsertById(prev, saved));
+      if (main) setMains((prev) => upsertById(prev, main));
       closeContentEdit();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save content.");
@@ -502,7 +517,7 @@ export function ThemesClient({
     id: string,
     status: ContentStatus
   ) {
-    await fetch("/api/themes", {
+    const res = await fetch("/api/themes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -512,17 +527,35 @@ export function ThemesClient({
         patch: { status },
       }),
     });
-    await refresh();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return;
+    if (entity === "main") {
+      const item = rowFromResponse<ThemeMainContent>(data);
+      const linked = rowFromResponse<ContentItem>(data, "content");
+      if (item) setMains((prev) => upsertById(prev, item));
+      if (linked) setContent((prev) => upsertById(prev, linked));
+    } else {
+      const item = rowFromResponse<ThemeOffshoot>(data);
+      if (item) setOffshoots((prev) => upsertById(prev, item));
+    }
   }
 
   async function remove(entity: "main" | "offshoot", id: string) {
-    await fetch("/api/themes", {
+    const res = await fetch("/api/themes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", entity, id }),
     });
+    if (!res.ok) return;
     if (entity === "main" && editingMainId === id) closeContentEdit();
-    await refresh();
+    if (entity === "main") {
+      setMains((prev) => removeById(prev, id));
+      setOffshoots((prev) =>
+        prev.filter((offshoot) => offshoot.main_content_id !== id)
+      );
+    } else {
+      setOffshoots((prev) => removeById(prev, id));
+    }
   }
 
   return (

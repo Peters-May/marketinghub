@@ -8,6 +8,7 @@ import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
+import { upsertById } from "@/lib/data/list-patch";
 
 const LINKED_TO: Record<TaskRelatedType, string> = {
   content: "this post",
@@ -121,15 +122,11 @@ export function RelatedTasksPanel({
         );
         return;
       }
-      if (data.item) {
-        setTasks((prev) =>
-          prev.some((task) => task.id === data.item!.id)
-            ? prev
-            : [...prev, data.item!]
-        );
+      const saved = data.item;
+      if (saved) {
+        setTasks((prev) => upsertById(prev, saved));
       }
       setAdding(false);
-      await refresh();
     } catch {
       setError("Could not save task");
     } finally {

@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, Folder } from "lucide-react";
+import { groupAssetImages } from "@/lib/email/asset-images";
 import { cn } from "@/lib/utils";
 
 type GalleryImage = {
   id: string;
   name: string;
   url: string;
+  folder?: string;
 };
 
 export function EmailImageField({
@@ -107,9 +110,8 @@ export function EmailImageField({
           className="max-h-28 w-full rounded border border-border object-contain"
         />
       ) : null}
-      <ImageChoices
-        label="Asset gallery"
-        empty={assetsNote}
+      <AssetGallery
+        note={assetsNote}
         images={assets}
         selected={src}
         onSelect={onChange}
@@ -129,6 +131,87 @@ export function EmailImageField({
           onChange={(event) => onChange(event.target.value)}
         />
       </label>
+    </div>
+  );
+}
+
+function AssetGallery({
+  note,
+  images,
+  selected,
+  onSelect,
+}: {
+  note: string;
+  images: GalleryImage[];
+  selected: string;
+  onSelect: (url: string) => void;
+}) {
+  const [folder, setFolder] = useState<string | null>(null);
+  const folders = useMemo(() => groupAssetImages(images), [images]);
+  const inFolder = images.filter((image) => (image.folder || "Gallery") === folder);
+
+  return (
+    <div>
+      <p className="text-sm text-muted">Asset gallery</p>
+      {images.length === 0 ? (
+        <p className="mt-1 text-xs text-muted">{note}</p>
+      ) : folder ? (
+        <div className="mt-1 space-y-1">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-xs text-brand"
+            onClick={() => setFolder(null)}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+            All folders
+          </button>
+          <p className="truncate text-sm text-brand">{folder}</p>
+          <div className="grid max-h-52 grid-cols-3 gap-1 overflow-y-auto">
+            {inFolder.map((image) => (
+              <button
+                key={image.id}
+                type="button"
+                title={image.name}
+                className={cn(
+                  "overflow-hidden rounded border border-border bg-white",
+                  image.url === selected && "ring-2 ring-brand"
+                )}
+                onClick={() => onSelect(image.url)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image.url} alt={image.name} className="h-14 w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1 max-h-52 space-y-1 overflow-y-auto">
+          {folders.map((entry) => (
+            <button
+              key={entry.name}
+              type="button"
+              className="flex w-full items-center gap-2 rounded border border-border bg-white p-1 text-left"
+              onClick={() => setFolder(entry.name)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={entry.coverUrl}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded object-cover"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-sm text-brand">
+                  <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="truncate">{entry.name}</span>
+                </span>
+                <span className="text-xs text-muted">
+                  {entry.count === 1 ? "1 image" : `${entry.count} images`}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { computeBudgetTotals, type LineSpend } from "@/lib/budget/totals";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import type {
   BudgetGroup,
   BudgetLine,
@@ -398,7 +399,22 @@ export function BudgetClient({
         setError(data.error || "Could not save");
         return false;
       }
-      applySnapshot(data);
+      const action = String(body.action ?? "");
+      const id = typeof body.id === "string" ? body.id : "";
+      if (action === "delete_line" && id) {
+        setLines((prev) => removeById(prev, id));
+        setPayments((prev) =>
+          prev.filter((payment) => payment.budget_line_id !== id)
+        );
+      } else if (action === "delete_payment" && id) {
+        setPayments((prev) => removeById(prev, id));
+      } else if (action === "create_line" || action === "update_line") {
+        const item = rowFromResponse<BudgetLine>(data);
+        if (item) setLines((prev) => upsertById(prev, item));
+      } else if (action === "create_payment" || action === "update_payment") {
+        const item = rowFromResponse<BudgetPayment>(data);
+        if (item) setPayments((prev) => upsertById(prev, item));
+      }
       return true;
     } catch {
       setError("Could not save");

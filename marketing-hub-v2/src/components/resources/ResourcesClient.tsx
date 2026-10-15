@@ -14,6 +14,7 @@ import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 export function ResourcesClient({
   initial,
@@ -54,24 +55,28 @@ export function ResourcesClient({
 
   async function create() {
     if (!allowManage) return;
-    await fetch("/api/resources", {
+    const res = await fetch("/api/resources", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<ResourceLink>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm({ title: "", description: "", url: "", category: "Press" });
-    await refresh();
   }
 
   async function remove(id: string) {
     if (!allowManage) return;
-    await fetch("/api/resources", {
+    const res = await fetch("/api/resources", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    await refresh();
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
   }
 
   const byCategory = items.reduce<Record<string, ResourceLink[]>>((acc, item) => {

@@ -335,7 +335,9 @@ async function readLocalFile(): Promise<Partial<HubStore> | null> {
 async function writeLocalFile(store: HubStore): Promise<void> {
   try {
     await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+    // Compact JSON. Pretty-printing the full hub document on the save path
+    // is disk work that does not change what Supabase stores.
+    await fs.writeFile(STORE_PATH, JSON.stringify(store), "utf8");
   } catch (err) {
     console.error("[store] local write failed", err);
   }
@@ -432,7 +434,12 @@ type StoreRead = {
 async function ensureStore(): Promise<StoreRead> {
   if (shouldUseDurableSupabaseStore()) {
     const remote = await readRemoteStore();
-    const local = await readLocalFile();
+    // A real remote row is the source of truth. Do not read or rewrite the
+    // local cache on that path — a save used to pretty-print the whole
+    // document to disk before it changed anything.
+    const remoteIsAuthoritative =
+      Boolean(remote) && !looksLikeSeedStore(remote!.payload);
+    const local = remoteIsAuthoritative ? null : await readLocalFile();
     const preferred = pickPreferredStore(remote?.payload ?? null, local);
 
     if (!preferred) {
@@ -499,7 +506,6 @@ async function ensureStore(): Promise<StoreRead> {
         console.error("[store] migration write failed; serving merged cache");
       }
     }
-    await writeLocalFile(merged);
     return {
       store: merged,
       remoteUpdatedAt: remote.updatedAt,

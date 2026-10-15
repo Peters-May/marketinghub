@@ -15,6 +15,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 const KINDS: { id: StaffRequestKind; label: string }[] = [
   { id: "asset", label: "Asset request" },
@@ -128,7 +129,7 @@ export function StaffRequestsClient({
           : "Internal asks for assets, social media intake forms, and other staff marketing support.";
 
   async function create() {
-    await fetch("/api/staff-requests", {
+    const res = await fetch("/api/staff-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -139,27 +140,34 @@ export function StaffRequestsClient({
         needed_by: form.needed_by || null,
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<StaffRequest>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm({ ...emptyForm, kind: kind ?? "asset" });
-    await refresh();
   }
 
   async function setStatus(id: string, status: StaffRequestStatus) {
-    await fetch("/api/staff-requests", {
+    const res = await fetch("/api/staff-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update", id, patch: { status } }),
     });
-    await refresh();
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<StaffRequest>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
   }
 
   async function remove(id: string) {
-    await fetch("/api/staff-requests", {
+    const res = await fetch("/api/staff-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    await refresh();
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
   }
 
   return (

@@ -68,6 +68,7 @@ async function handleThemesPost(request: NextRequest) {
     if (entity === "main") {
       const item = await updateThemeMain(body.id, body.patch ?? {});
       if (!item) return jsonError("Not found", 404);
+      let content = null;
       if (item.content_id && body.patch) {
         const sync: Record<string, unknown> = {};
         if (body.patch.title !== undefined) sync.title = body.patch.title;
@@ -78,10 +79,10 @@ async function handleThemesPost(request: NextRequest) {
         if (body.patch.status !== undefined) sync.status = body.patch.status;
         if (body.patch.notes !== undefined) sync.notes = body.patch.notes;
         if (Object.keys(sync).length > 0) {
-          await updateContent(item.content_id, sync);
+          content = await updateContent(item.content_id, sync);
         }
       }
-      return jsonOk({ item });
+      return jsonOk({ item, ...(content ? { content } : {}) });
     }
     if (entity === "offshoot") {
       const item = await updateThemeOffshoot(body.id, body.patch ?? {});
@@ -100,16 +101,23 @@ async function handleThemesPost(request: NextRequest) {
     if (!content) return jsonError("Not found", 404);
     const mains = await listThemeMains();
     const main = mains.find((m) => m.content_id === content.id);
-    if (main) {
-      await updateThemeMain(main.id, {
-        title: content.title,
-        channel: formatChannels(content.channel) || parseChannels(content.channel)[0] || "",
-        owner: content.owner,
-        status: content.status,
-        notes: content.notes,
-      });
-    }
-    return jsonOk({ content, mainId: main?.id ?? null });
+    const syncedMain = main
+      ? await updateThemeMain(main.id, {
+          title: content.title,
+          channel:
+            formatChannels(content.channel) ||
+            parseChannels(content.channel)[0] ||
+            "",
+          owner: content.owner,
+          status: content.status,
+          notes: content.notes,
+        })
+      : null;
+    return jsonOk({
+      content,
+      main: syncedMain,
+      mainId: syncedMain?.id ?? main?.id ?? null,
+    });
   }
 
   if (action === "delete") {

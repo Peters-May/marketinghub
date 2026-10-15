@@ -18,6 +18,7 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { PaidMediaPanel } from "@/components/reports/PaidMediaPanel";
 import { AdvertisementsPanel } from "@/components/reports/AdvertisementsPanel";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 export function ReportsClient({
   initial,
@@ -79,11 +80,15 @@ export function ReportsClient({
   }, [items, categoryOrder]);
 
   async function create() {
-    await fetch("/api/reports", {
+    const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<ReportLink>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm({
       title: "",
@@ -92,11 +97,10 @@ export function ReportsClient({
       category: "Dashboards",
       tool: "Google Analytics",
     });
-    await refresh();
   }
 
   async function saveUrl(id: string) {
-    await fetch("/api/reports", {
+    const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -105,18 +109,22 @@ export function ReportsClient({
         patch: { url: editUrl },
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<ReportLink>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setEditingId(null);
     setEditUrl("");
-    await refresh();
   }
 
   async function remove(id: string) {
-    await fetch("/api/reports", {
+    const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    await refresh();
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
   }
 
   return (

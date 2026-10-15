@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { format, parseISO } from "date-fns";
 import { Draggable } from "@fullcalendar/interaction";
 import { GripVertical } from "lucide-react";
@@ -32,10 +40,12 @@ function ParkedIdeaCard({
   post,
   onOpen,
   onPlace,
+  preview,
 }: {
   post: IdeaPanelPost;
   onOpen: (id: string) => void;
   onPlace: (id: string, dueDate: string) => void;
+  preview?: ReactNode;
 }) {
   const [day, setDay] = useState("");
 
@@ -59,16 +69,22 @@ function ParkedIdeaCard({
           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400"
           aria-hidden
         />
-        <span className="min-w-0">
-          <span className="block line-clamp-2 text-xs font-medium leading-snug text-slate-800">
-            {post.text || "Untitled"}
+        {preview ? (
+          <div className="min-w-0 flex-1 [&_.hub-cal-card]:border-0 [&_.hub-cal-card]:bg-transparent [&_.hub-cal-card]:p-0 [&_.hub-cal-card]:shadow-none">
+            {preview}
+          </div>
+        ) : (
+          <span className="min-w-0">
+            <span className="block line-clamp-2 text-xs font-medium leading-snug text-slate-800">
+              {post.text || "Untitled"}
+            </span>
+            <span className="mt-0.5 block text-[10px] text-muted">
+              {[post.status, platformLabel(post), categoryOf(post)]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
           </span>
-          <span className="mt-0.5 block text-[10px] text-muted">
-            {[post.status, platformLabel(post), categoryOf(post)]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </span>
+        )}
       </div>
       <div className="flex items-center gap-1.5 border-t border-slate-200/80 px-2.5 py-2">
         <label className="sr-only" htmlFor={`place-${post.id}`}>
@@ -102,6 +118,7 @@ export function SocialIdeasPanel({
   parkingId,
   parkingActive,
   kinds,
+  renderPreview,
   onOpen,
   onCreate,
   onPlace,
@@ -115,6 +132,8 @@ export function SocialIdeasPanel({
   parkingActive: boolean;
   /** When set, a new idea can be social, editorial, or another type. */
   kinds?: { value: string; label: string }[];
+  /** Same card as the calendar day cell: image, channels, title, status. */
+  renderPreview?: (post: IdeaPanelPost) => ReactNode;
   onOpen: (id: string) => void;
   onCreate: (title: string, caption: string, kind?: string) => Promise<boolean>;
   onPlace: (id: string, dueDate: string) => void;
@@ -300,6 +319,7 @@ export function SocialIdeasPanel({
               post={post}
               onOpen={onOpen}
               onPlace={onPlace}
+              preview={renderPreview?.(post)}
             />
           ))
         )}

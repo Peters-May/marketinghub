@@ -10,6 +10,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   CLOTHING_BRAND,
   CLOTHING_FITS,
@@ -722,7 +723,7 @@ export function MerchClient({
     }
     const { for_mode, ...header } = orderHeader;
     void for_mode;
-    await fetch("/api/merch", {
+    const res = await fetch("/api/merch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -734,10 +735,13 @@ export function MerchClient({
         status: "requested",
       }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<MerchOrder>(data);
+    if (!res.ok || !item) return;
+    setOrders((prev) => upsertById(prev, item));
     setShowForm(false);
     setOrderHeader(buildEmptyOrderHeader(viewerName, viewerContactId));
     setItemRows([buildEmptyItemRow(productCards)]);
-    await refresh();
   }
 
   function openEdit(order: MerchOrder) {
@@ -763,7 +767,7 @@ export function MerchClient({
     try {
       const { for_mode, status, ...header } = editHeader;
       void for_mode;
-      await fetch("/api/merch", {
+      const res = await fetch("/api/merch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -778,23 +782,29 @@ export function MerchClient({
           },
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<MerchOrder>(data);
+      if (!res.ok || !item) return;
+      setOrders((prev) => upsertById(prev, item));
       closeEdit();
-      await refresh();
     } finally {
       setSaving(false);
     }
   }
 
   async function setStatus(id: string, status: MerchStatus) {
-    await fetch("/api/merch", {
+    const res = await fetch("/api/merch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update", id, patch: { status } }),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<MerchOrder>(data);
+    if (!res.ok || !item) return;
+    setOrders((prev) => upsertById(prev, item));
     if (editingId === id && editHeader) {
-      setEditHeader({ ...editHeader, status });
+      setEditHeader({ ...editHeader, status: item.status });
     }
-    await refresh();
   }
 
   async function remove(id: string) {
@@ -813,7 +823,6 @@ export function MerchClient({
     }
     setOrders((prev) => prev.filter((o) => o.id !== id));
     if (editingId === id) closeEdit();
-    await refresh();
   }
 
   return (

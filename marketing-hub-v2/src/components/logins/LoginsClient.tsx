@@ -12,6 +12,7 @@ import {
 } from "@/lib/data/collections";
 import { useManagedFieldOptions } from "@/lib/data/useManagedFieldOptions";
 import { SearchSelect } from "@/components/ui/SearchSelect";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 const emptyForm = {
   platform: "Planable",
@@ -98,21 +99,24 @@ export function LoginsClient({
   }
 
   async function create() {
-    await fetch("/api/logins", {
+    const res = await fetch("/api/logins", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<PlatformCredential>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
-    await refresh();
   }
 
   async function saveEdit() {
     if (!editingId || !edit) return;
     setSaving(true);
     try {
-      await fetch("/api/logins", {
+      const res = await fetch("/api/logins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,9 +125,12 @@ export function LoginsClient({
           patch: edit,
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<PlatformCredential>(data);
+      if (!res.ok || !item) return;
+      setItems((prev) => upsertById(prev, item));
       setEditingId(null);
       setEdit(null);
-      await refresh();
     } finally {
       setSaving(false);
     }
@@ -131,16 +138,17 @@ export function LoginsClient({
 
   async function remove(id: string) {
     if (!window.confirm("Delete this login?")) return;
-    await fetch("/api/logins", {
+    const res = await fetch("/api/logins", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) {
       setEditingId(null);
       setEdit(null);
     }
-    await refresh();
   }
 
   return (

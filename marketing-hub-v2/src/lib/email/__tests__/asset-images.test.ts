@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imagesFromMediaItems } from "@/lib/email/asset-images";
+import { groupAssetImages, imagesFromMediaItems } from "@/lib/email/asset-images";
 
 describe("imagesFromMediaItems", () => {
   it("keeps raster files and Drive images from the gallery", () => {
@@ -45,7 +45,31 @@ describe("imagesFromMediaItems", () => {
         id: "cover-cover",
         name: "Harbour",
         url: "https://cdn.example.com/harbour.webp",
+        folder: "Gallery",
       },
+    ]);
+  });
+
+  it("keeps gallery subfolders separate from other libraries", () => {
+    const images = imagesFromMediaItems([
+      {
+        id: "a",
+        name: "Dock",
+        category: "Gallery",
+        subfolder: "Ports",
+        files: [{ url: "https://cdn.example.com/dock.jpg", name: "dock.jpg", type: "image/jpeg" }],
+      },
+      {
+        id: "b",
+        name: "Wordmark",
+        category: "Logos",
+        files: [{ url: "https://cdn.example.com/mark.png", name: "mark.png", type: "image/png" }],
+      },
+    ]);
+
+    expect(groupAssetImages(images).map((folder) => folder.name)).toEqual([
+      "Gallery / Ports",
+      "Logos",
     ]);
   });
 });

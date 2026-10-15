@@ -1375,6 +1375,11 @@ export function SocialClient({
               creating={creatingIdea}
               parkingId={parkingId}
               parkingActive={parkingActive}
+              renderPreview={(post) => {
+                const full = posts.find((p) => p.id === post.id);
+                if (!full) return null;
+                return <PostCard post={full} compact />;
+              }}
               onOpen={setSelectedId}
               onCreate={createIdea}
               onPlace={(id, dueDate) => {

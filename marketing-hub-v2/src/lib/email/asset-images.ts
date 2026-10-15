@@ -2,6 +2,13 @@ export type AssetImageChoice = {
   id: string;
   name: string;
   url: string;
+  folder: string;
+};
+
+export type AssetFolder = {
+  name: string;
+  count: number;
+  coverUrl: string;
 };
 
 export type AssetImageSource = {
@@ -9,11 +16,20 @@ export type AssetImageSource = {
   name?: string;
   display_name?: string;
   category?: string;
+  subfolder?: string;
   document_url?: string;
   document_link?: string;
   cover_url?: string | null;
   files?: { url?: string; name?: string; type?: string }[];
 };
+
+/** Gallery subfolders stay separate. Other libraries are one folder each. */
+export function folderForAsset(item: AssetImageSource): string {
+  const category = item.category?.trim() || "Gallery";
+  const subfolder = item.subfolder?.trim() || "";
+  if (!subfolder) return category;
+  return `${category} / ${subfolder}`;
+}
 
 const IMAGE_CATEGORIES = new Set(["gallery", "logos", "images", "design assets"]);
 
@@ -47,27 +63,33 @@ function driveThumb(url: string): string | null {
 /** Raster images from the media library, including Drive-hosted gallery files. */
 export function imagesFromMediaItems(
   items: AssetImageSource[],
-  limit = 80
+  limit = 400
 ): AssetImageChoice[] {
   const images: AssetImageChoice[] = [];
   const seen = new Set<string>();
-  const add = (id: string, name: string, url: string | null | undefined) => {
+  const add = (
+    id: string,
+    name: string,
+    url: string | null | undefined,
+    folder: string
+  ) => {
     const next = url?.trim() || "";
     if (!next || seen.has(next) || images.length >= limit) return;
     seen.add(next);
-    images.push({ id, name: name || "Image", url: next });
+    images.push({ id, name: name || "Image", url: next, folder });
   };
 
   items.forEach((item, index) => {
     const label = item.display_name?.trim() || item.name?.trim() || "Image";
     const itemId = item.id || `asset-${index}`;
+    const folder = folderForAsset(item);
     const allowDriveLink = isImageCategory(item.category);
 
     for (const file of item.files ?? []) {
       const name = file.name || label;
       const raw = file.url?.trim() || "";
       if (!raw || !isRaster(name, file.type || "")) continue;
-      add(`${itemId}-${raw}`, name, driveThumb(raw) || raw);
+      add(`${itemId}-${raw}`, name, driveThumb(raw) || raw, folder);
     }
 
     for (const candidate of [item.document_link, item.document_url, item.cover_url]) {
@@ -75,15 +97,36 @@ export function imagesFromMediaItems(
       if (!raw) continue;
       const thumb = driveThumb(raw);
       if (thumb && (allowDriveLink || isDirectRaster(raw) || isRaster(label, ""))) {
-        add(`${itemId}-drive-${raw}`, label, thumb);
+        add(`${itemId}-drive-${raw}`, label, thumb, folder);
       }
     }
 
     const cover = item.cover_url?.trim() || "";
     if (cover && isDirectRaster(cover)) {
-      add(`${itemId}-cover`, label, cover);
+      add(`${itemId}-cover`, label, cover, folder);
     }
   });
 
   return images;
+}
+
+export function groupAssetImages(
+  images: { url: string; folder?: string }[]
+): AssetFolder[] {
+  const folders = new Map<string, AssetFolder>();
+  for (const image of images) {
+    const name = image.folder?.trim() || "Gallery";
+    const existing = folders.get(name);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    folders.set(name, { name, count: 1, coverUrl: image.url });
+  }
+  return [...folders.values()].sort((a, b) => {
+    const aUnsorted = /unsorted$/i.test(a.name);
+    const bUnsorted = /unsorted$/i.test(b.name);
+    if (aUnsorted !== bUnsorted) return aUnsorted ? 1 : -1;
+    return a.name.localeCompare(b.name, "en-GB");
+  });
 }

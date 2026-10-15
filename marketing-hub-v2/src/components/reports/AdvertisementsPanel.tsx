@@ -21,6 +21,7 @@ import { SearchSelect } from "@/components/ui/SearchSelect";
 import { cn } from "@/lib/utils";
 import { useHubView } from "@/lib/hub-view";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 function emptyForm(): Omit<Advertisement, "id" | "created_at" | "updated_at"> {
   return {
@@ -137,37 +138,33 @@ export function AdvertisementsPanel({
 
   async function save() {
     const payload = { ...form };
-    if (editingId) {
-      await fetch("/api/advertisements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update",
-          id: editingId,
-          patch: payload,
-        }),
-      });
-    } else {
-      await fetch("/api/advertisements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
+    const res = await fetch("/api/advertisements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        editingId
+          ? { action: "update", id: editingId, patch: payload }
+          : payload
+      ),
+    });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<Advertisement>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
     closeDrawer();
-    await refresh();
   }
 
   async function remove(id: string) {
     if (!canToggleAdminView) return;
     if (!window.confirm("Delete this advertisement?")) return;
-    await fetch("/api/advertisements", {
+    const res = await fetch("/api/advertisements", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
+    if (!res.ok) return;
+    setItems((prev) => removeById(prev, id));
     if (editingId === id) closeDrawer();
-    await refresh();
   }
 
   return (
