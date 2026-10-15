@@ -2754,7 +2754,7 @@ function normalizeEmailCampaign(
     subject: c.subject ?? "",
     preview_text: c.preview_text ?? "",
     from_name: c.from_name ?? "Peters & May Marketing",
-    from_email: c.from_email ?? "marketing@petersandmay.com",
+    from_email: c.from_email ?? "hello@petersandmay.com",
     html_body: c.html_body ?? "",
     design: normalizeEmailDesign(c.design),
     template_id: c.template_id ?? null,

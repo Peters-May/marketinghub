@@ -118,7 +118,7 @@ export function EmailDesigner({
   initialHtml,
   audiences = [],
   initialFromName = "Peters & May Marketing",
-  initialFromEmail = "marketing@petersandmay.com",
+  initialFromEmail = "hello@petersandmay.com",
   initialAudienceId = "",
   canDelete = false,
 }: {

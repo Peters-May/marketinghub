@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     subject: body.subject ?? "",
     preview_text: body.preview_text ?? "",
     from_name: body.from_name ?? "Peters & May Marketing",
-    from_email: body.from_email ?? "marketing@petersandmay.com",
+    from_email: body.from_email ?? "hello@petersandmay.com",
     html_body: body.html_body ?? "",
     design: body.design ?? null,
     template_id: body.template_id || null,

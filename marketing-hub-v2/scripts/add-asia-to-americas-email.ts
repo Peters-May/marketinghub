@@ -456,7 +456,7 @@ function campaignFrom(html: string, emailDesign: EmailDesign, createdAt?: string
     subject: "Asia to the Americas",
     preview_text: "Plan your yacht's journey from Asia to the Americas.",
     from_name: "Peters & May Marketing",
-    from_email: "marketing@petersandmay.com",
+    from_email: "hello@petersandmay.com",
     html_body: html,
     design: emailDesign,
     template_id: null,

@@ -118,7 +118,7 @@ export async function sendEmailCampaign(
   const fromEmail =
     latest.from_email.trim() ||
     process.env.RESEND_FROM_EMAIL?.trim() ||
-    "marketing@petersandmay.com";
+    "hello@petersandmay.com";
   const from = latest.from_name.trim()
     ? `${latest.from_name.trim()} <${fromEmail}>`
     : fromEmail;
@@ -226,7 +226,7 @@ export async function sendTestEmail(input: {
   const fromEmail =
     input.fromEmail.trim() ||
     process.env.RESEND_FROM_EMAIL?.trim() ||
-    "marketing@petersandmay.com";
+    "hello@petersandmay.com";
   const from = input.fromName.trim()
     ? `${input.fromName.trim()} <${fromEmail}>`
     : fromEmail;
