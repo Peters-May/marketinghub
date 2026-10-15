@@ -10,7 +10,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
-import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
+import { rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   CLOTHING_BRAND,
   CLOTHING_FITS,
