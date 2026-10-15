@@ -940,6 +940,10 @@ export type EmailEvent = {
   kind: EmailEventKind;
   resend_message_id: string;
   meta: string;
+  /** Clicked URL. Empty for opens and for events stored before link tracking. */
+  link?: string;
+  /** Mail-client user agent. Empty when Resend did not send one. */
+  user_agent?: string;
   created_at: string;
 };
 

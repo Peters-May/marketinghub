@@ -8,6 +8,7 @@ import {
   listContacts,
   updateContact,
 } from "@/lib/data/repos";
+import { readResendEventDetail } from "@/lib/email/resend-event";
 import { notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 import type { EmailEventKind } from "@/lib/types";
 
@@ -43,7 +44,8 @@ export async function POST(request: NextRequest) {
   const messageId = String(
     data.email_id ?? data.id ?? data.message_id ?? ""
   );
-  const campaignId = extractCampaignId(data);
+  const detail = readResendEventDetail(data);
+  const campaignId = detail.campaignId;
   if (!campaignId) return jsonOk({ ok: true, skipped: "no campaign_id" });
 
   await appendEmailEvent({
@@ -52,6 +54,9 @@ export async function POST(request: NextRequest) {
     kind,
     resend_message_id: messageId,
     meta: type,
+    link: detail.link,
+    user_agent: detail.userAgent,
+    created_at: detail.occurredAt || undefined,
   });
 
   const statField = kindToStat(kind);
@@ -132,25 +137,6 @@ function extractEmail(data: Record<string, unknown>): string {
   }
   if (typeof data.email === "string") return data.email.trim().toLowerCase();
   return "";
-}
-
-function extractCampaignId(data: Record<string, unknown>): string | null {
-  const tags = data.tags;
-  if (Array.isArray(tags)) {
-    for (const t of tags) {
-      if (
-        t &&
-        typeof t === "object" &&
-        "name" in t &&
-        "value" in t &&
-        String((t as { name: string }).name) === "campaign_id"
-      ) {
-        return String((t as { value: string }).value);
-      }
-    }
-  }
-  if (typeof data.campaign_id === "string") return data.campaign_id;
-  return null;
 }
 
 /** Svix-compatible webhook verify (Resend uses Svix). */

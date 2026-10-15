@@ -3082,7 +3082,11 @@ export async function appendEmailEvent(input: {
   kind: EmailEventKind;
   resend_message_id?: string;
   meta?: string;
+  link?: string;
+  user_agent?: string;
+  created_at?: string;
 }) {
+  const stamped = input.created_at ? new Date(input.created_at) : null;
   const item: EmailEvent = {
     id: uid("eevt"),
     campaign_id: input.campaign_id,
@@ -3091,7 +3095,10 @@ export async function appendEmailEvent(input: {
     kind: input.kind,
     resend_message_id: input.resend_message_id ?? "",
     meta: input.meta ?? "",
-    created_at: nowIso(),
+    link: input.link?.trim() ?? "",
+    user_agent: input.user_agent?.trim() ?? "",
+    created_at:
+      stamped && !Number.isNaN(stamped.getTime()) ? stamped.toISOString() : nowIso(),
   };
   await updateStore((s) => {
     if (!s.email_events) s.email_events = [];

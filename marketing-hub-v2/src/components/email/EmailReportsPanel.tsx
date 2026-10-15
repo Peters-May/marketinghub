@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { EmailCampaign } from "@/lib/types";
+import { campaignOpenHref } from "@/lib/email/display";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 
@@ -150,7 +152,11 @@ export function EmailReportsPanel() {
             <tbody className="divide-y divide-border">
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="px-3 py-2 font-medium text-brand">{r.title}</td>
+                  <td className="px-3 py-2 font-medium text-brand">
+                    <Link href={campaignOpenHref(r)} className="underline">
+                      {r.title}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">
                     <StatusPill
                       status={r.status}
