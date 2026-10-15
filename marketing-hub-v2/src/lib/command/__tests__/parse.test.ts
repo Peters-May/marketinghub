@@ -20,6 +20,18 @@ describe("parseHubCommand", () => {
     expect(parsed.summary).toContain("due 2 Oct 2026");
   });
 
+  it("adds an event when the type comes at the end", () => {
+    const parsed = parseHubCommand(
+      "Add Yacht Chandlers Party 30th October as an event",
+      new Date(2026, 9, 13, 12, 0, 0)
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.command.kind !== "create_event") return;
+    expect(parsed.command.title).toBe("Yacht Chandlers Party");
+    expect(parsed.command.starts_at).toBe("2026-10-30");
+    expect(parsed.command.summary).toContain("30 Oct 2026");
+  });
+
   it("adds an event with a date and location", () => {
     const parsed = command(
       "Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco"

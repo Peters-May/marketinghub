@@ -848,6 +848,25 @@ export function parseHubCommand(input: string, now = new Date()): ParseResult {
     );
   }
 
+  const createAs = text.match(
+    new RegExp(
+      `^(?:add|create|new)\\s+(.+?)\\s+as\\s+(?:a\\s+|an\\s+|the\\s+)?(?:new\\s+)?(?:(${CHANNEL_PATTERN})\\s+)?(${TARGET_PATTERN})\\b\\s*(.*)$`,
+      "i"
+    )
+  );
+  if (createAs) {
+    const body = [createAs[1], createAs[4]].filter(Boolean).join(" ");
+    const extracted = extractFields(body, targetOf(createAs[3]), now);
+    if (!extracted.ok) return fail(extracted.message);
+    return fromFields(
+      "Add",
+      targetOf(createAs[3]),
+      extracted.title,
+      extracted.fields,
+      createAs[2] ? channelFrom(createAs[2]) : null
+    );
+  }
+
   return fail(
     "Start with add or update, then task, event, or post."
   );
