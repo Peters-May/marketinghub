@@ -24,6 +24,11 @@ describe("email design compiler", () => {
     expect(html).toContain('role="presentation"');
     expect(html).toContain("{{name}}");
     expect(html).toContain("{{unsubscribe_url}}");
+    expect(html).toContain("View this email in your browser");
+    const browserAt = html.indexOf("{{view_in_browser_url}}");
+    const cardAt = html.indexOf('class="em-container"');
+    expect(browserAt).toBeGreaterThan(-1);
+    expect(browserAt).toBeLessThan(cardAt);
     expect(html).toContain(COLORS.ensignNavy.hex);
     expect(html).toContain(COLORS.pmBlue.hex);
     expect(html.toLowerCase()).not.toContain(COLORS.ensignRed.hex.toLowerCase());

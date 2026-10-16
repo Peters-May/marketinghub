@@ -57,3 +57,14 @@ export function unsubscribeUrlFor(opts: {
   const path = `/unsubscribe?token=${encodeURIComponent(token)}`;
   return origin ? `${origin}${path}` : path;
 }
+
+export function viewInBrowserUrlFor(opts: {
+  email: string;
+  campaignId?: string | null;
+  contactId?: string | null;
+}): string {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const token = createUnsubscribeToken(opts);
+  const path = `/email/view?token=${encodeURIComponent(token)}`;
+  return origin ? `${origin}${path}` : path;
+}

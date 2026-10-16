@@ -400,6 +400,7 @@ export function EmailDesigner({
           from_email: fromEmail,
           subject,
           html_body: compileEmailDesign(history.designRef.current),
+          campaign_id: id,
         }),
       });
       const data = await res.json();

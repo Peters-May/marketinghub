@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
       fromEmail: String(body.from_email ?? ""),
       subject: String(body.subject ?? ""),
       html: String(body.html_body ?? ""),
+      campaignId: typeof body.campaign_id === "string" ? body.campaign_id : "",
     });
     if (!result.ok) return jsonError(result.error || "Test send failed", 502);
     return jsonOk({ ok: true, to: user.email });

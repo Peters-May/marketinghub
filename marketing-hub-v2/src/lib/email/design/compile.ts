@@ -1,4 +1,4 @@
-import { ensureUnsubscribeFooter } from "@/lib/email/merge";
+import { ensureUnsubscribeFooter, ensureViewInBrowserLink } from "@/lib/email/merge";
 import type {
   EmailBlock,
   EmailDesign,
@@ -225,5 +225,5 @@ ${sections}
 </table>
 </body>
 </html>`;
-  return ensureUnsubscribeFooter(html);
+  return ensureViewInBrowserLink(ensureUnsubscribeFooter(html));
 }

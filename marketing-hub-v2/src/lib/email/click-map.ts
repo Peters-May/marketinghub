@@ -4,7 +4,7 @@ export function linkKey(raw: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&#38;/g, "&")
     .trim();
-  if (!decoded || isUnsubscribeLink(decoded)) return "";
+  if (!decoded || isUnsubscribeLink(decoded) || isBrowserPreviewLink(decoded)) return "";
   try {
     const url = new URL(decoded);
     if (url.protocol === "mailto:") {
@@ -21,6 +21,10 @@ export function linkKey(raw: string): string {
 
 export function isUnsubscribeLink(url: string): boolean {
   return /unsubscribe/i.test(url);
+}
+
+export function isBrowserPreviewLink(url: string): boolean {
+  return /\/email\/view/i.test(url);
 }
 
 /**

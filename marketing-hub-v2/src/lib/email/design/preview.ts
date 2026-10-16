@@ -29,5 +29,6 @@ export function previewMerge(template: string): string {
   return applyEmailMerge(template, {
     contact: SAMPLE_CONTACT,
     unsubscribeUrl: "https://example.com/unsubscribe",
+    viewInBrowserUrl: "https://example.com/email/view",
   });
 }

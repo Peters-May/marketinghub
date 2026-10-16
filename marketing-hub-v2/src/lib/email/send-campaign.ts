@@ -5,8 +5,12 @@ import {
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
-import { applyEmailMerge, ensureUnsubscribeFooter } from "@/lib/email/merge";
-import { unsubscribeUrlFor } from "@/lib/email/unsubscribe-token";
+import {
+  applyEmailMerge,
+  ensureUnsubscribeFooter,
+  ensureViewInBrowserLink,
+} from "@/lib/email/merge";
+import { unsubscribeUrlFor, viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
 import {
   notifyPortalCampaignSend,
   syncPortalMarketingAudience,
@@ -123,25 +127,27 @@ export async function sendEmailCampaign(
     ? `${latest.from_name.trim()} <${fromEmail}>`
     : fromEmail;
 
-  const htmlBase = ensureUnsubscribeFooter(latest.html_body || "<p></p>");
+  const htmlBase = ensureViewInBrowserLink(
+    ensureUnsubscribeFooter(latest.html_body || "<p></p>")
+  );
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
 
   for (const contact of recipients) {
     const email = contact.email.trim();
-    const unsub = unsubscribeUrlFor({
-      email,
-      campaignId,
-      contactId: contact.id,
-    });
+    const identity = { email, campaignId, contactId: contact.id };
+    const unsub = unsubscribeUrlFor(identity);
+    const browser = viewInBrowserUrlFor(identity);
     const html = applyEmailMerge(htmlBase, {
       contact,
       unsubscribeUrl: unsub,
+      viewInBrowserUrl: browser,
     });
     const subject = applyEmailMerge(latest.subject || latest.title, {
       contact,
       unsubscribeUrl: unsub,
+      viewInBrowserUrl: browser,
     });
 
     try {
@@ -217,6 +223,7 @@ export async function sendTestEmail(input: {
   fromEmail: string;
   subject: string;
   html: string;
+  campaignId?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = input.to.trim();
   if (!to) return { ok: false, error: "No email address on your account" };
@@ -239,14 +246,25 @@ export async function sendTestEmail(input: {
     outlet: "",
     country: "United Kingdom",
   } as Contact;
-  const unsub = unsubscribeUrlFor({ email: to, campaignId: "test", contactId: "test" });
-  const html = applyEmailMerge(ensureUnsubscribeFooter(input.html || "<p></p>"), {
-    contact,
-    unsubscribeUrl: unsub,
-  });
+  const identity = {
+    email: to,
+    campaignId: input.campaignId?.trim() || "test",
+    contactId: "test",
+  };
+  const unsub = unsubscribeUrlFor(identity);
+  const browser = viewInBrowserUrlFor(identity);
+  const html = applyEmailMerge(
+    ensureViewInBrowserLink(ensureUnsubscribeFooter(input.html || "<p></p>")),
+    {
+      contact,
+      unsubscribeUrl: unsub,
+      viewInBrowserUrl: browser,
+    }
+  );
   const subject = applyEmailMerge(input.subject || "Test email", {
     contact,
     unsubscribeUrl: unsub,
+    viewInBrowserUrl: browser,
   });
 
   try {
