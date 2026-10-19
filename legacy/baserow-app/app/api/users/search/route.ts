@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { formatUserDisplayName } from "@/lib/users/userDisplay"
 
 /**
@@ -20,15 +21,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ users: [] })
     }
 
-    // Query user_profile_sync_status (has user_id, email; granted to authenticated)
-    const { data: rows, error } = await supabase
-      .from("user_profile_sync_status")
+    // Profiles RLS only lets someone read their own row. Mention search
+    // needs the directory, so this runs with the service role after auth.
+    const admin = createAdminClient()
+    const { data: rows, error } = await admin
+      .from("profiles")
       .select("user_id, email")
       .ilike("email", `%${q}%`)
+      .not("email", "is", null)
       .limit(10)
 
     if (error) {
-      console.warn("User search fallback - user_profile_sync_status:", error)
+      console.warn("User search failed:", error)
       return NextResponse.json({ users: [] })
     }
 

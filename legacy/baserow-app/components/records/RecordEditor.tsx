@@ -246,6 +246,8 @@ export default function RecordEditor({
 
   const permissions = (cascadeContext?.blockConfig as any)?.permissions ?? (cascadeContext?.pageConfig as any)?.permissions ?? {}
   const isViewOnly = permissions.mode === "view"
+  // Comments stay available in view mode. Field editing still follows the drawer mode.
+  const canComment = allowEdit && !isViewOnly && Boolean(recordId && canEditRecords)
 
   const recordTitle = useMemo(() => {
     if (!recordId || !formData) return null
@@ -934,7 +936,7 @@ export default function RecordEditor({
                           <RecordComments
                             tableId={tableId}
                             recordId={recordId}
-                            canAddComment={effectiveEditable}
+                            canAddComment={canComment}
                           />
                         </div>
                       ) : null}
@@ -1294,7 +1296,7 @@ export default function RecordEditor({
 
       {mode === "modal" && showComments && recordId && !loading && formData && Object.keys(formData).length > 0 && (
         <div className="border-t border-dashed border-gray-200 pl-6 pr-0 py-4 flex-shrink-0">
-          <RecordComments tableId={tableId} recordId={recordId} canAddComment={effectiveEditable} />
+          <RecordComments tableId={tableId} recordId={recordId} canAddComment={canComment} />
         </div>
       )}
 
@@ -1309,9 +1311,15 @@ export default function RecordEditor({
             <RecordActivity record={formData} tableId={tableId} />
           </div>
           <div className="border-t border-dashed border-gray-200 pl-6 pr-0 py-4 flex-shrink-0">
-            <RecordComments tableId={tableId} recordId={recordId} canAddComment={effectiveEditable} />
+            <RecordComments tableId={tableId} recordId={recordId} canAddComment={canComment} />
           </div>
         </>
+      )}
+
+      {mode === "review" && recordId && showEventContextualView && (
+        <div className="border-t border-dashed border-gray-200 pl-6 pr-0 py-4 flex-shrink-0">
+          <RecordComments tableId={tableId} recordId={recordId} canAddComment={canComment} />
+        </div>
       )}
 
     </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { createPortal } from "react-dom"
 import { ChevronDown, ChevronRight, MessageSquare, Send, Trash2, Pencil } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -76,6 +77,11 @@ export default function RecordComments({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const mentionQueryRef = useRef<string>("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [mentionMenuPos, setMentionMenuPos] = useState<{
+    left: number
+    width: number
+    top: number
+  } | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -149,6 +155,36 @@ export default function RecordComments({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [mentionQuery])
+
+  // The record panel scrolls with overflow hidden, which clips an in-flow menu.
+  useEffect(() => {
+    if (mentionQuery === null) {
+      setMentionMenuPos(null)
+      return
+    }
+    const update = () => {
+      const el = textareaRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const menuHeight = 192
+      const spaceBelow = window.innerHeight - rect.bottom
+      const placeAbove = spaceBelow < menuHeight && rect.top > spaceBelow
+      setMentionMenuPos({
+        left: rect.left,
+        width: rect.width,
+        top: placeAbove
+          ? Math.max(8, rect.top - menuHeight - 4)
+          : rect.bottom + 4,
+      })
+    }
+    update()
+    window.addEventListener("resize", update)
+    window.addEventListener("scroll", update, true)
+    return () => {
+      window.removeEventListener("resize", update)
+      window.removeEventListener("scroll", update, true)
+    }
+  }, [mentionQuery, newComment])
 
   const handleCommentChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -400,31 +436,45 @@ export default function RecordComments({
                   className="min-h-[60px] resize-none"
                   disabled={submitting}
                 />
-                {mentionQuery !== null && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                    {mentionLoading ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>
-                    ) : mentionUsers.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">
-                        {mentionQuery.length < 2 ? "Type 2+ characters" : "No users found"}
-                      </div>
-                    ) : (
-                      mentionUsers.map((u, i) => (
-                        <button
-                          key={u.user_id}
-                          type="button"
-                          onClick={() => insertMention(u)}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${
-                            i === mentionIndex ? "bg-gray-100" : ""
-                          }`}
-                        >
-                          <span className="font-medium">{u.display_name}</span>
-                          <span className="ml-2 text-gray-500">{u.email}</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                {mentionQuery !== null &&
+                  mentionMenuPos &&
+                  typeof document !== "undefined" &&
+                  createPortal(
+                    <div
+                      className="fixed z-[200] max-h-48 overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                      style={{
+                        left: mentionMenuPos.left,
+                        width: mentionMenuPos.width,
+                        top: mentionMenuPos.top,
+                      }}
+                    >
+                      {mentionLoading ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">Searching…</div>
+                      ) : mentionUsers.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          {mentionQuery.length < 2 ? "Type 2+ characters" : "No users found"}
+                        </div>
+                      ) : (
+                        mentionUsers.map((u, i) => (
+                          <button
+                            key={u.user_id}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault()
+                              insertMention(u)
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 ${
+                              i === mentionIndex ? "bg-gray-100" : ""
+                            }`}
+                          >
+                            <span className="font-medium">{u.display_name}</span>
+                            <span className="ml-2 text-gray-500">{u.email}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>,
+                    document.body
+                  )}
               </div>
               <Button
                 type="submit"
