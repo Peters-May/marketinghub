@@ -207,6 +207,8 @@ export type Contact = {
    * true = may include on marketing lists / email export.
    */
   marketing_consent: boolean | null;
+  /** Preference-page lists this person has asked to leave. */
+  email_topic_opt_outs?: string[];
   /** Portal CRM contact id when this person was synced from the customer list. */
   portal_contact_id?: string | null;
   created_at: string;

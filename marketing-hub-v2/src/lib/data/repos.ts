@@ -7,6 +7,7 @@ import {
 } from "@/lib/events/planner";
 import { uid } from "@/lib/utils";
 import { normalizeEmailDesign } from "@/lib/email/design";
+import { normalizeTopicOptOuts, topicForAudienceName } from "@/lib/email/preferences";
 import {
   HUB_ACCESS_ROLE_ORDER,
   normalizeHubAccessRole,
@@ -531,6 +532,7 @@ function normalizeContact(c: Contact): Contact {
         : c.marketing_consent === false
           ? false
           : null,
+    email_topic_opt_outs: normalizeTopicOptOuts(c.email_topic_opt_outs),
     portal_contact_id: c.portal_contact_id ?? null,
   };
 }
@@ -3063,6 +3065,21 @@ export async function addEmailSuppression(input: {
   return item;
 }
 
+/** Lift a preference-page unsubscribe. Bounce and complaint rows stay. */
+export async function removeUnsubscribeSuppression(email: string) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return;
+  await updateStore((s) => {
+    s.email_suppressions = (s.email_suppressions ?? []).filter(
+      (row) =>
+        !(
+          row.email.trim().toLowerCase() === normalized &&
+          row.reason === "unsubscribe"
+        )
+    );
+  });
+}
+
 export async function listEmailEvents(campaignId?: string) {
   const store = await readStore();
   let rows = [...(store.email_events ?? [])];
@@ -3189,6 +3206,7 @@ export async function resolveEmailRecipients(opts: {
 
   let excludeUnsubscribed = opts.excludeUnsubscribed !== false;
   let filter: EmailAudienceFilter = { tags: [], country: "" };
+  let audienceTopic: ReturnType<typeof topicForAudienceName> = null;
 
   if (opts.audienceId) {
     const audience = (store.email_audiences ?? []).find(
@@ -3197,6 +3215,7 @@ export async function resolveEmailRecipients(opts: {
     if (audience) {
       excludeUnsubscribed = audience.exclude_unsubscribed !== false;
       filter = normalizeAudienceFilter(audience.filter);
+      audienceTopic = topicForAudienceName(audience.name);
       for (const id of audience.contact_ids ?? []) idSet.add(id);
       for (const listId of audience.list_ids ?? []) {
         const list = lists.find((l) => l.id === listId);
@@ -3218,6 +3237,12 @@ export async function resolveEmailRecipients(opts: {
     if (!email || !email.includes("@")) continue;
     if (c.marketing_consent !== true) continue;
     if (excludeUnsubscribed && suppressions.has(email)) continue;
+    if (
+      audienceTopic &&
+      normalizeTopicOptOuts(c.email_topic_opt_outs).includes(audienceTopic)
+    ) {
+      continue;
+    }
     if (filter.country.trim()) {
       if (
         (c.country ?? "").trim().toLowerCase() !==

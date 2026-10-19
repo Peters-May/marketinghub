@@ -378,6 +378,46 @@ export async function notifyPortalCampaignSend(input: {
   }
 }
 
+export async function notifyPortalCampaignEngagement(input: {
+  email: string;
+  portalContactId?: string | null;
+  campaignId: string;
+  kind: "opened" | "clicked" | "unsubscribed";
+  occurredAt?: string;
+}): Promise<void> {
+  if (!input.portalContactId) return;
+  await postPortalMarketing({
+    event: "engage",
+    contact_id: input.portalContactId,
+    email: input.email,
+    hub_campaign_id: input.campaignId,
+    kind: input.kind,
+    occurred_at: input.occurredAt || new Date().toISOString(),
+  });
+}
+
+export async function notifyPortalPreferences(input: {
+  email: string;
+  portalContactId?: string | null;
+  optOuts: string[];
+  all: boolean;
+  liftUnsubscribe: boolean;
+}): Promise<void> {
+  const email = input.email.trim().toLowerCase();
+  if (!email) return;
+  const result = await postPortalMarketing({
+    event: "preferences",
+    contact_id: input.portalContactId ?? null,
+    email,
+    opt_outs: input.optOuts,
+    all: input.all,
+    lift_unsubscribe: input.liftUnsubscribe,
+  });
+  if (!result.ok) {
+    console.error("[portal-marketing] preferences", result.error);
+  }
+}
+
 export async function notifyPortalSuppression(input: {
   email: string;
   portalContactId?: string | null;

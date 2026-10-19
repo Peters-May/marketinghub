@@ -8,7 +8,7 @@ import {
   updateContact,
 } from "@/lib/data/repos";
 import { readResendEventDetail } from "@/lib/email/resend-event";
-import { notifyPortalSuppression } from "@/lib/sync/portal-marketing";
+import { notifyPortalCampaignEngagement, notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 import type { EmailEventKind } from "@/lib/types";
 
 /**
@@ -57,6 +57,23 @@ export async function POST(request: NextRequest) {
     user_agent: detail.userAgent,
     created_at: detail.occurredAt || undefined,
   });
+
+  if (kind === "opened" || kind === "clicked" || kind === "unsubscribed") {
+    if (email) {
+      const contacts = await listContacts();
+      const contact =
+        contacts.find(
+          (c) => c.email.trim().toLowerCase() === email.toLowerCase()
+        ) ?? null;
+      await notifyPortalCampaignEngagement({
+        email,
+        portalContactId: contact?.portal_contact_id,
+        campaignId,
+        kind,
+        occurredAt: detail.occurredAt || undefined,
+      });
+    }
+  }
 
   if (kind === "complained" || kind === "bounced") {
     if (email) {
