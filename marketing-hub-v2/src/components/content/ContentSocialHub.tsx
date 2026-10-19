@@ -47,27 +47,6 @@ export function ContentSocialHub({
   const { view } = useHubView();
   const isMemberView = view !== "admin";
   const [scope, setScope] = useState<Scope>("all");
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-
-  async function syncFromPlanable() {
-    setSyncing(true);
-    setSyncMessage(null);
-    try {
-      const res = await fetch("/api/planable/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setSyncMessage(data.error || "Planable sync failed");
-      } else {
-        setSyncMessage(
-          `Planable sync: ${data.created ?? 0} new, ${data.updated ?? 0} updated, ${data.removed ?? 0} removed`
-        );
-      }
-    } catch (e) {
-      setSyncMessage(e instanceof Error ? e.message : "Planable sync failed");
-    }
-    setSyncing(false);
-  }
 
   if (isMemberView) {
     return (
@@ -92,31 +71,17 @@ export function ContentSocialHub({
         title="Content & Social"
         description="Draft in the Hub. Approved sends one Facebook draft to Planable with the due date — add LinkedIn and Instagram there, then schedule, approve and publish. Published posts lock in the Hub."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={syncing}
-              onClick={() => void syncFromPlanable()}
-            >
-              {syncing ? "Syncing…" : "Sync from Planable"}
-            </button>
-            <a
-              href={PLANABLE_CALENDAR_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-primary"
-            >
-              Open Planable
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </div>
+          <a
+            href={PLANABLE_CALENDAR_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-primary"
+          >
+            Open Planable
+            <ExternalLink className="h-4 w-4" />
+          </a>
         }
       />
-
-      {syncMessage ? (
-        <p className="mb-4 text-xs text-muted">{syncMessage}</p>
-      ) : null}
 
       <SegmentFilter
         label="Content or social"

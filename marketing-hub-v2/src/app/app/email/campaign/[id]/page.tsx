@@ -51,6 +51,7 @@ export default async function EmailCampaignSummaryPage({
       campaign={campaign}
       audienceName={audienceName}
       report={report}
+      sentCount={events.filter((event) => event.kind === "sent").length}
     />
   );
 }

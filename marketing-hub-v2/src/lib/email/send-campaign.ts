@@ -39,13 +39,14 @@ export type SendCampaignResult = {
  * Updates campaign status and per-recipient "sent" events.
  */
 export async function sendEmailCampaign(
-  campaignId: string
+  campaignId: string,
+  opts?: { claimed?: boolean }
 ): Promise<SendCampaignResult> {
   const campaign = await getEmailCampaign(campaignId);
   if (!campaign) {
     return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
   }
-  if (campaign.status === "sending") {
+  if (campaign.status === "sending" && !opts?.claimed) {
     const started = new Date(campaign.updated_at).getTime();
     if (Date.now() - started < SENDING_LOCK_MS) {
       return {

@@ -897,7 +897,7 @@ export function EmailDesigner({
                   disabled={sending || saving || !audienceId}
                   onClick={() => void sendNow()}
                 >
-                  {sending ? "Sending…" : "Send now"}
+                  {sending ? "Starting…" : "Send now"}
                 </button>
               )}
               <button

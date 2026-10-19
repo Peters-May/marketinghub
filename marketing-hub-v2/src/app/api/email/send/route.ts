@@ -1,7 +1,10 @@
+import { waitUntil } from "@vercel/functions";
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import { sendEmailCampaign, sendTestEmail } from "@/lib/email/send-campaign";
 import { getEmailCampaign, updateEmailCampaign } from "@/lib/data/repos";
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const { error, user } = await requireAdmin();
@@ -28,30 +31,18 @@ export async function POST(request: NextRequest) {
   const campaign = await getEmailCampaign(campaignId);
   if (!campaign) return jsonError("Not found", 404);
 
-  // Allow immediate send from draft/scheduled/failed/cancelled
-  if (campaign.status === "sending") {
-    return jsonError("Campaign is already sending", 409);
-  }
   if (campaign.status === "sent") {
     return jsonError("Campaign already sent", 409);
   }
-
-  // Clear schedule when sending now
-  if (campaign.status === "scheduled") {
-    await updateEmailCampaign(campaignId, { scheduled_at: null });
+  if (campaign.status === "sending") {
+    return jsonOk({ ok: true, background: true });
   }
 
-  const result = await sendEmailCampaign(campaignId);
-  if (!result.ok) {
-    return jsonError(result.error || "Send failed", 502, {
-      campaign: result.campaign,
-      sent: result.sent,
-      failed: result.failed,
-    });
-  }
-  return jsonOk({
-    campaign: result.campaign,
-    sent: result.sent,
-    failed: result.failed,
+  await updateEmailCampaign(campaignId, {
+    status: "sending",
+    scheduled_at: null,
+    last_error: "",
   });
+  waitUntil(sendEmailCampaign(campaignId, { claimed: true }));
+  return jsonOk({ ok: true, background: true });
 }

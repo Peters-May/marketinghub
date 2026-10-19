@@ -4,6 +4,7 @@ import type { CampaignReport } from "@/lib/email/campaign-report";
 import { formatLondonStamp } from "@/lib/email/display";
 import { previewMerge } from "@/lib/email/design/preview";
 import type { EmailCampaign } from "@/lib/types";
+import { SendingProgress } from "@/components/email/SendingProgress";
 import { StatusPill } from "@/components/ui/StatusPill";
 
 const STATUS_LABEL: Record<EmailCampaign["status"], string> = {
@@ -19,10 +20,12 @@ export function EmailCampaignSummary({
   campaign,
   audienceName,
   report,
+  sentCount = 0,
 }: {
   campaign: EmailCampaign;
   audienceName: string;
   report: CampaignReport;
+  sentCount?: number;
 }) {
   const sentLabel = campaign.sent_at
     ? `${formatLondonStamp(campaign.sent_at)} London`
@@ -52,6 +55,10 @@ export function EmailCampaignSummary({
         <h1 className="font-display text-2xl text-brand">{campaign.title}</h1>
         <StatusPill status={campaign.status} label={STATUS_LABEL[campaign.status]} />
       </div>
+
+      {campaign.status === "sending" ? (
+        <SendingProgress sent={sentCount} total={report.sentTo} />
+      ) : null}
 
       <p className="text-sm text-muted">
         Sent to {report.sentTo.toLocaleString("en-GB")}. Delivered to{" "}
