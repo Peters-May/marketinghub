@@ -13,6 +13,7 @@ import {
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
+import { campaignCloneInput } from "@/lib/email/clone";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
 import type { EmailCampaignStatus } from "@/lib/types";
@@ -96,6 +97,15 @@ export async function POST(request: NextRequest) {
     });
     if (!item) return jsonError("Not found", 404);
     return jsonOk({ item });
+  }
+
+  if (action === "clone") {
+    const existing = await getEmailCampaign(String(body.id ?? ""));
+    if (!existing) return jsonError("Not found", 404);
+    const item = await createEmailCampaign(
+      campaignCloneInput(existing, user?.email || user?.id || "")
+    );
+    return jsonOk({ item }, { status: 201 });
   }
 
   if (action === "follow_up") {

@@ -4,6 +4,7 @@ import type { CampaignReport } from "@/lib/email/campaign-report";
 import { formatLondonStamp } from "@/lib/email/display";
 import { previewMerge } from "@/lib/email/design/preview";
 import type { EmailCampaign } from "@/lib/types";
+import { CopyEmailButton } from "@/components/email/CopyEmailButton";
 import { SendingProgress } from "@/components/email/SendingProgress";
 import { StatusPill } from "@/components/ui/StatusPill";
 
@@ -52,6 +53,12 @@ export function EmailCampaignSummary({
         <Link href="/app/email" className="btn-secondary px-3 py-1.5 text-sm">
           Back
         </Link>
+        <CopyEmailButton
+          kind="campaign"
+          id={campaign.id}
+          className="btn-secondary px-3 py-1.5 text-sm"
+          label="Copy for a new email"
+        />
         <h1 className="font-display text-2xl text-brand">{campaign.title}</h1>
         <StatusPill status={campaign.status} label={STATUS_LABEL[campaign.status]} />
       </div>

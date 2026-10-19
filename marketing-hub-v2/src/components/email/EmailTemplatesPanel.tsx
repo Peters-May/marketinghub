@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import type { EmailTemplate } from "@/lib/types";
+import { CopyEmailButton } from "@/components/email/CopyEmailButton";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { blankDesign, compileEmailDesign } from "@/lib/email/design";
 
@@ -100,6 +101,7 @@ export function EmailTemplatesPanel({
                   {template.subject_default || "No default subject"}
                 </span>
               </button>
+              <CopyEmailButton kind="template" id={template.id} />
               <button
                 type="button"
                 className="mr-3 text-sm text-red-700"

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import type { EmailCampaign } from "@/lib/types";
 import { blankDesign, compileEmailDesign } from "@/lib/email/design";
+import { CopyEmailButton } from "@/components/email/CopyEmailButton";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
 import {
@@ -231,19 +232,22 @@ export function EmailCampaignsPanel({
                     </td>
                     <td className="px-3 py-3">{campaignUpdatedBy(c)}</td>
                     <td className="px-3 py-3 text-right">
-                      {canDeleteUnsentDraft(c) ? (
-                        <button
-                          type="button"
-                          className="btn-secondary px-2.5 py-1 text-xs text-red-700"
-                          disabled={deletingId === c.id}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void removeDraft(c);
-                          }}
-                        >
-                          {deletingId === c.id ? "Deleting…" : "Delete"}
-                        </button>
-                      ) : null}
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <CopyEmailButton kind="campaign" id={c.id} />
+                        {canDeleteUnsentDraft(c) ? (
+                          <button
+                            type="button"
+                            className="btn-secondary px-2.5 py-1 text-xs text-red-700"
+                            disabled={deletingId === c.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void removeDraft(c);
+                            }}
+                          >
+                            {deletingId === c.id ? "Deleting…" : "Delete"}
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );

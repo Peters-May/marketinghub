@@ -348,6 +348,31 @@ export function EmailDesigner({
     }
   }
 
+  async function copyEmail() {
+    setError("");
+    if (!readOnly) {
+      const saved = await save();
+      if (!saved) return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(
+        kind === "template" ? "/api/email/templates" : "/api/email/campaigns",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clone", id }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not copy this email");
+      router.push(`/app/email/design/${kind}/${data.item.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not copy this email");
+      setSaving(false);
+    }
+  }
+
   async function scheduleSend() {
     if (kind !== "campaign" || readOnly) return;
     const iso = londonDateTimeToIso(scheduleDate, scheduleTime);
@@ -570,6 +595,14 @@ export function EmailDesigner({
             </div>
           ) : null}
         </div>
+        <button
+          type="button"
+          className="btn-secondary px-3 py-1.5 text-sm"
+          disabled={saving || sending}
+          onClick={() => void copyEmail()}
+        >
+          Copy
+        </button>
         {readOnly ? (
           <span className="text-sm text-muted">Sent — view only</span>
         ) : (
