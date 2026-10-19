@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import {
   appendEmailEvent,
   getEmailCampaign,
+  listEmailEvents,
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
@@ -18,6 +19,8 @@ import {
 import type { Contact, EmailCampaign } from "@/lib/types";
 
 const BATCH_PAUSE_MS = 80;
+/** Ignore a second start while a send is still in progress. */
+const SENDING_LOCK_MS = 8 * 60 * 1000;
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -43,13 +46,16 @@ export async function sendEmailCampaign(
     return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
   }
   if (campaign.status === "sending") {
-    return {
-      ok: false,
-      campaign,
-      sent: 0,
-      failed: 0,
-      error: "Campaign is already sending",
-    };
+    const started = new Date(campaign.updated_at).getTime();
+    if (Date.now() - started < SENDING_LOCK_MS) {
+      return {
+        ok: false,
+        campaign,
+        sent: 0,
+        failed: 0,
+        error: "Campaign is already sending",
+      };
+    }
   }
   if (campaign.status === "sent") {
     return {
@@ -130,12 +136,21 @@ export async function sendEmailCampaign(
   const htmlBase = ensureViewInBrowserLink(
     ensureUnsubscribeFooter(latest.html_body || "<p></p>")
   );
+  const alreadySent = new Set(
+    (await listEmailEvents(campaignId))
+      .filter((event) => event.kind === "sent")
+      .map((event) => event.email.trim().toLowerCase())
+  );
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
 
   for (const contact of recipients) {
     const email = contact.email.trim();
+    if (alreadySent.has(email.toLowerCase())) {
+      sent += 1;
+      continue;
+    }
     const identity = { email, campaignId, contactId: contact.id };
     const unsub = unsubscribeUrlFor(identity);
     const browser = viewInBrowserUrlFor(identity);

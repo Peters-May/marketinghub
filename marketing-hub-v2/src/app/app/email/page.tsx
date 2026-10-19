@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { EmailMarketingHub } from "@/components/email/EmailMarketingHub";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
+import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
 import {
   listEmailAudiences,
   listEmailCampaigns,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/data/repos";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export default async function EmailPage({
   searchParams,
@@ -25,6 +27,12 @@ export default async function EmailPage({
 
   if (searchParams?.campaign) {
     redirect(`/app/email/design/campaign/${encodeURIComponent(searchParams.campaign)}`);
+  }
+
+  try {
+    await processDueScheduledCampaigns(1);
+  } catch (err) {
+    console.error("[email] scheduled send", err);
   }
 
   const [campaigns, templates, audiences, lists] = await Promise.all([

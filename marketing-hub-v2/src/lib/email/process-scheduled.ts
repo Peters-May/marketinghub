@@ -1,21 +1,25 @@
 import { listEmailCampaigns } from "@/lib/data/repos";
 import { sendEmailCampaign } from "@/lib/email/send-campaign";
 
+const SENDING_LOCK_MS = 8 * 60 * 1000;
+
 /**
- * Send campaigns whose scheduled_at is due. Best-effort; safe to call on page load.
+ * Send campaigns whose scheduled time has passed.
+ * A send that stopped halfway is picked up again after the lock expires.
  */
-export async function processDueScheduledCampaigns(limit = 3): Promise<{
+export async function processDueScheduledCampaigns(limit = 1): Promise<{
   processed: number;
   ids: string[];
 }> {
   const now = Date.now();
   const due = (await listEmailCampaigns())
-    .filter(
-      (c) =>
-        c.status === "scheduled" &&
-        c.scheduled_at &&
-        new Date(c.scheduled_at).getTime() <= now
-    )
+    .filter((c) => {
+      if (!c.scheduled_at || new Date(c.scheduled_at).getTime() > now) return false;
+      if (c.status === "scheduled") return true;
+      if (c.status !== "sending") return false;
+      const started = new Date(c.updated_at).getTime();
+      return now - started >= SENDING_LOCK_MS;
+    })
     .slice(0, limit);
 
   const ids: string[] = [];
