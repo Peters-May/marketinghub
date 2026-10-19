@@ -4,7 +4,6 @@ import { jsonError, jsonOk } from "@/lib/api";
 import {
   addEmailSuppression,
   appendEmailEvent,
-  bumpEmailCampaignStat,
   listContacts,
   updateContact,
 } from "@/lib/data/repos";
@@ -13,8 +12,8 @@ import { notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 import type { EmailEventKind } from "@/lib/types";
 
 /**
- * Resend webhook → email_events + campaign stats.
- * Verifies svix-style signatures when RESEND_WEBHOOK_SECRET is set.
+ * Resend webhook. Opens, clicks and deliveries are stored as rows.
+ * The hub document is not rewritten for each event.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -58,11 +57,6 @@ export async function POST(request: NextRequest) {
     user_agent: detail.userAgent,
     created_at: detail.occurredAt || undefined,
   });
-
-  const statField = kindToStat(kind);
-  if (statField) {
-    await bumpEmailCampaignStat(campaignId, statField, 1);
-  }
 
   if (kind === "complained" || kind === "bounced") {
     if (email) {
@@ -108,25 +102,6 @@ function mapResendType(type: string): EmailEventKind | null {
     default:
       return null;
   }
-}
-
-function kindToStat(
-  kind: EmailEventKind
-):
-  | "delivered"
-  | "opened"
-  | "clicked"
-  | "bounced"
-  | "complained"
-  | "unsubscribed"
-  | null {
-  if (kind === "delivered") return "delivered";
-  if (kind === "opened") return "opened";
-  if (kind === "clicked") return "clicked";
-  if (kind === "bounced") return "bounced";
-  if (kind === "complained") return "complained";
-  if (kind === "unsubscribed") return "unsubscribed";
-  return null;
 }
 
 function extractEmail(data: Record<string, unknown>): string {

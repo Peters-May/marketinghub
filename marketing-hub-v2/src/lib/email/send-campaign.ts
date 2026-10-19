@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import {
-  appendEmailEvent,
+  appendEmailEvents,
   getEmailCampaign,
   listEmailEvents,
   resolveEmailRecipients,
@@ -18,7 +18,8 @@ import {
 } from "@/lib/sync/portal-marketing";
 import type { Contact, EmailCampaign } from "@/lib/types";
 
-const BATCH_PAUSE_MS = 80;
+const BATCH_SIZE = 40;
+const BATCH_PAUSE_MS = 250;
 /** Ignore a second start while a send is still in progress. */
 const SENDING_LOCK_MS = 8 * 60 * 1000;
 
@@ -145,70 +146,88 @@ export async function sendEmailCampaign(
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
+  const pending = recipients.filter(
+    (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
+  );
+  sent += recipients.length - pending.length;
 
-  for (const contact of recipients) {
-    const email = contact.email.trim();
-    if (alreadySent.has(email.toLowerCase())) {
-      sent += 1;
-      continue;
-    }
-    const identity = { email, campaignId, contactId: contact.id };
-    const unsub = unsubscribeUrlFor(identity);
-    const browser = viewInBrowserUrlFor(identity);
-    const html = applyEmailMerge(htmlBase, {
-      contact,
-      unsubscribeUrl: unsub,
-      viewInBrowserUrl: browser,
-    });
-    const subject = applyEmailMerge(latest.subject || latest.title, {
-      contact,
-      unsubscribeUrl: unsub,
-      viewInBrowserUrl: browser,
+  for (let index = 0; index < pending.length; index += BATCH_SIZE) {
+    const chunk = pending.slice(index, index + BATCH_SIZE);
+    const prepared = chunk.map((contact) => {
+      const email = contact.email.trim();
+      const identity = { email, campaignId, contactId: contact.id };
+      const unsub = unsubscribeUrlFor(identity);
+      const browser = viewInBrowserUrlFor(identity);
+      return {
+        contact,
+        email,
+        payload: {
+          from,
+          to: email,
+          subject: applyEmailMerge(latest.subject || latest.title, {
+            contact,
+            unsubscribeUrl: unsub,
+            viewInBrowserUrl: browser,
+          }),
+          html: applyEmailMerge(htmlBase, {
+            contact,
+            unsubscribeUrl: unsub,
+            viewInBrowserUrl: browser,
+          }),
+          tags: [
+            { name: "campaign_id", value: campaignId.slice(0, 50) },
+            { name: "hub", value: "marketing" },
+          ],
+        },
+      };
     });
 
+    let ids: Array<string | null> = prepared.map(() => null);
+    let chunkError = "";
     try {
-      const result = await resend.emails.send({
-        from,
-        to: email,
-        subject,
-        html,
-        tags: [
-          { name: "campaign_id", value: campaignId.slice(0, 50) },
-          { name: "hub", value: "marketing" },
-        ],
-      });
-
-      const messageId =
-        result.data && "id" in result.data
-          ? String((result.data as { id: string }).id)
-          : "";
-
+      const result = await resend.batch.send(
+        prepared.map((item) => item.payload),
+        { batchValidation: "permissive" }
+      );
       if (result.error) {
-        failed += 1;
-        errors.push(`${email}: ${result.error.message}`);
+        chunkError = result.error.message;
       } else {
-        sent += 1;
-        await appendEmailEvent({
-          campaign_id: campaignId,
-          contact_id: contact.id,
-          email,
-          kind: "sent",
-          resend_message_id: messageId,
-        });
-        void notifyPortalCampaignSend({
-          contact,
-          campaignId,
-          campaignTitle: latest.title || latest.subject || "Marketing email",
-          sentAt: new Date().toISOString(),
-        });
+        ids = batchMessageIds(result.data, prepared.length);
       }
     } catch (err) {
-      failed += 1;
-      const msg = err instanceof Error ? err.message : "send failed";
-      errors.push(`${email}: ${msg}`);
+      chunkError = err instanceof Error ? err.message : "send failed";
     }
 
-    await sleep(BATCH_PAUSE_MS);
+    const recorded: Parameters<typeof appendEmailEvents>[0] = [];
+    const sentAt = new Date().toISOString();
+    prepared.forEach((item, itemIndex) => {
+      const messageId = ids[itemIndex];
+      if (!messageId) {
+        failed += 1;
+        errors.push(`${item.email}: ${chunkError || "Not accepted"}`);
+        return;
+      }
+      sent += 1;
+      recorded.push({
+        campaign_id: campaignId,
+        contact_id: item.contact.id,
+        email: item.email,
+        kind: "sent",
+        resend_message_id: messageId,
+        created_at: sentAt,
+      });
+      void notifyPortalCampaignSend({
+        contact: item.contact,
+        campaignId,
+        campaignTitle: latest.title || latest.subject || "Marketing email",
+        sentAt,
+      });
+    });
+
+    if (recorded.length === 0) break;
+    await appendEmailEvents(recorded);
+    console.log("[email] recorded", sent, "of", recipients.length);
+    if (index + BATCH_SIZE < pending.length) await sleep(BATCH_PAUSE_MS);
   }
 
   const finalStatus = sent > 0 ? "sent" : "failed";
@@ -296,4 +315,21 @@ export async function sendTestEmail(input: {
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Test send failed" };
   }
+}
+
+function batchMessageIds(data: unknown, count: number): Array<string | null> {
+  const list = Array.isArray(data)
+    ? data
+    : data &&
+        typeof data === "object" &&
+        Array.isArray((data as { data?: unknown }).data)
+      ? (data as { data: unknown[] }).data
+      : [];
+  return Array.from({ length: count }, (_, index) => {
+    const row = list[index];
+    if (row && typeof row === "object" && "id" in row && (row as { id?: unknown }).id) {
+      return String((row as { id: string }).id);
+    }
+    return null;
+  });
 }

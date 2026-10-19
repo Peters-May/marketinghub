@@ -30,7 +30,7 @@ export default async function EmailPage({
   }
 
   try {
-    await processDueScheduledCampaigns(1);
+    await processDueScheduledCampaigns(1, { resumeInterrupted: false });
   } catch (err) {
     console.error("[email] scheduled send", err);
   }

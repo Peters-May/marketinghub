@@ -12,7 +12,7 @@ import {
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
 import { readStore, updateStore } from "@/lib/store/local";
-import { createServiceClient } from "@/lib/supabase/admin";
+import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 import { clothingProductById } from "@/lib/merch/north-sails";
 import {
   normalizeMerchOrderItems,
@@ -3069,7 +3069,19 @@ export async function listEmailEvents(campaignId?: string) {
   if (campaignId) {
     rows = rows.filter((e) => e.campaign_id === campaignId);
   }
-  return rows.sort(
+  const { listEmailEventRows } = await import("@/lib/email/event-log");
+  const extra = await listEmailEventRows(campaignId);
+  const seen = new Set<string>();
+  const merged: EmailEvent[] = [];
+  for (const event of [...extra, ...rows]) {
+    const key = event.resend_message_id
+      ? `${event.kind}:${event.resend_message_id}`
+      : event.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(event);
+  }
+  return merged.sort(
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
@@ -3086,25 +3098,51 @@ export async function appendEmailEvent(input: {
   user_agent?: string;
   created_at?: string;
 }) {
-  const stamped = input.created_at ? new Date(input.created_at) : null;
-  const item: EmailEvent = {
-    id: uid("eevt"),
-    campaign_id: input.campaign_id,
-    contact_id: input.contact_id ?? null,
-    email: input.email.trim().toLowerCase(),
-    kind: input.kind,
-    resend_message_id: input.resend_message_id ?? "",
-    meta: input.meta ?? "",
-    link: input.link?.trim() ?? "",
-    user_agent: input.user_agent?.trim() ?? "",
-    created_at:
-      stamped && !Number.isNaN(stamped.getTime()) ? stamped.toISOString() : nowIso(),
-  };
+  const [item] = await appendEmailEvents([input]);
+  return item;
+}
+
+/** One store write for a batch of sends, and refresh the campaign lock. */
+export async function appendEmailEvents(
+  inputs: Array<{
+    campaign_id: string;
+    contact_id?: string | null;
+    email: string;
+    kind: EmailEventKind;
+    resend_message_id?: string;
+    meta?: string;
+    link?: string;
+    user_agent?: string;
+    created_at?: string;
+  }>
+) {
+  if (inputs.length === 0) return [];
+  const items: EmailEvent[] = inputs.map((input) => {
+    const stamped = input.created_at ? new Date(input.created_at) : null;
+    return {
+      id: uid("eevt"),
+      campaign_id: input.campaign_id,
+      contact_id: input.contact_id ?? null,
+      email: input.email.trim().toLowerCase(),
+      kind: input.kind,
+      resend_message_id: input.resend_message_id ?? "",
+      meta: input.meta ?? "",
+      link: input.link?.trim() ?? "",
+      user_agent: input.user_agent?.trim() ?? "",
+      created_at:
+        stamped && !Number.isNaN(stamped.getTime()) ? stamped.toISOString() : nowIso(),
+    };
+  });
+  if (hasServiceRoleKey()) {
+    const { insertEmailEventRows } = await import("@/lib/email/event-log");
+    await insertEmailEventRows(items);
+    return items;
+  }
   await updateStore((s) => {
     if (!s.email_events) s.email_events = [];
-    s.email_events.push(item);
+    s.email_events.push(...items);
   });
-  return item;
+  return items;
 }
 
 export async function bumpEmailCampaignStat(

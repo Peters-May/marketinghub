@@ -578,8 +578,12 @@ export async function updateStore(
         return next;
       } catch (err) {
         lastError = err;
-        if (err instanceof StoreConflictError) {
-          // Another instance wrote first — re-read and re-apply mutator.
+        const message = err instanceof Error ? err.message : "";
+        if (
+          err instanceof StoreConflictError ||
+          /timeout/i.test(message)
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
           continue;
         }
         throw err;
