@@ -356,27 +356,58 @@ class StoreConflictError extends Error {
 }
 
 async function readRemoteStore(): Promise<RemoteStoreRow | null> {
+  let data: { payload?: unknown; updated_at?: string } | null = null;
+  let error: { message?: string } | null = null;
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const supabase = createServiceClient();
-    const { data, error } = await supabase
+    const result = await supabase
       .from("hub_store")
       .select("payload, updated_at")
       .eq("id", HUB_STORE_ID)
       .maybeSingle();
-    if (error) {
-      console.error("[store] remote read failed", error.message);
-      return null;
-    }
-    if (!data?.payload || typeof data.payload !== "object") return null;
-    if (!data.updated_at) return null;
-    return {
-      payload: data.payload as Partial<HubStore>,
-      updatedAt: String(data.updated_at),
-    };
+    data = result.data;
+    error = result.error;
   } catch (err) {
     console.error("[store] remote read error", err);
-    return null;
+    throw new Error("Hub store could not be read. Nothing was replaced.");
+  }
+  if (error) {
+    console.error("[store] remote read failed", error.message);
+    throw new Error("Hub store could not be read. Nothing was replaced.");
+  }
+  if (!data?.payload || typeof data.payload !== "object") return null;
+  if (!data.updated_at) return null;
+  return {
+    payload: data.payload as Partial<HubStore>,
+    updatedAt: String(data.updated_at),
+  };
+}
+
+/** Insert only. A timeout must never become an upsert over the live hub. */
+async function insertRemoteStoreIfMissing(
+  store: HubStore
+): Promise<"ok" | "exists" | "error"> {
+  try {
+    const { createServiceClient } = await import("@/lib/supabase/admin");
+    const supabase = createServiceClient();
+    const { error } = await supabase.from("hub_store").insert({
+      id: HUB_STORE_ID,
+      payload: store,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      const code = "code" in error ? String(error.code) : "";
+      if (code === "23505" || /duplicate key/i.test(error.message)) {
+        return "exists";
+      }
+      console.error("[store] remote insert failed", error.message);
+      return "error";
+    }
+    return "ok";
+  } catch (err) {
+    console.error("[store] remote insert error", err);
+    return "error";
   }
 }
 
@@ -392,32 +423,21 @@ async function writeRemoteStore(
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const supabase = createServiceClient();
 
-    if (expectedUpdatedAt) {
-      const { data, error } = await supabase.rpc("hub_store_cas_update", {
-        p_id: HUB_STORE_ID,
-        p_payload: store,
-        p_expected_updated_at: expectedUpdatedAt,
-      });
-      if (error) {
-        console.error("[store] remote CAS write failed", error.message);
-        return "error";
-      }
-      if (data == null) return "conflict";
-      return "ok";
-    }
-
-    const { error } = await supabase.from("hub_store").upsert(
-      {
-        id: HUB_STORE_ID,
-        payload: store,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
-    if (error) {
-      console.error("[store] remote write failed", error.message);
+    if (!expectedUpdatedAt) {
+      console.error("[store] refused a blind overwrite of hub_store");
       return "error";
     }
+
+    const { data, error } = await supabase.rpc("hub_store_cas_update", {
+      p_id: HUB_STORE_ID,
+      p_payload: store,
+      p_expected_updated_at: expectedUpdatedAt,
+    });
+    if (error) {
+      console.error("[store] remote CAS write failed", error.message);
+      return "error";
+    }
+    if (data == null) return "conflict";
     return "ok";
   } catch (err) {
     console.error("[store] remote write error", err);
@@ -434,23 +454,30 @@ type StoreRead = {
 async function ensureStore(): Promise<StoreRead> {
   if (shouldUseDurableSupabaseStore()) {
     const remote = await readRemoteStore();
-    // A real remote row is the source of truth. Do not read or rewrite the
-    // local cache on that path — a save used to pretty-print the whole
-    // document to disk before it changed anything.
-    const remoteIsAuthoritative =
-      Boolean(remote) && !looksLikeSeedStore(remote!.payload);
-    const local = remoteIsAuthoritative ? null : await readLocalFile();
+    // An existing remote row is the source of truth, even when it looks like
+    // the demo seed. A local or /tmp file must not be written over it.
+    const local = remote ? null : await readLocalFile();
     const preferred = pickPreferredStore(remote?.payload ?? null, local);
 
     if (!preferred) {
-      // First-run only: never seed-overwrite an existing remote row.
+      // First-run only. Insert, never upsert: a failed read must not land here,
+      // and a row that already exists must not be replaced with the demo seed.
       const seed = createSeedStore();
-      const written = await writeRemoteStore(seed, null);
-      if (written === "error") {
+      const inserted = await insertRemoteStoreIfMissing(seed);
+      if (inserted === "exists") {
+        const again = await readRemoteStore();
+        if (!again) {
+          throw new Error("Hub store could not be read. Nothing was replaced.");
+        }
+        return {
+          store: withDefaults(again.payload),
+          remoteUpdatedAt: again.updatedAt,
+        };
+      }
+      if (inserted === "error") {
         throw new Error("Failed to initialize hub store in Supabase");
       }
       await writeLocalFile(seed);
-      // Re-read so CAS version matches the row we just wrote.
       const again = await readRemoteStore();
       return {
         store: seed,
@@ -546,7 +573,13 @@ export async function writeStore(
         // Row exists — never blind-upsert; force CAS retry with a version.
         throw new StoreConflictError();
       }
-      // Truly missing row — allow insert.
+      const inserted = await insertRemoteStoreIfMissing(store);
+      if (inserted === "exists") throw new StoreConflictError();
+      if (inserted === "error") {
+        throw new Error("Failed to persist hub store to Supabase");
+      }
+      await writeLocalFile(store);
+      return;
     }
     const result = await writeRemoteStore(store, version);
     if (result === "conflict") throw new StoreConflictError();
