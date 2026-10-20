@@ -21,6 +21,32 @@ type Props = {
   initialSessionId?: string;
 };
 
+function sessionActivityAt(s: ChatSession): number {
+  const raw = s.last_message_at || s.updated_at || s.created_at || "";
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Newest activity first — stable inbox order. */
+function sortSessionsByDate(sessions: ChatSession[]): ChatSession[] {
+  return [...sessions].sort((a, b) => sessionActivityAt(b) - sessionActivityAt(a));
+}
+
+function formatSessionWhen(s: ChatSession): string {
+  const t = sessionActivityAt(s);
+  if (!t) return "";
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(t));
+  } catch {
+    return "";
+  }
+}
+
 export function ChatClient({ configured, initialSessionId }: Props) {
   const [tab, setTab] = useState<Tab>("inbox");
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -57,7 +83,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     const res = await fetch("/api/chat/admin?view=sessions&status=open");
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load sessions");
-    setSessions(data.sessions ?? []);
+    setSessions(sortSessionsByDate(data.sessions ?? []));
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -354,8 +380,13 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     selectedId === s.id ? "bg-sand" : "hover:bg-sand/60"
                   )}
                 >
-                  <div className="font-medium text-[#0B2545]">
-                    {s.visitor_email || s.visitor_name || "Visitor"}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="truncate font-medium text-[#0B2545]">
+                      {s.visitor_email || s.visitor_name || "Visitor"}
+                    </div>
+                    <div className="shrink-0 text-[11px] text-muted">
+                      {formatSessionWhen(s)}
+                    </div>
                   </div>
                   <div className="truncate text-xs text-muted">
                     {s.status} · {s.page_title || s.page_url || s.id}
