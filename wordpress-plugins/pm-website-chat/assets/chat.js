@@ -161,10 +161,21 @@
   headerText.appendChild(el("p", "pm-chat__title", cfg.labels.title));
   headerText.appendChild(el("p", "pm-chat__subtitle", cfg.labels.subtitle));
   header.appendChild(headerText);
+  var headerActions = el("div", "pm-chat__header-actions");
+  var minimizeBtn = el("button", "pm-chat__icon-btn", "–");
+  minimizeBtn.type = "button";
+  minimizeBtn.setAttribute(
+    "aria-label",
+    (cfg.labels && cfg.labels.minimize) || "Minimise chat"
+  );
+  minimizeBtn.title = (cfg.labels && cfg.labels.minimize) || "Minimise";
   var closeBtn = el("button", "pm-chat__icon-btn", "×");
   closeBtn.type = "button";
   closeBtn.setAttribute("aria-label", cfg.labels.close);
-  header.appendChild(closeBtn);
+  closeBtn.title = cfg.labels.close || "Close";
+  headerActions.appendChild(minimizeBtn);
+  headerActions.appendChild(closeBtn);
+  header.appendChild(headerActions);
   panel.appendChild(header);
 
   var actions = el("div", "pm-chat__actions");
@@ -189,6 +200,12 @@
   panel.appendChild(collectEl);
 
   var lead = el("div", "pm-chat__lead");
+  var leadBar = el("div", "pm-chat__lead-bar");
+  leadBar.appendChild(el("span", "pm-chat__lead-title", "Your details"));
+  var leadMinBtn = el("button", "pm-chat__lead-toggle", "Minimise");
+  leadMinBtn.type = "button";
+  leadBar.appendChild(leadMinBtn);
+  var leadBody = el("div", "pm-chat__lead-body");
   var nameInput = el("input", "");
   nameInput.type = "text";
   nameInput.placeholder = cfg.labels.name;
@@ -200,10 +217,12 @@
   companyInput.placeholder = cfg.labels.company;
   var leadSend = el("button", "", "Send details");
   leadSend.type = "button";
-  lead.appendChild(nameInput);
-  lead.appendChild(emailInput);
-  lead.appendChild(companyInput);
-  lead.appendChild(leadSend);
+  leadBody.appendChild(nameInput);
+  leadBody.appendChild(emailInput);
+  leadBody.appendChild(companyInput);
+  leadBody.appendChild(leadSend);
+  lead.appendChild(leadBar);
+  lead.appendChild(leadBody);
   panel.appendChild(lead);
 
   var composer = el("div", "pm-chat__composer");
@@ -771,6 +790,10 @@
   launcher.addEventListener("click", function () {
     setOpen(true);
   });
+  // Minimise: hide panel, keep conversation for later.
+  minimizeBtn.addEventListener("click", function () {
+    setOpen(false);
+  });
   closeBtn.addEventListener("click", function () {
     if (sessionId) {
       var ok = window.confirm(
@@ -778,8 +801,22 @@
           "Would you like to close the chat?\n\nThis ends the chat."
       );
       if (!ok) return;
+      sessionId = null;
+      lastMessageAt = null;
+      seenIds = {};
+      startersShown = false;
+      stopCollect();
+      hideStarters();
+      lead.classList.remove("is-on", "is-collapsed");
+      leadMinBtn.textContent = "Minimise";
+      clearNode(messagesEl);
+      messagesEl.appendChild(typingEl);
     }
     setOpen(false);
+  });
+  leadMinBtn.addEventListener("click", function () {
+    var collapsed = lead.classList.toggle("is-collapsed");
+    leadMinBtn.textContent = collapsed ? "Show details" : "Minimise";
   });
   sendBtn.addEventListener("click", sendMessage);
   input.addEventListener("keydown", function (e) {
