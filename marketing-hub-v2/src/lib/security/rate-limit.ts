@@ -37,6 +37,10 @@ export function checkRateLimit(
 }
 
 export function clientIpFromRequest(request: Request): string {
+  // WordPress chat proxy forwards the browser IP (spoofable if calling Hub
+  // directly; still better than collapsing all visitors on the WP egress IP).
+  const fromWp = request.headers.get("x-pm-client-ip")?.trim();
+  if (fromWp && /^[\d.:a-fA-F]+$/.test(fromWp)) return fromWp;
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0]?.trim() || "unknown";
   return request.headers.get("x-real-ip")?.trim() || "unknown";

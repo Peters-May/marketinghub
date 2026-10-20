@@ -59,12 +59,14 @@ export function isChatCorsOrigin(origin: string | null): boolean {
   const normalized = origin.replace(/\/$/, "");
   const allowed = chatCorsOrigins();
   if (allowed.includes(normalized)) return true;
-  // Allow any localhost port in development
-  try {
-    const u = new URL(normalized);
-    if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
-  } catch {
-    /* ignore */
+  // Localhost only outside production (stolen key + local origin).
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const u = new URL(normalized);
+      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
+    } catch {
+      /* ignore */
+    }
   }
   return false;
 }

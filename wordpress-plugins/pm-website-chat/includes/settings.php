@@ -96,8 +96,8 @@ function pm_website_chat_render_settings_page() {
           <tr>
             <th scope="row"><label for="pm_chat_site_key"><?php echo esc_html__('Site key', 'pm-website-chat'); ?></label></th>
             <td>
-              <input class="regular-text" type="text" id="pm_chat_site_key" name="pm_website_chat_options[site_key]" value="<?php echo esc_attr($opts['site_key']); ?>" autocomplete="off" />
-              <p class="description"><?php echo esc_html__('Must match CHAT_SITE_KEY on Marketing Hub (Vercel). Not the enquiry webhook secret.', 'pm-website-chat'); ?></p>
+              <input class="regular-text" type="password" id="pm_chat_site_key" name="pm_website_chat_options[site_key]" value="<?php echo esc_attr($opts['site_key']); ?>" autocomplete="new-password" />
+              <p class="description"><?php echo esc_html__('Must match CHAT_SITE_KEY on Marketing Hub (Vercel). Stored in WP only — not sent to the browser. Not the enquiry webhook secret.', 'pm-website-chat'); ?></p>
             </td>
           </tr>
           <tr>

@@ -674,18 +674,32 @@
     suppressCollectTrigger = true;
     stopCollect();
     unlockComposer();
+    // Persist enquiry + Portal when email was collected; then continue AI thread.
+    if (emailInput.value.trim()) {
+      submitLead({ quiet: true });
+    }
     sendMessageText(summary, { skipCollect: true });
   }
 
   function finishCollectFromPaste(text) {
     var kind = collectState && collectState.kind;
+    var pasted = String(text || "");
+    var emailMatch = pasted.match(
+      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+    );
+    if (emailMatch && !emailInput.value.trim()) {
+      emailInput.value = emailMatch[0];
+    }
     suppressCollectTrigger = true;
     stopCollect();
     unlockComposer();
+    if (emailInput.value.trim()) {
+      submitLead({ quiet: true });
+    }
     sendMessageText(
       (kind === "freight"
         ? "Freight / cargo enquiry (pasted details):\n"
-        : "Yacht transport enquiry (pasted details):\n") + text,
+        : "Yacht transport enquiry (pasted details):\n") + pasted,
       { skipCollect: true }
     );
   }
@@ -974,11 +988,12 @@
       });
   }
 
-  function submitLead() {
+  function submitLead(opts) {
+    opts = opts || {};
     if (!sessionId) return;
     var email = emailInput.value.trim();
     if (!email) {
-      emailInput.focus();
+      if (!opts.quiet) emailInput.focus();
       return;
     }
     fetch(
@@ -997,15 +1012,30 @@
       .then(function (r) {
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Could not save details");
-          if (data.message) {
+          if (!opts.quiet && data.message) {
             appendBubble("assistant", data.message.body, data.message.id);
           }
           lead.classList.remove("is-on");
         });
       })
       .catch(function (err) {
-        appendBubble("system", err.message || "Could not save details.");
+        if (!opts.quiet) {
+          appendBubble("system", err.message || "Could not save details.");
+        }
       });
+  }
+
+  function closeSessionOnHub() {
+    if (!sessionId) return Promise.resolve();
+    return fetch(
+      apiUrl("api/chat/sessions/" + encodeURIComponent(sessionId) + "/close"),
+      {
+        method: "POST",
+        headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
+        body: "{}",
+      }
+    ).catch(function () {});
   }
 
   launcher.addEventListener("click", function () {
@@ -1047,8 +1077,10 @@
     if (wantDownload) {
       downloadTranscriptFile();
     }
-    resetChatUi();
-    setOpen(false);
+    closeSessionOnHub().finally(function () {
+      resetChatUi();
+      setOpen(false);
+    });
   });
   leadMinBtn.addEventListener("click", function () {
     var collapsed = lead.classList.toggle("is-collapsed");

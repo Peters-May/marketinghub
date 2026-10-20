@@ -237,7 +237,8 @@ export async function createChatSession(input: {
   const supabase = requireService();
   const settings = await getChatSettings();
   const now = new Date().toISOString();
-  const id = uid("chat");
+  // Full UUID — short 8-char ids were enumerable with only the site key.
+  const id = `chat_${crypto.randomUUID()}`;
   const sessionRow = {
     id,
     status: "ai" as const,
@@ -318,37 +319,39 @@ export async function updateChatSession(
   return data ? rowToSession(data as Record<string, unknown>) : null;
 }
 
-/** Close abandoned open chats so the inbox does not fill with duplicate Visitors. */
+/**
+ * Close duplicate open chats for the same visitor email only.
+ * Never mass-close other visitors' anonymous AI threads.
+ */
 export async function closeAbandonedChatSessions(opts: {
   keepSessionId: string;
   visitorEmail?: string;
 }): Promise<number> {
+  const email = (opts.visitorEmail ?? "").trim().toLowerCase();
+  if (!email) return 0;
+
   const supabase = requireService();
   const now = new Date().toISOString();
-  const email = (opts.visitorEmail ?? "").trim().toLowerCase();
 
-  const q = supabase
+  const { data, error } = await supabase
     .from("chat_sessions")
     .select("id, visitor_email, status")
     .in("status", ["ai", "waiting", "human"])
     .neq("id", opts.keepSessionId)
+    .ilike("visitor_email", email)
     .limit(50);
-  const { data, error } = await q;
   if (error) throw new Error(error.message);
 
-  const toClose = (data ?? []).filter((row) => {
-    const rowEmail = String(row.visitor_email ?? "")
-      .trim()
-      .toLowerCase();
-    // Same email → always close older open threads.
-    if (email && rowEmail && rowEmail === email) return true;
-    // Anonymous abandoned AI threads (no email yet).
-    if (!rowEmail && row.status === "ai") return true;
-    return false;
-  });
+  const ids = (data ?? [])
+    .filter(
+      (row) =>
+        String(row.visitor_email ?? "")
+          .trim()
+          .toLowerCase() === email
+    )
+    .map((r) => String(r.id));
+  if (ids.length === 0) return 0;
 
-  if (toClose.length === 0) return 0;
-  const ids = toClose.map((r) => String(r.id));
   const { error: updErr } = await supabase
     .from("chat_sessions")
     .update({ status: "closed", updated_at: now })

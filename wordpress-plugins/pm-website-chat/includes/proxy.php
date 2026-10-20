@@ -39,12 +39,16 @@ function pm_website_chat_proxy_hub($request) {
     }
 
     $path = (string) $request['path'];
+    $path = rawurldecode($path);
+    $path = str_replace('\\', '/', $path);
     $path = ltrim($path, '/');
     // Only allow Hub public chat session routes (no path traversal / admin).
     if (
         strpos($path, '..') !== false ||
+        strpos($path, '%2e') !== false ||
+        strpos($path, '//') !== false ||
         !preg_match(
-            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff))?)?$#',
+            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff|close))?)?$#',
             $path
         )
     ) {
@@ -111,6 +115,9 @@ function pm_website_chat_proxy_hub($request) {
             'Content-Type' => 'application/json',
             'X-Chat-Site-Key' => $site_key,
             'Accept' => '*/*',
+            'X-PM-Client-IP' => isset($_SERVER['REMOTE_ADDR'])
+                ? sanitize_text_field(wp_unslash((string) $_SERVER['REMOTE_ADDR']))
+                : '',
         ],
         'sslverify' => true,
     ];
