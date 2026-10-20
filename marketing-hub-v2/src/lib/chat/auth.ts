@@ -29,9 +29,7 @@ export function requireChatSiteKey(request: Request): boolean {
     if (token && secretsMatch(token, expected)) return true;
   }
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get("key")?.trim() ?? "";
-  if (key && secretsMatch(key, expected)) return true;
+  // Do not accept ?key= — it leaks into logs, proxies, and Referer headers.
 
   return false;
 }

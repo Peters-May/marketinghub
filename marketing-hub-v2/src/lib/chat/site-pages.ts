@@ -24,7 +24,7 @@ export const ALLOWLISTED_SITE_PAGES: SitePageDef[] = [
     title: "Our Global Offices",
     url: "https://www.petersandmay.com/offices/",
     keywords:
-      /\b(office|offices|where (are|is) you|location|locations|address|contact (number|phone)|telephone|southampton|genoa|dubai|florida|asia|france|italy)\b/i,
+      /\b(office|offices|global offices|where (are|is) (you|your office)|branch|head office|contact (number|phone)|telephone number)\b/i,
   },
   {
     id: "careers",

@@ -28,7 +28,7 @@ Option B — Zip upload again
 
 After activate: Settings → PM Website Chat
 - Hub URL: https://marketing.petersandmay.com
-- Site key: from Marketing Hub exports/CHAT_SITE_KEY.txt (same as Vercel CHAT_SITE_KEY)
+- Site key: same value as Vercel env CHAT_SITE_KEY (server-side only; not shown in page JS)
 - Enable widget
 
 Staging (https://stg-petersmay-staging.kinsta.cloud/)

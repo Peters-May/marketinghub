@@ -187,11 +187,6 @@
     URL.revokeObjectURL(url);
   }
 
-  function lockComposer() {
-    composer.classList.add("is-hidden");
-    input.blur();
-  }
-
   function unlockComposer() {
     if (collectState) return;
     composer.classList.remove("is-hidden");

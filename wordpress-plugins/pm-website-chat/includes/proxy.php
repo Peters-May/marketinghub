@@ -40,9 +40,56 @@ function pm_website_chat_proxy_hub($request) {
 
     $path = (string) $request['path'];
     $path = ltrim($path, '/');
-    // Only allow Hub chat public API paths.
-    if (!preg_match('#^api/chat/sessions(?:/|$)#', $path)) {
+    // Only allow Hub public chat session routes (no path traversal / admin).
+    if (
+        strpos($path, '..') !== false ||
+        !preg_match(
+            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff))?)?$#',
+            $path
+        )
+    ) {
         return new WP_Error('pm_chat_forbidden_path', 'Path not allowed.', ['status' => 403]);
+    }
+
+    // Hub URL must stay on Marketing Hub (misconfig / SSRF guard).
+    $hub_host = wp_parse_url($hub, PHP_URL_HOST);
+    $hub_scheme = wp_parse_url($hub, PHP_URL_SCHEME);
+    $allowed_hosts = [
+        'marketing.petersandmay.com',
+        'marketinghub.vercel.app',
+        'localhost',
+        '127.0.0.1',
+    ];
+    if (
+        $hub_scheme !== 'https' &&
+        !($hub_scheme === 'http' && in_array($hub_host, ['localhost', '127.0.0.1'], true))
+    ) {
+        return new WP_Error(
+            'pm_chat_bad_hub',
+            'Hub URL must use HTTPS.',
+            ['status' => 400]
+        );
+    }
+    $host_ok = false;
+    foreach ($allowed_hosts as $allowed) {
+        if ($hub_host === $allowed) {
+            $host_ok = true;
+            break;
+        }
+    }
+    if (
+        !$host_ok &&
+        is_string($hub_host) &&
+        substr($hub_host, -strlen('.vercel.app')) === '.vercel.app'
+    ) {
+        $host_ok = true;
+    }
+    if (!$host_ok) {
+        return new WP_Error(
+            'pm_chat_bad_hub',
+            'Hub URL host is not allowed.',
+            ['status' => 400]
+        );
     }
 
     $url = $hub . '/' . $path;

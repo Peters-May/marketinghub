@@ -7,9 +7,16 @@ describe("selectSitePagesForQuery", () => {
     expect(pages.map((p) => p.id)).toContain("our-group");
   });
 
-  it("selects Offices for location questions", () => {
+  it("selects Offices for office questions", () => {
     const pages = selectSitePagesForQuery("Where are your offices?");
     expect(pages.map((p) => p.id)).toContain("offices");
+  });
+
+  it("does not fetch Offices just because a port city is mentioned", () => {
+    const pages = selectSitePagesForQuery(
+      "Ship my yacht from Southampton to Antigua"
+    );
+    expect(pages.map((p) => p.id)).not.toContain("offices");
   });
 
   it("selects Careers for jobs", () => {

@@ -43,6 +43,13 @@ function pm_website_chat_sanitize_options($input) {
     $out['enabled'] = empty($input['enabled']) ? 0 : 1;
     $hub = isset($input['hub_url']) ? esc_url_raw(trim((string) $input['hub_url'])) : '';
     $out['hub_url'] = $hub !== '' ? untrailingslashit($hub) : $defaults['hub_url'];
+    // Prefer production Hub; warn-friendly sanitize only (proxy also enforces host).
+    if ($out['hub_url'] !== '' && stripos($out['hub_url'], 'http://') === 0) {
+        $host = wp_parse_url($out['hub_url'], PHP_URL_HOST);
+        if (!in_array($host, ['localhost', '127.0.0.1'], true)) {
+            $out['hub_url'] = 'https://' . ltrim(substr($out['hub_url'], 7), '/');
+        }
+    }
     $out['site_key'] = isset($input['site_key'])
         ? sanitize_text_field((string) $input['site_key'])
         : '';
