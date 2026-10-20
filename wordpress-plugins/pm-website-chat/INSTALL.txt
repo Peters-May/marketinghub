@@ -1,0 +1,32 @@
+PM Website Chat — install (if zip Activate fails)
+
+WordPress error "Plugin file does not exist" usually means the upload did not
+extract files, or a broken leftover folder is registered.
+
+Option A — WP File Manager (recommended on this site)
+
+1. Plugins: if you see PM Website Chat with Delete, click Delete.
+2. Open WP File Manager.
+3. Go to: wp-content/plugins/
+4. Delete any empty/broken folder named pm-website-chat if present.
+5. Upload the folder contents:
+   - Create folder: pm-website-chat
+   - Inside it upload these files/folders from the zip:
+     pm-website-chat.php
+     README.md
+     INSTALL.txt
+     assets/   (chat.css, chat.js)
+     includes/ (settings.php, enqueue.php)
+6. Refresh Plugins list — you should see "PM Website Chat".
+7. Click Activate.
+
+Option B — Zip upload again
+
+1. Use the new Desktop file: pm-website-chat.zip
+2. Plugins → Add New → Upload Plugin → Choose File → Install Now → Activate
+3. If Activate says file does not exist: Delete the plugin, then use Option A.
+
+After activate: Settings → PM Website Chat
+- Hub URL: https://marketing.petersandmay.com
+- Site key: from Marketing Hub exports/CHAT_SITE_KEY.txt (same as Vercel CHAT_SITE_KEY)
+- Enable widget
