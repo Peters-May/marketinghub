@@ -2,6 +2,7 @@ import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
 import { resolveChatGuidance } from "@/lib/chat/enquiry-guidance";
+import { fetchRelevantSitePages } from "@/lib/chat/site-pages";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
 import { listKbDocuments, getChatSettings } from "@/lib/chat/data";
 
@@ -72,27 +73,41 @@ export async function streamAssistantReply(input: {
   sources: ChatMessage["sources"];
   forceHandoff: boolean;
 }> {
-  const [settings, docs] = await Promise.all([
+  const [settings, docs, sitePages] = await Promise.all([
     getChatSettings(),
     listKbDocuments({ activeOnly: true }),
+    fetchRelevantSitePages(input.visitorMessage),
   ]);
   const retrieved = retrieveKb(input.visitorMessage, docs);
-  const sources = retrieved.map((d) => ({
-    title: d.title,
-    ...(d.source_url ? { source_url: d.source_url } : {}),
-  }));
+  const sources: ChatMessage["sources"] = [
+    ...retrieved.map((d) => ({
+      title: d.title,
+      ...(d.source_url ? { source_url: d.source_url } : {}),
+    })),
+    ...sitePages.map((p) => ({
+      title: p.title,
+      source_url: p.url,
+    })),
+  ];
 
   const forceHandoff = shouldForceHandoff(input.visitorMessage);
 
+  const kbParts: string[] = [];
+  retrieved.forEach((d, i) => {
+    kbParts.push(
+      `[KB ${i + 1}] ${d.title}${d.source_url ? ` (${d.source_url})` : ""}\n${d.body}`
+    );
+  });
+  sitePages.forEach((p, i) => {
+    kbParts.push(
+      `[Website ${i + 1}] ${p.title} (${p.url})\n${p.body}`
+    );
+  });
+
   const kbBlock =
-    retrieved.length === 0
-      ? "(No knowledge base excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
-      : retrieved
-          .map(
-            (d, i) =>
-              `[${i + 1}] ${d.title}${d.source_url ? ` (${d.source_url})` : ""}\n${d.body}`
-          )
-          .join("\n\n");
+    kbParts.length === 0
+      ? "(No knowledge base or allowlisted website excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
+      : kbParts.join("\n\n");
 
   const guidance = resolveChatGuidance(settings.guidance);
 
@@ -105,14 +120,14 @@ ${guidance}
 
 Hard rules:
 - Follow Guidance for qualification flows, specialist replies (careers, personal effects, suppliers, existing bookings), and what never to promise.
-- Use knowledge base excerpts below for factual extras (contacts, careers URL, haulier names, office notes). Do not invent contacts or URLs not present in Guidance or the knowledge base.
+- Use knowledge base and allowlisted website excerpts below for factual extras (leadership, offices, careers, contacts). Do not invent contacts, names, titles, or URLs not present in those excerpts.
 - British English. Short paragraphs. No emoji. No exclamation marks. No hype.
-- Never invent rates, capacity, sailing dates, clients, case studies, leadership names, or company figures. Published facts are allowed only when present in the knowledge base excerpts.
+- Never invent rates, capacity, sailing dates, clients, case studies, leadership names, or company figures. Published facts are allowed only when present in the excerpts below (Train KB or fetched website pages).
 - Ask conversationally. Prefer one or two questions at a time. Stop when enough exists for a team review, then confirm handover and ask for a business email if missing.
 - If they insist on rates/quotes or a person, invite Speak to the team / email capture without inventing numbers.
-- If you cannot answer from the knowledge base, say so briefly, optionally offer Speak to the team, then ask what else you can help with.
+- If you cannot answer from the excerpts, say so briefly, optionally offer Speak to the team, then ask what else you can help with.
 
-Knowledge base:
+Knowledge base and website excerpts:
 ${kbBlock}`;
 
   const historyMessages = input.history

@@ -30,7 +30,19 @@ Tables: `chat_settings`, `chat_kb_documents`, `chat_sessions`, `chat_messages`
 - Hub page: `/app/chat` (Inbox · Train · Test · Deploy · Analyze)
 - Staff API: `/api/chat/admin`
 
-Leads upsert `web_enquiries` with `submission_id = chat:<sessionId>` and Portal mirror via existing sync.
+Leads upsert `web_enquiries` with `submission_id = chat:<sessionId>` and Portal mirror via existing sync. The Portal payload always includes the full chat transcript (`form_fields.Message`, `make_fields.chat_transcript`, `raw_payload.transcript`).
+
+## Allowlisted website fetch
+
+When a visitor asks about leadership, offices, or careers, Hub fetches these public pages (cached ~1 hour) and feeds the text into the answer — not a full-site crawl:
+
+- https://www.petersandmay.com/our-group/
+- https://www.petersandmay.com/offices/
+- https://www.petersandmay.com/careers/
+
+## Portal UI
+
+Hub Enquiries has a **Website chat** tab. Portal receives `channel: website_chat` with transcript; a separate Portal tab still needs a change in the Portal app (not this repo).
 
 ## Enquiry qualification guidance
 

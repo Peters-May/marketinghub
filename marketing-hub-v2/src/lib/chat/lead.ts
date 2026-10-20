@@ -55,9 +55,29 @@ export async function bridgeChatSessionToEnquiry(
   const company = (opts?.company ?? session.visitor_company).trim();
   const submissionId = `chat:${session.id}`;
 
-  const message =
-    opts?.message?.trim() ||
-    `Website chat lead from ${session.page_title || session.page_url || "site"}`;
+  // Always attach the full transcript for Hub + Portal (lead and close).
+  const messages = await listChatMessages(session.id);
+  const transcriptFromOpt =
+    opts?.message && opts.message.includes("--- Transcript ---")
+      ? opts.message.split("--- Transcript ---\n\n").pop()?.trim() ?? ""
+      : "";
+  const transcript =
+    transcriptFromOpt || formatChatTranscript(messages);
+
+  const header =
+    opts?.message?.trim() && !opts.message.includes("--- Transcript ---")
+      ? opts.message.trim()
+      : opts?.closed
+        ? `Website chat closed — ${
+            session.page_title || session.page_url || session.id
+          }`
+        : `Website chat lead from ${
+            session.page_title || session.page_url || "site"
+          }`;
+
+  const message = transcript
+    ? `${header}\n\n--- Transcript ---\n\n${transcript}`
+    : header;
 
   // Keep origin hint in notes for later office routing; do not assign office yet.
   const utm = session.utm ?? {};
@@ -85,6 +105,7 @@ export async function bridgeChatSessionToEnquiry(
       heard_about: "Website chat",
       chat_session_id: session.id,
       chat_message: message,
+      chat_transcript: transcript,
       chat_closed: opts?.closed === true,
       ...(AUTO_ROUTE_CHAT_TO_OFFICE
         ? {}
@@ -108,6 +129,13 @@ export async function bridgeChatSessionToEnquiry(
       Company: company,
       Message: message,
       "Page Location": session.page_url,
+      "Chat Transcript": transcript,
+    },
+    raw_payload: {
+      channel: "website_chat",
+      source: "website_chat",
+      chat_session_id: session.id,
+      transcript,
     },
   };
 
@@ -127,15 +155,6 @@ export async function bridgeChatSessionToEnquiry(
     enquiry_id: enquiry.id,
   };
 
-  // Email full transcript to visitor, staff assignee, and notify inbox when possible.
-  // Falls back to a short staff alert if there is no transcript yet.
-  const messages = await listChatMessages(session.id);
-  const transcriptFromOpt =
-    opts?.message && opts.message.includes("--- Transcript ---")
-      ? opts.message.split("--- Transcript ---\n\n").pop()?.trim() ?? ""
-      : "";
-  const transcript =
-    transcriptFromOpt || formatChatTranscript(messages);
   if (transcript.trim() && (email || session.assignee_email.trim())) {
     void emailChatTranscript({
       session: sessionForMail,
