@@ -36,6 +36,17 @@
   var YACHT_FIELDS = [
     { key: "name", label: "Your name" },
     { key: "email", label: "Business email", type: "email" },
+    {
+      key: "yacht_location",
+      label: "Where is the yacht now? (country or port)",
+      placeholder: "e.g. Southampton, UK",
+    },
+    {
+      key: "visitor_location",
+      label: "Where are you based? (optional)",
+      placeholder: "e.g. London",
+      optional: true,
+    },
     { key: "make_model", label: "Yacht make / model" },
     { key: "length", label: "Length (LOA)" },
     { key: "beam", label: "Beam" },
@@ -46,8 +57,12 @@
       label: "Approximate value (include currency)",
       placeholder: "e.g. 10000 GBP",
     },
-    { key: "loading_port", label: "Preferred loading port" },
     { key: "destination", label: "Destination" },
+    {
+      key: "loading_port",
+      label: "Preferred loading port (if different)",
+      optional: true,
+    },
     {
       key: "specs",
       label: "Drawings or specifications (optional — paste notes here)",
