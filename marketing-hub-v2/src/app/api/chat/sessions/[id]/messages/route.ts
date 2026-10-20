@@ -77,7 +77,7 @@ export async function POST(request: Request, ctx: Ctx) {
       return chatError(request, "This conversation is closed", 409);
     }
 
-    await addChatMessage({
+    const visitorMsg = await addChatMessage({
       session_id: id,
       role: "visitor",
       body: text,
@@ -92,14 +92,42 @@ export async function POST(request: Request, ctx: Ctx) {
       });
     }
 
+    // Wait briefly so visitors who send thoughts in several short messages
+    // get one reply that covers the full batch.
+    const VISITOR_REPLY_DEBOUNCE_MS = 3500;
+    await new Promise((resolve) =>
+      setTimeout(resolve, VISITOR_REPLY_DEBOUNCE_MS)
+    );
+
     const history = await listChatMessages(id);
+    const last = history[history.length - 1];
+    // A newer visitor message owns the reply — this request steps aside.
+    if (last?.role === "visitor" && last.id !== visitorMsg.id) {
+      return chatJson(request, { mode: "ai", deferred: true });
+    }
+    const idx = history.findIndex((m) => m.id === visitorMsg.id);
+    if (
+      idx >= 0 &&
+      history.slice(idx + 1).some((m) => m.role === "assistant")
+    ) {
+      return chatJson(request, { mode: "ai", deferred: true });
+    }
+
+    // Join trailing visitor bits since the last non-visitor turn.
+    const trailing: string[] = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "visitor") trailing.unshift(history[i].body);
+      else break;
+    }
+    const visitorMessage = trailing.join("\n").trim() || text;
+    const historyForAi = history.slice(0, history.length - trailing.length);
     const useStream = body?.stream !== false;
 
     if (!useStream) {
       const { generateAssistantReply } = await import("@/lib/chat/rag");
       const reply = await generateAssistantReply({
-        visitorMessage: text,
-        history: history.slice(0, -1),
+        visitorMessage,
+        history: historyForAi,
       });
       const saved = await addChatMessage({
         session_id: id,
@@ -119,8 +147,8 @@ export async function POST(request: Request, ctx: Ctx) {
     }
 
     const streamed = await streamAssistantReply({
-      visitorMessage: text,
-      history: history.slice(0, -1),
+      visitorMessage,
+      history: historyForAi,
     });
 
     const encoder = new TextEncoder();

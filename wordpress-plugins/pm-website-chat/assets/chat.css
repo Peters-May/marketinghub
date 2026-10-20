@@ -229,6 +229,103 @@
   cursor: pointer;
 }
 
+.pm-chat__starters {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--pm-chat-mist);
+  background: #f7f8f9;
+}
+
+#pm-website-chat-root .pm-chat__starters.is-on {
+  display: flex;
+}
+
+#pm-website-chat-root .pm-chat__chip {
+  border: 1px solid rgba(11, 37, 69, 0.18) !important;
+  background: var(--pm-chat-white) !important;
+  color: var(--pm-chat-navy) !important;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#pm-website-chat-root .pm-chat__chip:hover {
+  border-color: var(--pm-chat-blue) !important;
+  color: var(--pm-chat-blue) !important;
+}
+
+.pm-chat__collect {
+  display: none;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--pm-chat-mist);
+  background: #f7f8f9;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#pm-website-chat-root .pm-chat__collect.is-on {
+  display: flex;
+}
+
+.pm-chat__collect-progress {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(11, 37, 69, 0.65);
+}
+
+.pm-chat__collect-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pm-chat-navy);
+}
+
+#pm-website-chat-root .pm-chat__collect-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(11, 37, 69, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.pm-chat__collect-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#pm-website-chat-root .pm-chat__collect-primary {
+  border: none !important;
+  border-radius: 999px;
+  background: var(--pm-chat-navy) !important;
+  color: var(--pm-chat-white) !important;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#pm-website-chat-root .pm-chat__collect-secondary {
+  border: 1px solid rgba(11, 37, 69, 0.18) !important;
+  border-radius: 999px;
+  background: var(--pm-chat-white) !important;
+  color: var(--pm-chat-navy) !important;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#pm-website-chat-root .pm-chat__composer.is-hidden {
+  display: none;
+}
+
 .pm-chat__composer {
   display: flex;
   gap: 8px;

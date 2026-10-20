@@ -12,18 +12,56 @@
   var seenIds = {};
   var pollTimer = null;
   var open = false;
+  var inflightSends = 0;
+  var startersShown = false;
+  var collectState = null;
+
+  var YACHT_FIELDS = [
+    { key: "name", label: "Your name" },
+    { key: "email", label: "Business email", type: "email" },
+    { key: "make_model", label: "Yacht make / model" },
+    { key: "length", label: "Length (LOA)" },
+    { key: "beam", label: "Beam" },
+    { key: "height", label: "Overall transport height" },
+    { key: "weight", label: "Approximate weight / displacement" },
+    { key: "value", label: "Approximate value" },
+    { key: "loading_port", label: "Preferred loading port" },
+    { key: "destination", label: "Destination" },
+    {
+      key: "specs",
+      label: "Drawings or specifications (optional — paste notes here)",
+      optional: true,
+    },
+  ];
+
+  var FREIGHT_FIELDS = [
+    { key: "name", label: "Your name" },
+    { key: "email", label: "Business email", type: "email" },
+    { key: "company", label: "Company", optional: true },
+    { key: "commodity", label: "What are you shipping?" },
+    { key: "origin", label: "Origin" },
+    { key: "destination", label: "Destination" },
+    { key: "pieces", label: "Pieces / pallets / containers", optional: true },
+    { key: "dimensions", label: "Dimensions", optional: true },
+    { key: "weight", label: "Weight", optional: true },
+    { key: "timeframe", label: "Preferred timeframe", optional: true },
+  ];
 
   function apiUrl(hubPath) {
-    // hubPath like "api/chat/sessions" or "api/chat/sessions/ID/messages"
     if (useProxy) {
-      return String(cfg.apiBase).replace(/\/$/, "") + "/" + hubPath.replace(/^\//, "");
+      return (
+        String(cfg.apiBase).replace(/\/$/, "") +
+        "/" +
+        hubPath.replace(/^\//, "")
+      );
     }
-    return String(cfg.hubUrl).replace(/\/$/, "") + "/" + hubPath.replace(/^\//, "");
+    return (
+      String(cfg.hubUrl).replace(/\/$/, "") + "/" + hubPath.replace(/^\//, "")
+    );
   }
 
   function headers() {
     var h = { "Content-Type": "application/json" };
-    // Site key only needed for direct Hub calls; proxy adds it server-side.
     if (!useProxy && cfg.siteKey) {
       h["X-Chat-Site-Key"] = cfg.siteKey;
     }
@@ -34,7 +72,6 @@
     var ctype = (r.headers.get("content-type") || "").toLowerCase();
     if (ctype.indexOf("application/json") !== -1) {
       return r.json().then(function (data) {
-        // WP REST may wrap a JSON string as a JSON-encoded string
         if (typeof data === "string") {
           try {
             return JSON.parse(data);
@@ -65,16 +102,30 @@
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
     var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
-    // Keep typing indicator below the latest messages.
     messagesEl.insertBefore(bubble, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
   }
 
   function setTyping(on) {
     typingEl.classList.toggle("is-on", !!on);
-    // Ensure indicator stays at the bottom of the thread.
     messagesEl.appendChild(typingEl);
     if (on) messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function clearNode(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function looksLikeYachtChecklist(text) {
+    var t = String(text || "").toLowerCase();
+    var hits = 0;
+    if (/make\s*\/?\s*model|make\/model/.test(t)) hits++;
+    if (/\blength\b|\bloa\b/.test(t)) hits++;
+    if (/\bbeam\b/.test(t)) hits++;
+    if (/transport height|overall height/.test(t)) hits++;
+    if (/\bweight\b|displacement/.test(t)) hits++;
+    return hits >= 3;
   }
 
   var root = el(
@@ -110,6 +161,12 @@
   );
   messagesEl.appendChild(typingEl);
   panel.appendChild(messagesEl);
+
+  var startersEl = el("div", "pm-chat__starters");
+  panel.appendChild(startersEl);
+
+  var collectEl = el("div", "pm-chat__collect");
+  panel.appendChild(collectEl);
 
   var lead = el("div", "pm-chat__lead");
   var nameInput = el("input", "");
@@ -160,12 +217,311 @@
     }
   }
 
+  function hideStarters() {
+    startersEl.classList.remove("is-on");
+    clearNode(startersEl);
+  }
+
+  function showStarters() {
+    if (startersShown) return;
+    startersShown = true;
+    clearNode(startersEl);
+    startersEl.classList.add("is-on");
+
+    function addChip(label, onClick) {
+      var btn = el("button", "pm-chat__chip", label);
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        hideStarters();
+        onClick();
+      });
+      startersEl.appendChild(btn);
+    }
+
+    addChip("Get a quote", function () {
+      showQuoteTypeStarters();
+    });
+    addChip("Have a question", function () {
+      sendMessageText("I have a question");
+    });
+    addChip("Something else", function () {
+      input.focus();
+    });
+  }
+
+  function showQuoteTypeStarters() {
+    clearNode(startersEl);
+    startersEl.classList.add("is-on");
+
+    function addChip(label, onClick) {
+      var btn = el("button", "pm-chat__chip", label);
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        hideStarters();
+        onClick();
+      });
+      startersEl.appendChild(btn);
+    }
+
+    addChip("Yacht / boat transport", function () {
+      startCollect("yacht");
+    });
+    addChip("Freight / cargo", function () {
+      startCollect("freight");
+    });
+    addChip("Other quote", function () {
+      sendMessageText("I would like a quote");
+    });
+  }
+
+  function offerGuidedCollect(kind) {
+    clearNode(startersEl);
+    startersEl.classList.add("is-on");
+    var btn = el(
+      "button",
+      "pm-chat__chip",
+      kind === "freight"
+        ? "Answer step by step"
+        : "Answer step by step"
+    );
+    btn.type = "button";
+    btn.addEventListener("click", function () {
+      hideStarters();
+      startCollect(kind || "yacht");
+    });
+    startersEl.appendChild(btn);
+
+    var paste = el("button", "pm-chat__chip", "Paste all details");
+    paste.type = "button";
+    paste.addEventListener("click", function () {
+      hideStarters();
+      startCollect(kind || "yacht", { pasteFirst: true });
+    });
+    startersEl.appendChild(paste);
+  }
+
+  function stopCollect() {
+    collectState = null;
+    collectEl.classList.remove("is-on");
+    clearNode(collectEl);
+    composer.classList.remove("is-hidden");
+  }
+
+  function startCollect(kind, opts) {
+    opts = opts || {};
+    var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
+    collectState = {
+      kind: kind,
+      fields: fields,
+      index: 0,
+      values: {},
+      pasteMode: !!opts.pasteFirst,
+    };
+    composer.classList.add("is-hidden");
+    hideStarters();
+
+    var intro =
+      kind === "freight"
+        ? "Thank you. I can take a few details for our forwarding team — one at a time. You can also paste a full enquiry or specification if you prefer."
+        : "Thank you. I can take a few yacht details for our team — one at a time. If you have a specification sheet, you can paste the details in one go instead.";
+    appendBubble("assistant", intro);
+    renderCollectStep();
+  }
+
+  function renderCollectStep() {
+    if (!collectState) return;
+    clearNode(collectEl);
+    collectEl.classList.add("is-on");
+
+    if (collectState.pasteMode) {
+      collectEl.appendChild(
+        el(
+          "p",
+          "pm-chat__collect-label",
+          "Paste your details or specification notes"
+        )
+      );
+      var ta = el("textarea", "pm-chat__collect-input");
+      ta.rows = 5;
+      ta.placeholder =
+        "Paste make/model, dimensions, ports, contact details…";
+      collectEl.appendChild(ta);
+
+      var row = el("div", "pm-chat__collect-row");
+      var submit = el("button", "pm-chat__collect-primary", "Send details");
+      submit.type = "button";
+      submit.addEventListener("click", function () {
+        var text = (ta.value || "").trim();
+        if (!text) {
+          ta.focus();
+          return;
+        }
+        finishCollectFromPaste(text);
+      });
+      var back = el("button", "pm-chat__collect-secondary", "Step by step");
+      back.type = "button";
+      back.addEventListener("click", function () {
+        collectState.pasteMode = false;
+        renderCollectStep();
+      });
+      row.appendChild(submit);
+      row.appendChild(back);
+      collectEl.appendChild(row);
+      ta.focus();
+      return;
+    }
+
+    var field = collectState.fields[collectState.index];
+    var total = collectState.fields.length;
+    var step = collectState.index + 1;
+    collectEl.appendChild(
+      el("p", "pm-chat__collect-progress", "Step " + step + " of " + total)
+    );
+    collectEl.appendChild(el("p", "pm-chat__collect-label", field.label));
+
+    var inputEl =
+      field.key === "specs"
+        ? el("textarea", "pm-chat__collect-input")
+        : el("input", "pm-chat__collect-input");
+    if (inputEl.tagName === "INPUT") {
+      inputEl.type = field.type || "text";
+    } else {
+      inputEl.rows = 3;
+    }
+    inputEl.placeholder = field.optional ? "Optional" : "";
+    collectEl.appendChild(inputEl);
+
+    var row = el("div", "pm-chat__collect-row");
+    var next = el(
+      "button",
+      "pm-chat__collect-primary",
+      collectState.index === total - 1 ? "Send to team" : "Continue"
+    );
+    next.type = "button";
+    next.addEventListener("click", function () {
+      advanceCollect(inputEl);
+    });
+    inputEl.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && inputEl.tagName === "INPUT") {
+        e.preventDefault();
+        advanceCollect(inputEl);
+      }
+    });
+
+    var pasteBtn = el(
+      "button",
+      "pm-chat__collect-secondary",
+      "Paste all instead"
+    );
+    pasteBtn.type = "button";
+    pasteBtn.addEventListener("click", function () {
+      collectState.pasteMode = true;
+      renderCollectStep();
+    });
+
+    var skip = null;
+    if (field.optional) {
+      skip = el("button", "pm-chat__collect-secondary", "Skip");
+      skip.type = "button";
+      skip.addEventListener("click", function () {
+        collectState.values[field.key] = "";
+        collectState.index += 1;
+        if (collectState.index >= collectState.fields.length) {
+          finishCollectFromFields();
+        } else {
+          renderCollectStep();
+        }
+      });
+    }
+
+    row.appendChild(next);
+    row.appendChild(pasteBtn);
+    if (skip) row.appendChild(skip);
+    collectEl.appendChild(row);
+    inputEl.focus();
+  }
+
+  function advanceCollect(inputEl) {
+    if (!collectState) return;
+    var field = collectState.fields[collectState.index];
+    var value = (inputEl.value || "").trim();
+    if (!value && !field.optional) {
+      inputEl.focus();
+      return;
+    }
+    if (field.type === "email" && value) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        inputEl.focus();
+        return;
+      }
+    }
+    collectState.values[field.key] = value;
+    // Echo short confirmation in thread for clarity.
+    if (value) {
+      appendBubble("visitor", field.label + ": " + value);
+    }
+    collectState.index += 1;
+    if (collectState.index >= collectState.fields.length) {
+      finishCollectFromFields();
+    } else {
+      renderCollectStep();
+    }
+  }
+
+  function formatCollectValues(kind, values) {
+    var lines = [
+      kind === "freight"
+        ? "Freight / cargo enquiry (guided form):"
+        : "Yacht transport enquiry (guided form):",
+    ];
+    var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
+    fields.forEach(function (f) {
+      var v = (values[f.key] || "").trim();
+      if (v) lines.push(f.label + ": " + v);
+    });
+    return lines.join("\n");
+  }
+
+  function finishCollectFromFields() {
+    if (!collectState) return;
+    var kind = collectState.kind;
+    var values = collectState.values;
+    var summary = formatCollectValues(kind, values);
+    if (values.email) emailInput.value = values.email;
+    if (values.name) nameInput.value = values.name;
+    if (values.company) companyInput.value = values.company;
+    stopCollect();
+    sendMessageText(summary);
+  }
+
+  function finishCollectFromPaste(text) {
+    var kind = collectState && collectState.kind;
+    stopCollect();
+    sendMessageText(
+      (kind === "freight"
+        ? "Freight / cargo enquiry (pasted details):\n"
+        : "Yacht transport enquiry (pasted details):\n") + text
+    );
+  }
+
+  function maybeOfferGuidedFromAssistant(body) {
+    if (collectState) return;
+    if (looksLikeYachtChecklist(body)) {
+      offerGuidedCollect("yacht");
+    }
+  }
+
   function syncSeen() {
     if (!sessionId) return Promise.resolve();
-    return fetch(apiUrl("api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"), {
-      headers: headers(),
-      credentials: useProxy ? "same-origin" : "omit",
-    })
+    return fetch(
+      apiUrl(
+        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"
+      ),
+      {
+        headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
+      }
+    )
       .then(parseBody)
       .then(function (data) {
         (data.messages || []).forEach(function (m) {
@@ -238,6 +594,7 @@
           appendBubble("assistant", body, data.message.id);
           lastMessageAt = data.message.created_at;
         }
+        showStarters();
       })
       .catch(function (err) {
         appendBubble(
@@ -250,15 +607,14 @@
       });
   }
 
-  function sendMessage() {
-    var text = (input.value || "").trim();
+  function sendMessageText(text) {
+    text = (text || "").trim();
     if (!text || !sessionId) return;
-    input.value = "";
+    hideStarters();
     appendBubble("visitor", text);
+    inflightSends += 1;
     setTyping(true);
-    sendBtn.disabled = true;
 
-    // Prefer non-stream through proxy (WP may buffer streams).
     fetch(
       apiUrl(
         "api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"
@@ -273,11 +629,14 @@
       .then(function (r) {
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Send failed");
+          if (data.deferred) return;
           if (data.message && data.message.body) {
             appendBubble("assistant", data.message.body, data.message.id);
             lastMessageAt = data.message.created_at;
+            maybeOfferGuidedFromAssistant(data.message.body);
           } else if (typeof data.message === "string") {
             appendBubble("assistant", data.message);
+            maybeOfferGuidedFromAssistant(data.message);
           }
           if (data.handoff) lead.classList.add("is-on");
         });
@@ -289,13 +648,22 @@
         );
       })
       .finally(function () {
-        setTyping(false);
-        sendBtn.disabled = false;
+        inflightSends = Math.max(0, inflightSends - 1);
+        if (inflightSends === 0) setTyping(false);
       });
+  }
+
+  function sendMessage() {
+    var text = (input.value || "").trim();
+    if (!text) return;
+    input.value = "";
+    sendMessageText(text);
   }
 
   function handoff() {
     if (!sessionId) return;
+    hideStarters();
+    stopCollect();
     lead.classList.add("is-on");
     var payload = {
       name: nameInput.value.trim(),
@@ -365,7 +733,6 @@
     setOpen(true);
   });
   closeBtn.addEventListener("click", function () {
-    // Confirm before ending an active chat (X close).
     if (sessionId) {
       var ok = window.confirm(
         cfg.labels.closeConfirm ||
