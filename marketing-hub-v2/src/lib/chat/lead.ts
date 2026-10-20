@@ -2,6 +2,7 @@ import type { ChatSession } from "@/lib/types";
 import { upsertWebEnquiryFromWebhook } from "@/lib/data/web-enquiries";
 import { syncWebEnquiryToPortal } from "@/lib/sync/portal-enquiries";
 import { updateChatSession } from "@/lib/chat/data";
+import { suggestOfficeFromEnquiryText } from "@/lib/chat/enquiry-guidance";
 import { notifyChatStaff } from "@/lib/chat/notify";
 
 /**
@@ -26,6 +27,10 @@ export async function bridgeChatSessionToEnquiry(
   const message =
     opts?.message?.trim() ||
     `Website chat lead from ${session.page_title || session.page_url || "site"}`;
+
+  const suggestedOffice = suggestOfficeFromEnquiryText(
+    [message, name, company, session.page_title, session.page_url].join(" ")
+  );
 
   const utm = session.utm ?? {};
   const body: Record<string, unknown> = {
@@ -52,6 +57,7 @@ export async function bridgeChatSessionToEnquiry(
       heard_about: "Website chat",
       chat_session_id: session.id,
       chat_message: message,
+      ...(suggestedOffice ? { selected_office: suggestedOffice } : {}),
     },
     tracking: {
       current_page_url: session.page_url,
@@ -62,7 +68,10 @@ export async function bridgeChatSessionToEnquiry(
       heard_about: "Website chat",
     },
     routing: {
-      routing_reason: "website_chat",
+      routing_reason: suggestedOffice
+        ? `website_chat_origin_hint:${suggestedOffice}`
+        : "website_chat",
+      ...(suggestedOffice ? { selected_office: suggestedOffice } : {}),
       needs_manual_review: true,
     },
     form_fields: {

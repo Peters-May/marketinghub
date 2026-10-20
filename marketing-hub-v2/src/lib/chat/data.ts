@@ -124,7 +124,8 @@ export async function getChatSettings(): Promise<ChatSettings> {
     return {
       id: "default",
       deployed: false,
-      greeting: "How can we help?",
+      greeting:
+        "Hi, I can help get your enquiry to the right Peters & May team. What are you looking to move, or what can we help you with?",
       guidance: "",
       office_hours_note:
         "Our team typically replies during UK business hours.",

@@ -32,6 +32,16 @@ Tables: `chat_settings`, `chat_kb_documents`, `chat_sessions`, `chat_messages`
 
 Leads upsert `web_enquiries` with `submission_id = chat:<sessionId>` and Portal mirror via existing sync.
 
+## Enquiry qualification guidance
+
+Default behavioural SOP lives in `src/lib/chat/enquiry-guidance.ts` and is used when Train → Guidance is empty (or still the old “KB only” seed).
+
+Principles: qualify quickly by enquiry type (yacht, freight, customs, vehicle, existing booking, supplier, personal effects, UK domestic boat, careers), collect minimum useful CRM data, hand over — never quote prices, sailing dates, or imply Peters & May owns vessels.
+
+In Hub → Chat → Train you can **Load recommended guidance**, edit, and **Save**. Knowledge base documents remain for factual extras (careers URL, referral contacts, hauliers).
+
+Website chat leads stay `needs_manual_review: true`. Origin keywords may set a suggested `selected_office` (Italy, Dubai, Florida, Asia, France, UK, …) for staff routing — never shown to the visitor.
+
 ## Retire HubSpot chat (go-live checklist)
 
 1. Deploy Hub migration + env; Deploy toggle on in Hub.

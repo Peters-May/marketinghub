@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  DEFAULT_CHAT_GREETING,
+  DEFAULT_ENQUIRY_CHAT_GUIDANCE,
+} from "@/lib/chat/enquiry-guidance";
 import { cn } from "@/lib/utils";
 import type {
   ChatKbDocument,
@@ -86,12 +90,20 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load transcript");
-    setMessages(data.messages ?? []);
+    const msgs = (data.messages ?? []) as ChatMessage[];
+    setMessages(
+      [...msgs].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    );
     if (data.session) {
-      setSessions((prev) => {
-        const others = prev.filter((s) => s.id !== data.session.id);
-        return [data.session, ...others];
-      });
+      // Update in place and keep newest activity first — do not bump to top on select/poll.
+      setSessions((prev) =>
+        sortSessionsByDate(
+          prev.map((s) => (s.id === data.session.id ? data.session : s))
+        )
+      );
     }
   }, []);
 
@@ -448,9 +460,15 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             <h2 className="text-sm font-semibold text-[#0B2545]">
               Tone and policies
             </h2>
+            <p className="text-xs text-muted">
+              Empty guidance uses the recommended enquiry qualification SOP
+              (yacht, freight, customs, careers, suppliers, and so on). Load it
+              here to edit and save your own version.
+            </p>
             <textarea
-              className="min-h-[160px] w-full rounded-md border border-border px-3 py-2 text-sm"
+              className="min-h-[220px] w-full rounded-md border border-border px-3 py-2 text-sm"
               value={settings?.guidance ?? ""}
+              placeholder="Leave blank to use the recommended Peters & May enquiry guidance…"
               onChange={(e) =>
                 setSettings((s) =>
                   s ? { ...s, guidance: e.target.value } : s
@@ -467,19 +485,39 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 )
               }
             />
-            <button
-              type="button"
-              disabled={busy || !settings}
-              onClick={() =>
-                void saveSettings({
-                  guidance: settings?.guidance,
-                  greeting: settings?.greeting,
-                })
-              }
-              className="rounded-md bg-[#0B2545] px-3 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Save guidance
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy || !settings}
+                onClick={() =>
+                  setSettings((s) =>
+                    s
+                      ? {
+                          ...s,
+                          guidance: DEFAULT_ENQUIRY_CHAT_GUIDANCE,
+                          greeting: DEFAULT_CHAT_GREETING,
+                        }
+                      : s
+                  )
+                }
+                className="rounded-md border border-border px-3 py-2 text-sm text-[#0B2545] disabled:opacity-50"
+              >
+                Load recommended guidance
+              </button>
+              <button
+                type="button"
+                disabled={busy || !settings}
+                onClick={() =>
+                  void saveSettings({
+                    guidance: settings?.guidance,
+                    greeting: settings?.greeting,
+                  })
+                }
+                className="rounded-md bg-[#0B2545] px-3 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Save guidance
+              </button>
+            </div>
           </div>
           <div className="space-y-3 rounded-lg border border-border bg-white p-4">
             <h2 className="text-sm font-semibold text-[#0B2545]">

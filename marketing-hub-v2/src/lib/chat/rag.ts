@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
+import { resolveChatGuidance } from "@/lib/chat/enquiry-guidance";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
 import { listKbDocuments, getChatSettings } from "@/lib/chat/data";
 
@@ -50,13 +51,14 @@ function model() {
   return openai(process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini");
 }
 
+/** Force handoff for explicit human request or hard quote pressure mid-flow. */
 export function shouldForceHandoff(text: string): boolean {
   const t = text.toLowerCase();
   return (
     /\b(speak (to|with) (a |the )?human|talk to (a |the )?(person|someone|team|agent)|real person|live (chat|agent))\b/i.test(
       t
     ) ||
-    /\b(quote|quotation|how much|price|pricing|rate|rates|cost|costs|capacity)\b/i.test(
+    /\b(give me (a |the )?(price|quote|rate)|exact (price|cost|rate)|how much (will|would) it cost)\b/i.test(
       t
     )
   );
@@ -84,7 +86,7 @@ export async function streamAssistantReply(input: {
 
   const kbBlock =
     retrieved.length === 0
-      ? "(No knowledge base documents matched. Say you are unsure and offer to connect the visitor with the team.)"
+      ? "(No knowledge base excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
       : retrieved
           .map(
             (d, i) =>
@@ -92,16 +94,22 @@ export async function streamAssistantReply(input: {
           )
           .join("\n\n");
 
+  const guidance = resolveChatGuidance(settings.guidance);
+
   const system = `${BRAND_AI_SUMMARY}
 
-You are the Peters & May website assistant for anonymous visitors.
-${settings.guidance.trim() ? `\nGuidance:\n${settings.guidance.trim()}\n` : ""}
-Rules:
-- Answer only using the knowledge base excerpts below. If the answer is not there, say so briefly and offer Speak to the team.
+You are the Peters & May website enquiry assistant for anonymous visitors.
+
+Guidance:
+${guidance}
+
+Hard rules:
+- Follow Guidance for qualification flows, specialist replies (careers, personal effects, suppliers, existing bookings), and what never to promise.
+- Use knowledge base excerpts below for factual extras (contacts, careers URL, haulier names, office notes). Do not invent contacts or URLs not present in Guidance or the knowledge base.
 - British English. Short paragraphs. No emoji. No exclamation marks. No hype.
-- Never invent rates, capacity, clients, case studies, or company figures.
-- You may ask for a business email when the visitor wants a quote, callback, or human follow-up.
-- If they ask for rates/quotes or a person, acknowledge and invite Speak to the team / email capture.
+- Never invent rates, capacity, sailing dates, clients, case studies, or company figures.
+- Ask conversationally. Prefer one or two questions at a time. Stop when enough exists for a team review, then confirm handover and ask for a business email if missing.
+- If they insist on rates/quotes or a person, invite Speak to the team / email capture without inventing numbers.
 
 Knowledge base:
 ${kbBlock}`;
