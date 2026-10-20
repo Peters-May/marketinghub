@@ -65,12 +65,15 @@
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
     var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
-    messagesEl.appendChild(bubble);
+    // Keep typing indicator below the latest messages.
+    messagesEl.insertBefore(bubble, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   function setTyping(on) {
     typingEl.classList.toggle("is-on", !!on);
+    // Ensure indicator stays at the bottom of the thread.
+    messagesEl.appendChild(typingEl);
     if (on) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
