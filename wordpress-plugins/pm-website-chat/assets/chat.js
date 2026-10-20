@@ -193,7 +193,7 @@
   }
 
   function unlockComposer() {
-    if (suppressCollectTrigger || collectState) return;
+    if (collectState) return;
     composer.classList.remove("is-hidden");
   }
 
@@ -362,7 +362,10 @@
     addChip("Get a quote", function () {
       showQuoteTypeStarters();
     });
-    // No free-type chip — keep replies on guided paths / Speak to the team.
+    addChip("Ask a question", function () {
+      unlockComposer();
+      input.focus();
+    });
     addChip("Speak to the team", function () {
       handoff();
     });
@@ -472,11 +475,8 @@
     collectState = null;
     collectEl.classList.remove("is-on");
     clearNode(collectEl);
-    if (suppressCollectTrigger) {
-      lockComposer();
-    } else {
-      unlockComposer();
-    }
+    // Always restore free-type for follow-up questions (quote form stays suppressed).
+    composer.classList.remove("is-hidden");
   }
 
   function startCollect(kind, opts) {
@@ -678,7 +678,7 @@
     if (values.company) companyInput.value = values.company;
     suppressCollectTrigger = true;
     stopCollect();
-    lockComposer();
+    unlockComposer();
     sendMessageText(summary, { skipCollect: true });
   }
 
@@ -686,7 +686,7 @@
     var kind = collectState && collectState.kind;
     suppressCollectTrigger = true;
     stopCollect();
-    lockComposer();
+    unlockComposer();
     sendMessageText(
       (kind === "freight"
         ? "Freight / cargo enquiry (pasted details):\n"
@@ -710,7 +710,7 @@
     suppressCollectTrigger = true;
     stopCollect();
     hideStarters();
-    lockComposer();
+    unlockComposer();
     showWhatElseChip();
   }
 
