@@ -12,9 +12,18 @@ export function resolveFooterLinkSettings(
   block?: Pick<
     FooterBlock,
     "showPreferences" | "showUnsubscribe" | "unsubscribeLabel" | "preferencesLabel"
-  > | null
+  > | null,
+  /** Hub Email → Settings (source of truth when provided). */
+  global?: FooterLinkSettings | null
 ): FooterLinkSettings {
-  /** Email-level toggles are the source of truth for all footers. */
+  if (global) {
+    return {
+      showUnsubscribe: global.showUnsubscribe,
+      showPreferences: global.showPreferences,
+      unsubscribeLabel: global.unsubscribeLabel.trim() || "Unsubscribe",
+      preferencesLabel: global.preferencesLabel.trim() || "Manage preferences",
+    };
+  }
   return {
     showUnsubscribe: styles.showUnsubscribeLink !== false,
     showPreferences: styles.showPreferencesLink !== false,

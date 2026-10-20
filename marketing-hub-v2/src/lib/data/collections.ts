@@ -15,6 +15,7 @@ export type CollectionKey = Exclude<
   | "email_suppressions"
   | "email_events"
   | "email_gallery"
+  | "email_settings"
   | "newsroom_settings"
 >;
 

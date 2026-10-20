@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   EmailAlign,
   EmailBlock,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/email/footer-links";
 import { EMAIL_PREFERENCE_TOPICS } from "@/lib/email/preferences";
 import { EmailImageField } from "@/components/email/builder/EmailImageField";
+import { cn } from "@/lib/utils";
 
 const MERGE_TOKENS = [
   { token: "{{first_name}}", label: "First name" },
@@ -56,6 +58,11 @@ function acceptColour(value: string): boolean {
   return value.trim().toLowerCase() !== ENSIGN_RED.toLowerCase();
 }
 
+function isBrandSwatch(value: string): boolean {
+  const hex = value.trim().toLowerCase();
+  return EMAIL_COLOUR_SWATCHES.some((swatch) => swatch.toLowerCase() === hex);
+}
+
 function ColourField({
   label,
   value,
@@ -65,30 +72,72 @@ function ColourField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const [otherOpen, setOtherOpen] = useState(() => !isBrandSwatch(value));
+  const brandSelected = isBrandSwatch(value);
+
   return (
-    <label className="block text-sm">
+    <div className="block text-sm">
       <span className="text-muted">{label}</span>
-      <div className="mt-1 flex flex-wrap gap-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1">
         {EMAIL_COLOUR_SWATCHES.map((hex) => (
           <button
             key={hex}
             type="button"
             title={hex}
             aria-label={hex}
-            className="h-6 w-6 rounded border border-border"
+            className={cn(
+              "h-6 w-6 rounded border",
+              brandSelected && value.toLowerCase() === hex.toLowerCase()
+                ? "border-[#007DC5] ring-1 ring-[#007DC5]"
+                : "border-border"
+            )}
             style={{ background: hex }}
-            onClick={() => onChange(hex)}
+            onClick={() => {
+              setOtherOpen(false);
+              onChange(hex);
+            }}
           />
         ))}
+        <button
+          type="button"
+          className={cn(
+            "rounded border px-2 py-0.5 text-[11px]",
+            otherOpen || !brandSelected
+              ? "border-[#007DC5] text-[#007DC5]"
+              : "border-border text-muted"
+          )}
+          onClick={() => setOtherOpen(true)}
+        >
+          Other
+        </button>
       </div>
-      <input
-        className="input mt-2 w-full"
-        value={value}
-        onChange={(event) => {
-          if (acceptColour(event.target.value)) onChange(event.target.value);
-        }}
-      />
-    </label>
+      {otherOpen || !brandSelected ? (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="color"
+            aria-label={`${label} picker`}
+            className="h-9 w-10 cursor-pointer rounded border border-border bg-white p-0.5"
+            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#0B2545"}
+            onChange={(event) => {
+              if (acceptColour(event.target.value)) onChange(event.target.value);
+            }}
+          />
+          <input
+            className="input min-w-0 flex-1 font-mono text-xs"
+            value={value}
+            placeholder="#0B2545"
+            onChange={(event) => {
+              if (acceptColour(event.target.value)) onChange(event.target.value);
+            }}
+          />
+        </div>
+      ) : null}
+      {!acceptColour(value) ? (
+        <p className="mt-1 text-[10px] text-red-700">
+          Ensign Red is for logo artwork only — pick another colour.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

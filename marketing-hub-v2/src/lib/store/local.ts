@@ -27,6 +27,7 @@ import { allowDemoAuth } from "@/lib/auth/config";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { cache } from "react";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
+import { normalizeEmailSettings } from "@/lib/email/email-settings";
 import {
   applyReleaseLibrary,
   needsReleaseLibrary,
@@ -259,6 +260,9 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       store.email_suppressions ?? seed.email_suppressions ?? [],
     email_events: store.email_events ?? seed.email_events ?? [],
     email_gallery: store.email_gallery ?? seed.email_gallery ?? [],
+    email_settings: normalizeEmailSettings(
+      store.email_settings ?? seed.email_settings
+    ),
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -331,6 +335,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_suppressions ||
     !store.email_events ||
     !store.email_gallery ||
+    !store.email_settings ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );

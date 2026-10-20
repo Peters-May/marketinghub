@@ -95,15 +95,33 @@ export function EmailCanvas({
   onRemoveColumn: (sectionId: string, columnId: string) => void;
 }) {
   const frameWidth = device === "mobile" ? 375 : design.styles.contentWidth;
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dropTarget, setDropTargetState] = useState<string | null>(null);
   const [hoverSectionId, setHoverSectionId] = useState<string | null>(null);
   const [hoverBlockId, setHoverBlockId] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function setDropTarget(next: string | null) {
+    setDropTargetState((current) => (current === next ? current : next));
+  }
 
   return (
     <div
       className="min-h-full px-8 pb-20 pt-10"
       style={{ background: design.styles.pageBackground }}
       onClick={() => onSelect({ type: "email" })}
+      onDragStartCapture={() => {
+        setDragging(true);
+        setHoverSectionId(null);
+        setHoverBlockId(null);
+      }}
+      onDragEndCapture={() => {
+        setDragging(false);
+        setDropTarget(null);
+      }}
+      onDropCapture={() => {
+        setDragging(false);
+        setDropTarget(null);
+      }}
     >
       <div className="mx-auto" style={{ width: frameWidth, maxWidth: "100%" }}>
         <EmailInboxBar subject={subject} previewText={previewText} width={frameWidth} />
@@ -119,8 +137,9 @@ export function EmailCanvas({
               selection.type === "block" && selection.sectionId === section.id
                 ? selection.blockId
                 : null;
-            const sectionHovered = hoverSectionId === section.id;
+            const sectionHovered = !dragging && hoverSectionId === section.id;
             const moduleHoveredInSection =
+              !dragging &&
               hoverBlockId != null &&
               section.columns.some((column) =>
                 column.blocks.some((block) => block.id === hoverBlockId)
@@ -128,14 +147,17 @@ export function EmailCanvas({
             /**
              * HubSpot-style: section tools only when the pointer is on the section
              * chrome (not a module), or the section is selected with no module selected.
+             * Hover chrome is suppressed while dragging to avoid flash.
              */
             const showSectionTools =
               !readOnly &&
+              !dragging &&
               !moduleHoveredInSection &&
               !selectedBlockInSection &&
               (sectionHovered || sectionSelected);
             const showSectionOutline =
               !readOnly &&
+              !dragging &&
               (showSectionTools ||
                 (sectionHovered && !moduleHoveredInSection) ||
                 (sectionSelected && !selectedBlockInSection));
@@ -337,9 +359,10 @@ export function EmailCanvas({
                               const selected =
                                 selection.type === "block" &&
                                 selection.blockId === block.id;
-                              const hovered = hoverBlockId === block.id;
+                              const hovered =
+                                !dragging && hoverBlockId === block.id;
                               const showModuleChrome =
-                                !readOnly && (selected || hovered);
+                                !readOnly && !dragging && (selected || hovered);
                               const beforeKey = `${section.id}:${column.id}:${block.id}`;
                               return (
                                 <div key={block.id} className="relative py-0.5">

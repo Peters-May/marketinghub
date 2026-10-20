@@ -1041,6 +1041,15 @@ export type EmailGalleryImage = {
   created_at: string;
 };
 
+/** Global email marketing defaults (footer links, preference centre). */
+export type EmailSettings = {
+  show_unsubscribe_link: boolean;
+  show_preferences_link: boolean;
+  unsubscribe_label: string;
+  preferences_label: string;
+  updated_at: string;
+};
+
 /** Public newsroom content / SEO / branding settings (admin-managed). */
 export type NewsroomSettings = {
   /** Display title — e.g. "Peters & May News" (max 150). */
@@ -1132,6 +1141,8 @@ export type HubStore = {
   email_events: EmailEvent[];
   /** Images uploaded for marketing emails. */
   email_gallery: EmailGalleryImage[];
+  /** Global email marketing settings (unsubscribe / preferences). */
+  email_settings: EmailSettings;
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };
