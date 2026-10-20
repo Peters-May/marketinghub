@@ -1,8 +1,10 @@
 PM Website Chat — install / update
 
-IMPORTANT — avoid a "new plugin" duplicate
-------------------------------------------
-The zip MUST contain a single top folder named exactly:
+Upload this file only
+---------------------
+  exports/pm-website-chat.zip
+
+Inside the zip (one folder, not nested zips):
 
   pm-website-chat/
     pm-website-chat.php
@@ -10,26 +12,25 @@ The zip MUST contain a single top folder named exactly:
     includes/
     …
 
-Do NOT upload a flat zip (files at the root). WordPress then creates a
-folder from the zip filename (e.g. pm-website-chat-1.0.18) and you get
-a second plugin.
+That folder name must stay pm-website-chat so WordPress updates the same
+plugin. A flat zip (files at the root) makes WP create a second plugin
+from the zip filename.
 
 If you already have two entries under Plugins:
-1. Keep the one in folder wp-content/plugins/pm-website-chat/
+1. Keep wp-content/plugins/pm-website-chat/
 2. Delete the other (e.g. pm-website-chat-1.0.x)
-3. Upload the correct zip again (Updates the same plugin)
+3. Upload exports/pm-website-chat.zip again → Replace current with uploaded
 
-Option A — Upload plugin (preferred)
-------------------------------------
+Option A — Upload plugin
+------------------------
 1. Plugins → Add New → Upload Plugin
-2. Choose: exports/pm-website-chat-1.0.18/pm-website-chat-1.0.18.zip
-   (or pm-website-chat.zip in the same folder — identical contents)
-3. Click Replace current with uploaded if prompted, or Install → Activate
+2. Choose: exports/pm-website-chat.zip
+3. Replace current with uploaded if prompted, or Install → Activate
 
 Option B — WP File Manager
 --------------------------
 1. Delete broken/empty pm-website-chat folders under wp-content/plugins/
-2. Upload the pm-website-chat folder from the zip into wp-content/plugins/
+2. Extract the zip and put the pm-website-chat folder into wp-content/plugins/
 3. Activate "PM Website Chat"
 
 After activate: Settings → PM Website Chat
