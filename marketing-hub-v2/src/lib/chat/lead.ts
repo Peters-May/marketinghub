@@ -7,7 +7,7 @@ import {
   updateChatSession,
 } from "@/lib/chat/data";
 import { suggestOfficeFromEnquiryText } from "@/lib/chat/enquiry-guidance";
-import { notifyChatStaff } from "@/lib/chat/notify";
+import { emailChatTranscript, notifyChatStaff } from "@/lib/chat/notify";
 
 /** Readable transcript for Hub / Portal enquiry body. */
 export function formatChatTranscript(messages: ChatMessage[]): string {
@@ -109,14 +109,36 @@ export async function bridgeChatSessionToEnquiry(
 
   const enquiry = await upsertWebEnquiryFromWebhook(body);
   await syncWebEnquiryToPortal(body);
-  await updateChatSession(session.id, {
+  const updated = await updateChatSession(session.id, {
     enquiry_id: enquiry.id,
     visitor_name: name || session.visitor_name,
     visitor_email: email || session.visitor_email,
     visitor_company: company || session.visitor_company,
   });
+  const sessionForMail = updated ?? {
+    ...session,
+    visitor_name: name || session.visitor_name,
+    visitor_email: email || session.visitor_email,
+    visitor_company: company || session.visitor_company,
+    enquiry_id: enquiry.id,
+  };
 
-  if (opts?.notify !== false && email) {
+  // Email full transcript to visitor, staff assignee, and notify inbox when possible.
+  // Falls back to a short staff alert if there is no transcript yet.
+  const messages = await listChatMessages(session.id);
+  const transcriptFromOpt =
+    opts?.message && opts.message.includes("--- Transcript ---")
+      ? opts.message.split("--- Transcript ---\n\n").pop()?.trim() ?? ""
+      : "";
+  const transcript =
+    transcriptFromOpt || formatChatTranscript(messages);
+  if (transcript.trim() && (email || session.assignee_email.trim())) {
+    void emailChatTranscript({
+      session: sessionForMail,
+      transcript,
+      reason: opts?.closed ? "closed" : "lead",
+    });
+  } else if (opts?.notify !== false && email) {
     void notifyChatStaff({
       kind: "lead",
       sessionId: session.id,
@@ -148,12 +170,21 @@ export async function syncClosedChatSessionToPortal(
     }
 
     const email = (session.visitor_email ?? "").trim();
+    const messages = await listChatMessages(sessionId);
+    const transcript = formatChatTranscript(messages);
+
+    // No visitor email → still email staff assignee / notify inbox if involved.
     if (!email) {
+      if (transcript.trim() && session.assignee_email.trim()) {
+        void emailChatTranscript({
+          session,
+          transcript,
+          reason: "closed",
+        });
+      }
       return { ok: true, skipped: true, reason: "no_contact_email" };
     }
 
-    const messages = await listChatMessages(sessionId);
-    const transcript = formatChatTranscript(messages);
     const header = `Website chat closed — ${
       session.page_title || session.page_url || session.id
     }`;

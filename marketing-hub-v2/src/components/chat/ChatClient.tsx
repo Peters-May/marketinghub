@@ -421,6 +421,41 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     <button
                       type="button"
                       className="rounded border border-border px-2 py-1 text-xs"
+                      disabled={busy || messages.length === 0}
+                      onClick={() => {
+                        const lines = messages
+                          .map((m) => {
+                            const who =
+                              m.role === "visitor"
+                                ? "Visitor"
+                                : m.role === "staff"
+                                  ? m.author_name
+                                    ? `Staff (${m.author_name})`
+                                    : "Staff"
+                                  : m.role === "assistant"
+                                    ? "Assistant"
+                                    : "System";
+                            const body = (m.body ?? "").trim();
+                            return body ? `[${who}] ${body}` : "";
+                          })
+                          .filter(Boolean);
+                        const text = lines.join("\n\n");
+                        const blob = new Blob([text], {
+                          type: "text/plain;charset=utf-8",
+                        });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `chat-transcript-${selected.id.slice(0, 8)}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      Download transcript
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-border px-2 py-1 text-xs"
                       onClick={() => setStatus("human")}
                       disabled={busy}
                     >

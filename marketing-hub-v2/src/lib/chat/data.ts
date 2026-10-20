@@ -327,7 +327,7 @@ export async function closeAbandonedChatSessions(opts: {
   const now = new Date().toISOString();
   const email = (opts.visitorEmail ?? "").trim().toLowerCase();
 
-  let q = supabase
+  const q = supabase
     .from("chat_sessions")
     .select("id, visitor_email, status")
     .in("status", ["ai", "waiting", "human"])
