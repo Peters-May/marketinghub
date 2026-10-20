@@ -601,8 +601,11 @@ export function EmailDesigner({
       | undefined;
     if (!draft) return;
     const design = history.designRef.current;
+    // Prefer the first content section (skip brand header/footer when marked locked).
     const targetSection =
-      design.sections.find((item) => !item.locked) ?? design.sections[0];
+      design.sections.find(
+        (item) => !(item as { locked?: boolean }).locked
+      ) ?? design.sections[0];
     const sectionId = targetSection?.id;
     const columnId = targetSection?.columns[0]?.id;
     if (!sectionId || !columnId) {
