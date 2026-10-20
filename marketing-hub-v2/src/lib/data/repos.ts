@@ -1,4 +1,7 @@
-import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
+import {
+  emptyAttendanceOpsFields,
+  type EventAttendanceOpsFields,
+} from "@/lib/events/attendance-checklist";
 import {
   emptyPlannerFields,
   plannerFieldsFromBody,
@@ -122,8 +125,16 @@ export async function listEvents() {
 }
 
 export async function createEvent(
-  input: Omit<EventItem, "id" | "created_at" | "updated_at" | keyof PlannerFields> &
-    Partial<PlannerFields>
+  input: Omit<
+    EventItem,
+    | "id"
+    | "created_at"
+    | "updated_at"
+    | keyof PlannerFields
+    | keyof EventAttendanceOpsFields
+  > &
+    Partial<PlannerFields> &
+    Partial<EventAttendanceOpsFields>
 ) {
   const item: EventItem = {
     ...emptyPlannerFields(),

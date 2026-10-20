@@ -149,16 +149,28 @@ export async function updateChatSettings(
 ): Promise<ChatSettings> {
   const supabase = requireService();
   const now = new Date().toISOString();
+  const current = await getChatSettings();
+  const row = {
+    id: "default",
+    deployed:
+      typeof patch.deployed === "boolean" ? patch.deployed : current.deployed,
+    greeting:
+      typeof patch.greeting === "string" ? patch.greeting : current.greeting,
+    guidance:
+      typeof patch.guidance === "string" ? patch.guidance : current.guidance,
+    office_hours_note:
+      typeof patch.office_hours_note === "string"
+        ? patch.office_hours_note
+        : current.office_hours_note,
+    notify_email:
+      typeof patch.notify_email === "string"
+        ? patch.notify_email
+        : current.notify_email,
+    updated_at: now,
+  };
   const { data, error } = await supabase
     .from("chat_settings")
-    .upsert(
-      {
-        id: "default",
-        ...patch,
-        updated_at: now,
-      },
-      { onConflict: "id" }
-    )
+    .upsert(row, { onConflict: "id" })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
