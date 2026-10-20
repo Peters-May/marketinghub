@@ -2,9 +2,10 @@ import { NextRequest } from "next/server";
 import {
   draftEmailAssist,
   draftSocialAssist,
+  friendlyAiError,
+  generateAssistantChat,
   isAssistantMode,
   rewriteAssist,
-  streamAssistantChat,
   summariseAssist,
   type AssistantAttachment,
   type AssistantChatMessage,
@@ -30,7 +31,11 @@ function parseAttachments(raw: unknown): AssistantAttachment[] {
     const mime = typeof rec.mime === "string" ? rec.mime.trim() : "";
     if (!name || !url || !mime) continue;
     if (!/^https?:\/\//i.test(url) && !url.startsWith("/")) continue;
-    out.push({ name: name.slice(0, 200), url: url.slice(0, 2000), mime: mime.slice(0, 120) });
+    out.push({
+      name: name.slice(0, 200),
+      url: url.slice(0, 2000),
+      mime: mime.slice(0, 120),
+    });
   }
   return out;
 }
@@ -41,7 +46,12 @@ function parseMessages(raw: unknown): AssistantChatMessage[] {
   for (const item of raw.slice(-20)) {
     if (!item || typeof item !== "object") continue;
     const rec = item as Record<string, unknown>;
-    const role = rec.role === "assistant" ? "assistant" : rec.role === "user" ? "user" : null;
+    const role =
+      rec.role === "assistant"
+        ? "assistant"
+        : rec.role === "user"
+          ? "user"
+          : null;
     const content = typeof rec.content === "string" ? rec.content.trim() : "";
     if (!role || !content) continue;
     out.push({ role, content: content.slice(0, 12000) });
@@ -79,8 +89,8 @@ export async function POST(request: NextRequest) {
       if (!messages.length) {
         return jsonError("Add a message for the assistant.", 400);
       }
-      const result = streamAssistantChat({ messages, attachments });
-      return result.toTextStreamResponse();
+      const reply = await generateAssistantChat({ messages, attachments });
+      return jsonOk({ mode, reply });
     }
 
     if (mode === "draft_email") {
@@ -117,12 +127,8 @@ export async function POST(request: NextRequest) {
 
     return jsonError("Unknown mode", 400);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "The assistant could not respond.";
-    if (message.includes("AI is not configured")) {
-      return jsonError(message, 503);
-    }
+    const { message, status } = friendlyAiError(err);
     console.error("[api/ai/assistant]", err);
-    return jsonError(message, 500);
+    return jsonError(message, status);
   }
 }

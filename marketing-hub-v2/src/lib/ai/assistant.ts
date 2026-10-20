@@ -1,4 +1,4 @@
-import { generateObject, streamText, type ModelMessage } from "ai";
+import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { getHubOpenAIModel } from "@/lib/ai/openai";
 import {
@@ -41,7 +41,9 @@ The command line must match hub natural-language commands, for example:
 - Update task call the organiser status done
 
 Do not invent commands for emails, budgets, media, or other modules.
-Never claim you already saved the record — the admin must confirm in the hub.`;
+If the user asks to update budget, media, or anything outside tasks/events/content, explain that clearly and do not invent a hub-command block.
+Never claim you already saved the record — the admin must confirm in the hub.
+Uploads are available as context when the admin attaches files with Upload before sending.`;
 
 function isImageMime(mime: string) {
   return mime.startsWith("image/");
@@ -104,16 +106,36 @@ export function buildChatMessages(input: {
   return out;
 }
 
-export function streamAssistantChat(input: {
+/** Non-streaming chat so OpenAI billing/quota errors return as normal HTTP errors. */
+export async function generateAssistantChat(input: {
   messages: AssistantChatMessage[];
   attachments?: AssistantAttachment[];
 }) {
-  return streamText({
+  const { text } = await generateText({
     model: getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     messages: buildChatMessages(input),
   });
+  return text;
 }
+
+function friendlyAiError(err: unknown): { message: string; status: number } {
+  const message =
+    err instanceof Error ? err.message : "The assistant could not respond.";
+  if (/credits|billing|quota|insufficient/i.test(message)) {
+    return {
+      message:
+        "OpenAI has no credits remaining. Add billing credit at platform.openai.com, then try again.",
+      status: 402,
+    };
+  }
+  if (/not configured/i.test(message)) {
+    return { message, status: 503 };
+  }
+  return { message, status: 500 };
+}
+
+export { friendlyAiError };
 
 export async function draftEmailAssist(input: {
   brief: string;

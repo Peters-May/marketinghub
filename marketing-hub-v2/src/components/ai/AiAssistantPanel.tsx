@@ -281,7 +281,7 @@ export function AiAssistantPanel({
     const assistantId = newId();
     setMessages((prev) => [
       ...prev,
-      { id: assistantId, role: "assistant", content: "" },
+      { id: assistantId, role: "assistant", content: "…" },
     ]);
 
     try {
@@ -297,48 +297,32 @@ export function AiAssistantPanel({
           attachments,
         }),
       });
-
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        let message = "The assistant could not respond.";
-        try {
-          const data = await res.json();
-          if (data.error) message = data.error;
-        } catch {
-          // ignore
-        }
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setError(message);
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setError("The assistant returned an empty response.");
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let raw = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        raw += decoder.decode(value, { stream: true });
-        const { displayText } = extractHubCommand(raw);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: displayText || "…" } : m
-          )
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : "The assistant could not respond."
         );
+        return;
       }
 
+      const raw = typeof data.reply === "string" ? data.reply : "";
       const { displayText, commandText } = extractHubCommand(raw);
+      if (!displayText && !commandText) {
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        setError(
+          "The assistant returned an empty reply. If this keeps happening, check OpenAI billing credits."
+        );
+        return;
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
             ? {
                 ...m,
-                content: displayText || "(No reply)",
+                content: displayText || "Proposed action ready — review below.",
                 commandText,
               }
             : m
