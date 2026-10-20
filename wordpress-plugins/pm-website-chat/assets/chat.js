@@ -17,6 +17,8 @@
   var collectState = null;
   /** Prevent restarting the guided form after it has just been submitted. */
   var suppressCollectTrigger = false;
+  /** Plain-text lines for download on close. */
+  var transcriptLines = [];
   var SESSION_KEY = "pm_website_chat_session_id";
 
   function rememberSession(id) {
@@ -162,7 +164,37 @@
     wrap.appendChild(bubble);
     messagesEl.insertBefore(wrap, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    var who = label || (role === "visitor" ? "You" : role);
+    var text = String(body || "").trim();
+    if (text) transcriptLines.push("[" + who + "] " + text);
     return wrap;
+  }
+
+  function downloadTranscriptFile() {
+    var text = transcriptLines.join("\n\n").trim();
+    if (!text) text = "No messages in this chat yet.";
+    var blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download =
+      "peters-and-may-chat" +
+      (sessionId ? "-" + String(sessionId).slice(0, 8) : "") +
+      ".txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function lockComposer() {
+    composer.classList.add("is-hidden");
+    input.blur();
+  }
+
+  function unlockComposer() {
+    if (suppressCollectTrigger || collectState) return;
+    composer.classList.remove("is-hidden");
   }
 
   function setTyping(on) {
@@ -330,11 +362,9 @@
     addChip("Get a quote", function () {
       showQuoteTypeStarters();
     });
-    addChip("Ask a question", function () {
-      input.focus();
-    });
-    addChip("Something else", function () {
-      input.focus();
+    // No free-type chip — keep replies on guided paths / Speak to the team.
+    addChip("Speak to the team", function () {
+      handoff();
     });
   }
 
@@ -342,13 +372,24 @@
     if (collectState) return;
     clearNode(startersEl);
     startersEl.classList.add("is-on");
-    var btn = el("button", "pm-chat__chip", "What else can I help with?");
-    btn.type = "button";
-    btn.addEventListener("click", function () {
-      hideStarters();
+    function addChip(label, onClick) {
+      var btn = el("button", "pm-chat__chip", label);
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        hideStarters();
+        onClick();
+      });
+      startersEl.appendChild(btn);
+    }
+    addChip("What else can I help with?", function () {
       showStartersFresh();
     });
-    startersEl.appendChild(btn);
+    addChip("Download transcript", function () {
+      downloadTranscriptFile();
+    });
+    addChip("Speak to the team", function () {
+      handoff();
+    });
   }
 
   function showStartersFresh() {
@@ -391,13 +432,13 @@
     }
 
     addChip("Yacht / boat transport", function () {
-      startCollect("yacht");
+      startCollect("yacht", { force: true });
     });
     addChip("Freight / cargo", function () {
-      startCollect("freight");
+      startCollect("freight", { force: true });
     });
     addChip("Other quote", function () {
-      sendMessageText("I would like a quote");
+      startCollect("yacht", { force: true });
     });
   }
 
@@ -414,7 +455,7 @@
     btn.type = "button";
     btn.addEventListener("click", function () {
       hideStarters();
-      startCollect(kind || "yacht");
+      startCollect(kind || "yacht", { force: true });
     });
     startersEl.appendChild(btn);
 
@@ -422,7 +463,7 @@
     paste.type = "button";
     paste.addEventListener("click", function () {
       hideStarters();
-      startCollect(kind || "yacht", { pasteFirst: true });
+      startCollect(kind || "yacht", { pasteFirst: true, force: true });
     });
     startersEl.appendChild(paste);
   }
@@ -431,12 +472,18 @@
     collectState = null;
     collectEl.classList.remove("is-on");
     clearNode(collectEl);
-    composer.classList.remove("is-hidden");
+    if (suppressCollectTrigger) {
+      lockComposer();
+    } else {
+      unlockComposer();
+    }
   }
 
   function startCollect(kind, opts) {
     opts = opts || {};
     if (suppressCollectTrigger && !opts.force) return;
+    // Explicit chip restart of a new quote.
+    if (opts.force) suppressCollectTrigger = false;
     var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
     collectState = {
       kind: kind,
@@ -629,15 +676,17 @@
     if (values.email) emailInput.value = values.email;
     if (values.name) nameInput.value = values.name;
     if (values.company) companyInput.value = values.company;
-    stopCollect();
     suppressCollectTrigger = true;
+    stopCollect();
+    lockComposer();
     sendMessageText(summary, { skipCollect: true });
   }
 
   function finishCollectFromPaste(text) {
     var kind = collectState && collectState.kind;
-    stopCollect();
     suppressCollectTrigger = true;
+    stopCollect();
+    lockComposer();
     sendMessageText(
       (kind === "freight"
         ? "Freight / cargo enquiry (pasted details):\n"
@@ -652,17 +701,23 @@
       /enough information/.test(t) ||
       /pass this to our/.test(t) ||
       /contact you directly/.test(t) ||
-      /noted .+ and will follow up/.test(t)
+      /noted .+ and will follow up/.test(t) ||
+      /further quer/.test(t)
     );
+  }
+
+  function endGuidedEnquiryUi() {
+    suppressCollectTrigger = true;
+    stopCollect();
+    hideStarters();
+    lockComposer();
+    showWhatElseChip();
   }
 
   function maybeOfferGuidedFromAssistant(body) {
     // Never reopen the step form after a completed enquiry or handover.
     if (looksLikeHandover(body) || isGuidedEnquiryPayload(body)) {
-      suppressCollectTrigger = true;
-      stopCollect();
-      hideStarters();
-      showWhatElseChip();
+      endGuidedEnquiryUi();
       return;
     }
     if (collectState || suppressCollectTrigger) return;
@@ -965,24 +1020,39 @@
   minimizeBtn.addEventListener("click", function () {
     setOpen(false);
   });
+  function resetChatUi() {
+    rememberSession(null);
+    lastMessageAt = null;
+    seenIds = {};
+    startersShown = false;
+    suppressCollectTrigger = false;
+    transcriptLines = [];
+    stopCollect();
+    hideStarters();
+    unlockComposer();
+    lead.classList.remove("is-on", "is-collapsed");
+    leadMinBtn.textContent = "Minimise";
+    clearNode(messagesEl);
+    messagesEl.appendChild(typingEl);
+  }
+
   closeBtn.addEventListener("click", function () {
-    if (sessionId) {
-      var ok = window.confirm(
-        cfg.labels.closeConfirm ||
-          "Would you like to close the chat?\n\nThis ends the chat."
-      );
-      if (!ok) return;
-      rememberSession(null);
-      lastMessageAt = null;
-      seenIds = {};
-      startersShown = false;
-      stopCollect();
-      hideStarters();
-      lead.classList.remove("is-on", "is-collapsed");
-      leadMinBtn.textContent = "Minimise";
-      clearNode(messagesEl);
-      messagesEl.appendChild(typingEl);
+    if (!sessionId) {
+      setOpen(false);
+      return;
     }
+    var end = window.confirm(
+      cfg.labels.closeConfirm ||
+        "Would you like to close the chat?\n\nThis ends the chat."
+    );
+    if (!end) return;
+    var wantDownload = window.confirm(
+      "Download a copy of this chat transcript before closing?"
+    );
+    if (wantDownload) {
+      downloadTranscriptFile();
+    }
+    resetChatUi();
     setOpen(false);
   });
   leadMinBtn.addEventListener("click", function () {
