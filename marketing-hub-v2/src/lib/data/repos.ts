@@ -3061,17 +3061,30 @@ export async function findEmailSuppression(email: string) {
 export async function addEmailSuppression(input: {
   email: string;
   reason: EmailSuppressionReason;
+  detail?: string | null;
   contact_id?: string | null;
   campaign_id?: string | null;
 }) {
   const email = input.email.trim().toLowerCase();
   if (!email) return null;
+  const detail =
+    typeof input.detail === "string" ? input.detail.trim().slice(0, 320) : "";
   const existing = await findEmailSuppression(email);
-  if (existing) return existing;
+  if (existing) {
+    if (detail && existing.reason === "unsubscribe" && existing.detail !== detail) {
+      await updateStore((s) => {
+        const row = (s.email_suppressions ?? []).find((item) => item.id === existing.id);
+        if (row) row.detail = detail;
+      });
+      return { ...existing, detail };
+    }
+    return existing;
+  }
   const item: EmailSuppression = {
     id: uid("esup"),
     email,
     reason: input.reason,
+    detail: detail || undefined,
     contact_id: input.contact_id ?? null,
     campaign_id: input.campaign_id ?? null,
     created_at: nowIso(),

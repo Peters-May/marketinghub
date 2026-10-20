@@ -138,7 +138,12 @@ describe("campaign report", () => {
     const report = buildCampaignReport({
       campaign: campaign({ adj_open_rate: null, adj_click_rate: null }),
       events: [
-        event({ id: "u1", kind: "unsubscribed", email: "lea@example.com" }),
+        event({
+          id: "u1",
+          kind: "unsubscribed",
+          email: "lea@example.com",
+          meta: "Too many emails",
+        }),
         event({ id: "b1", kind: "bounced", email: "bad@example.com" }),
       ],
       contacts: [
@@ -150,6 +155,7 @@ describe("campaign report", () => {
           campaign_id: "ecamp_test",
           reason: "unsubscribe",
           email: "lea@example.com",
+          detail: "Too many emails",
         },
         {
           campaign_id: "ecamp_test",
@@ -159,10 +165,39 @@ describe("campaign report", () => {
       ],
     });
     expect(report.unsubscribedPeople).toEqual([
-      { name: "Lea", email: "lea@example.com", reason: "unsubscribe" },
+      {
+        name: "Lea",
+        email: "lea@example.com",
+        reason: "unsubscribe",
+        detail: "Too many emails",
+      },
     ]);
     expect(report.bouncedPeople).toEqual([
       { name: "Bad address", email: "bad@example.com", reason: "bounce" },
+    ]);
+  });
+
+  it("uses the event note when there is no suppression detail", () => {
+    const report = buildCampaignReport({
+      campaign: campaign({ adj_open_rate: null, adj_click_rate: null }),
+      events: [
+        event({
+          id: "u2",
+          kind: "unsubscribed",
+          email: "pat@example.com",
+          meta: "Content is not relevant",
+        }),
+      ],
+      contacts: [{ email: "pat@example.com", name: "Pat" }],
+      suppressions: [],
+    });
+    expect(report.unsubscribedPeople).toEqual([
+      {
+        name: "Pat",
+        email: "pat@example.com",
+        reason: "unsubscribe",
+        detail: "Content is not relevant",
+      },
     ]);
   });
 

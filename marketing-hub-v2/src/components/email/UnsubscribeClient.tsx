@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   EMAIL_PREFERENCE_TOPICS,
+  UNSUBSCRIBE_FEEDBACK_REASONS,
   type EmailPreferenceTopic,
+  type UnsubscribeFeedbackReason,
 } from "@/lib/email/preferences";
 
 export function UnsubscribeClient() {
@@ -18,6 +20,11 @@ export function UnsubscribeClient() {
   const [topics, setTopics] = useState<EmailPreferenceTopic[]>([]);
   const [all, setAll] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [arrivedOptedOut, setArrivedOptedOut] = useState(false);
+  const [feedbackReason, setFeedbackReason] = useState<UnsubscribeFeedbackReason | "">(
+    ""
+  );
+  const [feedbackOther, setFeedbackOther] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -33,8 +40,11 @@ export function UnsubscribeClient() {
           return;
         }
         setEmail(typeof data.email === "string" ? data.email : "");
-        setTopics(Array.isArray(data.topics) ? data.topics : []);
-        setAll(Boolean(data.all));
+        const nextTopics = Array.isArray(data.topics) ? data.topics : [];
+        const nextAll = Boolean(data.all);
+        setTopics(nextTopics);
+        setAll(nextAll);
+        setArrivedOptedOut(nextAll || nextTopics.length > 0);
         setLocked(Boolean(data.locked));
         setStatus("ready");
       } catch {
@@ -55,14 +65,35 @@ export function UnsubscribeClient() {
     );
   }
 
+  const isOptingOut = all || topics.length > 0;
+  const needsFeedback = isOptingOut && !arrivedOptedOut;
+
   async function save() {
     setStatus("saving");
     setMessage("");
+    if (needsFeedback) {
+      if (!feedbackReason) {
+        setStatus("ready");
+        setMessage("Please choose a reason for unsubscribing.");
+        return;
+      }
+      if (feedbackReason === "other" && !feedbackOther.trim()) {
+        setStatus("ready");
+        setMessage("Please tell us a little more.");
+        return;
+      }
+    }
     try {
       const res = await fetch("/api/unsubscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, topics, all }),
+        body: JSON.stringify({
+          token,
+          topics,
+          all,
+          unsubscribe_reason: needsFeedback ? feedbackReason : "",
+          unsubscribe_other: needsFeedback ? feedbackOther : "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -136,6 +167,45 @@ export function UnsubscribeClient() {
           </label>
         </fieldset>
       )}
+
+      {!locked && status !== "loading" && status !== "error" && needsFeedback ? (
+        <fieldset className="mt-6 space-y-3" disabled={status === "saving"}>
+          <legend className="text-sm font-semibold text-[#0B2545]">
+            Why are you unsubscribing?
+          </legend>
+          <p className="text-xs text-muted">
+            This helps us improve what we send. It is not shared outside the team.
+          </p>
+          {UNSUBSCRIBE_FEEDBACK_REASONS.map((reason) => (
+            <label
+              key={reason.id}
+              className="flex items-start gap-3 text-sm text-[#0B2545]"
+            >
+              <input
+                type="radio"
+                name="unsubscribe-reason"
+                className="mt-0.5"
+                checked={feedbackReason === reason.id}
+                onChange={() => setFeedbackReason(reason.id)}
+              />
+              <span>{reason.label}</span>
+            </label>
+          ))}
+          {feedbackReason === "other" ? (
+            <label className="block text-sm text-[#0B2545]">
+              <span className="sr-only">Tell us more</span>
+              <textarea
+                rows={3}
+                value={feedbackOther}
+                onChange={(e) => setFeedbackOther(e.target.value)}
+                maxLength={280}
+                placeholder="Tell us a little more"
+                className="mt-1 w-full rounded-md border border-[#E3E6E9] px-3 py-2 text-sm text-[#0B2545] outline-none focus:border-[#007DC5]"
+              />
+            </label>
+          ) : null}
+        </fieldset>
+      ) : null}
 
       {locked ? (
         <p className="mt-4 text-sm text-[#0B2545]">

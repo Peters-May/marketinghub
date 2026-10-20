@@ -2,16 +2,20 @@ import { Resend } from "resend";
 import {
   appendEmailEvents,
   getEmailCampaign,
+  listEmailAudiences,
   listEmailEvents,
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
+import { compileEmailDesign, resolveEmailDesign } from "@/lib/email/design";
 import {
   applyEmailMerge,
   ensureUnsubscribeFooter,
   ensureViewInBrowserLink,
 } from "@/lib/email/merge";
+import { topicForAudienceName } from "@/lib/email/preferences";
 import { unsubscribeUrlFor, viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
+import { appendUtmToEmailHtml } from "@/lib/email/utm";
 import {
   notifyPortalCampaignSend,
   syncPortalMarketingAudience,
@@ -136,8 +140,19 @@ export async function sendEmailCampaign(
     ? `${latest.from_name.trim()} <${fromEmail}>`
     : fromEmail;
 
-  const htmlBase = ensureViewInBrowserLink(
-    ensureUnsubscribeFooter(latest.html_body || "<p></p>")
+  let topic: ReturnType<typeof topicForAudienceName> = null;
+  if (latest.audience_id) {
+    const audiences = await listEmailAudiences();
+    const audience = audiences.find((row) => row.id === latest.audience_id);
+    topic = topicForAudienceName(audience?.name ?? "");
+  }
+  const design = resolveEmailDesign(latest.design, latest.html_body || "");
+  const compiled = compileEmailDesign(design, {
+    topic: topic ?? "all",
+  });
+  const htmlBase = appendUtmToEmailHtml(
+    ensureViewInBrowserLink(ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")),
+    { campaign: latest.title || latest.id }
   );
   const alreadySent = new Set(
     (await listEmailEvents(campaignId))

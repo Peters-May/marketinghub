@@ -9,11 +9,14 @@ import {
   Link2,
   Minus,
   MoveVertical,
+  Newspaper,
   PanelBottom,
+  Quote,
   Search,
   Share2,
   Square,
   Type,
+  Video,
 } from "lucide-react";
 import type { EmailBlockType, SectionPreset } from "@/lib/email/design";
 import { writeDrag } from "@/components/email/builder/drag";
@@ -23,6 +26,9 @@ const BLOCKS: { type: EmailBlockType; label: string; icon: typeof Type }[] = [
   { type: "text", label: "Text", icon: Type },
   { type: "button", label: "Button", icon: Square },
   { type: "image", label: "Image", icon: ImageIcon },
+  { type: "video", label: "Video", icon: Video },
+  { type: "quote", label: "Quote", icon: Quote },
+  { type: "content_card", label: "Content card", icon: Newspaper },
   { type: "logo", label: "Logo", icon: Link2 },
   { type: "divider", label: "Divider", icon: Minus },
   { type: "spacer", label: "Spacer", icon: MoveVertical },

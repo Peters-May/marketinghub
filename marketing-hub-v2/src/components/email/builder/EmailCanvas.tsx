@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { EmailBlock, EmailDesign } from "@/lib/email/design";
 import { emailImageSrc, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
+import { resolveFooterLinkSettings } from "@/lib/email/footer-links";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { readDrag, writeDrag, type DesignerDrag } from "@/components/email/builder/drag";
 import { previewMerge } from "@/lib/email/design/preview";
@@ -96,295 +97,449 @@ export function EmailCanvas({
 }) {
   const frameWidth = device === "mobile" ? 375 : design.styles.contentWidth;
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [hoverSectionId, setHoverSectionId] = useState<string | null>(null);
+  const [hoverBlockId, setHoverBlockId] = useState<string | null>(null);
 
   return (
     <div
-      className="min-h-full px-6 pb-16 pt-8"
+      className="min-h-full px-8 pb-20 pt-10"
       style={{ background: design.styles.pageBackground }}
       onClick={() => onSelect({ type: "email" })}
     >
       <div className="mx-auto" style={{ width: frameWidth, maxWidth: "100%" }}>
         <EmailInboxBar subject={subject} previewText={previewText} width={frameWidth} />
         <div
-          className="shadow-sm"
+          className="overflow-visible shadow-sm"
           style={{ background: design.styles.contentBackground }}
           data-testid="email-canvas"
         >
-        {design.sections.map((section, sectionIndex) => {
-          const sectionSelected =
-            selection.type === "section" && selection.sectionId === section.id;
-          const blockInSection =
-            selection.type === "block" && selection.sectionId === section.id;
-          const showHandles = !readOnly && (sectionSelected || blockInSection);
-          const columnOrder =
-            device === "mobile" && section.mobileStack === "reverse"
-              ? [...section.columns].reverse()
-              : section.columns;
-          return (
-            <div key={section.id} className="relative">
-              <SectionDrop
-                disabled={readOnly}
-                onDrop={(payload) =>
-                  onDrop(payload, { beforeSectionId: section.id })
-                }
-              />
-              <section
-                className={cn(
-                  "relative",
-                  (sectionSelected || blockInSection) &&
-                    "outline outline-2 outline-[#007DC5]"
-                )}
-                style={{
-                  background: section.background || design.styles.contentBackground,
-                  padding: `${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px`,
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect({ type: "section", sectionId: section.id });
-                }}
-              >
-                {showHandles ? (
-                  <>
-                    <div className="absolute -top-3 left-1/2 z-10 flex -translate-x-1/2 gap-1">
-                      <RoundHandle
-                        label="Add new column"
-                        disabled={section.columns.length >= 4}
-                        onClick={() => onAddColumn(section.id)}
+          {design.sections.map((section, sectionIndex) => {
+            const sectionSelected =
+              selection.type === "section" && selection.sectionId === section.id;
+            const selectedBlockInSection =
+              selection.type === "block" && selection.sectionId === section.id
+                ? selection.blockId
+                : null;
+            const sectionHovered = hoverSectionId === section.id;
+            const moduleHoveredInSection =
+              hoverBlockId != null &&
+              section.columns.some((column) =>
+                column.blocks.some((block) => block.id === hoverBlockId)
+              );
+            /**
+             * HubSpot-style: section tools only when the pointer is on the section
+             * chrome (not a module), or the section is selected with no module selected.
+             */
+            const showSectionTools =
+              !readOnly &&
+              !moduleHoveredInSection &&
+              !selectedBlockInSection &&
+              (sectionHovered || sectionSelected);
+            const showSectionOutline =
+              !readOnly &&
+              (showSectionTools ||
+                (sectionHovered && !moduleHoveredInSection) ||
+                (sectionSelected && !selectedBlockInSection));
+            const showColumnGuides = showSectionTools;
+            const columnOrder =
+              device === "mobile" && section.mobileStack === "reverse"
+                ? [...section.columns].reverse()
+                : section.columns;
+
+            return (
+              <div key={section.id} className="relative">
+                <SectionGap
+                  disabled={readOnly}
+                  onDropSection={(payload) =>
+                    onDrop(payload, { beforeSectionId: section.id })
+                  }
+                />
+
+                <div
+                  className={cn(
+                    "relative ml-3",
+                    showSectionOutline && "z-[2]"
+                  )}
+                  onMouseEnter={() => setHoverSectionId(section.id)}
+                  onMouseLeave={() => {
+                    setHoverSectionId((current) =>
+                      current === section.id ? null : current
+                    );
+                  }}
+                >
+                  {/* Section left rail + grip — only for section hover/select */}
+                  {showSectionOutline ? (
+                    <div
+                      className="absolute -left-3 bottom-0 top-0 z-20 w-3 rounded-l-sm bg-[#007DC5]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelect({ type: "section", sectionId: section.id });
+                      }}
+                    >
+                      <span
+                        className="absolute left-1/2 top-6 flex h-7 w-5 -translate-x-1/2 items-center justify-center rounded-sm bg-[#5eb8e8] text-white shadow-sm"
+                        title="Section"
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                      </RoundHandle>
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </span>
                     </div>
-                    <div className="absolute -right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1">
-                      <RoundHandle
-                        label="Add section below"
-                        onClick={() => onAddSectionAfter(section.id)}
+                  ) : null}
+
+                  {/* Section action bar — top-left, dark; never with module tools */}
+                  {showSectionTools ? (
+                    <div
+                      className="absolute -top-8 left-0 z-30 flex items-center gap-0.5 rounded-md bg-[#2d3a45] px-1 py-0.5 shadow-md"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <DarkTool
+                        label="Move section up"
+                        disabled={sectionIndex === 0}
+                        onClick={() => onMoveSection(section.id, -1)}
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                      </RoundHandle>
-                      <RoundHandle
-                        label="Delete section"
-                        disabled={design.sections.length <= 1}
-                        onClick={() => onDeleteSection(section.id)}
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </RoundHandle>
-                    </div>
-                    <div className="mb-2 flex flex-wrap justify-end gap-1">
-                      <IconButton label="Move section up" onClick={() => onMoveSection(section.id, -1)} disabled={sectionIndex === 0}>
                         <ChevronUp className="h-3.5 w-3.5" />
-                      </IconButton>
-                      <IconButton label="Move section down" onClick={() => onMoveSection(section.id, 1)} disabled={sectionIndex === design.sections.length - 1}>
+                      </DarkTool>
+                      <DarkTool
+                        label="Move section down"
+                        disabled={sectionIndex === design.sections.length - 1}
+                        onClick={() => onMoveSection(section.id, 1)}
+                      >
                         <ChevronDown className="h-3.5 w-3.5" />
-                      </IconButton>
-                      <IconButton label="Duplicate section" onClick={() => onDuplicateSection(section.id)}>
+                      </DarkTool>
+                      <DarkTool
+                        label="Duplicate section"
+                        onClick={() => onDuplicateSection(section.id)}
+                      >
                         <Copy className="h-3.5 w-3.5" />
-                      </IconButton>
-                      <IconButton
+                      </DarkTool>
+                      <DarkTool
                         label="Add column"
                         disabled={section.columns.length >= 4}
                         onClick={() => onAddColumn(section.id)}
                       >
                         <Columns2 className="h-3.5 w-3.5" />
-                      </IconButton>
+                      </DarkTool>
+                      <DarkTool
+                        label="Delete section"
+                        danger
+                        disabled={design.sections.length <= 1}
+                        onClick={() => onDeleteSection(section.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </DarkTool>
                     </div>
-                  </>
-                ) : null}
-                <div
-                  className={cn(
-                    "flex",
-                    device === "mobile" ? "flex-col gap-4" : "flex-row items-stretch"
-                  )}
-                  style={{
-                    gap: device === "mobile" ? undefined : section.columnGap,
-                    alignItems:
-                      section.verticalAlign === "middle"
-                        ? "center"
-                        : section.verticalAlign === "bottom"
-                          ? "flex-end"
-                          : "flex-start",
-                  }}
-                >
-                  {columnOrder.map((column) => {
-                    const columnDropKey = `${section.id}:${column.id}:end`;
-                    return (
+                  ) : null}
+
+                  <section
+                    className={cn(
+                      "relative transition-[box-shadow]",
+                      showSectionOutline &&
+                        "shadow-[inset_0_0_0_2px_#007DC5]"
+                    )}
+                    style={{
+                      background:
+                        section.background || design.styles.contentBackground,
+                      padding: `${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px`,
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect({ type: "section", sectionId: section.id });
+                    }}
+                  >
                     <div
-                      key={column.id}
                       className={cn(
-                        "relative min-h-[72px] min-w-0 flex-1 rounded transition-colors",
-                        dropTarget === columnDropKey && "bg-[#007DC5]/10 ring-1 ring-[#007DC5]"
+                        "flex",
+                        device === "mobile"
+                          ? "flex-col gap-3"
+                          : "flex-row items-stretch"
                       )}
-                      style={{ width: device === "mobile" ? "100%" : `${column.width}%` }}
-                      onDragOver={(event) => {
-                        if (readOnly) return;
-                        event.preventDefault();
-                        setDropTarget(columnDropKey);
-                      }}
-                      onDragLeave={() => {
-                        setDropTarget((current) =>
-                          current === columnDropKey ? null : current
-                        );
-                      }}
-                      onDrop={(event) => {
-                        if (readOnly) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setDropTarget(null);
-                        const payload = readDrag(event);
-                        if (!payload || payload.source === "section") return;
-                        onDrop(payload, {
-                          sectionId: section.id,
-                          columnId: column.id,
-                          beforeBlockId: null,
-                        });
+                      style={{
+                        gap: device === "mobile" ? undefined : section.columnGap,
+                        alignItems:
+                          section.verticalAlign === "middle"
+                            ? "center"
+                            : section.verticalAlign === "bottom"
+                              ? "flex-end"
+                              : "flex-start",
                       }}
                     >
-                      {showHandles && section.columns.length > 1 ? (
-                        <button
-                          type="button"
-                          title="Remove column"
-                          className="absolute -right-1 -top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-muted shadow-sm hover:text-red-700"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onRemoveColumn(section.id, column.id);
-                          }}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                      ) : null}
-                      {column.blocks.length === 0 ? (
-                        <div className="flex min-h-[88px] items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50/80 px-2 py-6 text-center text-xs text-muted">
-                          Drop content here
-                        </div>
-                      ) : null}
-                      {column.blocks.map((block, blockIndex) => {
-                        const selected =
-                          selection.type === "block" && selection.blockId === block.id;
-                        const beforeKey = `${section.id}:${column.id}:${block.id}`;
+                      {columnOrder.map((column, columnIndex) => {
+                        const columnDropKey = `${section.id}:${column.id}:end`;
+                        const originalIndex = section.columns.findIndex(
+                          (item) => item.id === column.id
+                        );
                         return (
-                          <div key={block.id} className="relative">
-                            <div
-                              className={cn(
-                                "mx-1 h-1 rounded transition-colors",
-                                dropTarget === beforeKey
-                                  ? "bg-[#007DC5]"
-                                  : "bg-transparent"
-                              )}
-                              onDragOver={(event) => {
-                                if (readOnly) return;
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setDropTarget(beforeKey);
-                              }}
-                              onDrop={(event) => {
-                                if (readOnly) return;
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setDropTarget(null);
-                                const payload = readDrag(event);
-                                if (!payload || payload.source === "section") return;
-                                onDrop(payload, {
-                                  sectionId: section.id,
-                                  columnId: column.id,
-                                  beforeBlockId: block.id,
-                                });
-                              }}
-                            />
                           <div
+                            key={column.id}
                             className={cn(
-                              "relative",
-                              selected && "outline outline-2 outline-offset-2 outline-[#007DC5]"
+                              "relative min-h-[64px] min-w-0 flex-1 transition-colors",
+                              showColumnGuides &&
+                                "rounded-sm outline outline-1 outline-dashed outline-slate-300/80",
+                              dropTarget === columnDropKey &&
+                                "bg-[#007DC5]/10 outline outline-1 outline-[#007DC5]"
                             )}
-                            onClick={(event) => {
+                            style={{
+                              width:
+                                device === "mobile"
+                                  ? "100%"
+                                  : `${column.width}%`,
+                            }}
+                            onDragOver={(event) => {
+                              if (readOnly) return;
+                              event.preventDefault();
+                              setDropTarget(columnDropKey);
+                            }}
+                            onDragLeave={() => {
+                              setDropTarget((current) =>
+                                current === columnDropKey ? null : current
+                              );
+                            }}
+                            onDrop={(event) => {
+                              if (readOnly) return;
+                              event.preventDefault();
                               event.stopPropagation();
-                              onSelect({
-                                type: "block",
+                              setDropTarget(null);
+                              const payload = readDrag(event);
+                              if (!payload || payload.source === "section")
+                                return;
+                              onDrop(payload, {
                                 sectionId: section.id,
                                 columnId: column.id,
-                                blockId: block.id,
+                                beforeBlockId: null,
                               });
                             }}
                           >
-                            {!readOnly && selected ? (
-                              <div className="mb-1 flex justify-end gap-1">
-                                <span
-                                  className="inline-flex h-6 w-6 cursor-grab items-center justify-center text-muted active:cursor-grabbing"
-                                  title="Drag to move"
-                                  draggable
-                                  onDragStart={(event) => {
+                            {showSectionTools && section.columns.length > 1 ? (
+                              <div className="mb-1 flex items-center justify-between gap-1 px-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Col {originalIndex + 1 || columnIndex + 1} ·{" "}
+                                  {column.width}%
+                                </span>
+                                <button
+                                  type="button"
+                                  title="Remove column"
+                                  className="text-[10px] text-muted hover:text-red-700"
+                                  onClick={(event) => {
                                     event.stopPropagation();
-                                    writeDrag(event, {
-                                      source: "move",
-                                      blockId: block.id,
-                                    });
+                                    onRemoveColumn(section.id, column.id);
                                   }}
                                 >
-                                  <GripVertical className="h-3.5 w-3.5" />
-                                </span>
-                                <IconButton label="Move up" onClick={() => onMove(block.id, -1)} disabled={blockIndex === 0}>
-                                  <ChevronUp className="h-3.5 w-3.5" />
-                                </IconButton>
-                                <IconButton label="Move down" onClick={() => onMove(block.id, 1)} disabled={blockIndex === column.blocks.length - 1}>
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                </IconButton>
-                                <IconButton label="Duplicate" onClick={() => onDuplicate(block.id)}>
-                                  <Copy className="h-3.5 w-3.5" />
-                                </IconButton>
-                                <IconButton label="Delete" onClick={() => onDelete(block.id)}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </IconButton>
+                                  Remove
+                                </button>
                               </div>
                             ) : null}
-                            <BlockView
-                              block={block}
-                              design={design}
-                              selected={selected}
-                              readOnly={readOnly}
-                              insertRequest={
-                                selected && block.type === "text"
-                                  ? insertRequest
-                                  : null
-                              }
-                              onLive={(patch) => onLiveBlock(block.id, patch)}
-                              onCommit={() => onCommitBlock(block.id)}
-                            />
-                          </div>
+
+                            {column.blocks.length === 0 ? (
+                              <div className="m-1 flex min-h-[72px] items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50/90 px-2 py-5 text-center text-xs text-muted">
+                                Drop a module here
+                              </div>
+                            ) : null}
+
+                            {column.blocks.map((block, blockIndex) => {
+                              const selected =
+                                selection.type === "block" &&
+                                selection.blockId === block.id;
+                              const hovered = hoverBlockId === block.id;
+                              const showModuleChrome =
+                                !readOnly && (selected || hovered);
+                              const beforeKey = `${section.id}:${column.id}:${block.id}`;
+                              return (
+                                <div key={block.id} className="relative py-0.5">
+                                  <InsertLine
+                                    active={dropTarget === beforeKey}
+                                    onDragOver={() => setDropTarget(beforeKey)}
+                                    onDrop={(payload) => {
+                                      setDropTarget(null);
+                                      if (payload.source === "section") return;
+                                      onDrop(payload, {
+                                        sectionId: section.id,
+                                        columnId: column.id,
+                                        beforeBlockId: block.id,
+                                      });
+                                    }}
+                                    disabled={readOnly}
+                                  />
+                                  <div
+                                    className={cn(
+                                      "relative ml-1",
+                                      showModuleChrome && "z-[4]"
+                                    )}
+                                    onMouseEnter={() =>
+                                      setHoverBlockId(block.id)
+                                    }
+                                    onMouseLeave={() => {
+                                      setHoverBlockId((current) =>
+                                        current === block.id ? null : current
+                                      );
+                                    }}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onSelect({
+                                        type: "block",
+                                        sectionId: section.id,
+                                        columnId: column.id,
+                                        blockId: block.id,
+                                      });
+                                    }}
+                                  >
+                                    {showModuleChrome ? (
+                                      <>
+                                        <span
+                                          className="absolute -left-3 top-3 z-30 flex h-7 w-5 cursor-grab items-center justify-center rounded-sm bg-[#007DC5] text-white shadow-sm active:cursor-grabbing"
+                                          title="Drag module"
+                                          draggable
+                                          onDragStart={(event) => {
+                                            event.stopPropagation();
+                                            writeDrag(event, {
+                                              source: "move",
+                                              blockId: block.id,
+                                            });
+                                          }}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
+                                          <GripVertical className="h-3.5 w-3.5" />
+                                        </span>
+                                        <div
+                                          className="absolute -top-7 right-0 z-30 flex items-center gap-0.5 rounded-md bg-[#2d3a45] px-1 py-0.5 shadow-md"
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                        >
+                                          <DarkTool
+                                            label="Move up"
+                                            disabled={blockIndex === 0}
+                                            onClick={() =>
+                                              onMove(block.id, -1)
+                                            }
+                                          >
+                                            <ChevronUp className="h-3.5 w-3.5" />
+                                          </DarkTool>
+                                          <DarkTool
+                                            label="Move down"
+                                            disabled={
+                                              blockIndex ===
+                                              column.blocks.length - 1
+                                            }
+                                            onClick={() => onMove(block.id, 1)}
+                                          >
+                                            <ChevronDown className="h-3.5 w-3.5" />
+                                          </DarkTool>
+                                          <DarkTool
+                                            label="Duplicate"
+                                            onClick={() =>
+                                              onDuplicate(block.id)
+                                            }
+                                          >
+                                            <Copy className="h-3.5 w-3.5" />
+                                          </DarkTool>
+                                          <DarkTool
+                                            label="Delete"
+                                            danger
+                                            onClick={() => onDelete(block.id)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </DarkTool>
+                                        </div>
+                                      </>
+                                    ) : null}
+                                    <div
+                                      className={cn(
+                                        "rounded-sm transition-[box-shadow]",
+                                        showModuleChrome &&
+                                          "shadow-[inset_0_0_0_2px_#007DC5]"
+                                      )}
+                                    >
+                                      <BlockView
+                                        block={block}
+                                        design={design}
+                                        selected={selected}
+                                        readOnly={readOnly}
+                                        insertRequest={
+                                          selected && block.type === "text"
+                                            ? insertRequest
+                                            : null
+                                        }
+                                        onLive={(patch) =>
+                                          onLiveBlock(block.id, patch)
+                                        }
+                                        onCommit={() =>
+                                          onCommitBlock(block.id)
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })}
                     </div>
-                    );
-                  })}
+                  </section>
                 </div>
-              </section>
-            </div>
-          );
-        })}
-        <SectionDrop
-          disabled={readOnly}
-          onDrop={(payload) => onDrop(payload, { beforeSectionId: null })}
-        />
-      </div>
+
+                {!readOnly && showSectionTools ? (
+                  <div className="flex justify-center py-1.5">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full border border-[#007DC5]/40 bg-white px-2.5 py-1 text-[11px] font-medium text-[#007DC5] shadow-sm hover:bg-[#007DC5]/5"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAddSectionAfter(section.id);
+                      }}
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add section
+                    </button>
+                  </div>
+                ) : (
+                  <div className="h-2" />
+                )}
+              </div>
+            );
+          })}
+
+          <SectionGap
+            disabled={readOnly}
+            trailing
+            onDropSection={(payload) =>
+              onDrop(payload, { beforeSectionId: null })
+            }
+            onAddClick={
+              design.sections.length > 0
+                ? () =>
+                    onAddSectionAfter(
+                      design.sections[design.sections.length - 1]!.id
+                    )
+                : undefined
+            }
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function SectionDrop({
+function SectionGap({
   disabled,
-  onDrop,
+  trailing,
+  onDropSection,
+  onAddClick,
 }: {
   disabled?: boolean;
-  onDrop: (payload: DesignerDrag) => void;
+  trailing?: boolean;
+  onDropSection: (payload: DesignerDrag) => void;
+  onAddClick?: () => void;
 }) {
   const [active, setActive] = useState(false);
-  if (disabled) return null;
+  if (disabled) return <div className={trailing ? "h-2" : "h-0"} />;
   return (
     <div
       className={cn(
-        "my-1 flex h-6 items-center justify-center rounded border border-dashed transition-colors",
-        active
-          ? "border-[#007DC5] bg-[#007DC5]/10"
-          : "border-transparent hover:border-border"
+        "relative flex items-center justify-center transition-colors",
+        trailing ? "h-10" : "h-3",
+        active && "bg-[#007DC5]/10"
       )}
       onDragOver={(event) => {
         event.preventDefault();
@@ -396,55 +551,88 @@ function SectionDrop({
         event.stopPropagation();
         setActive(false);
         const payload = readDrag(event);
-        if (payload?.source === "section") onDrop(payload);
+        if (payload?.source === "section") onDropSection(payload);
       }}
     >
       {active ? (
-        <span className="text-[10px] uppercase tracking-wide text-[#007DC5]">
-          Drop section
+        <span className="rounded bg-[#007DC5] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+          Drop section here
         </span>
-      ) : null}
+      ) : trailing && onAddClick ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-white/90 px-2.5 py-1 text-[11px] text-muted hover:border-[#007DC5] hover:text-brand"
+          onClick={(event) => {
+            event.stopPropagation();
+            onAddClick();
+          }}
+        >
+          <Plus className="h-3 w-3" />
+          Add section
+        </button>
+      ) : (
+        <div
+          className={cn(
+            "h-px w-full max-w-[80%] bg-transparent",
+            active && "bg-[#007DC5]"
+          )}
+        />
+      )}
     </div>
   );
 }
 
-function IconButton({
-  label,
-  onClick,
+function InsertLine({
+  active,
   disabled,
-  children,
+  onDragOver,
+  onDrop,
 }: {
-  label: string;
-  onClick: () => void;
+  active: boolean;
   disabled?: boolean;
-  children: React.ReactNode;
+  onDragOver: () => void;
+  onDrop: (payload: DesignerDrag) => void;
 }) {
+  if (disabled) return null;
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      className="inline-flex h-6 w-6 items-center justify-center rounded border border-border bg-white text-muted hover:text-brand disabled:opacity-40"
-      onClick={(event) => {
+    <div
+      className={cn(
+        "mx-2 flex h-2 items-center justify-center transition-all",
+        active ? "h-3" : "hover:h-3"
+      )}
+      onDragOver={(event) => {
+        event.preventDefault();
         event.stopPropagation();
-        onClick();
+        onDragOver();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const payload = readDrag(event);
+        if (payload) onDrop(payload);
       }}
     >
-      {children}
-    </button>
+      <div
+        className={cn(
+          "h-0.5 w-full rounded-full transition-colors",
+          active ? "bg-[#007DC5]" : "bg-transparent"
+        )}
+      />
+    </div>
   );
 }
 
-function RoundHandle({
+function DarkTool({
   label,
   onClick,
   disabled,
+  danger,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  danger?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -453,7 +641,10 @@ function RoundHandle({
       aria-label={label}
       title={label}
       disabled={disabled}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#007DC5] bg-white text-[#007DC5] shadow-sm hover:bg-[#007DC5] hover:text-white disabled:opacity-40"
+      className={cn(
+        "inline-flex h-7 w-7 items-center justify-center rounded text-white/90 hover:bg-white/15 disabled:opacity-35",
+        danger && "hover:bg-red-500/40"
+      )}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
@@ -631,6 +822,107 @@ function BlockView({
     );
   }
 
+  if (block.type === "video") {
+    const thumb = emailImageSrc(block.thumbnailSrc, false);
+    return (
+      <div style={style}>
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumb}
+            alt={block.alt || "Watch video"}
+            className="inline-block h-auto max-w-full"
+            style={{ width: `${block.widthPercent}%` }}
+          />
+        ) : (
+          <div className="inline-flex min-h-[100px] w-full flex-col items-center justify-center gap-1 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-muted">
+            <span className="font-medium text-brand">Add video</span>
+            <span className="text-xs">Thumbnail + video URL in the inspector</span>
+          </div>
+        )}
+        {block.videoUrl ? (
+          <p className="mt-1 text-xs" style={{ color: design.styles.linkColor }}>
+            Watch the video
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (block.type === "quote") {
+    return (
+      <div
+        style={{
+          ...style,
+          borderLeft: `4px solid ${block.accentColor}`,
+          paddingLeft: Math.max(12, block.paddingLeft),
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontFamily: design.styles.headingFontFamily,
+            fontSize: block.fontSize,
+            fontWeight: 600,
+            color: block.color,
+            lineHeight: 1.35,
+          }}
+        >
+          {block.text}
+        </p>
+        {block.attribution ? (
+          <p className="mt-2 text-xs text-muted">— {block.attribution}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (block.type === "content_card") {
+    const src = emailImageSrc(block.imageSrc, false);
+    return (
+      <div
+        className="rounded border border-border p-3"
+        style={style}
+      >
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="mb-2 h-auto w-full object-cover" />
+        ) : (
+          <div className="mb-2 flex h-20 items-center justify-center rounded bg-slate-50 text-xs text-muted">
+            Card image
+          </div>
+        )}
+        <p
+          className="m-0 font-semibold"
+          style={{
+            fontFamily: design.styles.headingFontFamily,
+            color: design.styles.textColor,
+            fontSize: 18,
+          }}
+        >
+          {block.title}
+        </p>
+        <div
+          className="email-rich-text mt-1 text-sm"
+          dangerouslySetInnerHTML={{
+            __html: sanitizeRichEmailHtml(block.bodyHtml),
+          }}
+        />
+        {block.ctaLabel ? (
+          <span
+            className="mt-2 inline-block px-3 py-1.5 text-xs font-semibold text-white"
+            style={{
+              background: design.styles.buttonBackground,
+              borderRadius: design.styles.buttonRadius,
+            }}
+          >
+            {block.ctaLabel}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   if (block.type === "divider") {
     return (
       <div style={style}>
@@ -675,18 +967,23 @@ function BlockView({
   }
 
   if (block.type === "footer") {
+    const links = resolveFooterLinkSettings(design.styles, block);
+    const parts: string[] = [];
+    if (links.showUnsubscribe) parts.push(links.unsubscribeLabel);
+    if (links.showPreferences) parts.push(links.preferencesLabel);
     return (
       <div style={{ ...style, fontSize: 12, color: "#666666" }}>
         <div className="whitespace-pre-line">{block.text}</div>
-        <div className="mt-1" style={{ color: design.styles.linkColor }}>
-          <span className="underline">Unsubscribe</span>
-          {block.showPreferences !== false ? (
-            <>
-              {" · "}
-              <span className="underline">Manage preferences</span>
-            </>
-          ) : null}
-        </div>
+        {parts.length > 0 ? (
+          <div className="mt-1" style={{ color: design.styles.linkColor }}>
+            {parts.map((label, index) => (
+              <span key={label}>
+                {index > 0 ? <span className="text-muted">{" · "}</span> : null}
+                <span className="underline">{label}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }

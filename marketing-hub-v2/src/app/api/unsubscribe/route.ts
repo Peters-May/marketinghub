@@ -11,6 +11,8 @@ import {
 } from "@/lib/data/repos";
 import {
   EMAIL_PREFERENCE_TOPICS,
+  formatUnsubscribeFeedback,
+  isUnsubscribeFeedbackReason,
   normalizeTopicOptOuts,
   topicForAudienceName,
   type EmailPreferenceTopic,
@@ -100,6 +102,29 @@ export async function POST(request: NextRequest) {
   const previous = normalizeTopicOptOuts(contact?.email_topic_opt_outs);
   const wasAll =
     suppression?.reason === "unsubscribe" || contact?.marketing_consent === false;
+  const isOptingOut = wantsAll || topics.length > 0;
+  const alreadyOptedOut = wasAll || previous.length > 0;
+  const feedback = formatUnsubscribeFeedback({
+    reason: body.unsubscribe_reason,
+    other: body.unsubscribe_other,
+  });
+
+  if (isOptingOut && !alreadyOptedOut) {
+    const reasonId =
+      typeof body.unsubscribe_reason === "string" ? body.unsubscribe_reason : "";
+    if (!isUnsubscribeFeedbackReason(reasonId)) {
+      return jsonError("Please choose a reason for unsubscribing.", 400);
+    }
+    if (reasonId === "other") {
+      const other =
+        typeof body.unsubscribe_other === "string"
+          ? body.unsubscribe_other.trim()
+          : "";
+      if (!other) {
+        return jsonError("Please tell us a little more.", 400);
+      }
+    }
+  }
 
   if (contact) {
     const patch: Partial<Contact> = { email_topic_opt_outs: topics };
@@ -112,6 +137,7 @@ export async function POST(request: NextRequest) {
     await addEmailSuppression({
       email: parsed.email,
       reason: "unsubscribe",
+      detail: feedback || null,
       contact_id: contact?.id ?? null,
       campaign_id: parsed.campaignId || null,
     });
@@ -152,6 +178,7 @@ export async function POST(request: NextRequest) {
       contact_id: contact?.id ?? null,
       email: parsed.email,
       kind: "unsubscribed",
+      meta: feedback,
     });
     await bumpEmailCampaignStat(parsed.campaignId, "unsubscribed", 1);
   }

@@ -4,6 +4,7 @@ import {
   listEmailCampaigns,
   listEmailEvents,
 } from "@/lib/data/repos";
+import { projectCampaignStatsFromEvents } from "@/lib/email/stats-projector";
 
 export async function GET(request: NextRequest) {
   const { error } = await requireAdmin();
@@ -31,8 +32,31 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
+  const filteredEvents = events.filter((e) => {
+    if (campaignId && e.campaign_id !== campaignId) return false;
+    const t = new Date(e.created_at).getTime();
+    if (fromMs !== null && Number.isFinite(fromMs) && t < fromMs) return false;
+    if (toMs !== null && Number.isFinite(toMs) && t > toMs) return false;
+    return true;
+  });
+
+  const eventsByCampaign = new Map<string, typeof filteredEvents>();
+  for (const event of filteredEvents) {
+    const list = eventsByCampaign.get(event.campaign_id) ?? [];
+    list.push(event);
+    eventsByCampaign.set(event.campaign_id, list);
+  }
+
+  const projected = filteredCampaigns.map((c) => {
+    const stats = projectCampaignStatsFromEvents(
+      eventsByCampaign.get(c.id) ?? [],
+      c.stats
+    );
+    return { ...c, stats };
+  });
+
   const rollup = {
-    campaigns: filteredCampaigns.length,
+    campaigns: projected.length,
     recipients: 0,
     delivered: 0,
     opened: 0,
@@ -42,7 +66,7 @@ export async function GET(request: NextRequest) {
     unsubscribed: 0,
   };
 
-  for (const c of filteredCampaigns) {
+  for (const c of projected) {
     rollup.recipients += c.stats.recipients || 0;
     rollup.delivered += c.stats.delivered || 0;
     rollup.opened += c.stats.opened || 0;
@@ -52,17 +76,9 @@ export async function GET(request: NextRequest) {
     rollup.unsubscribed += c.stats.unsubscribed || 0;
   }
 
-  const filteredEvents = events.filter((e) => {
-    if (campaignId && e.campaign_id !== campaignId) return false;
-    const t = new Date(e.created_at).getTime();
-    if (fromMs !== null && Number.isFinite(fromMs) && t < fromMs) return false;
-    if (toMs !== null && Number.isFinite(toMs) && t > toMs) return false;
-    return true;
-  });
-
   return jsonOk({
     rollup,
-    campaigns: filteredCampaigns.map((c) => ({
+    campaigns: projected.map((c) => ({
       id: c.id,
       title: c.title,
       status: c.status,

@@ -13,6 +13,14 @@ export type EmailDesignStyles = {
   buttonBackground: string;
   buttonColor: string;
   buttonRadius: number;
+  /** When true, sections marked locked cannot be edited or removed in the designer. */
+  brandLocked?: boolean;
+  /** Include an Unsubscribe link in footer blocks / auto footer. */
+  showUnsubscribeLink?: boolean;
+  /** Include a Manage preferences link (same preference-centre URL). */
+  showPreferencesLink?: boolean;
+  unsubscribeLabel?: string;
+  preferencesLabel?: string;
 };
 
 export type BlockPadding = {
@@ -104,8 +112,41 @@ export type HtmlBlock = BlockPadding & {
 export type FooterBlock = BlockPadding & {
   type: "footer";
   text: string;
-  /** Show a manage-preferences link beside unsubscribe. */
+  /** @deprecated Prefer design.styles.showPreferencesLink */
   showPreferences: boolean;
+  /** Override email-level unsubscribe visibility when set. */
+  showUnsubscribe?: boolean;
+  unsubscribeLabel?: string;
+  preferencesLabel?: string;
+};
+
+/** Clickable thumbnail that opens a video URL (YouTube / Vimeo / file). */
+export type VideoBlock = BlockPadding & {
+  type: "video";
+  thumbnailSrc: string;
+  alt: string;
+  videoUrl: string;
+  widthPercent: number;
+};
+
+export type QuoteBlock = BlockPadding & {
+  type: "quote";
+  text: string;
+  attribution: string;
+  accentColor: string;
+  color: string;
+  fontSize: number;
+};
+
+/** Title + image + body + CTA — optional hub content id for reference. */
+export type ContentCardBlock = BlockPadding & {
+  type: "content_card";
+  title: string;
+  imageSrc: string;
+  bodyHtml: string;
+  ctaLabel: string;
+  ctaHref: string;
+  contentId: string;
 };
 
 export type EmailBlock =
@@ -118,7 +159,10 @@ export type EmailBlock =
   | SocialBlock
   | LogoBlock
   | HtmlBlock
-  | FooterBlock;
+  | FooterBlock
+  | VideoBlock
+  | QuoteBlock
+  | ContentCardBlock;
 
 export type EmailBlockType = EmailBlock["type"];
 
@@ -133,6 +177,17 @@ export type SectionVerticalAlign = "top" | "middle" | "bottom";
 /** How columns stack on narrow viewports. */
 export type SectionMobileStack = "default" | "reverse";
 
+/**
+ * Audience topic gate for a section. Empty / "all" = always included.
+ * Matched against the campaign audience topic at send/compile time.
+ */
+export type SectionShowFor =
+  | "all"
+  | "general_marketing"
+  | "sailing_schedules"
+  | "freight_forwarding"
+  | "commercial_marine";
+
 export type EmailSection = {
   id: string;
   background: string;
@@ -143,6 +198,9 @@ export type EmailSection = {
   columnGap: number;
   verticalAlign: SectionVerticalAlign;
   mobileStack: SectionMobileStack;
+  /** Brand-locked sections (header/footer) cannot be changed when styles.brandLocked. */
+  locked?: boolean;
+  showFor?: SectionShowFor;
   columns: EmailColumn[];
 };
 

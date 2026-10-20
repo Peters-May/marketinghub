@@ -32,17 +32,55 @@ export function applyEmailMerge(
   });
 }
 
-export function ensureUnsubscribeFooter(html: string): string {
+export function ensureUnsubscribeFooter(
+  html: string,
+  opts?: {
+    showUnsubscribe?: boolean;
+    showPreferences?: boolean;
+    unsubscribeLabel?: string;
+    preferencesLabel?: string;
+    linkColor?: string;
+  }
+): string {
   if (/\{\{\s*unsubscribe_url\s*\}\}/i.test(html)) return html;
   if (/unsubscribe/i.test(html) && /href=/i.test(html)) return html;
+  const showUnsubscribe = opts?.showUnsubscribe !== false;
+  const showPreferences = opts?.showPreferences === true;
+  if (!showUnsubscribe && !showPreferences) return html;
+  const color = opts?.linkColor || "#007DC5";
+  const unsubLabel = opts?.unsubscribeLabel?.trim() || "Unsubscribe";
+  const prefsLabel = opts?.preferencesLabel?.trim() || "Manage preferences";
+  const parts: string[] = [];
+  if (showUnsubscribe) {
+    parts.push(
+      `<a href="{{unsubscribe_url}}" style="color:${color};">${escapeFooterLabel(unsubLabel)}</a>`
+    );
+  }
+  if (showPreferences) {
+    parts.push(
+      `<a href="{{unsubscribe_url}}" style="color:${color};">${escapeFooterLabel(prefsLabel)}</a>`
+    );
+  }
   const footer = `
 <p style="margin-top:32px;font-size:12px;color:#666;font-family:Arial,sans-serif;">
-  <a href="{{unsubscribe_url}}">Unsubscribe</a> from Peters &amp; May marketing emails.
+  ${parts.join(" &nbsp;|&nbsp; ")}${
+    showUnsubscribe
+      ? " from Peters &amp; May marketing emails."
+      : ""
+  }
 </p>`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, `${footer}</body>`);
   }
   return `${html}${footer}`;
+}
+
+function escapeFooterLabel(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 const VIEW_IN_BROWSER_LINK = `<p style="margin:0 0 16px;padding:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.4;text-align:center;"><a href="{{view_in_browser_url}}" style="color:#007DC5;text-decoration:underline;">View this email in your browser</a></p>`;

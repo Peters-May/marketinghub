@@ -8,6 +8,7 @@ import type {
   EmailDesignStyles,
   EmailSection,
   SectionPreset,
+  SectionShowFor,
   SocialNetwork,
   StarterLayout,
 } from "@/lib/email/design/types";
@@ -58,6 +59,11 @@ export function defaultEmailStyles(): EmailDesignStyles {
     buttonBackground: COLORS.ensignNavy.hex,
     buttonColor: COLORS.white.hex,
     buttonRadius: 4,
+    brandLocked: false,
+    showUnsubscribeLink: true,
+    showPreferencesLink: true,
+    unsubscribeLabel: "Unsubscribe",
+    preferencesLabel: "Manage preferences",
   };
 }
 
@@ -210,6 +216,75 @@ export function createBlock(
           "paddingLeft",
         ]),
       };
+    case "video":
+      return {
+        ...base,
+        type: "video",
+        thumbnailSrc: "",
+        alt: "Watch video",
+        videoUrl: "",
+        widthPercent: 100,
+        align: "center",
+        ...pick(partial, [
+          "thumbnailSrc",
+          "alt",
+          "videoUrl",
+          "widthPercent",
+          "align",
+          "paddingTop",
+          "paddingRight",
+          "paddingBottom",
+          "paddingLeft",
+        ]),
+      };
+    case "quote":
+      return {
+        ...base,
+        type: "quote",
+        text: "A short pull quote.",
+        attribution: "",
+        accentColor: COLORS.pmBlue.hex,
+        color: styles.textColor,
+        fontSize: 20,
+        align: "left",
+        ...pick(partial, [
+          "text",
+          "attribution",
+          "accentColor",
+          "color",
+          "fontSize",
+          "align",
+          "paddingTop",
+          "paddingRight",
+          "paddingBottom",
+          "paddingLeft",
+        ]),
+      };
+    case "content_card":
+      return {
+        ...base,
+        type: "content_card",
+        title: "Article title",
+        imageSrc: "",
+        bodyHtml: "<p>Short summary.</p>",
+        ctaLabel: "Read more",
+        ctaHref: "https://www.petersandmay.com",
+        contentId: "",
+        align: "left",
+        ...pick(partial, [
+          "title",
+          "imageSrc",
+          "bodyHtml",
+          "ctaLabel",
+          "ctaHref",
+          "contentId",
+          "align",
+          "paddingTop",
+          "paddingRight",
+          "paddingBottom",
+          "paddingLeft",
+        ]),
+      };
     default:
       return {
         ...base,
@@ -294,6 +369,8 @@ export function createSection(
     columnGap: partial?.columnGap ?? 16,
     verticalAlign: partial?.verticalAlign ?? "top",
     mobileStack: partial?.mobileStack ?? "default",
+    locked: partial?.locked ?? false,
+    showFor: partial?.showFor ?? "all",
     columns: partial?.columns ?? columns,
   };
 }
@@ -302,6 +379,7 @@ export function footerSection(): EmailSection {
   return createSection("1", {
     paddingTop: 8,
     paddingBottom: 24,
+    locked: true,
     columns: [column(100, [createBlock("footer")])],
   });
 }
@@ -332,6 +410,7 @@ export function newsletterDesign(): EmailDesign {
     sections: [
       createSection("1", {
         paddingBottom: 8,
+        locked: true,
         columns: [column(100, [createBlock("logo")])],
       }),
       createSection("1", {
@@ -470,6 +549,17 @@ export function normalizeEmailDesign(raw: unknown): EmailDesign | null {
     buttonBackground: str(stylesRaw.buttonBackground, defaults.buttonBackground),
     buttonColor: str(stylesRaw.buttonColor, defaults.buttonColor),
     buttonRadius: num(stylesRaw.buttonRadius, defaults.buttonRadius, 0, 40),
+    brandLocked: stylesRaw.brandLocked === true,
+    showUnsubscribeLink: stylesRaw.showUnsubscribeLink !== false,
+    showPreferencesLink: stylesRaw.showPreferencesLink !== false,
+    unsubscribeLabel: str(
+      stylesRaw.unsubscribeLabel,
+      defaults.unsubscribeLabel || "Unsubscribe"
+    ),
+    preferencesLabel: str(
+      stylesRaw.preferencesLabel,
+      defaults.preferencesLabel || "Manage preferences"
+    ),
   };
 
   const sections: EmailSection[] = [];
@@ -498,6 +588,7 @@ export function normalizeEmailDesign(raw: unknown): EmailDesign | null {
         : "top";
     const mobileStack =
       sectionRaw.mobileStack === "reverse" ? "reverse" : "default";
+    const showFor = normalizeShowFor(sectionRaw.showFor);
     sections.push({
       id: str(sectionRaw.id, uid("sec")),
       background: str(sectionRaw.background, ""),
@@ -508,6 +599,8 @@ export function normalizeEmailDesign(raw: unknown): EmailDesign | null {
       columnGap: num(sectionRaw.columnGap, 16, 0, 80),
       verticalAlign,
       mobileStack,
+      locked: sectionRaw.locked === true,
+      showFor,
       columns,
     });
   }
@@ -529,6 +622,9 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
     "logo",
     "html",
     "footer",
+    "video",
+    "quote",
+    "content_card",
   ];
   if (!known.includes(type)) return null;
   const created = createBlock(type);
@@ -599,14 +695,72 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
   }
   if (type === "footer") {
     const text = str(raw.text, OFFICE_FOOTER).trim();
-    return {
+    const footer: EmailBlock = {
       ...(merged as EmailBlock),
       type: "footer",
       text: text === "Peters & May" || text === "" ? OFFICE_FOOTER : str(raw.text, OFFICE_FOOTER),
       showPreferences: raw.showPreferences !== false,
+    };
+    if (raw.showUnsubscribe !== undefined) {
+      (footer as { showUnsubscribe?: boolean }).showUnsubscribe =
+        Boolean(raw.showUnsubscribe);
+    }
+    const unsubLabel = str(raw.unsubscribeLabel, "").trim();
+    const prefsLabel = str(raw.preferencesLabel, "").trim();
+    if (unsubLabel) {
+      (footer as { unsubscribeLabel?: string }).unsubscribeLabel = unsubLabel;
+    }
+    if (prefsLabel) {
+      (footer as { preferencesLabel?: string }).preferencesLabel = prefsLabel;
+    }
+    return footer;
+  }
+  if (type === "video") {
+    return {
+      ...(merged as EmailBlock),
+      type: "video",
+      widthPercent: num(raw.widthPercent, 100, 10, 100),
+      thumbnailSrc: str(raw.thumbnailSrc, ""),
+      alt: str(raw.alt, "Watch video"),
+      videoUrl: str(raw.videoUrl, ""),
+    } as EmailBlock;
+  }
+  if (type === "quote") {
+    return {
+      ...(merged as EmailBlock),
+      type: "quote",
+      text: str(raw.text, "A short pull quote."),
+      attribution: str(raw.attribution, ""),
+      accentColor: str(raw.accentColor, COLORS.pmBlue.hex),
+      color: str(raw.color, COLORS.ensignNavy.hex),
+      fontSize: num(raw.fontSize, 20, 14, 36),
+    } as EmailBlock;
+  }
+  if (type === "content_card") {
+    return {
+      ...(merged as EmailBlock),
+      type: "content_card",
+      title: str(raw.title, "Article title"),
+      imageSrc: str(raw.imageSrc, ""),
+      bodyHtml: str(raw.bodyHtml, "<p>Short summary.</p>"),
+      ctaLabel: str(raw.ctaLabel, "Read more"),
+      ctaHref: str(raw.ctaHref, "https://www.petersandmay.com"),
+      contentId: str(raw.contentId, ""),
     } as EmailBlock;
   }
   return merged as EmailBlock;
+}
+
+function normalizeShowFor(value: unknown): SectionShowFor {
+  if (
+    value === "general_marketing" ||
+    value === "sailing_schedules" ||
+    value === "freight_forwarding" ||
+    value === "commercial_marine"
+  ) {
+    return value;
+  }
+  return "all";
 }
 
 export function findBlock(

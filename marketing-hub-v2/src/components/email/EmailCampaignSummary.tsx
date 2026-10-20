@@ -209,6 +209,9 @@ export function EmailCampaignSummary({
                   {person.name !== person.email ? (
                     <div className="text-xs text-muted">{person.email}</div>
                   ) : null}
+                  {person.detail ? (
+                    <div className="mt-1 text-xs text-muted">Reason: {person.detail}</div>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -1,10 +1,17 @@
 import { ensureUnsubscribeFooter, ensureViewInBrowserLink } from "@/lib/email/merge";
+import { resolveFooterLinkSettings } from "@/lib/email/footer-links";
 import type {
   EmailBlock,
   EmailDesign,
   EmailSection,
+  SectionShowFor,
 } from "@/lib/email/design/types";
 import { extractEmailBody, OFFICE_FOOTER } from "@/lib/email/design/document";
+
+export type CompileEmailOptions = {
+  /** When set, sections with a matching showFor (or "all") are kept. */
+  topic?: SectionShowFor | null;
+};
 
 function escapeHtml(value: string): string {
   return value
@@ -190,15 +197,63 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     case "footer": {
       const footerText =
         block.text.trim() === "Peters & May" ? OFFICE_FOOTER : block.text;
-      const prefs =
-        block.showPreferences !== false
-          ? ` &nbsp;|&nbsp; <a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Manage preferences</a>`
+      const links = resolveFooterLinkSettings(styles, block);
+      const linkParts: string[] = [];
+      if (links.showUnsubscribe) {
+        linkParts.push(
+          `<a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">${escapeHtml(links.unsubscribeLabel)}</a>`
+        );
+      }
+      if (links.showPreferences) {
+        linkParts.push(
+          `<a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">${escapeHtml(links.preferencesLabel)}</a>`
+        );
+      }
+      const linkRow =
+        linkParts.length > 0
+          ? `<p style="margin:8px 0 0;">${linkParts.join(" &nbsp;|&nbsp; ")}</p>`
           : "";
-      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}<p style="margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Unsubscribe</a>${prefs}</p></div>`;
+      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}${linkRow}</div>`;
+    }
+    case "video": {
+      const thumb = emailImageSrc(block.thumbnailSrc, true);
+      const href = safeEmailUrl(block.videoUrl);
+      if (!href) return "";
+      const width = Math.round((styles.contentWidth * block.widthPercent) / 100);
+      const img = thumb
+        ? `<img src="${escapeAttr(thumb)}" alt="${escapeAttr(block.alt || "Watch video")}" width="${width}" style="display:block;border:0;max-width:100%;height:auto;width:100%;" />`
+        : `<span style="display:inline-block;padding:28px 20px;background:#0B2545;color:#ffffff;font-family:${styles.fontFamily};font-size:16px;font-weight:600;">Watch video</span>`;
+      return `<div style="${pad}${align}"><a href="${escapeAttr(href)}" style="text-decoration:none;">${img}</a><p style="margin:8px 0 0;font-family:${styles.fontFamily};font-size:12px;color:#666666;"><a href="${escapeAttr(href)}" style="color:${styles.linkColor};">Watch the video</a></p></div>`;
+    }
+    case "quote": {
+      const attr = block.attribution.trim()
+        ? `<p style="margin:10px 0 0;font-family:${styles.fontFamily};font-size:13px;color:#666666;">— ${escapeHtml(block.attribution)}</p>`
+        : "";
+      return `<div style="${pad}${align}border-left:4px solid ${escapeAttr(block.accentColor)};padding-left:${Math.max(12, block.paddingLeft)}px;"><p style="margin:0;font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.35;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</p>${attr}</div>`;
+    }
+    case "content_card": {
+      const src = emailImageSrc(block.imageSrc, true);
+      const href = safeEmailUrl(block.ctaHref) || "#";
+      const image = src
+        ? `<img src="${escapeAttr(src)}" alt="" width="100%" style="display:block;border:0;max-width:100%;height:auto;margin:0 0 12px;" />`
+        : "";
+      const cta = block.ctaLabel.trim()
+        ? `<p style="margin:12px 0 0;"><a href="${escapeAttr(href)}" style="display:inline-block;background:${escapeAttr(styles.buttonBackground)};color:${escapeAttr(styles.buttonColor)};font-family:${styles.fontFamily};font-size:14px;font-weight:600;text-decoration:none;padding:12px 18px;border-radius:${styles.buttonRadius}px;">${escapeHtml(block.ctaLabel)}</a></p>`
+        : "";
+      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="margin:0 0 8px;font-family:${styles.headingFontFamily};font-size:22px;line-height:1.25;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml)}</div>${cta}</div>`;
     }
     default:
       return "";
   }
+}
+
+function sectionVisibleForTopic(
+  section: EmailSection,
+  topic?: SectionShowFor | null
+): boolean {
+  if (!section.showFor || section.showFor === "all") return true;
+  if (!topic || topic === "all") return true;
+  return section.showFor === topic;
 }
 
 function renderSection(section: EmailSection, design: EmailDesign): string {
@@ -231,10 +286,16 @@ function renderSection(section: EmailSection, design: EmailDesign): string {
   return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr${rowAttr}>${cells}</tr></table></td></tr>`;
 }
 
-export function compileEmailDesign(design: EmailDesign): string {
+export function compileEmailDesign(
+  design: EmailDesign,
+  options?: CompileEmailOptions
+): string {
   const styles = design.styles;
   const width = styles.contentWidth;
-  const sections = design.sections.map((section) => renderSection(section, design)).join("");
+  const sections = design.sections
+    .filter((section) => sectionVisibleForTopic(section, options?.topic))
+    .map((section) => renderSection(section, design))
+    .join("");
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -259,5 +320,14 @@ ${sections}
 </table>
 </body>
 </html>`;
-  return ensureViewInBrowserLink(ensureUnsubscribeFooter(html));
+  const linkSettings = resolveFooterLinkSettings(styles);
+  return ensureViewInBrowserLink(
+    ensureUnsubscribeFooter(html, {
+      showUnsubscribe: linkSettings.showUnsubscribe,
+      showPreferences: linkSettings.showPreferences,
+      unsubscribeLabel: linkSettings.unsubscribeLabel,
+      preferencesLabel: linkSettings.preferencesLabel,
+      linkColor: styles.linkColor,
+    })
+  );
 }

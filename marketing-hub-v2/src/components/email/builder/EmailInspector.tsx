@@ -14,6 +14,11 @@ import {
   EMAIL_FONT_OPTIONS,
   ENSIGN_RED,
 } from "@/lib/email/design";
+import {
+  footerLinkPreviewParts,
+  resolveFooterLinkSettings,
+} from "@/lib/email/footer-links";
+import { EMAIL_PREFERENCE_TOPICS } from "@/lib/email/preferences";
 import { EmailImageField } from "@/components/email/builder/EmailImageField";
 
 const MERGE_TOKENS = [
@@ -299,6 +304,33 @@ export function EmailInspector({
                 <option value="reverse">Right on top of left</option>
               </select>
             </label>
+            <label className="block text-sm">
+              <span className="text-muted">Show for audience topic</span>
+              <select
+                className="input mt-1 w-full"
+                value={section.showFor ?? "all"}
+                onChange={(event) =>
+                  onSection({
+                    showFor: event.target.value as EmailSection["showFor"],
+                  })
+                }
+              >
+                <option value="all">Everyone (all topics)</option>
+                {EMAIL_PREFERENCE_TOPICS.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={section.locked === true}
+                onChange={(event) => onSection({ locked: event.target.checked })}
+              />
+              Brand-locked section
+            </label>
             <ColourField
               label="Background"
               value={section.background}
@@ -409,10 +441,137 @@ export function EmailInspector({
               max={40}
               onChange={(buttonRadius) => onDesign({ buttonRadius })}
             />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={design.styles.brandLocked === true}
+                onChange={(event) =>
+                  onDesign({ brandLocked: event.target.checked })
+                }
+              />
+              Lock brand sections (header/footer marked locked)
+            </label>
+            <UnsubscribePrefsSettings
+              styles={design.styles}
+              onDesign={onDesign}
+            />
           </>
         )}
       </fieldset>
     </aside>
+  );
+}
+
+function UnsubscribePrefsSettings({
+  styles,
+  onDesign,
+}: {
+  styles: EmailDesign["styles"];
+  onDesign: (patch: Partial<EmailDesign["styles"]>) => void;
+}) {
+  const settings = resolveFooterLinkSettings(styles);
+  const linkParts = footerLinkPreviewParts(settings);
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <p className="text-sm font-medium text-brand">Unsubscribe &amp; preferences</p>
+      <p className="text-xs text-muted">
+        Links in the email footer open the preference centre. Recipients can leave
+        individual lists or all marketing email.
+      </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={styles.showUnsubscribeLink !== false}
+          onChange={(event) =>
+            onDesign({ showUnsubscribeLink: event.target.checked })
+          }
+        />
+        Show unsubscribe link
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={styles.showPreferencesLink !== false}
+          onChange={(event) =>
+            onDesign({ showPreferencesLink: event.target.checked })
+          }
+        />
+        Show manage preferences link
+      </label>
+      <TextInput
+        label="Unsubscribe label"
+        value={styles.unsubscribeLabel ?? "Unsubscribe"}
+        onChange={(unsubscribeLabel) => onDesign({ unsubscribeLabel })}
+      />
+      <TextInput
+        label="Preferences label"
+        value={styles.preferencesLabel ?? "Manage preferences"}
+        onChange={(preferencesLabel) => onDesign({ preferencesLabel })}
+      />
+
+      <div className="rounded-lg border border-border bg-slate-50 p-3">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Footer link preview
+        </p>
+        <p
+          className="mt-2 text-xs leading-relaxed"
+          style={{ color: "#666666", fontFamily: styles.fontFamily }}
+        >
+          {linkParts.length === 0 ? (
+            <span className="text-muted">No footer links will be shown.</span>
+          ) : (
+            linkParts.map((label, index) => (
+              <span key={label}>
+                {index > 0 ? (
+                  <span className="text-muted">{" · "}</span>
+                ) : null}
+                <span
+                  className="underline"
+                  style={{ color: styles.linkColor }}
+                >
+                  {label}
+                </span>
+              </span>
+            ))
+          )}
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-white p-3 shadow-sm">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Preference centre preview
+        </p>
+        <p className="mt-2 font-display text-sm text-brand">
+          Email preferences
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          Choose which Peters &amp; May lists you want to receive.
+        </p>
+        <ul className="mt-3 space-y-2">
+          {EMAIL_PREFERENCE_TOPICS.map((topic) => (
+            <li key={topic.id} className="flex items-center gap-2 text-xs">
+              <span
+                className="inline-flex h-3.5 w-3.5 shrink-0 rounded border border-border bg-white"
+                aria-hidden
+              />
+              <span className="text-brand">{topic.label}</span>
+            </li>
+          ))}
+          <li className="flex items-center gap-2 border-t border-border pt-2 text-xs">
+            <span
+              className="inline-flex h-3.5 w-3.5 shrink-0 rounded border border-border bg-white"
+              aria-hidden
+            />
+            <span className="font-medium text-brand">
+              Unsubscribe from all marketing email
+            </span>
+          </li>
+        </ul>
+        <p className="mt-3 text-[10px] text-muted">
+          Demo only — recipients see this after using the footer link.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -515,6 +674,119 @@ function BlockFields({
           {onRewrite ? (
             <RewriteControls rewriting={rewriting} onRewrite={onRewrite} />
           ) : null}
+        </>
+      ) : null}
+      {block.type === "video" ? (
+        <>
+          <EmailImageField
+            src={block.thumbnailSrc}
+            onChange={(thumbnailSrc) =>
+              onBlock({ thumbnailSrc } as Partial<EmailBlock>)
+            }
+          />
+          <TextInput
+            label="Alt text"
+            value={block.alt}
+            onChange={(alt) => onBlock({ alt } as Partial<EmailBlock>)}
+          />
+          <TextInput
+            label="Video URL"
+            value={block.videoUrl}
+            onChange={(videoUrl) => onBlock({ videoUrl } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Width %"
+            value={block.widthPercent}
+            min={10}
+            max={100}
+            onChange={(widthPercent) =>
+              onBlock({ widthPercent } as Partial<EmailBlock>)
+            }
+          />
+        </>
+      ) : null}
+      {block.type === "quote" ? (
+        <>
+          <label className="block text-sm">
+            <span className="text-muted">Quote</span>
+            <textarea
+              className="input mt-1 min-h-[80px] w-full"
+              value={block.text}
+              onChange={(event) =>
+                onBlock({ text: event.target.value } as Partial<EmailBlock>)
+              }
+            />
+          </label>
+          <TextInput
+            label="Attribution"
+            value={block.attribution}
+            onChange={(attribution) =>
+              onBlock({ attribution } as Partial<EmailBlock>)
+            }
+          />
+          <NumberField
+            label="Size"
+            value={block.fontSize}
+            min={14}
+            max={36}
+            onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Text"
+            value={block.color}
+            onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Accent"
+            value={block.accentColor}
+            onChange={(accentColor) =>
+              onBlock({ accentColor } as Partial<EmailBlock>)
+            }
+          />
+        </>
+      ) : null}
+      {block.type === "content_card" ? (
+        <>
+          <TextInput
+            label="Title"
+            value={block.title}
+            onChange={(title) => onBlock({ title } as Partial<EmailBlock>)}
+          />
+          <EmailImageField
+            src={block.imageSrc}
+            onChange={(imageSrc) =>
+              onBlock({ imageSrc } as Partial<EmailBlock>)
+            }
+          />
+          <label className="block text-sm">
+            <span className="text-muted">Summary HTML</span>
+            <textarea
+              className="input mt-1 min-h-[80px] w-full font-mono text-xs"
+              value={block.bodyHtml}
+              onChange={(event) =>
+                onBlock({ bodyHtml: event.target.value } as Partial<EmailBlock>)
+              }
+            />
+          </label>
+          <TextInput
+            label="Button label"
+            value={block.ctaLabel}
+            onChange={(ctaLabel) =>
+              onBlock({ ctaLabel } as Partial<EmailBlock>)
+            }
+          />
+          <TextInput
+            label="Button link"
+            value={block.ctaHref}
+            onChange={(ctaHref) => onBlock({ ctaHref } as Partial<EmailBlock>)}
+          />
+          <TextInput
+            label="Hub content id (optional)"
+            value={block.contentId}
+            onChange={(contentId) =>
+              onBlock({ contentId } as Partial<EmailBlock>)
+            }
+          />
         </>
       ) : null}
       {block.type === "image" || block.type === "logo" ? (
@@ -705,18 +977,10 @@ function BlockFields({
               }
             />
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={block.showPreferences !== false}
-              onChange={(event) =>
-                onBlock({
-                  showPreferences: event.target.checked,
-                } as Partial<EmailBlock>)
-              }
-            />
-            Show manage preferences link
-          </label>
+          <p className="text-xs text-muted">
+            Unsubscribe and preference links are set under Email settings (click
+            Email in the breadcrumb). This footer uses those labels.
+          </p>
         </>
       ) : null}
       {block.type !== "spacer" && block.type !== "divider" ? (

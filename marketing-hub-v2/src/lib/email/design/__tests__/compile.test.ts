@@ -141,4 +141,58 @@ describe("email design compiler", () => {
     expect(normalizeEmailDesign({ version: 2, sections: [] })).toBeNull();
     expect(normalizeEmailDesign("not json")).toBeNull();
   });
+
+  it("compiles video, quote and topic-gated sections", () => {
+    const base = announcementDesign();
+    const design = {
+      ...base,
+      sections: [
+        {
+          ...base.sections[0],
+          showFor: "sailing_schedules" as const,
+          columns: [
+            {
+              ...base.sections[0].columns[0],
+              blocks: [
+                {
+                  id: "q1",
+                  type: "quote" as const,
+                  text: "Experience matters.",
+                  attribution: "Peters & May",
+                  accentColor: "#007DC5",
+                  color: "#0B2545",
+                  fontSize: 20,
+                  align: "left" as const,
+                  paddingTop: 8,
+                  paddingRight: 0,
+                  paddingBottom: 8,
+                  paddingLeft: 0,
+                },
+                {
+                  id: "v1",
+                  type: "video" as const,
+                  thumbnailSrc: "",
+                  alt: "Watch",
+                  videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                  widthPercent: 100,
+                  align: "center" as const,
+                  paddingTop: 8,
+                  paddingRight: 0,
+                  paddingBottom: 8,
+                  paddingLeft: 0,
+                },
+              ],
+            },
+          ],
+        },
+        base.sections[base.sections.length - 1],
+      ],
+    };
+    const forSailing = compileEmailDesign(design, { topic: "sailing_schedules" });
+    expect(forSailing).toContain("Experience matters.");
+    expect(forSailing).toContain("Watch the video");
+    const forFreight = compileEmailDesign(design, { topic: "freight_forwarding" });
+    expect(forFreight).not.toContain("Experience matters.");
+    expect(forFreight).toContain("Unsubscribe");
+  });
 });
