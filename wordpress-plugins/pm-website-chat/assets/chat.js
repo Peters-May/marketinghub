@@ -196,8 +196,18 @@
   composer.appendChild(sendBtn);
   panel.appendChild(composer);
 
-  var launcher = el("button", "pm-chat__launcher", cfg.labels.open);
+  var launcher = el("button", "pm-chat__launcher");
   launcher.type = "button";
+  launcher.setAttribute(
+    "aria-label",
+    (cfg.labels && cfg.labels.open) || "Open chat"
+  );
+  // Modern circular chat icon (no text label).
+  launcher.innerHTML =
+    '<svg class="pm-chat__launcher-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+    '<path d="M21 12a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.7-.3-3.9-.9L3 21l1.5-4.4A8.4 8.4 0 0 1 3.5 12 8.5 8.5 0 1 1 21 12Z"/>' +
+    '<path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>' +
+    "</svg>";
 
   root.appendChild(panel);
   root.appendChild(launcher);

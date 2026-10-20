@@ -40,25 +40,37 @@
   bottom: 20px;
 }
 
-.pm-chat__launcher {
+#pm-website-chat-root .pm-chat__launcher {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 52px;
-  height: 52px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--pm-chat-navy);
-  color: var(--pm-chat-white);
-  box-shadow: var(--pm-chat-shadow);
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: var(--pm-chat-navy) !important;
+  color: var(--pm-chat-white) !important;
+  box-shadow: var(--pm-chat-shadow) !important;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
+  transition: transform 0.15s ease, background 0.15s ease;
 }
 
-.pm-chat__launcher:hover {
-  background: #1b3a5b;
+#pm-website-chat-root .pm-chat__launcher:hover {
+  background: #1b3a5b !important;
+  transform: scale(1.04);
+}
+
+#pm-website-chat-root .pm-chat__launcher-icon {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .pm-chat__panel {
