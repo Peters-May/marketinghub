@@ -7,7 +7,6 @@ import {
   Columns2,
   Copy,
   GripVertical,
-  Minus,
   Plus,
   Trash2,
 } from "lucide-react";
