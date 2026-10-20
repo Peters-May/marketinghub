@@ -187,9 +187,13 @@
     URL.revokeObjectURL(url);
   }
 
-  function unlockComposer() {
-    if (collectState) return;
+  /** Free-type message box always stays at the bottom (never hide). */
+  function ensureComposerVisible() {
     composer.classList.remove("is-hidden");
+    // Keep composer last in the panel so it stays under collect / lead.
+    if (composer.parentNode === panel) {
+      panel.appendChild(composer);
+    }
   }
 
   function setTyping(on) {
@@ -358,7 +362,7 @@
       showQuoteTypeStarters();
     });
     addChip("Ask a question", function () {
-      unlockComposer();
+      ensureComposerVisible();
       input.focus();
     });
     addChip("Speak to the team", function () {
@@ -470,8 +474,7 @@
     collectState = null;
     collectEl.classList.remove("is-on");
     clearNode(collectEl);
-    // Always restore free-type for follow-up questions (quote form stays suppressed).
-    composer.classList.remove("is-hidden");
+    ensureComposerVisible();
   }
 
   function startCollect(kind, opts) {
@@ -487,8 +490,8 @@
       values: {},
       pasteMode: !!opts.pasteFirst,
     };
-    composer.classList.add("is-hidden");
     hideStarters();
+    ensureComposerVisible();
 
     var intro =
       kind === "freight"
@@ -673,7 +676,6 @@
     if (values.company) companyInput.value = values.company;
     suppressCollectTrigger = true;
     stopCollect();
-    unlockComposer();
     // Persist enquiry + Portal when email was collected; then continue AI thread.
     if (emailInput.value.trim()) {
       submitLead({ quiet: true });
@@ -692,7 +694,6 @@
     }
     suppressCollectTrigger = true;
     stopCollect();
-    unlockComposer();
     if (emailInput.value.trim()) {
       submitLead({ quiet: true });
     }
@@ -719,7 +720,7 @@
     suppressCollectTrigger = true;
     stopCollect();
     hideStarters();
-    unlockComposer();
+    ensureComposerVisible();
     showWhatElseChip();
   }
 
@@ -1054,7 +1055,7 @@
     transcriptLines = [];
     stopCollect();
     hideStarters();
-    unlockComposer();
+    ensureComposerVisible();
     lead.classList.remove("is-on", "is-collapsed");
     leadMinBtn.textContent = "Minimise";
     clearNode(messagesEl);

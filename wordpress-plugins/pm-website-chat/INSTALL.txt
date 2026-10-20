@@ -1,30 +1,36 @@
-PM Website Chat — install (if zip Activate fails)
+PM Website Chat — install / update
 
-WordPress error "Plugin file does not exist" usually means the upload did not
-extract files, or a broken leftover folder is registered.
+IMPORTANT — avoid a "new plugin" duplicate
+------------------------------------------
+The zip MUST contain a single top folder named exactly:
 
-Option A — WP File Manager (recommended on this site)
+  pm-website-chat/
+    pm-website-chat.php
+    assets/
+    includes/
+    …
 
-1. Plugins: if you see PM Website Chat with Delete, click Delete.
-2. Open WP File Manager.
-3. Go to: wp-content/plugins/
-4. Delete any empty/broken folder named pm-website-chat if present.
-5. Upload the folder contents:
-   - Create folder: pm-website-chat
-   - Inside it upload these files/folders from the zip:
-     pm-website-chat.php
-     README.md
-     INSTALL.txt
-     assets/   (chat.css, chat.js)
-     includes/ (settings.php, enqueue.php, proxy.php)
-6. Refresh Plugins list — you should see "PM Website Chat".
-7. Click Activate.
+Do NOT upload a flat zip (files at the root). WordPress then creates a
+folder from the zip filename (e.g. pm-website-chat-1.0.18) and you get
+a second plugin.
 
-Option B — Zip upload again
+If you already have two entries under Plugins:
+1. Keep the one in folder wp-content/plugins/pm-website-chat/
+2. Delete the other (e.g. pm-website-chat-1.0.x)
+3. Upload the correct zip again (Updates the same plugin)
 
-1. Use the new Desktop file: pm-website-chat.zip
-2. Plugins → Add New → Upload Plugin → Choose File → Install Now → Activate
-3. If Activate says file does not exist: Delete the plugin, then use Option A.
+Option A — Upload plugin (preferred)
+------------------------------------
+1. Plugins → Add New → Upload Plugin
+2. Choose: exports/pm-website-chat-1.0.18/pm-website-chat-1.0.18.zip
+   (or pm-website-chat.zip in the same folder — identical contents)
+3. Click Replace current with uploaded if prompted, or Install → Activate
+
+Option B — WP File Manager
+--------------------------
+1. Delete broken/empty pm-website-chat folders under wp-content/plugins/
+2. Upload the pm-website-chat folder from the zip into wp-content/plugins/
+3. Activate "PM Website Chat"
 
 After activate: Settings → PM Website Chat
 - Hub URL: https://marketing.petersandmay.com
@@ -32,6 +38,6 @@ After activate: Settings → PM Website Chat
 - Enable widget
 
 Staging (https://stg-petersmay-staging.kinsta.cloud/)
-- Install/activate on the staging WordPress, not production www.
+- Install/activate on staging WordPress, not production www.
 - Widget calls same-origin /wp-json/pm-website-chat/v1/hub/... (proxy.php).
 - Hub URL and site key are still required in Settings (server-side only).
