@@ -126,7 +126,7 @@ export async function getChatSettings(): Promise<ChatSettings> {
       id: "default",
       deployed: false,
       greeting:
-        "Hi, I can help get your enquiry to the right Peters & May team. What are you looking to move, or what can we help you with?",
+        "Hi — how can I help today? I can take a shipping or yacht enquiry, answer questions from our published information, or put you in touch with the team.",
       guidance: "",
       office_hours_note:
         "Our team typically replies during UK business hours.",
@@ -358,7 +358,7 @@ export async function closeAbandonedChatSessions(opts: {
 }
 
 export async function listChatSessions(opts?: {
-  status?: ChatSessionStatus | "open";
+  status?: ChatSessionStatus | "open" | "all";
   limit?: number;
 }): Promise<ChatSession[]> {
   const supabase = requireService();
@@ -370,7 +370,7 @@ export async function listChatSessions(opts?: {
     .limit(limit);
   if (opts?.status === "open") {
     q = q.in("status", ["ai", "waiting", "human"]);
-  } else if (opts?.status) {
+  } else if (opts?.status && opts.status !== "all") {
     q = q.eq("status", opts.status);
   }
   const { data, error } = await q;

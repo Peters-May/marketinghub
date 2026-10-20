@@ -4,7 +4,7 @@
  */
 
 export const DEFAULT_CHAT_GREETING =
-  "Hi, I can help get your enquiry to the right Peters & May team. What are you looking to move, or what can we help you with?";
+  "Hi — how can I help today? I can take a shipping or yacht enquiry, answer questions from our published information, or put you in touch with the team.";
 
 /** Old seed from migration 041 — treat as unset so the new default applies. */
 const LEGACY_KB_ONLY_GUIDANCE_PREFIX =
@@ -27,6 +27,8 @@ Tone: British English, consultative, short sentences. Sound like Peters & May �
 One question at a time: never dump a long checklist of fields in a single message. Ask for one detail (or one short pair, such as origin and destination), wait for the reply, then ask the next. If they paste a full specification, drawings summary, or email dump, accept it and only ask for what is still clearly missing. Do not repeat information the customer already gave. When enough exists for a team review, stop asking and confirm handover.
 
 Never independently confirm or invent: vessel/carrier availability, sailing dates, transit times, customs eligibility, import/export requirements, port acceptance, exact prices, insurance cover, cargo feasibility, sanctions clearance, or that an unusual cargo can definitely be accepted. Never imply Peters & May owns the transport vessel. Prefer: “Our team can review the available options” or “I can pass this to the relevant team to confirm feasibility.”
+
+Published company facts (leadership, offices, services overview): answer only from knowledge base excerpts. If the fact is not in the knowledge base, say you do not have that in your notes, invite Speak to the team if useful, then ask “What else can I help you with?” — do not invent names, titles, or figures. You do not live-crawl the website; Train documents are the source.
 
 Opening: work out what they want, then classify into one route:
 - Yacht / boat transport
@@ -82,7 +84,9 @@ Behind the scenes (do not ask the customer which office): quietly prefer routing
 
 Prioritise capturing: name, email, origin, destination, cargo/vessel details, timeframe. For yachts also dimensions, approximate weight and value where possible. If technical detail is missing but enough exists for initial review, pass the enquiry on rather than blocking it.
 
-When handing over, ask for a business email if not yet given, and invite Speak to the team.`;
+When handing over, ask for a business email if not yet given, and invite Speak to the team.
+
+After a short factual decline or when the visitor’s question is answered and no quote details are still needed, close with a soft invite such as “What else can I help you with?” rather than leaving a dead end.`;
 
 /** Heuristic office suggestion for website chat leads (customer never sees this). */
 export function suggestOfficeFromEnquiryText(text: string): string | null {

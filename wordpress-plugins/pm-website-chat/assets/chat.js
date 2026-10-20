@@ -41,7 +41,11 @@
     { key: "beam", label: "Beam" },
     { key: "height", label: "Overall transport height" },
     { key: "weight", label: "Approximate weight / displacement" },
-    { key: "value", label: "Approximate value" },
+    {
+      key: "value",
+      label: "Approximate value (include currency)",
+      placeholder: "e.g. 10000 GBP",
+    },
     { key: "loading_port", label: "Preferred loading port" },
     { key: "destination", label: "Destination" },
     {
@@ -133,12 +137,12 @@
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
     var wrap = el("div", "pm-chat__msg pm-chat__msg--" + role);
-    var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
-    wrap.appendChild(bubble);
     var label = senderLabel(role, authorName);
     if (label) {
       wrap.appendChild(el("div", "pm-chat__sender", label));
     }
+    var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
+    wrap.appendChild(bubble);
     messagesEl.insertBefore(wrap, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return wrap;
@@ -309,12 +313,50 @@
     addChip("Get a quote", function () {
       showQuoteTypeStarters();
     });
-    addChip("Have a question", function () {
-      sendMessageText("I have a question");
+    addChip("Ask a question", function () {
+      input.focus();
     });
     addChip("Something else", function () {
       input.focus();
     });
+  }
+
+  function showWhatElseChip() {
+    if (collectState) return;
+    clearNode(startersEl);
+    startersEl.classList.add("is-on");
+    var btn = el("button", "pm-chat__chip", "What else can I help with?");
+    btn.type = "button";
+    btn.addEventListener("click", function () {
+      hideStarters();
+      showStartersFresh();
+    });
+    startersEl.appendChild(btn);
+  }
+
+  function showStartersFresh() {
+    startersShown = false;
+    showStarters();
+  }
+
+  function detectQuoteKindFromText(text) {
+    var t = String(text || "").toLowerCase();
+    if (
+      /\b(yacht|boat|sailboat|motor.?yacht|catamaran|loa|berth)\b/.test(t)
+    ) {
+      return "yacht";
+    }
+    if (
+      /\b(freight|cargo|pallet|container|forwarding|air freight|customs)\b/.test(
+        t
+      )
+    ) {
+      return "freight";
+    }
+    if (/\b(quote|quotat|ship(ping)?|transport)\b/.test(t)) {
+      return "yacht";
+    }
+    return null;
   }
 
   function showQuoteTypeStarters() {
@@ -456,7 +498,8 @@
     } else {
       inputEl.rows = 3;
     }
-    inputEl.placeholder = field.optional ? "Optional" : "";
+    inputEl.placeholder =
+      field.placeholder || (field.optional ? "Optional" : "");
     collectEl.appendChild(inputEl);
 
     var row = el("div", "pm-chat__collect-row");
@@ -576,7 +619,20 @@
     if (collectState) return;
     if (looksLikeYachtChecklist(body)) {
       offerGuidedCollect("yacht");
+      return;
     }
+    showWhatElseChip();
+  }
+
+  function maybeStartCollectFromVisitor(text) {
+    if (collectState) return;
+    var kind = detectQuoteKindFromText(text);
+    if (!kind) return;
+    // Free-typed quote intent → start guided fields after a short beat.
+    setTimeout(function () {
+      if (collectState) return;
+      startCollect(kind);
+    }, 400);
   }
 
   function syncSeen() {
@@ -727,6 +783,7 @@
     text = (text || "").trim();
     if (!text || !sessionId) return;
     hideStarters();
+    maybeStartCollectFromVisitor(text);
     appendBubble("visitor", text);
     inflightSends += 1;
     setTyping(true);

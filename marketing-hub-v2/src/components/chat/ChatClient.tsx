@@ -68,6 +68,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showClosed, setShowClosed] = useState(false);
   const [testInput, setTestInput] = useState("");
   const [testLog, setTestLog] = useState<
     Array<{ role: string; body: string }>
@@ -80,11 +81,14 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   });
 
   const loadSessions = useCallback(async () => {
-    const res = await fetch("/api/chat/admin?view=sessions&status=open");
+    const status = showClosed ? "all" : "open";
+    const res = await fetch(
+      `/api/chat/admin?view=sessions&status=${encodeURIComponent(status)}`
+    );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load sessions");
     setSessions(sortSessionsByDate(data.sessions ?? []));
-  }, []);
+  }, [showClosed]);
 
   const loadSettings = useCallback(async () => {
     const res = await fetch("/api/chat/admin?view=settings");
@@ -367,8 +371,21 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       {tab === "inbox" ? (
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
           <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-white">
+            <label className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                className="rounded border-border"
+                checked={showClosed}
+                onChange={(e) => setShowClosed(e.target.checked)}
+              />
+              Show closed chats
+            </label>
             {sessions.length === 0 ? (
-              <p className="p-4 text-sm text-muted">No open conversations.</p>
+              <p className="p-4 text-sm text-muted">
+                {showClosed
+                  ? "No conversations yet."
+                  : "No open conversations."}
+              </p>
             ) : (
               sessions.map((s) => (
                 <button

@@ -50,11 +50,12 @@ export async function GET(request: Request) {
     const statusRaw = url.searchParams.get("status");
     const status =
       statusRaw === "open" ||
+      statusRaw === "all" ||
       statusRaw === "ai" ||
       statusRaw === "waiting" ||
       statusRaw === "human" ||
       statusRaw === "closed"
-        ? (statusRaw as ChatSessionStatus | "open")
+        ? (statusRaw as ChatSessionStatus | "open" | "all")
         : "open";
     const sessions = await listChatSessions({ status, limit: 150 });
     return jsonOk({ configured: true, sessions });

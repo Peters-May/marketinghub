@@ -68,7 +68,7 @@ add_action('wp_enqueue_scripts', static function () {
         'utm' => $utm,
         'labels' => [
             'title' => 'Peters & May',
-            'subtitle' => 'The team can also help',
+            'subtitle' => 'Ask a question or get a quote',
             'placeholder' => 'Message…',
             'speak' => 'Speak to the team',
             'send' => 'Send',
