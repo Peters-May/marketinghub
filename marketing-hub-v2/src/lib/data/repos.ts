@@ -65,6 +65,7 @@ import type {
   PrMonitorMention,
   PrMonitorMentionStatus,
   NewsroomSettings,
+  EmailSettings,
   EmailTemplate,
   EmailAudience,
   EmailAudienceFilter,
@@ -78,6 +79,7 @@ import type {
   EmailGalleryImage,
 } from "@/lib/types";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
+import { normalizeEmailSettings } from "@/lib/email/email-settings";
 
 export const EMPTY_EMAIL_CAMPAIGN_STATS: EmailCampaignStats = {
   recipients: 0,
@@ -2669,6 +2671,26 @@ export async function listPublishedPressReleases() {
       const db = b.due_date || b.updated_at;
       return new Date(db).getTime() - new Date(da).getTime();
     });
+}
+
+export async function getEmailSettings(): Promise<EmailSettings> {
+  const store = await readStore();
+  return normalizeEmailSettings(store.email_settings);
+}
+
+export async function updateEmailSettings(
+  patch: Partial<EmailSettings>
+): Promise<EmailSettings> {
+  let next: EmailSettings = normalizeEmailSettings(patch);
+  await updateStore((s) => {
+    next = normalizeEmailSettings({
+      ...s.email_settings,
+      ...patch,
+      updated_at: nowIso(),
+    });
+    s.email_settings = next;
+  });
+  return next;
 }
 
 export async function getNewsroomSettings(): Promise<NewsroomSettings> {

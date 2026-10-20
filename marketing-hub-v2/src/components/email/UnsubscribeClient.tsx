@@ -22,34 +22,47 @@ function topicLabel(id: EmailPreferenceTopic | null): string {
 export function UnsubscribeClient() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
+  const isPreview = params.get("preview") === "1";
   const viewParam = params.get("view");
   const view: CentreView =
     viewParam === "preferences" ? "preferences" : "unsubscribe";
 
   const [status, setStatus] = useState<"loading" | "ready" | "saving" | "done" | "error">(
-    token ? "loading" : "error"
+    () => (isPreview ? "ready" : token ? "loading" : "error")
   );
-  const [message, setMessage] = useState(token ? "" : "This link is missing a token.");
-  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState(() =>
+    isPreview
+      ? ""
+      : token
+        ? ""
+        : "This link is missing a token."
+  );
+  const [email, setEmail] = useState(() =>
+    isPreview ? "preview@example.com" : ""
+  );
   /** Topics the person is opted OUT of (API shape). */
   const [optOuts, setOptOuts] = useState<EmailPreferenceTopic[]>([]);
   const [all, setAll] = useState(false);
   const [locked, setLocked] = useState(false);
   const [campaignTopic, setCampaignTopic] = useState<EmailPreferenceTopic | null>(
-    null
+    () => (isPreview ? "general_marketing" : null)
   );
   const [arrivedOptedOut, setArrivedOptedOut] = useState(false);
   /** Preferences UI: topics the person wants to receive. */
-  const [subscribed, setSubscribed] = useState<EmailPreferenceTopic[]>([]);
+  const [subscribed, setSubscribed] = useState<EmailPreferenceTopic[]>(() =>
+    isPreview ? EMAIL_PREFERENCE_TOPICS.map((topic) => topic.id) : []
+  );
   /** Unsubscribe UI: stop this list vs stop everything. */
-  const [unsubScope, setUnsubScope] = useState<"list" | "all">("list");
+  const [unsubScope, setUnsubScope] = useState<"list" | "all">(() =>
+    isPreview ? "list" : "list"
+  );
   const [feedbackReason, setFeedbackReason] = useState<UnsubscribeFeedbackReason | "">(
     ""
   );
   const [feedbackOther, setFeedbackOther] = useState("");
 
   useEffect(() => {
-    if (!token) return;
+    if (isPreview || !token) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -93,7 +106,7 @@ export function UnsubscribeClient() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, isPreview]);
 
   const prefsHref = useMemo(() => {
     const next = new URLSearchParams(params.toString());
@@ -128,6 +141,11 @@ export function UnsubscribeClient() {
     view === "preferences" && prefsNewlyOptingOut && !arrivedOptedOut;
 
   async function savePreferences() {
+    if (isPreview) {
+      setStatus("done");
+      setMessage("Preview only — changes are not saved.");
+      return;
+    }
     setStatus("saving");
     setMessage("");
     if (prefsNeedsFeedback) {
@@ -185,6 +203,11 @@ export function UnsubscribeClient() {
   }
 
   async function saveUnsubscribe() {
+    if (isPreview) {
+      setStatus("done");
+      setMessage("Preview only — changes are not saved.");
+      return;
+    }
     setStatus("saving");
     setMessage("");
     if (unsubNeedsFeedback) {
@@ -243,6 +266,12 @@ export function UnsubscribeClient() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-16">
+      {isPreview ? (
+        <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Staff preview — this is the page recipients see. Saves do not change
+          any subscriptions.
+        </p>
+      ) : null}
       <p className="text-xs font-semibold uppercase tracking-wide text-[#007DC5]">
         Peters &amp; May
       </p>

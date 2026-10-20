@@ -12,7 +12,10 @@ import {
 } from "lucide-react";
 import type { EmailBlock, EmailDesign } from "@/lib/email/design";
 import { emailImageSrc, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
-import { resolveFooterLinkSettings } from "@/lib/email/footer-links";
+import {
+  resolveFooterLinkSettings,
+  type FooterLinkSettings,
+} from "@/lib/email/footer-links";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { readDrag, writeDrag, type DesignerDrag } from "@/components/email/builder/drag";
 import { previewMerge } from "@/lib/email/design/preview";
@@ -54,6 +57,7 @@ export function EmailCanvas({
   device,
   subject,
   previewText,
+  footerLinks = null,
   readOnly,
   insertRequest,
   onSelect,
@@ -75,6 +79,7 @@ export function EmailCanvas({
   device: "desktop" | "mobile";
   subject: string;
   previewText: string;
+  footerLinks?: FooterLinkSettings | null;
   readOnly?: boolean;
   insertRequest?: { token: string; nonce: number } | null;
   onSelect: (selection: CanvasSelection) => void;
@@ -477,6 +482,7 @@ export function EmailCanvas({
                                         design={design}
                                         selected={selected}
                                         readOnly={readOnly}
+                                        footerLinks={footerLinks}
                                         insertRequest={
                                           selected && block.type === "text"
                                             ? insertRequest
@@ -682,6 +688,7 @@ function BlockView({
   design,
   selected,
   readOnly,
+  footerLinks = null,
   insertRequest,
   onLive,
   onCommit,
@@ -690,6 +697,7 @@ function BlockView({
   design: EmailDesign;
   selected: boolean;
   readOnly?: boolean;
+  footerLinks?: FooterLinkSettings | null;
   insertRequest?: { token: string; nonce: number } | null;
   onLive: (patch: Partial<EmailBlock>) => void;
   onCommit: () => void;
@@ -989,7 +997,7 @@ function BlockView({
   }
 
   if (block.type === "footer") {
-    const links = resolveFooterLinkSettings(design.styles, block);
+    const links = resolveFooterLinkSettings(design.styles, block, footerLinks);
     const parts: string[] = [];
     if (links.showUnsubscribe) parts.push(links.unsubscribeLabel);
     if (links.showPreferences) parts.push(links.preferencesLabel);

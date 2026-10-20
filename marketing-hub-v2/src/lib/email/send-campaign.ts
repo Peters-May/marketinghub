@@ -2,12 +2,14 @@ import { Resend } from "resend";
 import {
   appendEmailEvents,
   getEmailCampaign,
+  getEmailSettings,
   listEmailAudiences,
   listEmailEvents,
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
 import { compileEmailDesign, resolveEmailDesign } from "@/lib/email/design";
+import { footerLinksFromEmailSettings } from "@/lib/email/email-settings";
 import {
   applyEmailMerge,
   ensureUnsubscribeFooter,
@@ -151,8 +153,10 @@ export async function sendEmailCampaign(
     topic = topicForAudienceName(audience?.name ?? "");
   }
   const design = resolveEmailDesign(latest.design, latest.html_body || "");
+  const footerLinks = footerLinksFromEmailSettings(await getEmailSettings());
   const compiled = compileEmailDesign(design, {
     topic: topic ?? "all",
+    footerLinks,
   });
   const htmlBase = appendUtmToEmailHtml(
     ensureViewInBrowserLink(ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")),

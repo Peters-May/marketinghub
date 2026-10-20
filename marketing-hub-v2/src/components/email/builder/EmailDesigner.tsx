@@ -32,6 +32,10 @@ import {
 import { excerptFromDesign } from "@/lib/email/design-excerpt";
 import { previewMerge } from "@/lib/email/design/preview";
 import { formatLondonStamp, londonDateTimeToIso } from "@/lib/email/display";
+import {
+  footerLinksFromEmailSettings,
+} from "@/lib/email/email-settings";
+import type { FooterLinkSettings } from "@/lib/email/footer-links";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
 import { EmailInspector } from "@/components/email/builder/EmailInspector";
 import { EmailPalette } from "@/components/email/builder/EmailPalette";
@@ -189,10 +193,29 @@ export function EmailDesigner({
   const dirtyRef = useRef(false);
 
   const [audienceOptions, setAudienceOptions] = useState(audiences);
+  const [footerLinks, setFooterLinks] = useState<FooterLinkSettings | null>(
+    null
+  );
 
   useEffect(() => {
     setAudienceOptions(audiences);
   }, [audiences]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/email/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !data.settings) return;
+        setFooterLinks(footerLinksFromEmailSettings(data.settings));
+      })
+      .catch(() => {
+        /* design styles remain fallback */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (kind !== "campaign" || readOnly) return;
@@ -426,7 +449,7 @@ export function EmailDesigner({
     setError("");
     setSavedNote("");
     const design = history.designRef.current;
-    const html_body = compileEmailDesign(design);
+    const html_body = compileEmailDesign(design, { footerLinks });
     const patch =
       kind === "template"
         ? {
@@ -763,7 +786,9 @@ export function EmailDesigner({
           from_name: fromName,
           from_email: fromEmail,
           subject,
-          html_body: compileEmailDesign(history.designRef.current),
+          html_body: compileEmailDesign(history.designRef.current, {
+            footerLinks,
+          }),
           campaign_id: id,
         }),
       });
@@ -840,7 +865,7 @@ export function EmailDesigner({
     }
   }
 
-  const compiled = compileEmailDesign(history.design);
+  const compiled = compileEmailDesign(history.design, { footerLinks });
   const frameWidth = device === "mobile" ? 375 : history.design.styles.contentWidth;
   const audienceName =
     audienceOptions.find((audience) => audience.id === audienceId)?.name ?? "";
@@ -1266,6 +1291,7 @@ export function EmailDesigner({
               device={device}
               subject={subject}
               previewText={previewText}
+              footerLinks={footerLinks}
               readOnly={readOnly}
               insertRequest={insertRequest}
               onSelect={setSelection}

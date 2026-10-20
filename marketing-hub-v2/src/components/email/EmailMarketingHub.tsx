@@ -7,16 +7,18 @@ import { EmailCampaignsPanel } from "@/components/email/EmailCampaignsPanel";
 import { EmailAudiencesPanel } from "@/components/email/EmailAudiencesPanel";
 import { EmailTemplatesPanel } from "@/components/email/EmailTemplatesPanel";
 import { EmailReportsPanel } from "@/components/email/EmailReportsPanel";
+import { EmailSettingsPanel } from "@/components/email/EmailSettingsPanel";
 import type { EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
 
 export type AudienceWithCount = EmailAudience & { recipient_count: number };
 
-type Tab = "emails" | "templates" | "analyse";
+type Tab = "emails" | "templates" | "analyse" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "emails", label: "Emails" },
   { id: "templates", label: "Templates" },
   { id: "analyse", label: "Analyse" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function EmailMarketingHub({
@@ -85,6 +87,8 @@ export function EmailMarketingHub({
       ) : null}
 
       {tab === "analyse" ? <EmailReportsPanel /> : null}
+
+      {tab === "settings" ? <EmailSettingsPanel /> : null}
     </div>
   );
 }

@@ -1,5 +1,8 @@
 import { ensureUnsubscribeFooter, ensureViewInBrowserLink } from "@/lib/email/merge";
-import { resolveFooterLinkSettings } from "@/lib/email/footer-links";
+import {
+  resolveFooterLinkSettings,
+  type FooterLinkSettings,
+} from "@/lib/email/footer-links";
 import type {
   EmailBlock,
   EmailDesign,
@@ -11,6 +14,8 @@ import { extractEmailBody, OFFICE_FOOTER } from "@/lib/email/design/document";
 export type CompileEmailOptions = {
   /** When set, sections with a matching showFor (or "all") are kept. */
   topic?: SectionShowFor | null;
+  /** Hub Email → Settings footer links (overrides design styles when set). */
+  footerLinks?: FooterLinkSettings | null;
 };
 
 function escapeHtml(value: string): string {
@@ -290,11 +295,21 @@ export function compileEmailDesign(
   design: EmailDesign,
   options?: CompileEmailOptions
 ): string {
-  const styles = design.styles;
+  const footerLinks = options?.footerLinks ?? null;
+  const styles = footerLinks
+    ? {
+        ...design.styles,
+        showUnsubscribeLink: footerLinks.showUnsubscribe,
+        showPreferencesLink: footerLinks.showPreferences,
+        unsubscribeLabel: footerLinks.unsubscribeLabel,
+        preferencesLabel: footerLinks.preferencesLabel,
+      }
+    : design.styles;
+  const working: EmailDesign = { ...design, styles };
   const width = styles.contentWidth;
-  const sections = design.sections
+  const sections = working.sections
     .filter((section) => sectionVisibleForTopic(section, options?.topic))
-    .map((section) => renderSection(section, design))
+    .map((section) => renderSection(section, working))
     .join("");
   const html = `<!DOCTYPE html>
 <html>
@@ -320,7 +335,7 @@ ${sections}
 </table>
 </body>
 </html>`;
-  const linkSettings = resolveFooterLinkSettings(styles);
+  const linkSettings = resolveFooterLinkSettings(styles, null, footerLinks);
   return ensureViewInBrowserLink(
     ensureUnsubscribeFooter(html, {
       showUnsubscribe: linkSettings.showUnsubscribe,

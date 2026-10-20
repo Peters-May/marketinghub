@@ -15,10 +15,6 @@ import {
   EMAIL_FONT_OPTIONS,
   ENSIGN_RED,
 } from "@/lib/email/design";
-import {
-  footerLinkPreviewParts,
-  resolveFooterLinkSettings,
-} from "@/lib/email/footer-links";
 import { EMAIL_PREFERENCE_TOPICS } from "@/lib/email/preferences";
 import { EmailImageField } from "@/components/email/builder/EmailImageField";
 import { cn } from "@/lib/utils";
@@ -501,118 +497,14 @@ export function EmailInspector({
               />
               Lock brand sections (header/footer marked locked)
             </label>
-            <UnsubscribePrefsSettings
-              styles={design.styles}
-              onDesign={onDesign}
-            />
+            <p className="border-t border-border pt-4 text-xs text-muted">
+              Unsubscribe and preference pages are under{" "}
+              <span className="font-medium text-brand">Email → Settings</span>.
+            </p>
           </>
         )}
       </fieldset>
     </aside>
-  );
-}
-
-function UnsubscribePrefsSettings({
-  styles,
-  onDesign,
-}: {
-  styles: EmailDesign["styles"];
-  onDesign: (patch: Partial<EmailDesign["styles"]>) => void;
-}) {
-  const settings = resolveFooterLinkSettings(styles);
-  const linkParts = footerLinkPreviewParts(settings);
-  return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <p className="text-sm font-medium text-brand">Unsubscribe &amp; preferences</p>
-      <p className="text-xs text-muted">
-        Unsubscribe opens a stop-receiving page. Manage preferences lets people
-        subscribe to lists or adjust what they get.
-      </p>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={styles.showUnsubscribeLink !== false}
-          onChange={(event) =>
-            onDesign({ showUnsubscribeLink: event.target.checked })
-          }
-        />
-        Show unsubscribe link
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={styles.showPreferencesLink !== false}
-          onChange={(event) =>
-            onDesign({ showPreferencesLink: event.target.checked })
-          }
-        />
-        Show manage preferences link
-      </label>
-      <TextInput
-        label="Unsubscribe label"
-        value={styles.unsubscribeLabel ?? "Unsubscribe"}
-        onChange={(unsubscribeLabel) => onDesign({ unsubscribeLabel })}
-      />
-      <TextInput
-        label="Preferences label"
-        value={styles.preferencesLabel ?? "Manage preferences"}
-        onChange={(preferencesLabel) => onDesign({ preferencesLabel })}
-      />
-
-      <div className="rounded-lg border border-border bg-slate-50 p-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-          Footer link preview
-        </p>
-        <p
-          className="mt-2 text-xs leading-relaxed"
-          style={{ color: "#666666", fontFamily: styles.fontFamily }}
-        >
-          {linkParts.length === 0 ? (
-            <span className="text-muted">No footer links will be shown.</span>
-          ) : (
-            linkParts.map((label, index) => (
-              <span key={label}>
-                {index > 0 ? (
-                  <span className="text-muted">{" · "}</span>
-                ) : null}
-                <span
-                  className="underline"
-                  style={{ color: styles.linkColor }}
-                >
-                  {label}
-                </span>
-              </span>
-            ))
-          )}
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-border bg-white p-3 shadow-sm">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
-          Preference centre preview
-        </p>
-        <p className="mt-2 font-display text-sm text-brand">
-          Email preferences
-        </p>
-        <p className="mt-1 text-xs text-muted">Subscribe me to</p>
-        <ul className="mt-3 space-y-2">
-          {EMAIL_PREFERENCE_TOPICS.map((topic) => (
-            <li key={topic.id} className="flex items-center gap-2 text-xs">
-              <span
-                className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-[#007DC5] bg-[#007DC5]/10 text-[9px] text-[#007DC5]"
-                aria-hidden
-              >
-                ✓
-              </span>
-              <span className="text-brand">{topic.label}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 border-t border-border pt-2 text-[10px] text-muted">
-          Unsubscribe link opens a separate stop-receiving page instead.
-        </p>
-      </div>
-    </div>
   );
 }
 
@@ -1019,8 +911,7 @@ function BlockFields({
             />
           </label>
           <p className="text-xs text-muted">
-            Unsubscribe and preference links are set under Email settings (click
-            Email in the breadcrumb). This footer uses those labels.
+            Unsubscribe and preference links are set under Email → Settings.
           </p>
         </>
       ) : null}
