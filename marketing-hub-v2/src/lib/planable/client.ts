@@ -716,6 +716,7 @@ export async function updatePlanablePost(
     plainText?: string;
     scheduledAt?: string | null;
     media?: string[];
+    videoThumbnailUrl?: string | null;
     approved?: boolean;
     notify?: boolean;
   }
@@ -738,6 +739,9 @@ export async function updatePlanablePost(
     body.publishAtScheduledDate = false;
   }
   if (patch.media !== undefined) body.media = patch.media;
+  if (patch.videoThumbnailUrl) {
+    body.videoThumbnail = { imageUrl: patch.videoThumbnailUrl };
+  }
   if (patch.approved !== undefined) body.approved = patch.approved;
   const hasFields = Object.keys(body).some((key) => key !== "notify");
   if (!hasFields) {

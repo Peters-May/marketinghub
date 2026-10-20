@@ -8,9 +8,11 @@ import {
 import {
   groupKey,
   groupPlanablePosts,
+  htmlToPlanableText,
   inboundStatusForExisting,
   isHubDirty,
   isReplaceablePlanableTitle,
+  planableMediaPayload,
   resolveSyncedTitle,
   shouldPushSocialToPlanable,
   titleForPlanableGroup,
@@ -235,6 +237,54 @@ describe("scheduledAtFromDueDate / dueDateFromScheduledAt", () => {
       "2026-09-10"
     );
     expect(dueDateFromScheduledAt(null)).toBeNull();
+  });
+});
+
+describe("planable push payload", () => {
+  it("sends mp4 files and keeps a still as the video cover", () => {
+    expect(
+      planableMediaPayload(
+        [
+          "https://cdn.example/cover.jpg",
+          "https://xxx.supabase.co/storage/v1/object/public/assets/film.mp4",
+          "https://cdn.example/extra.png",
+        ].join("\n")
+      )
+    ).toEqual({
+      mediaUrls: [
+        "https://xxx.supabase.co/storage/v1/object/public/assets/film.mp4",
+        "https://cdn.example/extra.png",
+      ],
+      videoThumbnailUrl: "https://cdn.example/cover.jpg",
+    });
+  });
+
+  it("keeps image-only posts as images", () => {
+    expect(
+      planableMediaPayload("https://cdn.example/a.jpg\nhttps://cdn.example/b.png")
+    ).toEqual({
+      mediaUrls: ["https://cdn.example/a.jpg", "https://cdn.example/b.png"],
+      videoThumbnailUrl: null,
+    });
+  });
+
+  it("puts a blank line between paragraphs and keeps an empty paragraph", () => {
+    expect(htmlToPlanableText("<p>First line</p><p>Second line</p>")).toBe(
+      "First line\n\nSecond line"
+    );
+    expect(
+      htmlToPlanableText("<p>First</p><p><br></p><p>Second</p>")
+    ).toBe("First\n\n\nSecond");
+  });
+
+  it("keeps list structure and link addresses from formatted captions", () => {
+    expect(
+      htmlToPlanableText(
+        '<p>Hello <strong>team</strong></p><ul><li><p>One</p></li><li><p>Two</p></li></ul><p>See <a href="https://www.petersandmay.com">the site</a></p>'
+      )
+    ).toBe(
+      "Hello team\n\n• One\n• Two\n\nSee the site (https://www.petersandmay.com)"
+    );
   });
 });
 

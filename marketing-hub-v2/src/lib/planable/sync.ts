@@ -10,6 +10,7 @@ import {
   isSocialContentItem,
   joinAssetUrls,
   normalizeChannels,
+  videoAssetUrls,
 } from "@/lib/data/normalize";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import type { ContentItem, ContentStatus } from "@/lib/types";
@@ -739,25 +740,184 @@ export async function removeContentFromPlanable(
   return { ok: true };
 }
 
-function htmlToPlanableText(html: string): string {
-  if (!html.trim()) return "";
-  if (!html.includes("<")) return html.trim();
-  return html
-    .replace(/<\s*br\s*\/?\s*>/gi, "\n")
-    .replace(/<\s*\/p\s*>/gi, "\n")
-    .replace(/<\s*\/div\s*>/gi, "\n")
-    .replace(/<\s*\/h[1-6]\s*>/gi, "\n")
-    .replace(/<\s*\/li\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+function decodePlanableEntities(value: string): string {
+  return value
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/&gt;/gi, ">");
+}
+
+function linkToPlanableText(href: string, labelHtml: string): string {
+  const text = decodePlanableEntities(labelHtml.replace(/<[^>]+>/g, ""))
+    .replace(/\s+/g, " ")
     .trim();
+  const url = decodePlanableEntities(href).trim();
+  if (!text) return url;
+  if (!url || text === url) return text;
+  return `${text} (${url})`;
+}
+
+function replacePlanableLinks(html: string): string {
+  return html.replace(
+    /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (_match, href: string, label: string) => linkToPlanableText(href, label)
+  );
+}
+
+const PLANABLE_BLOCK_TAGS = new Set([
+  "p",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "blockquote",
+  "ul",
+  "ol",
+  "br",
+]);
+
+function inlineToPlanableText(html: string): string {
+  return decodePlanableEntities(
+    replacePlanableLinks(html)
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  )
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function isEmptyPlanableInner(inner: string): boolean {
+  return !inlineToPlanableText(inner.replace(/<\s*br\s*\/?\s*>/gi, ""));
+}
+
+function readHtmlElement(
+  html: string,
+  start: number
+): { tag: string; inner: string; end: number } | null {
+  const open = /^<([a-z0-9]+)(\s[^>]*)?\/?>/i.exec(html.slice(start));
+  if (!open) return null;
+  const tag = open[1].toLowerCase();
+  const endOfOpen = start + open[0].length;
+  if (tag === "br" || open[0].endsWith("/>")) {
+    return { tag, inner: "", end: endOfOpen };
+  }
+  const token = new RegExp(`</?${tag}\\b[^>]*>`, "gi");
+  token.lastIndex = endOfOpen;
+  let depth = 1;
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(html))) {
+    depth += match[0].startsWith("</") ? -1 : 1;
+    if (depth === 0) {
+      return {
+        tag,
+        inner: html.slice(endOfOpen, match.index),
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  return null;
+}
+
+function planableBlocks(html: string): string[] {
+  const blocks: string[] = [];
+  let loose = "";
+  let index = 0;
+
+  const flushLoose = () => {
+    const text = inlineToPlanableText(loose);
+    loose = "";
+    if (text) blocks.push(text);
+  };
+
+  while (index < html.length) {
+    if (html[index] !== "<") {
+      loose += html[index];
+      index += 1;
+      continue;
+    }
+    const element = readHtmlElement(html, index);
+    if (!element || !PLANABLE_BLOCK_TAGS.has(element.tag)) {
+      loose += html[index];
+      index += 1;
+      continue;
+    }
+    flushLoose();
+    if (element.tag === "br") {
+      blocks.push("");
+    } else if (element.tag === "ul" || element.tag === "ol") {
+      const text = listToPlanableText(element.tag, element.inner);
+      if (text) blocks.push(text);
+    } else if (isEmptyPlanableInner(element.inner)) {
+      blocks.push("");
+    } else {
+      const text = inlineToPlanableText(element.inner);
+      if (text) blocks.push(text);
+    }
+    index = element.end;
+  }
+  flushLoose();
+  return blocks;
+}
+
+function listToPlanableText(tag: "ul" | "ol", inner: string): string {
+  const items: string[] = [];
+  let index = 0;
+  while (index < inner.length) {
+    const at = inner.indexOf("<", index);
+    if (at === -1) break;
+    const element = readHtmlElement(inner, at);
+    if (!element || element.tag !== "li") {
+      index = at + 1;
+      continue;
+    }
+    const text = planableBlocks(element.inner)
+      .filter((block) => block !== "")
+      .join("\n")
+      .trim();
+    if (text) items.push(text);
+    index = element.end;
+  }
+  return items
+    .map((text, itemIndex) =>
+      tag === "ol" ? `${itemIndex + 1}. ${text}` : `• ${text}`
+    )
+    .join("\n");
+}
+
+/**
+ * Planable's public API stores `text` as plain text. Paragraphs keep a blank
+ * line between them, matching the gap shown in the Hub editor. Bold and italic
+ * have no API field, so the words remain.
+ */
+export function htmlToPlanableText(html: string): string {
+  if (!html.trim()) return "";
+  if (!html.includes("<")) return html.trim();
+  return planableBlocks(html).join("\n\n").replace(/\n{4,}/g, "\n\n\n").trim();
+}
+
+/** Images, or a video file plus any extra stills. First still is the video cover. */
+export function planableMediaPayload(assetUrl: string | null | undefined): {
+  mediaUrls: string[];
+  videoThumbnailUrl: string | null;
+} {
+  const videos = videoAssetUrls(assetUrl).slice(0, 20);
+  const images = imageAssetUrls(assetUrl);
+  if (!videos.length) {
+    return { mediaUrls: images.slice(0, 20), videoThumbnailUrl: null };
+  }
+  const cover = images[0] ?? null;
+  const rest = cover ? images.slice(1) : images;
+  return {
+    mediaUrls: [...videos, ...rest].slice(0, 20),
+    videoThumbnailUrl: cover,
+  };
 }
 
 function pushableCaption(item: ContentItem): string {
@@ -810,6 +970,7 @@ async function patchPlanableContent(
     plainText: string;
     scheduledAt: string | null;
     mediaUrls: string[];
+    videoThumbnailUrl?: string | null;
     includeMedia?: boolean;
   }
 ): Promise<
@@ -828,19 +989,27 @@ async function patchPlanableContent(
   const seen = new Set<string>();
   let lastError = "Planable update failed";
   for (const media of mediaAttempts) {
-    const key = media?.join("\n") ?? "";
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const result = await updatePlanablePostWithRetry(postId, {
-      plainText: input.plainText,
-      scheduledAt: input.scheduledAt,
-      ...(media?.length ? { media } : {}),
-    });
-    if (result.ok) return { ok: true, mediaApplied: Boolean(media?.length) };
-    if (result.notFound) return result;
-    // Extra media variants only make rate limits worse.
-    if (isPlanableRateLimit(result.error)) return result;
-    lastError = result.error;
+    const thumb =
+      includeMedia && media?.length && input.videoThumbnailUrl
+        ? input.videoThumbnailUrl
+        : null;
+    const variants: Array<string | null> = thumb ? [thumb, null] : [null];
+    for (const videoThumbnailUrl of variants) {
+      const key = `${media?.join("\n") ?? ""}|${videoThumbnailUrl ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const result = await updatePlanablePostWithRetry(postId, {
+        plainText: input.plainText,
+        scheduledAt: input.scheduledAt,
+        ...(media?.length ? { media } : {}),
+        ...(videoThumbnailUrl ? { videoThumbnailUrl } : {}),
+      });
+      if (result.ok) return { ok: true, mediaApplied: Boolean(media?.length) };
+      if (result.notFound) return result;
+      // Extra media variants only make rate limits worse.
+      if (isPlanableRateLimit(result.error)) return result;
+      lastError = result.error;
+    }
   }
   return { ok: false, error: lastError };
 }
@@ -899,13 +1068,15 @@ export async function pushContentToPlanable(
 
   const plainText = pushableCaption(current);
   const scheduledAt = scheduledAtFromDueDate(current.due_date);
-  const mediaUrls = imageAssetUrls(current.asset_url).slice(0, 20);
+  const { mediaUrls, videoThumbnailUrl } = planableMediaPayload(
+    current.asset_url
+  );
 
   if (!plainText && !mediaUrls.length) {
     return {
       item: current,
       error:
-        "Add a caption or image before sending to Planable. Empty drafts still use your post allowance.",
+        "Add a caption, image, or video before sending to Planable. Empty drafts still use your post allowance.",
     };
   }
 
@@ -916,6 +1087,7 @@ export async function pushContentToPlanable(
     plainText: caption,
     scheduledAt: effectiveScheduledAt,
     mediaUrls,
+    videoThumbnailUrl,
   });
 
   if (current.planable_post_id) {
@@ -966,8 +1138,11 @@ export async function pushContentToPlanable(
         item: patched ?? current,
         ...(!result.mediaApplied && mediaUrls.length
           ? {
-              error:
-                "Caption reached Planable, but the images were rejected. Check the Planable post and try again.",
+              error: mediaUrls.some((url) =>
+                /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)
+              )
+                ? "Caption reached Planable, but the video was rejected. Use a public MP4, MOV, WEBM, or M4V file under 100MB."
+                : "Caption reached Planable, but the images were rejected. Check the Planable post and try again.",
             }
           : {}),
       };
@@ -1038,6 +1213,21 @@ export async function pushContentToPlanable(
       item: current,
       error: created.error || "Failed to create Planable draft.",
     };
+  }
+
+  // Cover is a separate update. Create returns 400 if the video has not finished transcoding.
+  if (videoThumbnailUrl && created.post.id) {
+    const cover = await updatePlanablePost(created.post.id, {
+      videoThumbnailUrl,
+      notify: false,
+    });
+    if (!cover.ok) {
+      console.error("[planable] video cover update failed", {
+        id: current.id,
+        postId: created.post.id,
+        error: cover.error,
+      });
+    }
   }
 
   return {
