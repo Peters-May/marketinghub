@@ -665,7 +665,7 @@ export type AccessRequest = {
 /** WordPress Quote Builder → hub webhook enquiries. */
 export type WebEnquiryStatus = "new" | "in_progress" | "done";
 
-export type EnquiryIntake = "web" | "whatsapp";
+export type EnquiryIntake = "web" | "whatsapp" | "website_chat";
 
 export type WebEnquiry = {
   id: string;

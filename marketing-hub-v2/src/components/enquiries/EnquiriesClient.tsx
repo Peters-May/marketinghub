@@ -23,10 +23,11 @@ import { RecordDrawer } from "@/components/ui/RecordDrawer";
 
 const MARKETING_SOURCE_UPDATE_KEY = "web-enquiries-marketing-source-1.3.24";
 
-type IntakeTab = "web" | "whatsapp";
+type IntakeTab = "web" | "whatsapp" | "website_chat";
 
 const INTAKE_TABS: { id: IntakeTab; label: string }[] = [
-  { id: "web", label: "Web" },
+  { id: "web", label: "Web form" },
+  { id: "website_chat", label: "Website chat" },
   { id: "whatsapp", label: "WhatsApp" },
 ];
 
@@ -505,7 +506,12 @@ function buildDetailSections(e: HubEnquiry) {
   const attributionRows: AttrRow[] = [
     {
       label: "Intake",
-      value: e.channel === "whatsapp" ? "WhatsApp" : "Web form",
+      value:
+        e.channel === "whatsapp"
+          ? "WhatsApp"
+          : e.channel === "website_chat"
+            ? "Website chat"
+            : "Web form",
     },
     { label: "Channel", value: channel },
     { label: "Campaign", value: attr.utmCampaign },
@@ -981,7 +987,9 @@ export function EnquiriesClient({
         description={
           intakeTab === "whatsapp"
             ? "WhatsApp enquiry tracker — updated via Hub MCP (ChatGPT). Fields match the spreadsheet."
-            : "Website quote form submissions — live via WordPress webhook, with imported history."
+            : intakeTab === "website_chat"
+              ? "Website chatbot enquiries — synced when a visitor leaves contact details or closes the chat."
+              : "Website quote form submissions — live via WordPress webhook, with imported history."
         }
         actions={
           <button

@@ -228,10 +228,13 @@ export function registerEnquiryMcpTools(server: McpServer) {
     {
       title: "List enquiries",
       description:
-        "List all Marketing Hub enquiries for a calendar year (default: current year). Use channel web or whatsapp. Each web row includes tracking (gclid, utm_campaign) and source google_ads when a click id is present. Optional limit caps the result; omit limit to return the full year.",
+        "List all Marketing Hub enquiries for a calendar year (default: current year). Use channel web, website_chat, or whatsapp. Each web row includes tracking (gclid, utm_campaign) and source google_ads when a click id is present. Optional limit caps the result; omit limit to return the full year.",
       annotations: readOnlyAnnotations,
       inputSchema: z.object({
-        channel: z.string().optional().describe("web or whatsapp"),
+        channel: z
+          .string()
+          .optional()
+          .describe("web, website_chat, or whatsapp"),
         year: z
           .number()
           .int()
@@ -247,7 +250,9 @@ export function registerEnquiryMcpTools(server: McpServer) {
       jsonText(
         await listEnquiriesForMcp({
           channel:
-            args.channel === "web" || args.channel === "whatsapp"
+            args.channel === "web" ||
+            args.channel === "whatsapp" ||
+            args.channel === "website_chat"
               ? args.channel
               : undefined,
           year: args.year ?? new Date().getFullYear(),

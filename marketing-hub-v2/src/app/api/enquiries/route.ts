@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("include_test") === "true";
   const channelRaw = request.nextUrl.searchParams.get("channel");
   const channel =
-    channelRaw === "web" || channelRaw === "whatsapp"
+    channelRaw === "web" ||
+    channelRaw === "whatsapp" ||
+    channelRaw === "website_chat"
       ? (channelRaw as EnquiryIntake)
       : undefined;
   const limitRaw = request.nextUrl.searchParams.get("limit");

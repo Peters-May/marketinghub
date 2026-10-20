@@ -13,8 +13,25 @@ import type {
   WebEnquiry,
 } from "@/lib/types";
 
+function isWebsiteChatEnquiry(e: WebEnquiry): boolean {
+  const raw = e.raw_payload ?? {};
+  const make = e.make_fields ?? {};
+  const channel = String(raw.channel ?? "").toLowerCase();
+  const source = String(raw.source ?? make.source ?? "").toLowerCase();
+  const heard = String(make.heard_about ?? "").toLowerCase();
+  return (
+    channel === "website_chat" ||
+    source === "website_chat" ||
+    heard === "website chat" ||
+    String(e.submission_id ?? "").startsWith("chat:")
+  );
+}
+
 export function webToHubEnquiry(e: WebEnquiry): HubEnquiry {
-  return { ...e, channel: "web" };
+  return {
+    ...e,
+    channel: isWebsiteChatEnquiry(e) ? "website_chat" : "web",
+  };
 }
 
 export function whatsappToHubEnquiry(e: WhatsAppEnquiry): HubEnquiry {
@@ -86,7 +103,7 @@ function sortHub(items: HubEnquiry[]): HubEnquiry[] {
   });
 }
 
-/** Combined web + WhatsApp list for the Enquiries tab. */
+/** Combined web + WhatsApp + website chat list for the Enquiries tab. */
 export async function listHubEnquiries(options?: {
   includeTest?: boolean;
   channel?: EnquiryIntake;
@@ -95,19 +112,27 @@ export async function listHubEnquiries(options?: {
   const includeTest = Boolean(options?.includeTest);
   const channel = options?.channel;
 
+  const needWeb =
+    !channel || channel === "web" || channel === "website_chat";
+  const needWhatsApp = !channel || channel === "whatsapp";
+
   const [web, whatsapp] = await Promise.all([
-    channel === "whatsapp"
-      ? Promise.resolve([] as WebEnquiry[])
-      : listWebEnquiries({ includeTest }),
-    channel === "web"
-      ? Promise.resolve([] as WhatsAppEnquiry[])
-      : listWhatsAppEnquiries({ includeTest }),
+    needWeb
+      ? listWebEnquiries({ includeTest })
+      : Promise.resolve([] as WebEnquiry[]),
+    needWhatsApp
+      ? listWhatsAppEnquiries({ includeTest })
+      : Promise.resolve([] as WhatsAppEnquiry[]),
   ]);
 
   let merged = sortHub([
     ...web.map(webToHubEnquiry),
     ...whatsapp.map(whatsappToHubEnquiry),
   ]);
+
+  if (channel) {
+    merged = merged.filter((e) => e.channel === channel);
+  }
 
   if (options?.limit != null) {
     const limit = Math.min(Math.max(options.limit, 1), 20_000);
