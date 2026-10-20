@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
+import { getHubOpenAIModel } from "@/lib/ai/openai";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
 
 const SYSTEM = `${BRAND_AI_SUMMARY}
@@ -11,20 +11,7 @@ Leave factsheet placeholders if a figure would otherwise be needed.
 Do not use emoji, exclamation marks, or hype words.`;
 
 function model() {
-  const apiKey =
-    process.env.OPENAI_API_KEY ||
-    process.env.AI_GATEWAY_API_KEY ||
-    process.env.VERCEL_AI_GATEWAY_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "AI is not configured. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY."
-    );
-  }
-  const openai = createOpenAI({
-    apiKey,
-    baseURL: process.env.OPENAI_BASE_URL || undefined,
-  });
-  return openai(process.env.OPENAI_MODEL || "gpt-4o-mini");
+  return getHubOpenAIModel();
 }
 
 export async function suggestSubjects(input: {

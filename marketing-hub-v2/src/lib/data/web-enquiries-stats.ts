@@ -107,6 +107,15 @@ export function getEnquiryAttribution(
   const make = asRecord(e.make_fields);
   const form = asRecord(raw.form_fields);
 
+  const submissionId = asString(
+    "submission_id" in e ? e.submission_id : ""
+  );
+  const isWebsiteChat =
+    asString(raw.channel) === "website_chat" ||
+    asString(raw.source) === "website_chat" ||
+    asString(make.heard_about) === "Website chat" ||
+    submissionId.startsWith("chat:");
+
   const pageUrl =
     asString(tracking.current_page_url) ||
     asString(form["Page Location"]) ||
@@ -224,7 +233,9 @@ export function getEnquiryAttribution(
 
   /** Friendly channel label — matches team enquiry email Marketing source. */
   let sourceLabel = "Unknown";
-  if (isGoogleAds) {
+  if (isWebsiteChat) {
+    sourceLabel = "Website chat";
+  } else if (isGoogleAds) {
     sourceLabel = "Google Ads";
   } else if (isMetaAds) {
     sourceLabel = "Meta Ads";

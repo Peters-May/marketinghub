@@ -1,4 +1,5 @@
-﻿import { emptyPlannerFields } from "@/lib/events/planner";
+﻿import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
+import { emptyPlannerFields } from "@/lib/events/planner";
 import type { HubStore } from "@/lib/types";
 import {
   createDefaultBudgetLines,
@@ -23,9 +24,7 @@ export function createSeedStore(): HubStore {
         division: "Leisure",
         notes: "Booth + press meetings.",
         link_url: "",
-        social_media_post_completed: false,
-        personal_social_media_graphics_completed: false,
-        reached_out_for_pr_to_organisers: false,
+        ...emptyAttendanceOpsFields(),
         created_by: "demo-staff",
         created_at: now,
         updated_at: now,
@@ -41,9 +40,7 @@ export function createSeedStore(): HubStore {
         division: "All",
         notes: "Bring campaign briefs.",
         link_url: "",
-        social_media_post_completed: false,
-        personal_social_media_graphics_completed: false,
-        reached_out_for_pr_to_organisers: false,
+        ...emptyAttendanceOpsFields(),
         created_by: "demo-staff",
         created_at: now,
         updated_at: now,

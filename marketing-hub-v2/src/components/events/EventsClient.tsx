@@ -57,6 +57,14 @@ import {
   EventPlannerFields,
 } from "@/components/events/EventPlannerFields";
 import { LinkedSailings } from "@/components/events/LinkedSailings";
+import {
+  ATTENDANCE_CHECKLIST_KEYS,
+  ATTENDANCE_CHECKLIST_LABELS,
+  attendanceChecklistProgress,
+  emptyAttendanceOpsFields,
+  readAttendanceOpsFields,
+  type EventAttendanceOpsFields,
+} from "@/lib/events/attendance-checklist";
 import { readPlannerFields } from "@/lib/events/planner";
 
 const ATTENDANCE_OPTIONS: { value: EventAttendanceStatus; label: string }[] = [
@@ -75,9 +83,7 @@ const emptyForm = {
   division: "",
   notes: "",
   link_url: "",
-  social_media_post_completed: false,
-  personal_social_media_graphics_completed: false,
-  reached_out_for_pr_to_organisers: false,
+  ...emptyAttendanceOpsFields(),
   ...emptyPlannerForm,
 };
 
@@ -102,17 +108,24 @@ function toEditForm(event: EventItem): EventForm {
     division: event.division || "",
     notes: event.notes,
     link_url: event.link_url,
-    social_media_post_completed: Boolean(event.social_media_post_completed),
-    personal_social_media_graphics_completed: Boolean(
-      event.personal_social_media_graphics_completed
-    ),
-    reached_out_for_pr_to_organisers: Boolean(
-      event.reached_out_for_pr_to_organisers
-    ),
+    ...readAttendanceOpsFields(event),
     ...planner,
     recommended_arrival_start: planner.recommended_arrival_start || "",
     recommended_arrival_end: planner.recommended_arrival_end || "",
   };
+}
+
+function AttendingBadge({ event }: { event: EventItem }) {
+  if (!event.pm_attending) return null;
+  const { done, total } = attendanceChecklistProgress(event);
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
+      Attending
+      <span className="text-brand/70">
+        {done}/{total}
+      </span>
+    </span>
+  );
 }
 
 function hasValidStart(event: EventItem): boolean {
@@ -308,6 +321,151 @@ function TypeSwatch({ eventType }: { eventType: string }) {
   );
 }
 
+function AttendanceOpsPanel({
+  values,
+  onChange,
+  disabled = false,
+}: {
+  values: EventAttendanceOpsFields;
+  onChange: (patch: Partial<EventAttendanceOpsFields>) => void;
+  disabled?: boolean;
+}) {
+  const { done, total } = attendanceChecklistProgress(values);
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-sand/40 px-3 py-3">
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+        <input
+          type="checkbox"
+          className="rounded border-border"
+          disabled={disabled}
+          checked={Boolean(values.pm_attending)}
+          onChange={(e) => onChange({ pm_attending: e.target.checked })}
+        />
+        We are attending
+      </label>
+      <p className="text-xs text-muted">
+        Peters &amp; May as a company — separate from who has RSVP&apos;d.
+      </p>
+      {values.pm_attending ? (
+        <>
+          <div className="space-y-2 border-t border-border/70 pt-3">
+            <p className="label !mb-1">
+              Attendance checklist ({done}/{total})
+            </p>
+            {ATTENDANCE_CHECKLIST_KEYS.map((key) => (
+              <label
+                key={key}
+                className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+              >
+                <input
+                  type="checkbox"
+                  className="rounded border-border"
+                  disabled={disabled}
+                  checked={Boolean(values[key])}
+                  onChange={(e) => onChange({ [key]: e.target.checked })}
+                />
+                {ATTENDANCE_CHECKLIST_LABELS[key]}
+              </label>
+            ))}
+          </div>
+          <div className="space-y-3 border-t border-border/70 pt-3">
+            <p className="label !mb-1">Hotel booking</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="label">Hotel name</label>
+                <input
+                  className="field"
+                  disabled={disabled}
+                  value={values.hotel_name}
+                  onChange={(e) => onChange({ hotel_name: e.target.value })}
+                  placeholder="Hotel name"
+                />
+              </div>
+              <div>
+                <label className="label">Confirmation ref</label>
+                <input
+                  className="field"
+                  disabled={disabled}
+                  value={values.hotel_confirmation}
+                  onChange={(e) =>
+                    onChange({ hotel_confirmation: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Cost estimate</label>
+                <input
+                  className="field"
+                  disabled={disabled}
+                  value={values.hotel_cost_estimate}
+                  onChange={(e) =>
+                    onChange({ hotel_cost_estimate: e.target.value })
+                  }
+                  placeholder="e.g. £2,400"
+                />
+              </div>
+              <div>
+                <label className="label">Check-in</label>
+                <input
+                  className="field"
+                  type="date"
+                  disabled={disabled}
+                  value={values.hotel_check_in}
+                  onChange={(e) => onChange({ hotel_check_in: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Check-out</label>
+                <input
+                  className="field"
+                  type="date"
+                  disabled={disabled}
+                  value={values.hotel_check_out}
+                  onChange={(e) =>
+                    onChange({ hotel_check_out: e.target.value })
+                  }
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label">Guests / rooms</label>
+                <input
+                  className="field"
+                  disabled={disabled}
+                  value={values.hotel_guests}
+                  onChange={(e) => onChange({ hotel_guests: e.target.value })}
+                  placeholder="e.g. 4 rooms — Sophie, …"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label">Booking link</label>
+                <input
+                  className="field"
+                  disabled={disabled}
+                  value={values.hotel_booking_url}
+                  onChange={(e) =>
+                    onChange({ hotel_booking_url: e.target.value })
+                  }
+                  placeholder="https://"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label">Hotel notes</label>
+                <textarea
+                  className="field min-h-[72px]"
+                  disabled={disabled}
+                  value={values.hotel_notes}
+                  onChange={(e) => onChange({ hotel_notes: e.target.value })}
+                  placeholder="Second hotel, late checkout, company card…"
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function EventFields({
   form,
   onChange,
@@ -398,50 +556,11 @@ function EventFields({
       </div>
       <EventPlannerFields form={form} onChange={onChange} />
       {showAdminChecks ? (
-        <div className="md:col-span-2 space-y-2 rounded-lg border border-border bg-sand/40 px-3 py-3">
-          <p className="label !mb-1">Admin checklist</p>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              className="rounded border-border"
-              checked={form.social_media_post_completed}
-              onChange={(e) =>
-                onChange({
-                  ...form,
-                  social_media_post_completed: e.target.checked,
-                })
-              }
-            />
-            Social media post completed
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              className="rounded border-border"
-              checked={form.personal_social_media_graphics_completed}
-              onChange={(e) =>
-                onChange({
-                  ...form,
-                  personal_social_media_graphics_completed: e.target.checked,
-                })
-              }
-            />
-            Personal social media graphics completed
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              className="rounded border-border"
-              checked={form.reached_out_for_pr_to_organisers}
-              onChange={(e) =>
-                onChange({
-                  ...form,
-                  reached_out_for_pr_to_organisers: e.target.checked,
-                })
-              }
-            />
-            Reached out for PR to event organisers
-          </label>
+        <div className="md:col-span-2">
+          <AttendanceOpsPanel
+            values={readAttendanceOpsFields(form)}
+            onChange={(patch) => onChange({ ...form, ...patch })}
+          />
         </div>
       ) : null}
     </div>
@@ -1180,6 +1299,7 @@ export function EventsClient({
           id: a.user_id,
           name: a.user_name,
         }));
+        const checklist = attendanceChecklistProgress(e);
         return {
           id: e.id,
           title: e.title,
@@ -1192,6 +1312,9 @@ export function EventsClient({
           extendedProps: {
             eventType: e.event_type,
             attendees,
+            pmAttending: Boolean(e.pm_attending),
+            checklistDone: checklist.done,
+            checklistTotal: checklist.total,
           },
         };
       }),
@@ -1304,15 +1427,7 @@ export function EventsClient({
             event_series_id: edit.event_series_id,
             planner_slug: edit.planner_slug,
             pm_attendance: edit.pm_attendance,
-            ...(showAdminChecks
-              ? {
-                  social_media_post_completed: edit.social_media_post_completed,
-                  personal_social_media_graphics_completed:
-                    edit.personal_social_media_graphics_completed,
-                  reached_out_for_pr_to_organisers:
-                    edit.reached_out_for_pr_to_organisers,
-                }
-              : {}),
+            ...(showAdminChecks ? readAttendanceOpsFields(edit) : {}),
           },
         }),
       });
@@ -1328,14 +1443,7 @@ export function EventsClient({
 
   async function patchEventAdminChecks(
     eventId: string,
-    patch: Partial<
-      Pick<
-        EventItem,
-        | "social_media_post_completed"
-        | "personal_social_media_graphics_completed"
-        | "reached_out_for_pr_to_organisers"
-      >
-    >
+    patch: Partial<EventAttendanceOpsFields>
   ) {
     if (!showAdminChecks) return;
     setSaving(true);
@@ -1721,6 +1829,15 @@ export function EventsClient({
                     ? arg.event.extendedProps.attendees
                     : []
                 ) as { id: string; name: string }[];
+                const pmAttending = Boolean(
+                  arg.event.extendedProps.pmAttending
+                );
+                const checklistDone = Number(
+                  arg.event.extendedProps.checklistDone ?? 0
+                );
+                const checklistTotal = Number(
+                  arg.event.extendedProps.checklistTotal ?? 0
+                );
                 const color = eventTypeColor(eventType);
                 const isList = arg.view.type.startsWith("list");
                 return (
@@ -1745,6 +1862,14 @@ export function EventsClient({
                     >
                       {arg.event.title}
                     </span>
+                    {showAdminChecks && pmAttending ? (
+                      <span
+                        className="shrink-0 text-[10px] font-medium opacity-90"
+                        style={{ color: color.text }}
+                      >
+                        Attending {checklistDone}/{checklistTotal}
+                      </span>
+                    ) : null}
                     <AttendeeInitials people={attendees} max={isList ? 5 : 3} />
                   </div>
                 );
@@ -1763,7 +1888,10 @@ export function EventsClient({
                     onClick={() => setSelected(e)}
                   >
                     <div>
-                      <p className="font-medium">{e.title}</p>
+                      <p className="flex flex-wrap items-center gap-2 font-medium">
+                        <span>{e.title}</span>
+                        {showAdminChecks ? <AttendingBadge event={e} /> : null}
+                      </p>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
                         <TypeSwatch eventType={e.event_type} />
                         {e.division ? (
@@ -1792,9 +1920,14 @@ export function EventsClient({
             {selected ? (
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-display text-xl text-brand">
-                    {selected.title}
-                  </h2>
+                  <div className="min-w-0 space-y-1.5">
+                    <h2 className="font-display text-xl text-brand">
+                      {selected.title}
+                    </h2>
+                    {showAdminChecks ? (
+                      <AttendingBadge event={selected} />
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     className="btn-ghost shrink-0 px-2 py-1 text-xs"
@@ -1862,55 +1995,14 @@ export function EventsClient({
                 </dl>
 
                 {showAdminChecks ? (
-                  <div className="mt-4 space-y-2 rounded-lg border border-border bg-sand/40 px-3 py-3">
-                    <p className="label !mb-1">Admin checklist</p>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border"
-                        disabled={saving}
-                        checked={Boolean(selected.social_media_post_completed)}
-                        onChange={(e) =>
-                          void patchEventAdminChecks(selected.id, {
-                            social_media_post_completed: e.target.checked,
-                          })
-                        }
-                      />
-                      Social media post completed
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border"
-                        disabled={saving}
-                        checked={Boolean(
-                          selected.personal_social_media_graphics_completed
-                        )}
-                        onChange={(e) =>
-                          void patchEventAdminChecks(selected.id, {
-                            personal_social_media_graphics_completed:
-                              e.target.checked,
-                          })
-                        }
-                      />
-                      Personal social media graphics completed
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border"
-                        disabled={saving}
-                        checked={Boolean(
-                          selected.reached_out_for_pr_to_organisers
-                        )}
-                        onChange={(e) =>
-                          void patchEventAdminChecks(selected.id, {
-                            reached_out_for_pr_to_organisers: e.target.checked,
-                          })
-                        }
-                      />
-                      Reached out for PR to event organisers
-                    </label>
+                  <div className="mt-4">
+                    <AttendanceOpsPanel
+                      values={readAttendanceOpsFields(selected)}
+                      disabled={saving}
+                      onChange={(patch) =>
+                        void patchEventAdminChecks(selected.id, patch)
+                      }
+                    />
                   </div>
                 ) : null}
 
@@ -2060,7 +2152,10 @@ export function EventsClient({
                       className="flex min-w-0 flex-1 flex-col gap-1 px-4 py-3 text-left hover:bg-sand"
                       onClick={() => setSelected(e)}
                     >
-                      <span className="text-sm font-medium">{e.title}</span>
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                        <span>{e.title}</span>
+                        {showAdminChecks ? <AttendingBadge event={e} /> : null}
+                      </span>
                       <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
                         <TypeSwatch eventType={e.event_type} />
                         {e.division ? (

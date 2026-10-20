@@ -85,11 +85,24 @@ function migrateEvents(items: EventItem[] | undefined): EventItem[] | undefined 
   return items.map((item) => ({
     ...item,
     division: item.division ?? "",
+    pm_attending: item.pm_attending ?? false,
+    accommodation_arranged: item.accommodation_arranged ?? false,
+    costs_collected: item.costs_collected ?? false,
+    stand_or_passes_booked: item.stand_or_passes_booked ?? false,
+    press_kit_ready: item.press_kit_ready ?? false,
     social_media_post_completed: item.social_media_post_completed ?? false,
     personal_social_media_graphics_completed:
       item.personal_social_media_graphics_completed ?? false,
     reached_out_for_pr_to_organisers:
       item.reached_out_for_pr_to_organisers ?? false,
+    hotel_name: item.hotel_name ?? "",
+    hotel_confirmation: item.hotel_confirmation ?? "",
+    hotel_check_in: item.hotel_check_in ?? "",
+    hotel_check_out: item.hotel_check_out ?? "",
+    hotel_guests: item.hotel_guests ?? "",
+    hotel_cost_estimate: item.hotel_cost_estimate ?? "",
+    hotel_booking_url: item.hotel_booking_url ?? "",
+    hotel_notes: item.hotel_notes ?? "",
   }));
 }
 

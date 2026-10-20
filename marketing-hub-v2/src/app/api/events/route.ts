@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
+import { readAttendanceOpsFields } from "@/lib/events/attendance-checklist";
 import { plannerFieldsFromBody } from "@/lib/events/planner";
 import {
   createEvent,
@@ -48,13 +49,7 @@ export async function POST(request: NextRequest) {
     division: body.division ?? "",
     notes: body.notes ?? "",
     link_url: body.link_url ?? "",
-    social_media_post_completed: Boolean(body.social_media_post_completed),
-    personal_social_media_graphics_completed: Boolean(
-      body.personal_social_media_graphics_completed
-    ),
-    reached_out_for_pr_to_organisers: Boolean(
-      body.reached_out_for_pr_to_organisers
-    ),
+    ...readAttendanceOpsFields(body),
     ...plannerFieldsFromBody(body),
     created_by: user.id,
   });

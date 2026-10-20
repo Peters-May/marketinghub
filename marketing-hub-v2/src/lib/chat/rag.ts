@@ -1,0 +1,154 @@
+import { streamText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
+import type { ChatKbDocument, ChatMessage } from "@/lib/types";
+import { listKbDocuments, getChatSettings } from "@/lib/chat/data";
+
+function scoreDoc(query: string, doc: ChatKbDocument): number {
+  const q = query.toLowerCase();
+  const words = q.split(/\W+/).filter((w) => w.length > 2);
+  const hay = `${doc.title}\n${doc.body}`.toLowerCase();
+  let score = 0;
+  for (const w of words) {
+    if (hay.includes(w)) score += 1;
+  }
+  if (doc.title.toLowerCase().split(/\W+/).some((t) => q.includes(t) && t.length > 3)) {
+    score += 2;
+  }
+  return score;
+}
+
+export function retrieveKb(
+  query: string,
+  docs: ChatKbDocument[],
+  limit = 4
+): ChatKbDocument[] {
+  const scored = docs
+    .map((d) => ({ d, score: scoreDoc(query, d) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) {
+    return docs.slice(0, Math.min(2, docs.length));
+  }
+  return scored.slice(0, limit).map((x) => x.d);
+}
+
+function model() {
+  const apiKey =
+    process.env.OPENAI_API_KEY ||
+    process.env.AI_GATEWAY_API_KEY ||
+    process.env.VERCEL_AI_GATEWAY_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "AI is not configured. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY."
+    );
+  }
+  const openai = createOpenAI({
+    apiKey,
+    baseURL: process.env.OPENAI_BASE_URL || undefined,
+  });
+  return openai(process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini");
+}
+
+export function shouldForceHandoff(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\b(speak (to|with) (a |the )?human|talk to (a |the )?(person|someone|team|agent)|real person|live (chat|agent))\b/i.test(
+      t
+    ) ||
+    /\b(quote|quotation|how much|price|pricing|rate|rates|cost|costs|capacity)\b/i.test(
+      t
+    )
+  );
+}
+
+export async function streamAssistantReply(input: {
+  visitorMessage: string;
+  history: ChatMessage[];
+}): Promise<{
+  textStream: AsyncIterable<string>;
+  sources: ChatMessage["sources"];
+  forceHandoff: boolean;
+}> {
+  const [settings, docs] = await Promise.all([
+    getChatSettings(),
+    listKbDocuments({ activeOnly: true }),
+  ]);
+  const retrieved = retrieveKb(input.visitorMessage, docs);
+  const sources = retrieved.map((d) => ({
+    title: d.title,
+    ...(d.source_url ? { source_url: d.source_url } : {}),
+  }));
+
+  const forceHandoff = shouldForceHandoff(input.visitorMessage);
+
+  const kbBlock =
+    retrieved.length === 0
+      ? "(No knowledge base documents matched. Say you are unsure and offer to connect the visitor with the team.)"
+      : retrieved
+          .map(
+            (d, i) =>
+              `[${i + 1}] ${d.title}${d.source_url ? ` (${d.source_url})` : ""}\n${d.body}`
+          )
+          .join("\n\n");
+
+  const system = `${BRAND_AI_SUMMARY}
+
+You are the Peters & May website assistant for anonymous visitors.
+${settings.guidance.trim() ? `\nGuidance:\n${settings.guidance.trim()}\n` : ""}
+Rules:
+- Answer only using the knowledge base excerpts below. If the answer is not there, say so briefly and offer Speak to the team.
+- British English. Short paragraphs. No emoji. No exclamation marks. No hype.
+- Never invent rates, capacity, clients, case studies, or company figures.
+- You may ask for a business email when the visitor wants a quote, callback, or human follow-up.
+- If they ask for rates/quotes or a person, acknowledge and invite Speak to the team / email capture.
+
+Knowledge base:
+${kbBlock}`;
+
+  const historyMessages = input.history
+    .filter((m) => m.role === "visitor" || m.role === "assistant" || m.role === "staff")
+    .slice(-12)
+    .map((m) => ({
+      role:
+        m.role === "visitor"
+          ? ("user" as const)
+          : ("assistant" as const),
+      content: m.body,
+    }));
+
+  const result = streamText({
+    model: model(),
+    system,
+    messages: [
+      ...historyMessages,
+      { role: "user", content: input.visitorMessage },
+    ],
+  });
+
+  return {
+    textStream: result.textStream,
+    sources,
+    forceHandoff,
+  };
+}
+
+/** Non-streaming reply for Hub playground / fallback. */
+export async function generateAssistantReply(input: {
+  visitorMessage: string;
+  history: ChatMessage[];
+}): Promise<{ body: string; sources: ChatMessage["sources"]; forceHandoff: boolean }> {
+  const streamed = await streamAssistantReply(input);
+  let body = "";
+  for await (const chunk of streamed.textStream) {
+    body += chunk;
+  }
+  if (streamed.forceHandoff && !/team|email|follow/i.test(body)) {
+    body = `${body.trim()}\n\nFor a quote or personal help, use Speak to the team and leave your business email.`.trim();
+  }
+  return {
+    body: body.trim() || "I am not sure from our published information. Please speak to the team and we will follow up.",
+    sources: streamed.sources,
+    forceHandoff: streamed.forceHandoff,
+  };
+}

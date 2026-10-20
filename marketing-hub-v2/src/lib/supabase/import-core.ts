@@ -1,3 +1,4 @@
+import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
 import { emptyPlannerFields } from "@/lib/events/planner";
 import { uid } from "@/lib/utils";
 import type {
@@ -243,9 +244,7 @@ export async function importFromCoreData(): Promise<ImportResult> {
           division: division.trim(),
           notes: cleaned.notes,
           link_url: cleaned.link_url,
-          social_media_post_completed: false,
-          personal_social_media_graphics_completed: false,
-          reached_out_for_pr_to_organisers: false,
+          ...emptyAttendanceOpsFields(),
           created_by: null,
           created_at: asIsoDate(r.created_at) || now,
           updated_at: asIsoDate(r.updated_at) || now,

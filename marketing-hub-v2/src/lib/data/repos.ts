@@ -1,3 +1,4 @@
+import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
 import {
   emptyPlannerFields,
   plannerFieldsFromBody,
@@ -126,6 +127,7 @@ export async function createEvent(
 ) {
   const item: EventItem = {
     ...emptyPlannerFields(),
+    ...emptyAttendanceOpsFields(),
     ...input,
     ...plannerFieldsFromBody({ ...input, title: input.title, starts_at: input.starts_at }),
     id: uid("evt"),
@@ -145,6 +147,7 @@ export async function updateEvent(id: string, patch: Partial<EventItem>) {
     if (idx === -1) return;
     const next = {
       ...emptyPlannerFields(),
+      ...emptyAttendanceOpsFields(),
       ...s.events[idx],
       ...patch,
       id,

@@ -3,10 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Sparkles, X } from "lucide-react";
 import { canAccessBudget as userCanAccessBudget } from "@/lib/auth/budget-access";
 import { navForView } from "@/lib/nav";
 import { HubViewProvider, useHubView } from "@/lib/hub-view";
+import {
+  AiAssistantPanel,
+  AiAssistantTrigger,
+} from "@/components/ai/AiAssistantPanel";
 import { MemberRouteGuard } from "@/components/shell/MemberRouteGuard";
 import { AccountMenu, SignOutLink } from "@/components/shell/AccountMenu";
 import { BrandLockup } from "@/components/shell/BrandLockup";
@@ -93,8 +97,10 @@ function ShellInner({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
   const nav = navForView(view, { canAccessBudget, budgetInMemberNav });
+  const canUseAssistant = accessRole === "admin";
 
   const ensureAdminView = useCallback(() => {
     if (canToggleAdminView) setView("admin");
@@ -153,6 +159,12 @@ function ShellInner({
           </div>
           <div className="flex-1 overflow-y-auto">{Nav}</div>
           <div className="border-t border-border px-3 py-3">
+            {canUseAssistant ? (
+              <AiAssistantTrigger
+                onOpen={() => setAssistantOpen(true)}
+                className="mb-1"
+              />
+            ) : null}
             <AccountMenu
               userName={userName}
               userEmail={userEmail}
@@ -171,6 +183,16 @@ function ShellInner({
               <div className="w-56">
                 <ViewToggle canToggle={canToggleAdminView} />
               </div>
+              {canUseAssistant ? (
+                <button
+                  type="button"
+                  className="btn-secondary px-3 py-2"
+                  onClick={() => setAssistantOpen(true)}
+                  aria-label="Open AI assistant"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+              ) : null}
               <AccountMenu
                 userName={userName}
                 userEmail={userEmail}
@@ -206,6 +228,12 @@ function ShellInner({
           </main>
         </div>
       </div>
+      {canUseAssistant ? (
+        <AiAssistantPanel
+          open={assistantOpen}
+          onClose={() => setAssistantOpen(false)}
+        />
+      ) : null}
     </HubTourProvider>
   );
 }
