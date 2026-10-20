@@ -42,7 +42,7 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_CHARS = 12_000;
 
 function stripHtml(html: string): string {
-  let t = html
+  const t = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
