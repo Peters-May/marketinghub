@@ -14,6 +14,7 @@ import {
   updateChatSession,
 } from "@/lib/chat/data";
 import { generateAssistantReply } from "@/lib/chat/rag";
+import { syncClosedChatSessionToPortal } from "@/lib/chat/lead";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import type { ChatSessionStatus } from "@/lib/types";
 
@@ -188,7 +189,16 @@ export async function POST(request: Request) {
           : {}),
       });
       if (!updated) return jsonError("Not found", 404);
-      return jsonOk({ session: updated });
+
+      // Closing with contact details → Hub enquiry + Portal (full transcript).
+      let portal_sync: Awaited<
+        ReturnType<typeof syncClosedChatSessionToPortal>
+      > | null = null;
+      if (status === "closed") {
+        portal_sync = await syncClosedChatSessionToPortal(sessionId);
+      }
+
+      return jsonOk({ session: updated, portal_sync });
     }
 
     if (action === "get_session") {

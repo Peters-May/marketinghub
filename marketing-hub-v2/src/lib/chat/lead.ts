@@ -1,9 +1,33 @@
-import type { ChatSession } from "@/lib/types";
+import type { ChatMessage, ChatSession } from "@/lib/types";
 import { upsertWebEnquiryFromWebhook } from "@/lib/data/web-enquiries";
 import { syncWebEnquiryToPortal } from "@/lib/sync/portal-enquiries";
-import { updateChatSession } from "@/lib/chat/data";
+import {
+  getChatSession,
+  listChatMessages,
+  updateChatSession,
+} from "@/lib/chat/data";
 import { suggestOfficeFromEnquiryText } from "@/lib/chat/enquiry-guidance";
 import { notifyChatStaff } from "@/lib/chat/notify";
+
+/** Readable transcript for Hub / Portal enquiry body. */
+export function formatChatTranscript(messages: ChatMessage[]): string {
+  return messages
+    .map((m) => {
+      const who =
+        m.role === "visitor"
+          ? "Visitor"
+          : m.role === "staff"
+            ? "Staff"
+            : m.role === "assistant"
+              ? "Assistant"
+              : "System";
+      const body = (m.body ?? "").trim();
+      if (!body) return "";
+      return `[${who}] ${body}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 /**
  * Upsert a web enquiry from a chat session and mirror to Portal.
@@ -17,6 +41,7 @@ export async function bridgeChatSessionToEnquiry(
     company?: string;
     message?: string;
     notify?: boolean;
+    closed?: boolean;
   }
 ): Promise<{ enquiryId: string; submissionId: string }> {
   const name = (opts?.name ?? session.visitor_name).trim();
@@ -57,6 +82,7 @@ export async function bridgeChatSessionToEnquiry(
       heard_about: "Website chat",
       chat_session_id: session.id,
       chat_message: message,
+      chat_closed: opts?.closed === true,
       ...(suggestedOffice ? { selected_office: suggestedOffice } : {}),
     },
     tracking: {
@@ -99,4 +125,55 @@ export async function bridgeChatSessionToEnquiry(
   }
 
   return { enquiryId: enquiry.id, submissionId };
+}
+
+/**
+ * When staff closes a chat that has contact details, upsert Hub + Portal
+ * with the full transcript (idempotent on submission_id chat:<sessionId>).
+ */
+export async function syncClosedChatSessionToPortal(
+  sessionId: string
+): Promise<
+  | { ok: true; enquiryId: string; submissionId: string }
+  | { ok: true; skipped: true; reason: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await getChatSession(sessionId);
+    if (!session) {
+      return { ok: true, skipped: true, reason: "session_not_found" };
+    }
+    if (session.is_test) {
+      return { ok: true, skipped: true, reason: "test_session" };
+    }
+
+    const email = (session.visitor_email ?? "").trim();
+    if (!email) {
+      return { ok: true, skipped: true, reason: "no_contact_email" };
+    }
+
+    const messages = await listChatMessages(sessionId);
+    const transcript = formatChatTranscript(messages);
+    const header = `Website chat closed — ${
+      session.page_title || session.page_url || session.id
+    }`;
+    const message = transcript
+      ? `${header}\n\n--- Transcript ---\n\n${transcript}`
+      : header;
+
+    const result = await bridgeChatSessionToEnquiry(session, {
+      email,
+      name: session.visitor_name,
+      company: session.visitor_company,
+      message,
+      notify: false,
+      closed: true,
+    });
+
+    return { ok: true, ...result };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Close sync failed";
+    console.error("[chat-close-portal-sync]", sessionId, error);
+    return { ok: false, error };
+  }
 }
