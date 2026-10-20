@@ -12,6 +12,7 @@ import {
   createSection,
   duplicateBlock,
   duplicateSection,
+  findBlock,
   insertBlock,
   insertSection,
   moveBlock,
@@ -153,7 +154,7 @@ export function EmailDesigner({
   const [name, setName] = useState(initialName);
   const [subject, setSubject] = useState(initialSubject);
   const [previewText, setPreviewText] = useState(initialPreview);
-  const [brief] = useState(initialBrief);
+  const [brief, setBrief] = useState(initialBrief);
   const [fromName, setFromName] = useState(initialFromName);
   const [fromEmail, setFromEmail] = useState(initialFromEmail);
   const [audienceId, setAudienceId] = useState(initialAudienceId);
@@ -443,6 +444,7 @@ export function EmailDesigner({
             from_email: fromEmail,
             audience_id: audienceId || null,
             exclude_audience_id: excludeAudienceId || null,
+            brief,
             design,
             html_body,
           };
@@ -483,6 +485,7 @@ export function EmailDesigner({
     name,
     subject,
     previewText,
+    brief,
     fromName,
     fromEmail,
     audienceId,
@@ -570,33 +573,95 @@ export function EmailDesigner({
   }
 
   async function draftFromBriefAi() {
+    const prompt = (brief || subject || name).trim();
+    if (!prompt) {
+      setError("Add a brief (or a subject) first, then try Draft from brief.");
+      return;
+    }
     const audienceLabel =
       audienceOptions.find((audience) => audience.id === audienceId)?.name ?? "";
     const data = await runAi("draft_from_brief", {
-      brief: brief || subject || name,
+      brief: prompt,
       audience: audienceLabel,
     });
     const draft = data?.draft as
-      | { heading?: string; html?: string; buttonLabel?: string }
+      | {
+          subject?: string;
+          preview?: string;
+          heading?: string;
+          html?: string;
+          buttonLabel?: string;
+          blocks?: Array<
+            | { type: "heading"; text: string }
+            | { type: "text"; html: string }
+            | { type: "quote"; text: string; attribution?: string }
+            | { type: "button"; label: string }
+          >;
+        }
       | undefined;
     if (!draft) return;
     const design = history.designRef.current;
-    const sectionId = design.sections[0]?.id;
-    const columnId = design.sections[0]?.columns[0]?.id;
-    if (!sectionId || !columnId) return;
+    const targetSection =
+      design.sections.find((item) => !item.locked) ?? design.sections[0];
+    const sectionId = targetSection?.id;
+    const columnId = targetSection?.columns[0]?.id;
+    if (!sectionId || !columnId) {
+      setError("Could not add the draft — this email has no editable section.");
+      return;
+    }
     let next = design;
-    if (draft.heading) {
-      const heading = createBlock("heading", { text: draft.heading });
-      next = insertBlock(next, sectionId, columnId, heading, null);
+    const blocks =
+      draft.blocks && draft.blocks.length > 0
+        ? draft.blocks
+        : [
+            draft.heading
+              ? ({ type: "heading" as const, text: draft.heading })
+              : null,
+            draft.html ? ({ type: "text" as const, html: draft.html }) : null,
+            draft.buttonLabel
+              ? ({ type: "button" as const, label: draft.buttonLabel })
+              : null,
+          ].filter(Boolean) as NonNullable<typeof draft.blocks>;
+    for (const item of blocks) {
+      if (item.type === "heading") {
+        next = insertBlock(
+          next,
+          sectionId,
+          columnId,
+          createBlock("heading", { text: item.text }),
+          null
+        );
+      } else if (item.type === "text") {
+        next = insertBlock(
+          next,
+          sectionId,
+          columnId,
+          createBlock("text", { html: item.html }),
+          null
+        );
+      } else if (item.type === "quote") {
+        next = insertBlock(
+          next,
+          sectionId,
+          columnId,
+          createBlock("quote", {
+            text: item.text,
+            attribution: item.attribution || "",
+          }),
+          null
+        );
+      } else if (item.type === "button") {
+        next = insertBlock(
+          next,
+          sectionId,
+          columnId,
+          createBlock("button", { label: item.label }),
+          null
+        );
+      }
     }
-    if (draft.html) {
-      const text = createBlock("text", { html: draft.html });
-      next = insertBlock(next, sectionId, columnId, text, null);
-    }
-    if (draft.buttonLabel) {
-      const button = createBlock("button", { label: draft.buttonLabel });
-      next = insertBlock(next, sectionId, columnId, button, null);
-    }
+    if (draft.subject) setSubject(draft.subject);
+    if (draft.preview) setPreviewText(draft.preview);
     history.commit(next);
     markDirty();
     setSavedNote("AI draft added — review before sending");
@@ -785,6 +850,14 @@ export function EmailDesigner({
   function commitDesign(next: EmailDesign) {
     history.commit(next);
     markDirty();
+  }
+
+  function sectionIsBrandLocked(sectionId: string) {
+    const design = history.designRef.current;
+    if (!design.styles.brandLocked) return false;
+    return design.sections.some(
+      (item) => item.id === sectionId && item.locked
+    );
   }
 
   return (
@@ -1123,20 +1196,36 @@ export function EmailDesigner({
             </ul>
           ) : null}
           {!readOnly ? (
-            <div className="flex flex-wrap gap-2 sm:pl-[7.5rem]">
-              <button
-                type="button"
-                className="btn-secondary inline-flex items-center gap-1 px-2 py-1.5 text-xs"
-                disabled={aiBusy}
-                onClick={() => void draftFromBriefAi()}
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                Draft from brief
-              </button>
-              {dirty ? (
-                <span className="self-center text-xs text-muted">Unsaved changes…</span>
-              ) : null}
-            </div>
+            <>
+              <label className="grid items-start gap-2 sm:grid-cols-[7rem_1fr]">
+                <span className="pt-2 text-muted">Brief</span>
+                <textarea
+                  className="input min-h-[4.5rem] w-full resize-y"
+                  value={brief}
+                  placeholder="What should this email say? (AI uses this for Draft from brief)"
+                  onChange={(event) => {
+                    setBrief(event.target.value);
+                    markDirty();
+                  }}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2 sm:pl-[7.5rem]">
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                  disabled={aiBusy}
+                  onClick={() => void draftFromBriefAi()}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {aiBusy ? "Drafting…" : "Draft from brief"}
+                </button>
+                {dirty ? (
+                  <span className="self-center text-xs text-muted">
+                    Unsaved changes…
+                  </span>
+                ) : null}
+              </div>
+            </>
           ) : null}
         </div>
       </div>
@@ -1196,16 +1285,20 @@ export function EmailDesigner({
                 commitDesign(duplicateBlock(history.designRef.current, blockId))
               }
               onDelete={(blockId) => {
+                const found = findBlock(history.designRef.current, blockId);
+                if (found && sectionIsBrandLocked(found.sectionId)) return;
                 commitDesign(removeBlock(history.designRef.current, blockId));
                 setSelection({ type: "email" });
               }}
-              onMoveSection={(sectionId, direction) =>
-                commitDesign(moveSection(history.designRef.current, sectionId, direction))
-              }
+              onMoveSection={(sectionId, direction) => {
+                if (sectionIsBrandLocked(sectionId)) return;
+                commitDesign(moveSection(history.designRef.current, sectionId, direction));
+              }}
               onDuplicateSection={(sectionId) =>
                 commitDesign(duplicateSection(history.designRef.current, sectionId))
               }
               onDeleteSection={(sectionId) => {
+                if (sectionIsBrandLocked(sectionId)) return;
                 commitDesign(removeSection(history.designRef.current, sectionId));
                 setSelection({ type: "email" });
               }}
@@ -1220,10 +1313,12 @@ export function EmailDesigner({
                 addSection("1", before);
               }}
               onAddColumn={(sectionId) => {
+                if (sectionIsBrandLocked(sectionId)) return;
                 commitDesign(addColumn(history.designRef.current, sectionId));
                 setSelection({ type: "section", sectionId });
               }}
               onRemoveColumn={(sectionId, columnId) => {
+                if (sectionIsBrandLocked(sectionId)) return;
                 commitDesign(
                   removeColumn(history.designRef.current, sectionId, columnId)
                 );
@@ -1236,7 +1331,10 @@ export function EmailDesigner({
           design={history.design}
           section={section}
           block={block}
-          disabled={readOnly}
+          disabled={
+            readOnly ||
+            Boolean(section && sectionIsBrandLocked(section.id))
+          }
           onSelectEmail={() => setSelection({ type: "email" })}
           onSelectSection={() => {
             if (section) {

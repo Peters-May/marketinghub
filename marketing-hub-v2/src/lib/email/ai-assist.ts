@@ -89,10 +89,17 @@ ${input.text}`,
   return object.text;
 }
 
+export type DraftBlock =
+  | { type: "heading"; text: string }
+  | { type: "text"; html: string }
+  | { type: "quote"; text: string; attribution?: string }
+  | { type: "button"; label: string };
+
 export async function draftFromBrief(input: {
   brief: string;
   audience?: string;
 }) {
+  // Flat schema (no discriminatedUnion) — OpenAI structured output is more reliable.
   const { object } = await generateObject({
     model: model(),
     system: SYSTEM,
@@ -101,14 +108,32 @@ export async function draftFromBrief(input: {
 Brief: ${input.brief || "(none)"}
 Audience: ${input.audience || "(general)"}
 
-Provide a heading, 1–2 short HTML paragraphs (use <p>), and a button label.`,
+Provide a subject (under 60 characters), inbox preview (under 90 characters),
+a heading, 1–2 short HTML paragraphs (use <p> only with optional strong/em/a/ul/ol/li),
+and a button label. Keep copy short and specific. Do not invent statistics or client names.`,
     schema: z.object({
+      subject: z.string(),
+      preview: z.string(),
       heading: z.string(),
       html: z.string(),
       buttonLabel: z.string(),
     }),
   });
-  return object;
+
+  const blocks: DraftBlock[] = [
+    { type: "heading", text: object.heading },
+    { type: "text", html: object.html },
+    { type: "button", label: object.buttonLabel },
+  ];
+
+  return {
+    subject: object.subject,
+    preview: object.preview,
+    heading: object.heading,
+    html: object.html,
+    buttonLabel: object.buttonLabel,
+    blocks,
+  };
 }
 
 export { excerptFromDesign } from "@/lib/email/design-excerpt";
