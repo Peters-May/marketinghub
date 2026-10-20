@@ -3,7 +3,7 @@
  * Plugin Name: PM Website Chat
  * Plugin URI: https://marketing.petersandmay.com/app/chat
  * Description: Peters and May website chatbot. Connects to Marketing Hub for AI answers, staff inbox, and enquiry leads.
- * Version: 1.0.12
+ * Version: 1.0.13
  * Requires at least: 5.8
  * Requires PHP: 7.4
  * Author: Peters and May Marketing
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('PM_WEBSITE_CHAT_VERSION', '1.0.12');
+define('PM_WEBSITE_CHAT_VERSION', '1.0.13');
 define('PM_WEBSITE_CHAT_PLUGIN_FILE', __FILE__);
 define('PM_WEBSITE_CHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PM_WEBSITE_CHAT_PLUGIN_URL', plugin_dir_url(__FILE__));

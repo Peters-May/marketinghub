@@ -15,6 +15,8 @@
   var inflightSends = 0;
   var startersShown = false;
   var collectState = null;
+  /** Prevent restarting the guided form after it has just been submitted. */
+  var suppressCollectTrigger = false;
   var SESSION_KEY = "pm_website_chat_session_id";
 
   function rememberSession(id) {
@@ -434,6 +436,7 @@
 
   function startCollect(kind, opts) {
     opts = opts || {};
+    if (suppressCollectTrigger && !opts.force) return;
     var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
     collectState = {
       kind: kind,
@@ -608,6 +611,16 @@
     return lines.join("\n");
   }
 
+  function isGuidedEnquiryPayload(text) {
+    var t = String(text || "");
+    return (
+      /enquiry \(guided form\):/i.test(t) ||
+      /enquiry \(pasted details\):/i.test(t) ||
+      (t.split("\n").length >= 4 &&
+        /\b(length \(loa\)|yacht make|destination|business email)\b/i.test(t))
+    );
+  }
+
   function finishCollectFromFields() {
     if (!collectState) return;
     var kind = collectState.kind;
@@ -617,21 +630,42 @@
     if (values.name) nameInput.value = values.name;
     if (values.company) companyInput.value = values.company;
     stopCollect();
-    sendMessageText(summary);
+    suppressCollectTrigger = true;
+    sendMessageText(summary, { skipCollect: true });
   }
 
   function finishCollectFromPaste(text) {
     var kind = collectState && collectState.kind;
     stopCollect();
+    suppressCollectTrigger = true;
     sendMessageText(
       (kind === "freight"
         ? "Freight / cargo enquiry (pasted details):\n"
-        : "Yacht transport enquiry (pasted details):\n") + text
+        : "Yacht transport enquiry (pasted details):\n") + text,
+      { skipCollect: true }
+    );
+  }
+
+  function looksLikeHandover(body) {
+    var t = String(body || "").toLowerCase();
+    return (
+      /enough information/.test(t) ||
+      /pass this to our/.test(t) ||
+      /contact you directly/.test(t) ||
+      /noted .+ and will follow up/.test(t)
     );
   }
 
   function maybeOfferGuidedFromAssistant(body) {
-    if (collectState) return;
+    // Never reopen the step form after a completed enquiry or handover.
+    if (looksLikeHandover(body) || isGuidedEnquiryPayload(body)) {
+      suppressCollectTrigger = true;
+      stopCollect();
+      hideStarters();
+      showWhatElseChip();
+      return;
+    }
+    if (collectState || suppressCollectTrigger) return;
     if (looksLikeYachtChecklist(body)) {
       offerGuidedCollect("yacht");
       return;
@@ -639,15 +673,12 @@
     showWhatElseChip();
   }
 
-  function maybeStartCollectFromVisitor(text) {
-    if (collectState) return;
-    var kind = detectQuoteKindFromText(text);
-    if (!kind) return;
-    // Free-typed quote intent → start guided fields after a short beat.
-    setTimeout(function () {
-      if (collectState) return;
-      startCollect(kind);
-    }, 400);
+  /**
+   * Do not auto-open the guided form from free-typed messages.
+   * Collect starts only from Get a quote / yacht / freight chips.
+   */
+  function maybeStartCollectFromVisitor(_text) {
+    return;
   }
 
   function syncSeen() {
@@ -794,11 +825,14 @@
       });
   }
 
-  function sendMessageText(text) {
+  function sendMessageText(text, opts) {
+    opts = opts || {};
     text = (text || "").trim();
     if (!text || !sessionId) return;
     hideStarters();
-    maybeStartCollectFromVisitor(text);
+    if (!opts.skipCollect) {
+      maybeStartCollectFromVisitor(text);
+    }
     appendBubble("visitor", text);
     inflightSends += 1;
     setTyping(true);
