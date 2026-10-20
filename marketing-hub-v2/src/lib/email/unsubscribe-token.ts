@@ -47,14 +47,39 @@ export function parseUnsubscribeToken(token: string): {
   }
 }
 
+export type PreferenceCentreView = "unsubscribe" | "preferences";
+
+function preferenceCentrePath(
+  opts: {
+    email: string;
+    campaignId?: string | null;
+    contactId?: string | null;
+  },
+  view: PreferenceCentreView
+): string {
+  const token = createUnsubscribeToken(opts);
+  return `/unsubscribe?token=${encodeURIComponent(token)}&view=${view}`;
+}
+
+/** One-click / footer Unsubscribe — opens the stop-receiving flow. */
 export function unsubscribeUrlFor(opts: {
   email: string;
   campaignId?: string | null;
   contactId?: string | null;
 }): string {
   const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-  const token = createUnsubscribeToken(opts);
-  const path = `/unsubscribe?token=${encodeURIComponent(token)}`;
+  const path = preferenceCentrePath(opts, "unsubscribe");
+  return origin ? `${origin}${path}` : path;
+}
+
+/** Footer Manage preferences — open lists to subscribe or adjust. */
+export function preferencesUrlFor(opts: {
+  email: string;
+  campaignId?: string | null;
+  contactId?: string | null;
+}): string {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  const path = preferenceCentrePath(opts, "preferences");
   return origin ? `${origin}${path}` : path;
 }
 

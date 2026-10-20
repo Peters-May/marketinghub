@@ -67,11 +67,16 @@ export async function GET(request: NextRequest) {
     ? EMAIL_PREFERENCE_TOPICS.map((topic) => topic.id)
     : normalizeTopicOptOuts(contact?.email_topic_opt_outs);
 
+  const campaignTopic = parsed.campaignId
+    ? await topicForCampaign(parsed.campaignId)
+    : null;
+
   return jsonOk({
     email: parsed.email,
     topics,
     all,
     locked,
+    campaign_topic: campaignTopic,
   });
 }
 

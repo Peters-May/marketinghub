@@ -14,7 +14,11 @@ import {
   ensureViewInBrowserLink,
 } from "@/lib/email/merge";
 import { topicForAudienceName } from "@/lib/email/preferences";
-import { unsubscribeUrlFor, viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
+import {
+  preferencesUrlFor,
+  unsubscribeUrlFor,
+  viewInBrowserUrlFor,
+} from "@/lib/email/unsubscribe-token";
 import { appendUtmToEmailHtml } from "@/lib/email/utm";
 import {
   notifyPortalCampaignSend,
@@ -173,6 +177,7 @@ export async function sendEmailCampaign(
       const email = contact.email.trim();
       const identity = { email, campaignId, contactId: contact.id };
       const unsub = unsubscribeUrlFor(identity);
+      const prefs = preferencesUrlFor(identity);
       const browser = viewInBrowserUrlFor(identity);
       return {
         contact,
@@ -183,11 +188,13 @@ export async function sendEmailCampaign(
           subject: applyEmailMerge(latest.subject || latest.title, {
             contact,
             unsubscribeUrl: unsub,
+            preferencesUrl: prefs,
             viewInBrowserUrl: browser,
           }),
           html: applyEmailMerge(htmlBase, {
             contact,
             unsubscribeUrl: unsub,
+            preferencesUrl: prefs,
             viewInBrowserUrl: browser,
           }),
           tags: [
@@ -303,18 +310,21 @@ export async function sendTestEmail(input: {
     contactId: "test",
   };
   const unsub = unsubscribeUrlFor(identity);
+  const prefs = preferencesUrlFor(identity);
   const browser = viewInBrowserUrlFor(identity);
   const html = applyEmailMerge(
     ensureViewInBrowserLink(ensureUnsubscribeFooter(input.html || "<p></p>")),
     {
       contact,
       unsubscribeUrl: unsub,
+      preferencesUrl: prefs,
       viewInBrowserUrl: browser,
     }
   );
   const subject = applyEmailMerge(input.subject || "Test email", {
     contact,
     unsubscribeUrl: unsub,
+    preferencesUrl: prefs,
     viewInBrowserUrl: browser,
   });
 

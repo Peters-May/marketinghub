@@ -3,6 +3,7 @@ import type { Contact } from "@/lib/types";
 export type MergeContext = {
   contact?: Contact | null;
   unsubscribeUrl?: string;
+  preferencesUrl?: string;
   viewInBrowserUrl?: string;
 };
 
@@ -23,6 +24,8 @@ export function applyEmailMerge(
     outlet: c?.outlet ?? "",
     country: c?.country ?? "",
     unsubscribe_url: ctx.unsubscribeUrl ?? "#",
+    preferences_url:
+      ctx.preferencesUrl ?? ctx.unsubscribeUrl ?? "#",
     view_in_browser_url: ctx.viewInBrowserUrl ?? "#",
   };
 
@@ -42,7 +45,12 @@ export function ensureUnsubscribeFooter(
     linkColor?: string;
   }
 ): string {
-  if (/\{\{\s*unsubscribe_url\s*\}\}/i.test(html)) return html;
+  if (
+    /\{\{\s*unsubscribe_url\s*\}\}/i.test(html) ||
+    /\{\{\s*preferences_url\s*\}\}/i.test(html)
+  ) {
+    return html;
+  }
   if (/unsubscribe/i.test(html) && /href=/i.test(html)) return html;
   const showUnsubscribe = opts?.showUnsubscribe !== false;
   const showPreferences = opts?.showPreferences === true;
@@ -58,7 +66,7 @@ export function ensureUnsubscribeFooter(
   }
   if (showPreferences) {
     parts.push(
-      `<a href="{{unsubscribe_url}}" style="color:${color};">${escapeFooterLabel(prefsLabel)}</a>`
+      `<a href="{{preferences_url}}" style="color:${color};">${escapeFooterLabel(prefsLabel)}</a>`
     );
   }
   const footer = `

@@ -28,7 +28,8 @@ const SAMPLE_CONTACT: Contact = {
 export function previewMerge(template: string): string {
   return applyEmailMerge(template, {
     contact: SAMPLE_CONTACT,
-    unsubscribeUrl: "https://example.com/unsubscribe",
+    unsubscribeUrl: "https://example.com/unsubscribe?view=unsubscribe",
+    preferencesUrl: "https://example.com/unsubscribe?view=preferences",
     viewInBrowserUrl: "https://example.com/email/view",
   });
 }

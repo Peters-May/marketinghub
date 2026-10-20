@@ -206,7 +206,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
       }
       if (links.showPreferences) {
         linkParts.push(
-          `<a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">${escapeHtml(links.preferencesLabel)}</a>`
+          `<a href="{{preferences_url}}" style="color:${styles.linkColor};">${escapeHtml(links.preferencesLabel)}</a>`
         );
       }
       const linkRow =
