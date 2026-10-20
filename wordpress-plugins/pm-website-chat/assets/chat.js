@@ -98,13 +98,33 @@
     return node;
   }
 
-  function appendBubble(role, body, id) {
+  function senderLabel(role, authorName) {
+    if (role === "assistant") {
+      return (
+        (cfg.labels && cfg.labels.botSender) ||
+        "Your P&M friendly assistant"
+      );
+    }
+    if (role === "staff") {
+      var name = (authorName || "").trim();
+      return name || "Team";
+    }
+    return "";
+  }
+
+  function appendBubble(role, body, id, authorName) {
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
+    var wrap = el("div", "pm-chat__msg pm-chat__msg--" + role);
     var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
-    messagesEl.insertBefore(bubble, typingEl);
+    wrap.appendChild(bubble);
+    var label = senderLabel(role, authorName);
+    if (label) {
+      wrap.appendChild(el("div", "pm-chat__sender", label));
+    }
+    messagesEl.insertBefore(wrap, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    return bubble;
+    return wrap;
   }
 
   function setTyping(on) {
@@ -561,6 +581,8 @@
           data.messages.forEach(function (m) {
             if (m.role === "visitor") return;
             if (m.role === "staff" || m.role === "system") {
+              appendBubble(m.role, m.body, m.id, m.author_name);
+            } else if (m.role === "assistant") {
               appendBubble(m.role, m.body, m.id);
             } else if (m.id) {
               seenIds[m.id] = true;
@@ -641,9 +663,16 @@
           if (!r.ok) throw new Error(data.error || "Send failed");
           if (data.deferred) return;
           if (data.message && data.message.body) {
-            appendBubble("assistant", data.message.body, data.message.id);
+            appendBubble(
+              data.message.role || "assistant",
+              data.message.body,
+              data.message.id,
+              data.message.author_name
+            );
             lastMessageAt = data.message.created_at;
-            maybeOfferGuidedFromAssistant(data.message.body);
+            if ((data.message.role || "assistant") === "assistant") {
+              maybeOfferGuidedFromAssistant(data.message.body);
+            }
           } else if (typeof data.message === "string") {
             appendBubble("assistant", data.message);
             maybeOfferGuidedFromAssistant(data.message);

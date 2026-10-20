@@ -740,6 +740,8 @@ export type ChatMessage = {
   session_id: string;
   role: ChatMessageRole;
   body: string;
+  /** Staff first name for visitor widget; empty for bot/system. */
+  author_name: string;
   sources: Array<{ title: string; source_url?: string }>;
   created_at: string;
 };

@@ -100,6 +100,7 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     session_id: asString(row.session_id),
     role: ROLES.includes(role) ? role : "assistant",
     body: asString(row.body),
+    author_name: asString(row.author_name),
     sources,
     created_at: asString(row.created_at),
   };
@@ -361,6 +362,7 @@ export async function addChatMessage(input: {
   role: ChatMessageRole;
   body: string;
   sources?: ChatMessage["sources"];
+  author_name?: string;
 }): Promise<ChatMessage> {
   const supabase = requireService();
   const now = new Date().toISOString();
@@ -372,6 +374,7 @@ export async function addChatMessage(input: {
       session_id: input.session_id,
       role: input.role,
       body: input.body.trim(),
+      author_name: (input.author_name ?? "").trim().slice(0, 80),
       sources: input.sources ?? [],
       created_at: now,
     })

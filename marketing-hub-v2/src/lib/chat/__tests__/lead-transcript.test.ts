@@ -12,6 +12,7 @@ function msg(
     session_id: "s1",
     role,
     body,
+    author_name: "",
     sources: [],
     created_at: "2026-10-20T12:00:00.000Z",
   };

@@ -79,6 +79,7 @@ add_action('wp_enqueue_scripts', static function () {
             'closeConfirm' =>
                 "Would you like to close the chat?\n\nThis ends the chat.",
             'open' => 'Chat',
+            'botSender' => 'Your P&M friendly assistant',
         ],
     ]);
 });

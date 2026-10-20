@@ -164,10 +164,17 @@ export async function POST(request: Request) {
       }
       const session = await getChatSession(sessionId);
       if (!session) return jsonError("Not found", 404);
+      const fullName = (gate.user.full_name || "").trim();
+      const emailLocal = (gate.user.email || "").split("@")[0] || "";
+      const rawFirst =
+        (fullName.split(/\s+/)[0] || emailLocal.split(/[._-]/)[0] || "Team").trim();
+      const authorName =
+        rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
       const msg = await addChatMessage({
         session_id: sessionId,
         role: "staff",
         body: text,
+        author_name: authorName,
       });
       if (session.status === "waiting" || session.status === "ai") {
         await updateChatSession(sessionId, {
