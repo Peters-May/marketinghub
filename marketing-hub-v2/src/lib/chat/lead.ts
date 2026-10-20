@@ -6,8 +6,14 @@ import {
   listChatMessages,
   updateChatSession,
 } from "@/lib/chat/data";
-import { suggestOfficeFromEnquiryText } from "@/lib/chat/enquiry-guidance";
 import { emailChatTranscript, notifyChatStaff } from "@/lib/chat/notify";
+
+/**
+ * Office auto-routing is off for website chat for now: all leads go to the
+ * Chat notify inbox (Sophie) for manual forward. Re-enable suggestOfficeFromEnquiryText
+ * when office routing is ready.
+ */
+const AUTO_ROUTE_CHAT_TO_OFFICE = false;
 
 /** Readable transcript for Hub / Portal enquiry body. */
 export function formatChatTranscript(messages: ChatMessage[]): string {
@@ -53,10 +59,7 @@ export async function bridgeChatSessionToEnquiry(
     opts?.message?.trim() ||
     `Website chat lead from ${session.page_title || session.page_url || "site"}`;
 
-  const suggestedOffice = suggestOfficeFromEnquiryText(
-    [message, name, company, session.page_title, session.page_url].join(" ")
-  );
-
+  // Keep origin hint in notes for later office routing; do not assign office yet.
   const utm = session.utm ?? {};
   const body: Record<string, unknown> = {
     channel: "website_chat",
@@ -83,7 +86,9 @@ export async function bridgeChatSessionToEnquiry(
       chat_session_id: session.id,
       chat_message: message,
       chat_closed: opts?.closed === true,
-      ...(suggestedOffice ? { selected_office: suggestedOffice } : {}),
+      ...(AUTO_ROUTE_CHAT_TO_OFFICE
+        ? {}
+        : { selected_office: "", routing_hold: "marketing_manual_forward" }),
     },
     tracking: {
       current_page_url: session.page_url,
@@ -94,10 +99,9 @@ export async function bridgeChatSessionToEnquiry(
       heard_about: "Website chat",
     },
     routing: {
-      routing_reason: suggestedOffice
-        ? `website_chat_origin_hint:${suggestedOffice}`
-        : "website_chat",
-      ...(suggestedOffice ? { selected_office: suggestedOffice } : {}),
+      routing_reason: AUTO_ROUTE_CHAT_TO_OFFICE
+        ? "website_chat"
+        : "website_chat_hold_marketing",
       needs_manual_review: true,
     },
     form_fields: {

@@ -754,7 +754,8 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             }
           />
           <label className="block text-xs text-muted">
-            Notify email (optional; defaults to marketing alert address)
+            Notify email — all website chat quotes / leads email here first
+            (office auto-routing is off; forward manually for now)
           </label>
           <input
             className="w-full rounded-md border border-border px-3 py-2 text-sm"
@@ -764,6 +765,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 s ? { ...s, notify_email: e.target.value } : s
               )
             }
+            placeholder="sophie@petersandmay.com"
           />
           <button
             type="button"
@@ -779,10 +781,10 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             Save deploy settings
           </button>
           <div className="rounded-md bg-sand px-3 py-2 text-xs text-muted">
-            WordPress plugin settings: Hub URL{" "}
-            <code>https://marketing.petersandmay.com</code> and the same site
-            key as <code>CHAT_SITE_KEY</code>. CORS via{" "}
-            <code>CHAT_CORS_ORIGINS</code> (defaults include petersandmay.com).
+            Leads also land in Hub Enquiries → Website chat, and mirror to the
+            Portal. WordPress: Hub URL{" "}
+            <code>https://marketing.petersandmay.com</code> +{" "}
+            <code>CHAT_SITE_KEY</code>.
           </div>
         </div>
       ) : null}
