@@ -1,0 +1,17 @@
+---
+description: After commit, always push and confirm Vercel production redeploy
+alwaysApply: true
+---
+
+# Commit → push → confirm redeploy
+
+When the user asks to commit (or commit and push) Marketing Hub changes:
+
+1. **Commit** as usual (only when asked; follow git safety rules).
+2. **Always push** to `origin` for the current branch (`git push -u origin HEAD` if needed). Do not leave commits local-only unless the user explicitly says not to push.
+3. **Confirm Vercel redeploy** for project `marketinghub` (`prj_WHayFOqKV0hcu0bEnIqIxAWrtSXJ`, team `team_eG7NBgvRqgEX8JuiMfnxw3N3` / `petersandmay`):
+   - Check latest deployment SHA matches the pushed commit.
+   - If GitHub did not start a deploy within a short wait, create a production deployment for that commit (`create_deployment` with `gitSource` + `forceNew: "1"`).
+   - Report the deployment state (BUILDING / READY / ERROR) and inspector URL when done.
+
+Do not commit `exports/` or files that look like secrets (e.g. `CHAT_SITE_KEY.txt`).

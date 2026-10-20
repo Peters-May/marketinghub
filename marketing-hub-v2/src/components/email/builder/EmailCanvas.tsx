@@ -310,7 +310,7 @@ export function EmailCanvas({
                               setDropTarget(columnDropKey);
                             }}
                             onDragLeave={() => {
-                              setDropTarget((current) =>
+                              setDropTargetState((current) =>
                                 current === columnDropKey ? null : current
                               );
                             }}
