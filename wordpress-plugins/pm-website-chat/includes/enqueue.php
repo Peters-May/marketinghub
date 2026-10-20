@@ -76,6 +76,8 @@ add_action('wp_enqueue_scripts', static function () {
             'name' => 'Name',
             'company' => 'Company',
             'close' => 'Close',
+            'closeConfirm' =>
+                "Would you like to close the chat?\n\nThis ends the chat.",
             'open' => 'Chat',
         ],
     ]);

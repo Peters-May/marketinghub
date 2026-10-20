@@ -362,6 +362,14 @@
     setOpen(true);
   });
   closeBtn.addEventListener("click", function () {
+    // Confirm before ending an active chat (X close).
+    if (sessionId) {
+      var ok = window.confirm(
+        cfg.labels.closeConfirm ||
+          "Would you like to close the chat?\n\nThis ends the chat."
+      );
+      if (!ok) return;
+    }
     setOpen(false);
   });
   sendBtn.addEventListener("click", sendMessage);
