@@ -2,6 +2,7 @@ import { requireChatSiteKey } from "@/lib/chat/auth";
 import { chatError, chatJson, chatOptions } from "@/lib/chat/http";
 import {
   addChatMessage,
+  closeAbandonedChatSessions,
   getChatSession,
   updateChatSession,
 } from "@/lib/chat/data";
@@ -63,6 +64,16 @@ export async function POST(request: Request, ctx: Ctx) {
         message: body?.message,
       }
     );
+
+    // Avoid duplicate open threads when the visitor refreshed / reopened chat.
+    try {
+      await closeAbandonedChatSessions({
+        keepSessionId: id,
+        visitorEmail: email,
+      });
+    } catch (err) {
+      console.warn("[chat-lead] closeAbandonedChatSessions", err);
+    }
 
     const msg = await addChatMessage({
       session_id: id,

@@ -318,6 +318,45 @@ export async function updateChatSession(
   return data ? rowToSession(data as Record<string, unknown>) : null;
 }
 
+/** Close abandoned open chats so the inbox does not fill with duplicate Visitors. */
+export async function closeAbandonedChatSessions(opts: {
+  keepSessionId: string;
+  visitorEmail?: string;
+}): Promise<number> {
+  const supabase = requireService();
+  const now = new Date().toISOString();
+  const email = (opts.visitorEmail ?? "").trim().toLowerCase();
+
+  let q = supabase
+    .from("chat_sessions")
+    .select("id, visitor_email, status")
+    .in("status", ["ai", "waiting", "human"])
+    .neq("id", opts.keepSessionId)
+    .limit(50);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+
+  const toClose = (data ?? []).filter((row) => {
+    const rowEmail = String(row.visitor_email ?? "")
+      .trim()
+      .toLowerCase();
+    // Same email → always close older open threads.
+    if (email && rowEmail && rowEmail === email) return true;
+    // Anonymous abandoned AI threads (no email yet).
+    if (!rowEmail && row.status === "ai") return true;
+    return false;
+  });
+
+  if (toClose.length === 0) return 0;
+  const ids = toClose.map((r) => String(r.id));
+  const { error: updErr } = await supabase
+    .from("chat_sessions")
+    .update({ status: "closed", updated_at: now })
+    .in("id", ids);
+  if (updErr) throw new Error(updErr.message);
+  return ids.length;
+}
+
 export async function listChatSessions(opts?: {
   status?: ChatSessionStatus | "open";
   limit?: number;

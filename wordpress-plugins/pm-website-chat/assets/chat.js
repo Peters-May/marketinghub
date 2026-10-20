@@ -15,6 +15,23 @@
   var inflightSends = 0;
   var startersShown = false;
   var collectState = null;
+  var SESSION_KEY = "pm_website_chat_session_id";
+
+  function rememberSession(id) {
+    sessionId = id || null;
+    try {
+      if (sessionId) sessionStorage.setItem(SESSION_KEY, sessionId);
+      else sessionStorage.removeItem(SESSION_KEY);
+    } catch (e) {}
+  }
+
+  function readRememberedSession() {
+    try {
+      return sessionStorage.getItem(SESSION_KEY) || null;
+    } catch (e) {
+      return null;
+    }
+  }
 
   var YACHT_FIELDS = [
     { key: "name", label: "Your name" },
@@ -256,7 +273,9 @@
     open = next;
     root.classList.toggle("pm-chat--open", open);
     if (open && !sessionId) {
-      startSession();
+      var remembered = readRememberedSession();
+      if (remembered) resumeSession(remembered);
+      else startSession();
     }
     if (open) {
       startPoll();
@@ -618,6 +637,52 @@
     pollTimer = null;
   }
 
+  function resumeSession(id) {
+    setTyping(true);
+    fetch(
+      apiUrl("api/chat/sessions/" + encodeURIComponent(id) + "/messages"),
+      {
+        headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
+      }
+    )
+      .then(function (r) {
+        return parseBody(r).then(function (data) {
+          if (!r.ok) throw new Error(data.error || "Could not resume chat");
+          return data;
+        });
+      })
+      .then(function (data) {
+        if (data.session && data.session.status === "closed") {
+          rememberSession(null);
+          startSession();
+          return;
+        }
+        rememberSession(id);
+        clearNode(messagesEl);
+        messagesEl.appendChild(typingEl);
+        seenIds = {};
+        lastMessageAt = null;
+        (data.messages || []).forEach(function (m) {
+          if (m.role === "visitor") {
+            appendBubble("visitor", m.body, m.id);
+          } else {
+            appendBubble(m.role, m.body, m.id, m.author_name);
+          }
+          if (m.created_at) lastMessageAt = m.created_at;
+        });
+        startersShown = true;
+        hideStarters();
+      })
+      .catch(function () {
+        rememberSession(null);
+        startSession();
+      })
+      .finally(function () {
+        setTyping(false);
+      });
+  }
+
   function startSession() {
     setTyping(true);
     fetch(apiUrl("api/chat/sessions"), {
@@ -638,7 +703,7 @@
         });
       })
       .then(function (data) {
-        sessionId = data.session && data.session.id;
+        rememberSession(data.session && data.session.id);
         if (data.message) {
           var body = data.message.body;
           if (cfg.greeting) body = cfg.greeting;
@@ -801,7 +866,7 @@
           "Would you like to close the chat?\n\nThis ends the chat."
       );
       if (!ok) return;
-      sessionId = null;
+      rememberSession(null);
       lastMessageAt = null;
       seenIds = {};
       startersShown = false;
