@@ -30,6 +30,7 @@ const MERGE_TOKENS = [
   { token: "{{outlet}}", label: "Outlet" },
   { token: "{{country}}", label: "Country" },
   { token: "{{unsubscribe_url}}", label: "Unsubscribe URL" },
+  { token: "{{preferences_url}}", label: "Preferences URL" },
   { token: "{{view_in_browser_url}}", label: "View in browser URL" },
 ] as const;
 
@@ -475,8 +476,8 @@ function UnsubscribePrefsSettings({
     <div className="space-y-3 border-t border-border pt-4">
       <p className="text-sm font-medium text-brand">Unsubscribe &amp; preferences</p>
       <p className="text-xs text-muted">
-        Links in the email footer open the preference centre. Recipients can leave
-        individual lists or all marketing email.
+        Unsubscribe opens a stop-receiving page. Manage preferences lets people
+        subscribe to lists or adjust what they get.
       </p>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -544,31 +545,22 @@ function UnsubscribePrefsSettings({
         <p className="mt-2 font-display text-sm text-brand">
           Email preferences
         </p>
-        <p className="mt-1 text-xs text-muted">
-          Choose which Peters &amp; May lists you want to receive.
-        </p>
+        <p className="mt-1 text-xs text-muted">Subscribe me to</p>
         <ul className="mt-3 space-y-2">
           {EMAIL_PREFERENCE_TOPICS.map((topic) => (
             <li key={topic.id} className="flex items-center gap-2 text-xs">
               <span
-                className="inline-flex h-3.5 w-3.5 shrink-0 rounded border border-border bg-white"
+                className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border border-[#007DC5] bg-[#007DC5]/10 text-[9px] text-[#007DC5]"
                 aria-hidden
-              />
+              >
+                ✓
+              </span>
               <span className="text-brand">{topic.label}</span>
             </li>
           ))}
-          <li className="flex items-center gap-2 border-t border-border pt-2 text-xs">
-            <span
-              className="inline-flex h-3.5 w-3.5 shrink-0 rounded border border-border bg-white"
-              aria-hidden
-            />
-            <span className="font-medium text-brand">
-              Unsubscribe from all marketing email
-            </span>
-          </li>
         </ul>
-        <p className="mt-3 text-[10px] text-muted">
-          Demo only — recipients see this after using the footer link.
+        <p className="mt-3 border-t border-border pt-2 text-[10px] text-muted">
+          Unsubscribe link opens a separate stop-receiving page instead.
         </p>
       </div>
     </div>

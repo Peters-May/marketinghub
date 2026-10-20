@@ -17,7 +17,7 @@ export type EmailDesignStyles = {
   brandLocked?: boolean;
   /** Include an Unsubscribe link in footer blocks / auto footer. */
   showUnsubscribeLink?: boolean;
-  /** Include a Manage preferences link (same preference-centre URL). */
+  /** Include a Manage preferences link (subscribe / adjust lists). */
   showPreferencesLink?: boolean;
   unsubscribeLabel?: string;
   preferencesLabel?: string;
