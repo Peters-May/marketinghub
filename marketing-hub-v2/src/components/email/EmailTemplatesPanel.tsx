@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import type { EmailTemplate } from "@/lib/types";
 import { CopyEmailButton } from "@/components/email/CopyEmailButton";
+import { EmailStarterPicker } from "@/components/email/EmailStarterPicker";
 import { EmptyState } from "@/components/ui/PageHeader";
-import { blankDesign, compileEmailDesign } from "@/lib/email/design";
+import {
+  compileEmailDesign,
+  starterDesign,
+  type StarterLayout,
+} from "@/lib/email/design";
 
 export function EmailTemplatesPanel({
   templates,
@@ -17,12 +22,13 @@ export function EmailTemplatesPanel({
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [starterOpen, setStarterOpen] = useState(false);
   const [error, setError] = useState("");
 
-  async function createTemplate() {
+  async function createTemplate(layout: StarterLayout) {
     setCreating(true);
     setError("");
-    const design = blankDesign();
+    const design = starterDesign(layout);
     try {
       const res = await fetch("/api/email/templates", {
         method: "POST",
@@ -44,6 +50,7 @@ export function EmailTemplatesPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
       setCreating(false);
+      setStarterOpen(false);
     }
   }
 
@@ -68,12 +75,20 @@ export function EmailTemplatesPanel({
           type="button"
           className="btn-primary inline-flex items-center gap-1.5"
           disabled={creating}
-          onClick={() => void createTemplate()}
+          onClick={() => setStarterOpen(true)}
         >
           <Plus className="h-4 w-4" />
           {creating ? "Creating…" : "New template"}
         </button>
       </div>
+
+      <EmailStarterPicker
+        open={starterOpen}
+        title="New template"
+        busy={creating}
+        onClose={() => setStarterOpen(false)}
+        onPick={(layout) => void createTemplate(layout)}
+      />
       {error ? (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}

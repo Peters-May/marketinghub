@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Monitor, Redo2, Smartphone, Undo2 } from "lucide-react";
+import { Monitor, Redo2, Smartphone, Sparkles, Undo2 } from "lucide-react";
 import type { EmailBlock, EmailDesign, EmailSection } from "@/lib/email/design";
 import {
   compileEmailDesign,
@@ -25,6 +25,7 @@ import {
   type EmailBlockType,
   type SectionPreset,
 } from "@/lib/email/design";
+import { excerptFromDesign } from "@/lib/email/design-excerpt";
 import { previewMerge } from "@/lib/email/design/preview";
 import { formatLondonStamp, londonDateTimeToIso } from "@/lib/email/display";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
@@ -120,6 +121,7 @@ export function EmailDesigner({
   initialFromName = "Peters & May Marketing",
   initialFromEmail = "hello@petersandmay.com",
   initialAudienceId = "",
+  initialBrief = "",
   canDelete = false,
 }: {
   kind: "template" | "campaign";
@@ -135,6 +137,7 @@ export function EmailDesigner({
   initialFromName?: string;
   initialFromEmail?: string;
   initialAudienceId?: string;
+  initialBrief?: string;
   /** Unsent drafts only. Scheduled and sent emails cannot be deleted. */
   canDelete?: boolean;
 }) {
@@ -145,6 +148,7 @@ export function EmailDesigner({
   const [name, setName] = useState(initialName);
   const [subject, setSubject] = useState(initialSubject);
   const [previewText, setPreviewText] = useState(initialPreview);
+  const [brief] = useState(initialBrief);
   const [fromName, setFromName] = useState(initialFromName);
   const [fromEmail, setFromEmail] = useState(initialFromEmail);
   const [audienceId, setAudienceId] = useState(initialAudienceId);
@@ -162,6 +166,18 @@ export function EmailDesigner({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [insertRequest, setInsertRequest] = useState<{
+    token: string;
+    nonce: number;
+  } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<
+    { subject: string; preview: string }[]
+  >([]);
+  const [previewSuggestions, setPreviewSuggestions] = useState<string[]>([]);
+  const saveRef = useRef<() => Promise<boolean>>(async () => false);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     if (kind !== "campaign" || !audienceId) {
@@ -187,6 +203,66 @@ export function EmailDesigner({
       cancelled = true;
     };
   }, [audienceId, kind]);
+
+  const markDirty = useCallback(() => {
+    dirtyRef.current = true;
+    setDirty(true);
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (readOnly) return;
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.key.toLowerCase() === "z" && !event.shiftKey) {
+        event.preventDefault();
+        history.undo();
+        markDirty();
+        return;
+      }
+      if (
+        mod &&
+        (event.key.toLowerCase() === "y" ||
+          (event.key.toLowerCase() === "z" && event.shiftKey))
+      ) {
+        event.preventDefault();
+        history.redo();
+        markDirty();
+        return;
+      }
+      if (event.key === "Escape") {
+        setSelection({ type: "email" });
+        return;
+      }
+      if (
+        !editing &&
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selection.type === "block"
+      ) {
+        event.preventDefault();
+        history.commit(removeBlock(history.designRef.current, selection.blockId));
+        setSelection({ type: "email" });
+        markDirty();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [history, markDirty, readOnly, selection]);
+
+  useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (!dirtyRef.current || readOnly) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [readOnly]);
 
   const section =
     selection.type === "email"
@@ -239,6 +315,7 @@ export function EmailDesigner({
         target.beforeBlockId
       )
     );
+    markDirty();
     setSelection({
       type: "block",
       sectionId: target.sectionId,
@@ -259,6 +336,7 @@ export function EmailDesigner({
             ]?.id ?? null
           : null;
     history.commit(insertSection(history.designRef.current, section, before));
+    markDirty();
     setSelection({ type: "section", sectionId: section.id });
   }
 
@@ -338,6 +416,8 @@ export function EmailDesigner({
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Save failed");
+      dirtyRef.current = false;
+      setDirty(false);
       setSavedNote("Saved");
       return true;
     } catch (err) {
@@ -345,6 +425,145 @@ export function EmailDesigner({
       return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  saveRef.current = save;
+
+  useEffect(() => {
+    if (readOnly || !dirty) return;
+    const timer = window.setTimeout(() => {
+      void saveRef.current();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [dirty, history.design, name, subject, previewText, fromName, fromEmail, audienceId, readOnly]);
+
+  async function runAi(action: string, body: Record<string, unknown>) {
+    setAiBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/email/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI assist failed");
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI assist failed");
+      return null;
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function suggestSubjectsAi() {
+    const data = await runAi("subjects", {
+      brief,
+      excerpt: excerptFromDesign(history.designRef.current),
+    });
+    if (data?.options) {
+      setSubjectSuggestions(data.options);
+      setPreviewSuggestions([]);
+    }
+  }
+
+  async function improvePreviewAi() {
+    const data = await runAi("preview", {
+      subject,
+      excerpt: excerptFromDesign(history.designRef.current),
+    });
+    if (data?.options) {
+      setPreviewSuggestions(data.options);
+      setSubjectSuggestions([]);
+    }
+  }
+
+  async function rewriteSelection(
+    tone: "clearer" | "shorter" | "more_formal"
+  ) {
+    if (!block) return;
+    if (block.type === "heading") {
+      const data = await runAi("rewrite", {
+        text: block.text,
+        html: false,
+        tone,
+      });
+      if (typeof data?.text === "string") {
+        history.commit(
+          updateBlock(history.designRef.current, block.id, {
+            text: data.text,
+          } as Partial<EmailBlock>)
+        );
+        markDirty();
+      }
+      return;
+    }
+    if (block.type === "text") {
+      const data = await runAi("rewrite", {
+        text: block.html,
+        html: true,
+        tone,
+      });
+      if (typeof data?.text === "string") {
+        history.commit(
+          updateBlock(history.designRef.current, block.id, {
+            html: data.text,
+          } as Partial<EmailBlock>)
+        );
+        markDirty();
+      }
+    }
+  }
+
+  async function draftFromBriefAi() {
+    const audienceLabel =
+      audiences.find((audience) => audience.id === audienceId)?.name ?? "";
+    const data = await runAi("draft_from_brief", {
+      brief: brief || subject || name,
+      audience: audienceLabel,
+    });
+    const draft = data?.draft as
+      | { heading?: string; html?: string; buttonLabel?: string }
+      | undefined;
+    if (!draft) return;
+    const design = history.designRef.current;
+    const sectionId = design.sections[0]?.id;
+    const columnId = design.sections[0]?.columns[0]?.id;
+    if (!sectionId || !columnId) return;
+    let next = design;
+    if (draft.heading) {
+      const heading = createBlock("heading", { text: draft.heading });
+      next = insertBlock(next, sectionId, columnId, heading, null);
+    }
+    if (draft.html) {
+      const text = createBlock("text", { html: draft.html });
+      next = insertBlock(next, sectionId, columnId, text, null);
+    }
+    if (draft.buttonLabel) {
+      const button = createBlock("button", { label: draft.buttonLabel });
+      next = insertBlock(next, sectionId, columnId, button, null);
+    }
+    history.commit(next);
+    markDirty();
+    setSavedNote("AI draft added — review before sending");
+  }
+
+  function insertMergeToken(token: string) {
+    if (!block) return;
+    if (block.type === "text") {
+      setInsertRequest({ token, nonce: Date.now() });
+      markDirty();
+      return;
+    }
+    if (block.type === "heading") {
+      history.commit(
+        updateBlock(history.designRef.current, block.id, {
+          text: `${block.text}${block.text ? " " : ""}${token}`,
+        } as Partial<EmailBlock>)
+      );
+      markDirty();
     }
   }
 
@@ -508,6 +727,11 @@ export function EmailDesigner({
   const plannedIso =
     whenMode === "later" ? londonDateTimeToIso(scheduleDate, scheduleTime) : null;
 
+  function commitDesign(next: EmailDesign) {
+    history.commit(next);
+    markDirty();
+  }
+
   return (
     <div className="-mx-4 -mt-6 flex min-h-[calc(100dvh-8rem)] flex-col md:-mx-8 md:-mt-8">
       <header className="flex flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2">
@@ -519,14 +743,20 @@ export function EmailDesigner({
           aria-label={kind === "template" ? "Template name" : "Email name"}
           value={name}
           disabled={readOnly}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            markDirty();
+          }}
         />
         <button
           type="button"
           className="btn-secondary px-2 py-1.5"
           aria-label="Undo"
           disabled={!history.canUndo || readOnly}
-          onClick={history.undo}
+          onClick={() => {
+            history.undo();
+            markDirty();
+          }}
         >
           <Undo2 className="h-4 w-4" />
         </button>
@@ -535,7 +765,10 @@ export function EmailDesigner({
           className="btn-secondary px-2 py-1.5"
           aria-label="Redo"
           disabled={!history.canRedo || readOnly}
-          onClick={history.redo}
+          onClick={() => {
+            history.redo();
+            markDirty();
+          }}
         >
           <Redo2 className="h-4 w-4" />
         </button>
@@ -709,22 +942,112 @@ export function EmailDesigner({
           ) : null}
           <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
             <span className="text-muted">Subject line</span>
-            <input
-              className="input w-full"
-              value={subject}
-              disabled={readOnly}
-              onChange={(event) => setSubject(event.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="input min-w-[12rem] flex-1"
+                value={subject}
+                disabled={readOnly}
+                onChange={(event) => {
+                  setSubject(event.target.value);
+                  markDirty();
+                }}
+              />
+              {!readOnly ? (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                  disabled={aiBusy}
+                  onClick={() => void suggestSubjectsAi()}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Suggest
+                </button>
+              ) : null}
+            </div>
           </label>
+          {subjectSuggestions.length > 0 ? (
+            <ul className="space-y-1 sm:pl-[7.5rem]">
+              {subjectSuggestions.map((option) => (
+                <li key={option.subject}>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm hover:border-brand"
+                    onClick={() => {
+                      setSubject(option.subject);
+                      setPreviewText(option.preview);
+                      setSubjectSuggestions([]);
+                      markDirty();
+                    }}
+                  >
+                    <span className="font-medium text-brand">{option.subject}</span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {option.preview}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
             <span className="text-muted">Preview text</span>
-            <input
-              className="input w-full"
-              value={previewText}
-              disabled={readOnly}
-              onChange={(event) => setPreviewText(event.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="input min-w-[12rem] flex-1"
+                value={previewText}
+                disabled={readOnly}
+                onChange={(event) => {
+                  setPreviewText(event.target.value);
+                  markDirty();
+                }}
+              />
+              {!readOnly ? (
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                  disabled={aiBusy}
+                  onClick={() => void improvePreviewAi()}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Improve
+                </button>
+              ) : null}
+            </div>
           </label>
+          {previewSuggestions.length > 0 ? (
+            <ul className="space-y-1 sm:pl-[7.5rem]">
+              {previewSuggestions.map((option) => (
+                <li key={option}>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm hover:border-brand"
+                    onClick={() => {
+                      setPreviewText(option);
+                      setPreviewSuggestions([]);
+                      markDirty();
+                    }}
+                  >
+                    {option}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {!readOnly ? (
+            <div className="flex flex-wrap gap-2 sm:pl-[7.5rem]">
+              <button
+                type="button"
+                className="btn-secondary inline-flex items-center gap-1 px-2 py-1.5 text-xs"
+                disabled={aiBusy}
+                onClick={() => void draftFromBriefAi()}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Draft from brief
+              </button>
+              {dirty ? (
+                <span className="self-center text-xs text-muted">Unsaved changes…</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="flex min-h-[70vh] flex-1">
@@ -762,30 +1085,38 @@ export function EmailDesigner({
               subject={subject}
               previewText={previewText}
               readOnly={readOnly}
+              insertRequest={insertRequest}
               onSelect={setSelection}
-              onLiveBlock={(blockId, patch) =>
-                history.live(updateBlock(history.designRef.current, blockId, patch))
-              }
-              onCommitBlock={() => history.commit(history.designRef.current)}
-              onDrop={onDrop}
+              onLiveBlock={(blockId, patch) => {
+                history.live(updateBlock(history.designRef.current, blockId, patch));
+                markDirty();
+              }}
+              onCommitBlock={() => {
+                history.commit(history.designRef.current);
+                markDirty();
+              }}
+              onDrop={(payload, target) => {
+                onDrop(payload, target);
+                markDirty();
+              }}
               onMove={(blockId, direction) =>
-                history.commit(moveBlockBy(history.designRef.current, blockId, direction))
+                commitDesign(moveBlockBy(history.designRef.current, blockId, direction))
               }
               onDuplicate={(blockId) =>
-                history.commit(duplicateBlock(history.designRef.current, blockId))
+                commitDesign(duplicateBlock(history.designRef.current, blockId))
               }
               onDelete={(blockId) => {
-                history.commit(removeBlock(history.designRef.current, blockId));
+                commitDesign(removeBlock(history.designRef.current, blockId));
                 setSelection({ type: "email" });
               }}
               onMoveSection={(sectionId, direction) =>
-                history.commit(moveSection(history.designRef.current, sectionId, direction))
+                commitDesign(moveSection(history.designRef.current, sectionId, direction))
               }
               onDuplicateSection={(sectionId) =>
-                history.commit(duplicateSection(history.designRef.current, sectionId))
+                commitDesign(duplicateSection(history.designRef.current, sectionId))
               }
               onDeleteSection={(sectionId) => {
-                history.commit(removeSection(history.designRef.current, sectionId));
+                commitDesign(removeSection(history.designRef.current, sectionId));
                 setSelection({ type: "email" });
               }}
             />
@@ -796,24 +1127,37 @@ export function EmailDesigner({
           section={section}
           block={block}
           disabled={readOnly}
+          onSelectEmail={() => setSelection({ type: "email" })}
+          onSelectSection={() => {
+            if (section) {
+              setSelection({ type: "section", sectionId: section.id });
+            }
+          }}
           onDesign={(patch) =>
-            history.commit({
+            commitDesign({
               ...history.designRef.current,
               styles: { ...history.designRef.current.styles, ...patch },
             })
           }
           onSection={(patch: Partial<EmailSection>) => {
             if (!section) return;
-            history.commit(updateSection(history.designRef.current, section.id, patch));
+            commitDesign(updateSection(history.designRef.current, section.id, patch));
           }}
           onPreset={(preset) => {
             if (!section) return;
-            history.commit(setSectionPreset(history.designRef.current, section.id, preset));
+            commitDesign(setSectionPreset(history.designRef.current, section.id, preset));
           }}
           onBlock={(patch: Partial<EmailBlock>) => {
             if (!block) return;
-            history.commit(updateBlock(history.designRef.current, block.id, patch));
+            commitDesign(updateBlock(history.designRef.current, block.id, patch));
           }}
+          onInsertMerge={insertMergeToken}
+          onRewrite={
+            block && (block.type === "heading" || block.type === "text")
+              ? (tone) => void rewriteSelection(tone)
+              : undefined
+          }
+          rewriting={aiBusy}
         />
       </div>
       {reviewOpen && kind === "campaign" ? (

@@ -65,6 +65,7 @@ export default async function EmailDesignPage({
       initialFromName={campaign.from_name}
       initialFromEmail={campaign.from_email}
       initialAudienceId={campaign.audience_id ?? ""}
+      initialBrief={campaign.brief ?? ""}
       canDelete={canDeleteUnsentDraft(campaign)}
     />
   );

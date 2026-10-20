@@ -5,18 +5,27 @@ import type {
   EmailBlock,
   EmailDesign,
   EmailSection,
+  HeadingLevel,
   SectionPreset,
   SocialNetwork,
 } from "@/lib/email/design";
-import { EMAIL_COLOUR_SWATCHES, ENSIGN_RED } from "@/lib/email/design";
+import {
+  EMAIL_COLOUR_SWATCHES,
+  EMAIL_FONT_OPTIONS,
+  ENSIGN_RED,
+} from "@/lib/email/design";
 import { EmailImageField } from "@/components/email/builder/EmailImageField";
 
 const MERGE_TOKENS = [
   { token: "{{first_name}}", label: "First name" },
   { token: "{{name}}", label: "Name" },
   { token: "{{organisation}}", label: "Organisation" },
+  { token: "{{role}}", label: "Role" },
   { token: "{{email}}", label: "Email" },
+  { token: "{{outlet}}", label: "Outlet" },
   { token: "{{country}}", label: "Country" },
+  { token: "{{unsubscribe_url}}", label: "Unsubscribe URL" },
+  { token: "{{view_in_browser_url}}", label: "View in browser URL" },
 ] as const;
 
 const PRESETS: { id: SectionPreset; label: string }[] = [
@@ -24,8 +33,8 @@ const PRESETS: { id: SectionPreset; label: string }[] = [
   { id: "2", label: "2 columns" },
   { id: "3", label: "3 columns" },
   { id: "4", label: "4 columns" },
-  { id: "image-left", label: "Image left" },
-  { id: "image-right", label: "Image right" },
+  { id: "image-left", label: "40/60 columns" },
+  { id: "image-right", label: "60/40 columns" },
 ];
 
 const SOCIAL_LABEL: Record<SocialNetwork, string> = {
@@ -98,9 +107,9 @@ function NumberField({
         className="input mt-1 w-full"
         value={value}
         onChange={(event) => {
-        const next = Number(event.target.value);
-        if (Number.isFinite(next)) onChange(next);
-      }}
+          const next = Number(event.target.value);
+          if (Number.isFinite(next)) onChange(next);
+        }}
       />
     </label>
   );
@@ -155,25 +164,68 @@ export function EmailInspector({
   section,
   block,
   disabled,
+  onSelectEmail,
+  onSelectSection,
   onDesign,
   onSection,
   onPreset,
   onBlock,
+  onInsertMerge,
+  onRewrite,
+  rewriting,
 }: {
   design: EmailDesign;
   section: EmailSection | null;
   block: EmailBlock | null;
   disabled?: boolean;
+  onSelectEmail: () => void;
+  onSelectSection?: () => void;
   onDesign: (patch: Partial<EmailDesign["styles"]>) => void;
   onSection: (patch: Partial<EmailSection>) => void;
   onPreset: (preset: SectionPreset) => void;
   onBlock: (patch: Partial<EmailBlock>) => void;
+  onInsertMerge?: (token: string) => void;
+  onRewrite?: (tone: "clearer" | "shorter" | "more_formal") => void;
+  rewriting?: boolean;
 }) {
   return (
     <aside className="w-72 shrink-0 overflow-y-auto border-l border-border bg-white p-4">
+      <nav className="mb-3 flex flex-wrap items-center gap-1 text-xs text-muted">
+        <button
+          type="button"
+          className="hover:text-brand hover:underline"
+          onClick={onSelectEmail}
+        >
+          Email
+        </button>
+        {section ? (
+          <>
+            <span aria-hidden>/</span>
+            <button
+              type="button"
+              className="hover:text-brand hover:underline"
+              onClick={onSelectSection}
+            >
+              Section
+            </button>
+          </>
+        ) : null}
+        {block ? (
+          <>
+            <span aria-hidden>/</span>
+            <span className="capitalize text-brand">{block.type}</span>
+          </>
+        ) : null}
+      </nav>
       <fieldset disabled={disabled} className="space-y-4 disabled:opacity-60">
         {block ? (
-          <BlockFields block={block} onBlock={onBlock} />
+          <BlockFields
+            block={block}
+            onBlock={onBlock}
+            onInsertMerge={onInsertMerge}
+            onRewrite={onRewrite}
+            rewriting={rewriting}
+          />
         ) : section ? (
           <>
             <p className="text-sm font-medium text-brand">Section</p>
@@ -228,6 +280,36 @@ export function EmailInspector({
         ) : (
           <>
             <p className="text-sm font-medium text-brand">Email</p>
+            <label className="block text-sm">
+              <span className="text-muted">Body font</span>
+              <select
+                className="input mt-1 w-full"
+                value={design.styles.fontFamily}
+                onChange={(event) => onDesign({ fontFamily: event.target.value })}
+              >
+                {EMAIL_FONT_OPTIONS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Heading font</span>
+              <select
+                className="input mt-1 w-full"
+                value={design.styles.headingFontFamily}
+                onChange={(event) =>
+                  onDesign({ headingFontFamily: event.target.value })
+                }
+              >
+                {EMAIL_FONT_OPTIONS.map((item) => (
+                  <option key={`h-${item.id}`} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ColourField
               label="Page background"
               value={design.styles.pageBackground}
@@ -291,35 +373,91 @@ function presetFor(section: EmailSection): SectionPreset {
 function BlockFields({
   block,
   onBlock,
+  onInsertMerge,
+  onRewrite,
+  rewriting,
 }: {
   block: EmailBlock;
   onBlock: (patch: Partial<EmailBlock>) => void;
+  onInsertMerge?: (token: string) => void;
+  onRewrite?: (tone: "clearer" | "shorter" | "more_formal") => void;
+  rewriting?: boolean;
 }) {
   return (
     <>
       <p className="text-sm font-medium capitalize text-brand">{block.type}</p>
       {block.type === "heading" ? (
         <>
-          <TextInput label="Text" value={block.text} onChange={(text) => onBlock({ text } as Partial<EmailBlock>)} />
-          <NumberField label="Size" value={block.fontSize} min={14} max={48} onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)} />
-          <ColourField label="Colour" value={block.color} onChange={(color) => onBlock({ color } as Partial<EmailBlock>)} />
+          <TextInput
+            label="Text"
+            value={block.text}
+            onChange={(text) => onBlock({ text } as Partial<EmailBlock>)}
+          />
+          <label className="block text-sm">
+            <span className="text-muted">Level</span>
+            <select
+              className="input mt-1 w-full"
+              value={block.level ?? 1}
+              onChange={(event) =>
+                onBlock({
+                  level: Number(event.target.value) as HeadingLevel,
+                } as Partial<EmailBlock>)
+              }
+            >
+              <option value={1}>Heading 1</option>
+              <option value={2}>Heading 2</option>
+              <option value={3}>Heading 3</option>
+            </select>
+          </label>
+          <NumberField
+            label="Size"
+            value={block.fontSize}
+            min={14}
+            max={48}
+            onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Colour"
+            value={block.color}
+            onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
+          />
+          <MergeInsert
+            onInsert={(token) =>
+              onInsertMerge
+                ? onInsertMerge(token)
+                : onBlock({ text: `${block.text} ${token}` } as Partial<EmailBlock>)
+            }
+          />
+          {onRewrite ? (
+            <RewriteControls rewriting={rewriting} onRewrite={onRewrite} />
+          ) : null}
         </>
       ) : null}
       {block.type === "text" ? (
         <>
-          <NumberField label="Size" value={block.fontSize} min={12} max={28} onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)} />
-          <ColourField label="Colour" value={block.color} onChange={(color) => onBlock({ color } as Partial<EmailBlock>)} />
+          <NumberField
+            label="Size"
+            value={block.fontSize}
+            min={12}
+            max={28}
+            onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Colour"
+            value={block.color}
+            onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
+          />
           <MergeInsert
             onInsert={(token) =>
-              onBlock({ html: `${block.html}${token}` } as Partial<EmailBlock>)
+              onInsertMerge
+                ? onInsertMerge(token)
+                : onBlock({ html: `${block.html}${token}` } as Partial<EmailBlock>)
             }
           />
+          {onRewrite ? (
+            <RewriteControls rewriting={rewriting} onRewrite={onRewrite} />
+          ) : null}
         </>
-      ) : null}
-      {block.type === "heading" ? (
-        <MergeInsert
-          onInsert={(token) => onBlock({ text: `${block.text} ${token}` } as Partial<EmailBlock>)}
-        />
       ) : null}
       {block.type === "image" || block.type === "logo" ? (
         <>
@@ -327,15 +465,25 @@ function BlockFields({
             src={block.src}
             onChange={(src) => onBlock({ src } as Partial<EmailBlock>)}
           />
-          <TextInput label="Alt text" value={block.alt} onChange={(alt) => onBlock({ alt } as Partial<EmailBlock>)} />
-          <TextInput label="Link" value={block.href} onChange={(href) => onBlock({ href } as Partial<EmailBlock>)} />
+          <TextInput
+            label="Alt text"
+            value={block.alt}
+            onChange={(alt) => onBlock({ alt } as Partial<EmailBlock>)}
+          />
+          <TextInput
+            label="Link"
+            value={block.href}
+            onChange={(href) => onBlock({ href } as Partial<EmailBlock>)}
+          />
           {block.type === "image" ? (
             <NumberField
               label="Width %"
               value={block.widthPercent}
               min={10}
               max={100}
-              onChange={(widthPercent) => onBlock({ widthPercent } as Partial<EmailBlock>)}
+              onChange={(widthPercent) =>
+                onBlock({ widthPercent } as Partial<EmailBlock>)
+              }
             />
           ) : (
             <NumberField
@@ -350,11 +498,70 @@ function BlockFields({
       ) : null}
       {block.type === "button" ? (
         <>
-          <TextInput label="Label" value={block.label} onChange={(label) => onBlock({ label } as Partial<EmailBlock>)} />
-          <TextInput label="Link" value={block.href} onChange={(href) => onBlock({ href } as Partial<EmailBlock>)} />
-          <ColourField label="Colour" value={block.background} onChange={(background) => onBlock({ background } as Partial<EmailBlock>)} />
-          <ColourField label="Text" value={block.color} onChange={(color) => onBlock({ color } as Partial<EmailBlock>)} />
-          <NumberField label="Radius" value={block.radius} max={40} onChange={(radius) => onBlock({ radius } as Partial<EmailBlock>)} />
+          <TextInput
+            label="Label"
+            value={block.label}
+            onChange={(label) => onBlock({ label } as Partial<EmailBlock>)}
+          />
+          <TextInput
+            label="Link"
+            value={block.href}
+            onChange={(href) => onBlock({ href } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Colour"
+            value={block.background}
+            onChange={(background) =>
+              onBlock({ background } as Partial<EmailBlock>)
+            }
+          />
+          <ColourField
+            label="Text"
+            value={block.color}
+            onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Font size"
+            value={block.fontSize ?? 16}
+            min={12}
+            max={28}
+            onChange={(fontSize) => onBlock({ fontSize } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Padding X"
+            value={block.paddingX ?? 22}
+            min={8}
+            max={48}
+            onChange={(paddingX) => onBlock({ paddingX } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Padding Y"
+            value={block.paddingY ?? 14}
+            min={6}
+            max={40}
+            onChange={(paddingY) => onBlock({ paddingY } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Radius"
+            value={block.radius}
+            max={40}
+            onChange={(radius) => onBlock({ radius } as Partial<EmailBlock>)}
+          />
+          <ColourField
+            label="Border"
+            value={block.borderColor || block.background}
+            onChange={(borderColor) =>
+              onBlock({ borderColor } as Partial<EmailBlock>)
+            }
+          />
+          <NumberField
+            label="Border width"
+            value={block.borderWidth ?? 0}
+            max={8}
+            onChange={(borderWidth) =>
+              onBlock({ borderWidth } as Partial<EmailBlock>)
+            }
+          />
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -369,12 +576,30 @@ function BlockFields({
       ) : null}
       {block.type === "divider" ? (
         <>
-          <ColourField label="Colour" value={block.color} onChange={(color) => onBlock({ color } as Partial<EmailBlock>)} />
-          <NumberField label="Thickness" value={block.thickness} min={1} max={8} onChange={(thickness) => onBlock({ thickness } as Partial<EmailBlock>)} />
+          <ColourField
+            label="Colour"
+            value={block.color}
+            onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
+          />
+          <NumberField
+            label="Thickness"
+            value={block.thickness}
+            min={1}
+            max={8}
+            onChange={(thickness) =>
+              onBlock({ thickness } as Partial<EmailBlock>)
+            }
+          />
         </>
       ) : null}
       {block.type === "spacer" ? (
-        <NumberField label="Height" value={block.height} min={4} max={200} onChange={(height) => onBlock({ height } as Partial<EmailBlock>)} />
+        <NumberField
+          label="Height"
+          value={block.height}
+          min={4}
+          max={200}
+          onChange={(height) => onBlock({ height } as Partial<EmailBlock>)}
+        />
       ) : null}
       {block.type === "social" ? (
         <div className="space-y-2">
@@ -392,6 +617,7 @@ function BlockFields({
               }
             />
           ))}
+          <p className="text-xs text-muted">Leave a URL blank to hide that network.</p>
         </div>
       ) : null}
       {block.type === "html" ? (
@@ -400,31 +626,101 @@ function BlockFields({
           <textarea
             className="input mt-1 min-h-[160px] w-full font-mono text-xs"
             value={block.html}
-            onChange={(event) => onBlock({ html: event.target.value } as Partial<EmailBlock>)}
+            onChange={(event) =>
+              onBlock({ html: event.target.value } as Partial<EmailBlock>)
+            }
           />
+          <span className="mt-1 block text-xs text-muted">
+            Scripts and iframes are removed when the email is sent.
+          </span>
         </label>
       ) : null}
       {block.type === "footer" ? (
-        <label className="block text-sm">
-          <span className="text-muted">Address</span>
-          <textarea
-            className="input mt-1 min-h-[120px] w-full"
-            value={block.text}
-            onChange={(event) => onBlock({ text: event.target.value } as Partial<EmailBlock>)}
-          />
-        </label>
+        <>
+          <label className="block text-sm">
+            <span className="text-muted">Address</span>
+            <textarea
+              className="input mt-1 min-h-[120px] w-full"
+              value={block.text}
+              onChange={(event) =>
+                onBlock({ text: event.target.value } as Partial<EmailBlock>)
+              }
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={block.showPreferences !== false}
+              onChange={(event) =>
+                onBlock({
+                  showPreferences: event.target.checked,
+                } as Partial<EmailBlock>)
+              }
+            />
+            Show manage preferences link
+          </label>
+        </>
       ) : null}
       {block.type !== "spacer" && block.type !== "divider" ? (
         <AlignField value={block.align} onChange={(align) => onBlock({ align })} />
       ) : null}
       <p className="text-sm font-medium text-brand">Padding</p>
       <div className="grid grid-cols-2 gap-2">
-        <NumberField label="Top" value={block.paddingTop} onChange={(paddingTop) => onBlock({ paddingTop })} />
-        <NumberField label="Bottom" value={block.paddingBottom} onChange={(paddingBottom) => onBlock({ paddingBottom })} />
-        <NumberField label="Left" value={block.paddingLeft} onChange={(paddingLeft) => onBlock({ paddingLeft })} />
-        <NumberField label="Right" value={block.paddingRight} onChange={(paddingRight) => onBlock({ paddingRight })} />
+        <NumberField
+          label="Top"
+          value={block.paddingTop}
+          onChange={(paddingTop) => onBlock({ paddingTop })}
+        />
+        <NumberField
+          label="Bottom"
+          value={block.paddingBottom}
+          onChange={(paddingBottom) => onBlock({ paddingBottom })}
+        />
+        <NumberField
+          label="Left"
+          value={block.paddingLeft}
+          onChange={(paddingLeft) => onBlock({ paddingLeft })}
+        />
+        <NumberField
+          label="Right"
+          value={block.paddingRight}
+          onChange={(paddingRight) => onBlock({ paddingRight })}
+        />
       </div>
     </>
+  );
+}
+
+function RewriteControls({
+  rewriting,
+  onRewrite,
+}: {
+  rewriting?: boolean;
+  onRewrite: (tone: "clearer" | "shorter" | "more_formal") => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm text-muted">Rewrite with AI</p>
+      <div className="flex flex-wrap gap-1">
+        {(
+          [
+            ["clearer", "Clearer"],
+            ["shorter", "Shorter"],
+            ["more_formal", "More formal"],
+          ] as const
+        ).map(([tone, label]) => (
+          <button
+            key={tone}
+            type="button"
+            className="btn-secondary px-2 py-1 text-xs"
+            disabled={rewriting}
+            onClick={() => onRewrite(tone)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

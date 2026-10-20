@@ -122,8 +122,11 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
   const align = alignStyle(block.align);
 
   switch (block.type) {
-    case "heading":
-      return `<h1 style="margin:0;${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.2;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</h1>`;
+    case "heading": {
+      const level = block.level === 2 || block.level === 3 ? block.level : 1;
+      const tag = `h${level}`;
+      return `<${tag} style="margin:0;${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.2;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`;
+    }
     case "text":
       return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html)}</div>`;
     case "image": {
@@ -149,7 +152,15 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     case "button": {
       const href = safeEmailUrl(block.href) || "#";
       const width = block.fullWidth ? "display:block;width:100%;" : "display:inline-block;";
-      return `<div style="${pad}${align}"><a href="${escapeAttr(href)}" style="${width}background:${escapeAttr(block.background)};color:${escapeAttr(block.color)};font-family:${styles.fontFamily};font-size:16px;font-weight:600;line-height:1;text-decoration:none;padding:14px 22px;border-radius:${block.radius}px;">${escapeHtml(block.label || "Read more")}</a></div>`;
+      const fontSize = block.fontSize || 16;
+      const padX = block.paddingX ?? 22;
+      const padY = block.paddingY ?? 14;
+      const borderW = block.borderWidth ?? 0;
+      const border =
+        borderW > 0 && block.borderColor
+          ? `border:${borderW}px solid ${escapeAttr(block.borderColor)};`
+          : "border:0;";
+      return `<div style="${pad}${align}"><a href="${escapeAttr(href)}" style="${width}background:${escapeAttr(block.background)};color:${escapeAttr(block.color)};font-family:${styles.fontFamily};font-size:${fontSize}px;font-weight:600;line-height:1;text-decoration:none;padding:${padY}px ${padX}px;border-radius:${block.radius}px;${border}">${escapeHtml(block.label || "Read more")}</a></div>`;
     }
     case "divider":
       return `<div style="${pad}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:${block.thickness}px solid ${escapeAttr(block.color)};font-size:0;line-height:0;">&nbsp;</td></tr></table></div>`;
@@ -176,10 +187,15 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     }
     case "html":
       return `<div style="${pad}">${sanitizeHtmlBlock(block.html)}</div>`;
-    case "footer":
+    case "footer": {
       const footerText =
         block.text.trim() === "Peters & May" ? OFFICE_FOOTER : block.text;
-      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}<p style="margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Unsubscribe</a></p></div>`;
+      const prefs =
+        block.showPreferences !== false
+          ? ` &nbsp;|&nbsp; <a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Manage preferences</a>`
+          : "";
+      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}<p style="margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:${styles.linkColor};">Unsubscribe</a>${prefs}</p></div>`;
+    }
     default:
       return "";
   }

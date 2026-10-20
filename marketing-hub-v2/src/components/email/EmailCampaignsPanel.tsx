@@ -4,8 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import type { EmailCampaign } from "@/lib/types";
-import { blankDesign, compileEmailDesign } from "@/lib/email/design";
+import {
+  compileEmailDesign,
+  starterDesign,
+  type StarterLayout,
+} from "@/lib/email/design";
 import { CopyEmailButton } from "@/components/email/CopyEmailButton";
+import { EmailStarterPicker } from "@/components/email/EmailStarterPicker";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +56,7 @@ export function EmailCampaignsPanel({
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [starterOpen, setStarterOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [items, setItems] = useState(campaigns);
@@ -76,10 +82,10 @@ export function EmailCampaignsPanel({
       );
   }, [items, filter, query]);
 
-  async function createEmail() {
+  async function createEmail(layout: StarterLayout) {
     setCreating(true);
     setError("");
-    const design = blankDesign();
+    const design = starterDesign(layout);
     try {
       const res = await fetch("/api/email/campaigns", {
         method: "POST",
@@ -98,6 +104,7 @@ export function EmailCampaignsPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the email");
       setCreating(false);
+      setStarterOpen(false);
     }
   }
 
@@ -135,12 +142,20 @@ export function EmailCampaignsPanel({
           type="button"
           className="btn-primary inline-flex items-center gap-1.5"
           disabled={creating}
-          onClick={() => void createEmail()}
+          onClick={() => setStarterOpen(true)}
         >
           <Plus className="h-4 w-4" />
           {creating ? "Creating…" : "Create email"}
         </button>
       </div>
+
+      <EmailStarterPicker
+        open={starterOpen}
+        title="Create email"
+        busy={creating}
+        onClose={() => setStarterOpen(false)}
+        onPick={(layout) => void createEmail(layout)}
+      />
 
       {error ? (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

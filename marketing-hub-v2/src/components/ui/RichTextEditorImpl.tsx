@@ -48,6 +48,8 @@ type RichTextEditorProps = {
   /** Email canvas: same type and spacing as the unselected block. */
   variant?: "default" | "email";
   textStyle?: CSSProperties;
+  /** When nonce changes, insert `token` at the caret. */
+  insertRequest?: { token: string; nonce: number } | null;
 };
 
 function ToolbarButton({
@@ -91,8 +93,10 @@ export function RichTextEditorImpl({
   minHeight = "96px",
   variant = "default",
   textStyle,
+  insertRequest,
 }: RichTextEditorProps) {
   const editorRef = useRef<ReturnType<typeof useEditor> | null>(null);
+  const lastInsertNonce = useRef<number | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -162,6 +166,13 @@ export function RichTextEditorImpl({
     }
     editor.commands.setContent(next, false);
   }, [editor, value]);
+
+  useEffect(() => {
+    if (!editor || !insertRequest) return;
+    if (lastInsertNonce.current === insertRequest.nonce) return;
+    lastInsertNonce.current = insertRequest.nonce;
+    editor.chain().focus().insertContent(insertRequest.token).run();
+  }, [editor, insertRequest]);
 
   const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

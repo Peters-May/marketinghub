@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  Code2,
   Columns2,
+  Heading,
   Image as ImageIcon,
   Link2,
   Minus,
+  MoveVertical,
   PanelBottom,
   Share2,
   Square,
@@ -14,20 +17,25 @@ import type { EmailBlockType, SectionPreset } from "@/lib/email/design";
 import { writeDrag } from "@/components/email/builder/drag";
 
 const BLOCKS: { type: EmailBlockType; label: string; icon: typeof Type }[] = [
-  { type: "button", label: "Button", icon: Square },
+  { type: "heading", label: "Heading", icon: Heading },
   { type: "text", label: "Text", icon: Type },
+  { type: "button", label: "Button", icon: Square },
   { type: "image", label: "Image", icon: ImageIcon },
-  { type: "divider", label: "Divider", icon: Minus },
-  { type: "social", label: "Social", icon: Share2 },
   { type: "logo", label: "Logo", icon: Link2 },
+  { type: "divider", label: "Divider", icon: Minus },
+  { type: "spacer", label: "Spacer", icon: MoveVertical },
+  { type: "social", label: "Social", icon: Share2 },
   { type: "footer", label: "Footer", icon: PanelBottom },
+  { type: "html", label: "HTML", icon: Code2 },
 ];
 
 const LAYOUTS: { preset: SectionPreset; label: string }[] = [
   { preset: "1", label: "1 column" },
   { preset: "2", label: "2 columns" },
-  { preset: "image-left", label: "Image left" },
-  { preset: "image-right", label: "Image right" },
+  { preset: "3", label: "3 columns" },
+  { preset: "4", label: "4 columns" },
+  { preset: "image-left", label: "Image left (40/60)" },
+  { preset: "image-right", label: "Image right (60/40)" },
 ];
 
 export function EmailPalette({
@@ -82,26 +90,22 @@ export function EmailPalette({
                 </button>
               );
             })
-          : (
-            <>
-              {LAYOUTS.map((item) => (
-                <button
-                  key={item.preset}
-                  type="button"
-                  draggable={!disabled}
-                  disabled={disabled}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
-                  onClick={() => onAddSection(item.preset)}
-                  onDragStart={(event) =>
-                    writeDrag(event, { source: "section", preset: item.preset })
-                  }
-                >
-                  <Columns2 className="h-4 w-4 text-muted" />
-                  {item.label}
-                </button>
-              ))}
-            </>
-          )}
+          : LAYOUTS.map((item) => (
+              <button
+                key={item.preset}
+                type="button"
+                draggable={!disabled}
+                disabled={disabled}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => onAddSection(item.preset)}
+                onDragStart={(event) =>
+                  writeDrag(event, { source: "section", preset: item.preset })
+                }
+              >
+                <Columns2 className="h-4 w-4 text-muted" />
+                {item.label}
+              </button>
+            ))}
       </div>
     </aside>
   );

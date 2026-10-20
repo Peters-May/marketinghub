@@ -24,11 +24,15 @@ export type BlockPadding = {
   align: EmailAlign;
 };
 
+export type HeadingLevel = 1 | 2 | 3;
+
 export type HeadingBlock = BlockPadding & {
   type: "heading";
   text: string;
   color: string;
   fontSize: number;
+  /** Semantic heading level in compiled HTML. Defaults to 1. */
+  level: HeadingLevel;
 };
 
 export type TextBlock = BlockPadding & {
@@ -54,6 +58,11 @@ export type ButtonBlock = BlockPadding & {
   color: string;
   radius: number;
   fullWidth: boolean;
+  fontSize: number;
+  paddingX: number;
+  paddingY: number;
+  borderColor: string;
+  borderWidth: number;
 };
 
 export type DividerBlock = BlockPadding & {
@@ -95,6 +104,8 @@ export type HtmlBlock = BlockPadding & {
 export type FooterBlock = BlockPadding & {
   type: "footer";
   text: string;
+  /** Show a manage-preferences link beside unsubscribe. */
+  showPreferences: boolean;
 };
 
 export type EmailBlock =

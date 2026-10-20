@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronDown, ChevronUp, Copy, GripVertical, Trash2 } from "lucide-react";
 import type { EmailBlock, EmailDesign } from "@/lib/email/design";
 import { emailImageSrc, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
@@ -45,6 +46,7 @@ export function EmailCanvas({
   subject,
   previewText,
   readOnly,
+  insertRequest,
   onSelect,
   onLiveBlock,
   onCommitBlock,
@@ -62,6 +64,7 @@ export function EmailCanvas({
   subject: string;
   previewText: string;
   readOnly?: boolean;
+  insertRequest?: { token: string; nonce: number } | null;
   onSelect: (selection: CanvasSelection) => void;
   onLiveBlock: (blockId: string, patch: Partial<EmailBlock>) => void;
   onCommitBlock: (blockId: string) => void;
@@ -77,6 +80,7 @@ export function EmailCanvas({
   onDeleteSection: (sectionId: string) => void;
 }) {
   const frameWidth = device === "mobile" ? 375 : design.styles.contentWidth;
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   return (
     <div
@@ -133,18 +137,31 @@ export function EmailCanvas({
                   </div>
                 ) : null}
                 <div className={cn("flex", device === "mobile" ? "flex-col gap-4" : "flex-row")} style={{ gap: device === "mobile" ? undefined : section.columnGap }}>
-                  {section.columns.map((column) => (
+                  {section.columns.map((column) => {
+                    const columnDropKey = `${section.id}:${column.id}:end`;
+                    return (
                     <div
                       key={column.id}
-                      className="min-h-[48px] min-w-0 flex-1"
+                      className={cn(
+                        "min-h-[48px] min-w-0 flex-1 rounded transition-colors",
+                        dropTarget === columnDropKey && "bg-[#007DC5]/10 ring-1 ring-[#007DC5]"
+                      )}
                       style={{ width: device === "mobile" ? "100%" : `${column.width}%` }}
                       onDragOver={(event) => {
-                        if (!readOnly) event.preventDefault();
+                        if (readOnly) return;
+                        event.preventDefault();
+                        setDropTarget(columnDropKey);
+                      }}
+                      onDragLeave={() => {
+                        setDropTarget((current) =>
+                          current === columnDropKey ? null : current
+                        );
                       }}
                       onDrop={(event) => {
                         if (readOnly) return;
                         event.preventDefault();
                         event.stopPropagation();
+                        setDropTarget(null);
                         const payload = readDrag(event);
                         if (!payload || payload.source === "section") return;
                         onDrop(payload, {
@@ -162,33 +179,41 @@ export function EmailCanvas({
                       {column.blocks.map((block, blockIndex) => {
                         const selected =
                           selection.type === "block" && selection.blockId === block.id;
+                        const beforeKey = `${section.id}:${column.id}:${block.id}`;
                         return (
+                          <div key={block.id} className="relative">
+                            <div
+                              className={cn(
+                                "mx-1 h-1 rounded transition-colors",
+                                dropTarget === beforeKey
+                                  ? "bg-[#007DC5]"
+                                  : "bg-transparent"
+                              )}
+                              onDragOver={(event) => {
+                                if (readOnly) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setDropTarget(beforeKey);
+                              }}
+                              onDrop={(event) => {
+                                if (readOnly) return;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setDropTarget(null);
+                                const payload = readDrag(event);
+                                if (!payload || payload.source === "section") return;
+                                onDrop(payload, {
+                                  sectionId: section.id,
+                                  columnId: column.id,
+                                  beforeBlockId: block.id,
+                                });
+                              }}
+                            />
                           <div
-                            key={block.id}
                             className={cn(
                               "relative",
                               selected && "outline outline-2 outline-offset-2 outline-[#007DC5]"
                             )}
-                            draggable={!readOnly}
-                            onDragStart={(event) => {
-                              event.stopPropagation();
-                              writeDrag(event, { source: "move", blockId: block.id });
-                            }}
-                            onDragOver={(event) => {
-                              if (!readOnly) event.preventDefault();
-                            }}
-                            onDrop={(event) => {
-                              if (readOnly) return;
-                              event.preventDefault();
-                              event.stopPropagation();
-                              const payload = readDrag(event);
-                              if (!payload || payload.source === "section") return;
-                              onDrop(payload, {
-                                sectionId: section.id,
-                                columnId: column.id,
-                                beforeBlockId: block.id,
-                              });
-                            }}
                             onClick={(event) => {
                               event.stopPropagation();
                               onSelect({
@@ -201,7 +226,18 @@ export function EmailCanvas({
                           >
                             {!readOnly && selected ? (
                               <div className="mb-1 flex justify-end gap-1">
-                                <span className="inline-flex h-6 w-6 items-center justify-center text-muted" title="Drag to move">
+                                <span
+                                  className="inline-flex h-6 w-6 cursor-grab items-center justify-center text-muted active:cursor-grabbing"
+                                  title="Drag to move"
+                                  draggable
+                                  onDragStart={(event) => {
+                                    event.stopPropagation();
+                                    writeDrag(event, {
+                                      source: "move",
+                                      blockId: block.id,
+                                    });
+                                  }}
+                                >
                                   <GripVertical className="h-3.5 w-3.5" />
                                 </span>
                                 <IconButton label="Move up" onClick={() => onMove(block.id, -1)} disabled={blockIndex === 0}>
@@ -223,14 +259,21 @@ export function EmailCanvas({
                               design={design}
                               selected={selected}
                               readOnly={readOnly}
-              onLive={(patch) => onLiveBlock(block.id, patch)}
-              onCommit={() => onCommitBlock(block.id)}
+                              insertRequest={
+                                selected && block.type === "text"
+                                  ? insertRequest
+                                  : null
+                              }
+                              onLive={(patch) => onLiveBlock(block.id, patch)}
+                              onCommit={() => onCommitBlock(block.id)}
                             />
+                          </div>
                           </div>
                         );
                       })}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </div>
@@ -253,18 +296,35 @@ function SectionDrop({
   disabled?: boolean;
   onDrop: (payload: DesignerDrag) => void;
 }) {
+  const [active, setActive] = useState(false);
   if (disabled) return null;
   return (
     <div
-      className="h-3"
-      onDragOver={(event) => event.preventDefault()}
+      className={cn(
+        "my-1 flex h-6 items-center justify-center rounded border border-dashed transition-colors",
+        active
+          ? "border-[#007DC5] bg-[#007DC5]/10"
+          : "border-transparent hover:border-border"
+      )}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setActive(true);
+      }}
+      onDragLeave={() => setActive(false)}
       onDrop={(event) => {
         event.preventDefault();
         event.stopPropagation();
+        setActive(false);
         const payload = readDrag(event);
         if (payload?.source === "section") onDrop(payload);
       }}
-    />
+    >
+      {active ? (
+        <span className="text-[10px] uppercase tracking-wide text-[#007DC5]">
+          Drop section
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -301,6 +361,7 @@ function BlockView({
   design,
   selected,
   readOnly,
+  insertRequest,
   onLive,
   onCommit,
 }: {
@@ -308,6 +369,7 @@ function BlockView({
   design: EmailDesign;
   selected: boolean;
   readOnly?: boolean;
+  insertRequest?: { token: string; nonce: number } | null;
   onLive: (patch: Partial<EmailBlock>) => void;
   onCommit: () => void;
 }) {
@@ -338,8 +400,9 @@ function BlockView({
         />
       );
     }
+    const Tag = block.level === 3 ? "h3" : block.level === 2 ? "h2" : "h1";
     return (
-      <h2
+      <Tag
         style={{
           ...style,
           margin: 0,
@@ -347,10 +410,11 @@ function BlockView({
           fontSize: block.fontSize,
           fontFamily: design.styles.headingFontFamily,
           lineHeight: 1.2,
+          fontWeight: 600,
         }}
       >
         {block.text}
-      </h2>
+      </Tag>
     );
   }
 
@@ -363,6 +427,7 @@ function BlockView({
             onChange={(html) => onLive({ html } as Partial<EmailBlock>)}
             onBlur={() => onCommit()}
             variant="email"
+            insertRequest={insertRequest}
             textStyle={{
               color: block.color,
               fontSize: block.fontSize,
@@ -415,17 +480,36 @@ function BlockView({
   }
 
   if (block.type === "button") {
+    const buttonStyle = {
+      background: block.background,
+      color: block.color,
+      borderRadius: block.radius,
+      width: block.fullWidth ? "100%" : undefined,
+      fontSize: block.fontSize ?? 16,
+      padding: `${block.paddingY ?? 14}px ${block.paddingX ?? 22}px`,
+      border:
+        (block.borderWidth ?? 0) > 0 && block.borderColor
+          ? `${block.borderWidth}px solid ${block.borderColor}`
+          : "0",
+    } as const;
+    if (selected && !readOnly) {
+      return (
+        <div style={style} onClick={(event) => event.stopPropagation()}>
+          <input
+            className="inline-block bg-transparent text-center font-semibold outline-none"
+            style={buttonStyle}
+            value={block.label}
+            onChange={(event) =>
+              onLive({ label: event.target.value } as Partial<EmailBlock>)
+            }
+            onBlur={() => onCommit()}
+          />
+        </div>
+      );
+    }
     return (
       <div style={style}>
-        <span
-          className="inline-block px-5 py-3 text-sm font-semibold"
-          style={{
-            background: block.background,
-            color: block.color,
-            borderRadius: block.radius,
-            width: block.fullWidth ? "100%" : undefined,
-          }}
-        >
+        <span className="inline-block font-semibold" style={buttonStyle}>
           {block.label || "Button"}
         </span>
       </div>
@@ -446,18 +530,28 @@ function BlockView({
 
   if (block.type === "social") {
     const linked = block.links.filter((link) => link.url.trim());
+    const label = (network: string) =>
+      network === "linkedin"
+        ? "LinkedIn"
+        : network === "youtube"
+          ? "YouTube"
+          : network === "instagram"
+            ? "Instagram"
+            : network === "facebook"
+              ? "Facebook"
+              : network;
     return (
       <div style={{ ...style, fontSize: 13 }}>
         {linked.length === 0 ? (
           <span className="text-muted">Add social links</span>
         ) : (
           linked.map((link) => (
-            <span key={link.network} className="mr-3 capitalize underline" style={{ color: design.styles.linkColor }}>
-              {link.network === "linkedin"
-                ? "LinkedIn"
-                : link.network === "youtube"
-                  ? "YouTube"
-                  : link.network}
+            <span
+              key={link.network}
+              className="mr-3 underline"
+              style={{ color: design.styles.linkColor }}
+            >
+              {label(link.network)}
             </span>
           ))
         )}
@@ -469,8 +563,14 @@ function BlockView({
     return (
       <div style={{ ...style, fontSize: 12, color: "#666666" }}>
         <div className="whitespace-pre-line">{block.text}</div>
-        <div className="mt-1 underline" style={{ color: design.styles.linkColor }}>
-          Unsubscribe
+        <div className="mt-1" style={{ color: design.styles.linkColor }}>
+          <span className="underline">Unsubscribe</span>
+          {block.showPreferences !== false ? (
+            <>
+              {" · "}
+              <span className="underline">Manage preferences</span>
+            </>
+          ) : null}
         </div>
       </div>
     );

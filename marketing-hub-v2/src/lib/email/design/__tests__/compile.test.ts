@@ -74,6 +74,60 @@ describe("email design compiler", () => {
     expect(moved.sections[0].columns[0].blocks.some((block) => block.id === from.id)).toBe(true);
   });
 
+  it("compiles heading levels and footer preference links", () => {
+    const design = normalizeEmailDesign({
+      version: 1,
+      styles: announcementDesign().styles,
+      sections: [
+        {
+          id: "s1",
+          background: "",
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [
+            {
+              id: "c1",
+              width: 100,
+              blocks: [
+                {
+                  id: "h1",
+                  type: "heading",
+                  text: "Title",
+                  color: "#0B2545",
+                  fontSize: 24,
+                  level: 2,
+                  align: "left",
+                  paddingTop: 0,
+                  paddingRight: 0,
+                  paddingBottom: 0,
+                  paddingLeft: 0,
+                },
+                {
+                  id: "f1",
+                  type: "footer",
+                  text: "Peters & May",
+                  showPreferences: true,
+                  align: "center",
+                  paddingTop: 0,
+                  paddingRight: 0,
+                  paddingBottom: 0,
+                  paddingLeft: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(design).not.toBeNull();
+    const html = compileEmailDesign(design!);
+    expect(html).toContain("<h2");
+    expect(html).toContain("Manage preferences");
+  });
+
   it("turns a gallery image into an absolute address for the sent email", () => {
     const path = "/api/email/gallery/file/photo.png";
     expect(emailImageSrc(path, false)).toBe(path);

@@ -15,6 +15,14 @@ import type {
 export const EMAIL_FONT_BODY = "Archivo, Arial, sans-serif";
 export const EMAIL_FONT_HEADING = "League Spartan, Arial, sans-serif";
 
+/** Brand-safe stacks offered in the theme inspector. */
+export const EMAIL_FONT_OPTIONS = [
+  { id: EMAIL_FONT_BODY, label: "Archivo (body)" },
+  { id: EMAIL_FONT_HEADING, label: "League Spartan (headings)" },
+  { id: "Arial, Helvetica, sans-serif", label: "Arial" },
+  { id: "Georgia, Times New Roman, serif", label: "Georgia" },
+] as const;
+
 /** Layout colours from the brand palette. Ensign Red is logo artwork only. */
 export const EMAIL_COLOUR_SWATCHES = [
   COLORS.ensignNavy.hex,
@@ -81,8 +89,9 @@ export function createBlock(
         text: "Heading",
         color: styles.textColor,
         fontSize: 28,
+        level: 1,
         align: "left",
-        ...pick(partial, ["text", "color", "fontSize", "align", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]),
+        ...pick(partial, ["text", "color", "fontSize", "level", "align", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]),
       };
     case "text":
       return {
@@ -114,8 +123,30 @@ export function createBlock(
         color: styles.buttonColor,
         radius: styles.buttonRadius,
         fullWidth: false,
+        fontSize: 16,
+        paddingX: 22,
+        paddingY: 14,
+        borderColor: "",
+        borderWidth: 0,
         align: "left",
-        ...pick(partial, ["label", "href", "background", "color", "radius", "fullWidth", "align", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]),
+        ...pick(partial, [
+          "label",
+          "href",
+          "background",
+          "color",
+          "radius",
+          "fullWidth",
+          "fontSize",
+          "paddingX",
+          "paddingY",
+          "borderColor",
+          "borderWidth",
+          "align",
+          "paddingTop",
+          "paddingRight",
+          "paddingBottom",
+          "paddingLeft",
+        ]),
       };
     case "divider":
       return {
@@ -167,8 +198,17 @@ export function createBlock(
         ...base,
         type: "footer",
         text: OFFICE_FOOTER,
+        showPreferences: true,
         align: "center",
-        ...pick(partial, ["text", "align", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]),
+        ...pick(partial, [
+          "text",
+          "showPreferences",
+          "align",
+          "paddingTop",
+          "paddingRight",
+          "paddingBottom",
+          "paddingLeft",
+        ]),
       };
     default:
       return {
@@ -505,6 +545,11 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
       type: "button",
       fullWidth: Boolean(raw.fullWidth),
       radius: num(raw.radius, 4, 0, 40),
+      fontSize: num(raw.fontSize, 16, 12, 28),
+      paddingX: num(raw.paddingX, 22, 8, 48),
+      paddingY: num(raw.paddingY, 14, 6, 40),
+      borderColor: str(raw.borderColor, ""),
+      borderWidth: num(raw.borderWidth, 0, 0, 8),
     } as EmailBlock;
   }
   if (type === "image") {
@@ -518,7 +563,14 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
     return { ...(merged as EmailBlock), type: "spacer", height: num(raw.height, 24, 4, 200) } as EmailBlock;
   }
   if (type === "heading") {
-    return { ...(merged as EmailBlock), type: "heading", fontSize: num(raw.fontSize, 28, 14, 48) } as EmailBlock;
+    const levelRaw = num(raw.level, 1, 1, 3);
+    const level = (levelRaw === 2 || levelRaw === 3 ? levelRaw : 1) as 1 | 2 | 3;
+    return {
+      ...(merged as EmailBlock),
+      type: "heading",
+      fontSize: num(raw.fontSize, 28, 14, 48),
+      level,
+    } as EmailBlock;
   }
   if (type === "text") {
     return { ...(merged as EmailBlock), type: "text", fontSize: num(raw.fontSize, 16, 12, 28) } as EmailBlock;
@@ -529,6 +581,7 @@ function normalizeBlock(raw: unknown): EmailBlock | null {
       ...(merged as EmailBlock),
       type: "footer",
       text: text === "Peters & May" || text === "" ? OFFICE_FOOTER : str(raw.text, OFFICE_FOOTER),
+      showPreferences: raw.showPreferences !== false,
     } as EmailBlock;
   }
   return merged as EmailBlock;
