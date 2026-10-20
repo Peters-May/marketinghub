@@ -54,6 +54,8 @@ add_action('wp_enqueue_scripts', static function () {
     }
 
     wp_localize_script($handle, 'PMWebsiteChat', [
+        // Browser talks to WordPress; WP proxies to Hub (avoids CORS / Cookiebot).
+        'apiBase' => esc_url_raw(rest_url('pm-website-chat/v1/hub')),
         'hubUrl' => untrailingslashit($opts['hub_url']),
         'siteKey' => $opts['site_key'],
         'greeting' => $opts['greeting'],

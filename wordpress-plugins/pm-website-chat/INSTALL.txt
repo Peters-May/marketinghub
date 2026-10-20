@@ -16,7 +16,7 @@ Option A — WP File Manager (recommended on this site)
      README.md
      INSTALL.txt
      assets/   (chat.css, chat.js)
-     includes/ (settings.php, enqueue.php)
+     includes/ (settings.php, enqueue.php, proxy.php)
 6. Refresh Plugins list — you should see "PM Website Chat".
 7. Click Activate.
 
@@ -30,3 +30,8 @@ After activate: Settings → PM Website Chat
 - Hub URL: https://marketing.petersandmay.com
 - Site key: from Marketing Hub exports/CHAT_SITE_KEY.txt (same as Vercel CHAT_SITE_KEY)
 - Enable widget
+
+Staging (https://stg-petersmay-staging.kinsta.cloud/)
+- Install/activate on the staging WordPress, not production www.
+- Widget calls same-origin /wp-json/pm-website-chat/v1/hub/... (proxy.php).
+- Hub URL and site key are still required in Settings (server-side only).

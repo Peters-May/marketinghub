@@ -36,20 +36,24 @@ export function requireChatSiteKey(request: Request): boolean {
   return false;
 }
 
+const CHAT_CORS_DEFAULTS = [
+  "https://www.petersandmay.com",
+  "https://petersandmay.com",
+  "https://stg-petersmay-staging.kinsta.cloud",
+  "http://localhost",
+  "http://127.0.0.1",
+];
+
 export function chatCorsOrigins(): string[] {
   const raw = process.env.CHAT_CORS_ORIGINS?.trim();
-  if (raw) {
-    return raw
-      .split(",")
-      .map((s) => s.trim().replace(/\/$/, ""))
-      .filter(Boolean);
-  }
-  return [
-    "https://www.petersandmay.com",
-    "https://petersandmay.com",
-    "http://localhost",
-    "http://127.0.0.1",
-  ];
+  const fromEnv = raw
+    ? raw
+        .split(",")
+        .map((s) => s.trim().replace(/\/$/, ""))
+        .filter(Boolean)
+    : [];
+  // Always include staging + production defaults so env typos do not block the widget.
+  return Array.from(new Set([...CHAT_CORS_DEFAULTS, ...fromEnv]));
 }
 
 export function isChatCorsOrigin(origin: string | null): boolean {

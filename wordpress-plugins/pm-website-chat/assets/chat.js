@@ -2,7 +2,10 @@
   "use strict";
 
   var cfg = window.PMWebsiteChat;
-  if (!cfg || !cfg.hubUrl || !cfg.siteKey) return;
+  if (!cfg) return;
+  // Prefer same-origin WP proxy (avoids CORS on staging). Fall back to Hub direct.
+  var useProxy = Boolean(cfg.apiBase);
+  if (!useProxy && (!cfg.hubUrl || !cfg.siteKey)) return;
 
   var sessionId = null;
   var lastMessageAt = null;
@@ -10,11 +13,45 @@
   var pollTimer = null;
   var open = false;
 
+  function apiUrl(hubPath) {
+    // hubPath like "api/chat/sessions" or "api/chat/sessions/ID/messages"
+    if (useProxy) {
+      return String(cfg.apiBase).replace(/\/$/, "") + "/" + hubPath.replace(/^\//, "");
+    }
+    return String(cfg.hubUrl).replace(/\/$/, "") + "/" + hubPath.replace(/^\//, "");
+  }
+
   function headers() {
-    return {
-      "Content-Type": "application/json",
-      "X-Chat-Site-Key": cfg.siteKey,
-    };
+    var h = { "Content-Type": "application/json" };
+    // Site key only needed for direct Hub calls; proxy adds it server-side.
+    if (!useProxy && cfg.siteKey) {
+      h["X-Chat-Site-Key"] = cfg.siteKey;
+    }
+    return h;
+  }
+
+  function parseBody(r) {
+    var ctype = (r.headers.get("content-type") || "").toLowerCase();
+    if (ctype.indexOf("application/json") !== -1) {
+      return r.json().then(function (data) {
+        // WP REST may wrap a JSON string as a JSON-encoded string
+        if (typeof data === "string") {
+          try {
+            return JSON.parse(data);
+          } catch (e) {
+            return { error: data };
+          }
+        }
+        return data;
+      });
+    }
+    return r.text().then(function (t) {
+      try {
+        return JSON.parse(t);
+      } catch (e) {
+        return { error: t || "Request failed" };
+      }
+    });
   }
 
   function el(tag, className, text) {
@@ -37,7 +74,10 @@
     if (on) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  var root = el("div", "pm-chat--" + (cfg.position === "bottom-left" ? "bl" : "br"));
+  var root = el(
+    "div",
+    "pm-chat--" + (cfg.position === "bottom-left" ? "bl" : "br")
+  );
   root.id = "pm-website-chat-root";
 
   var panel = el("div", "pm-chat__panel");
@@ -60,7 +100,11 @@
   panel.appendChild(actions);
 
   var messagesEl = el("div", "pm-chat__messages");
-  var typingEl = el("div", "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing", "…");
+  var typingEl = el(
+    "div",
+    "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing",
+    "…"
+  );
   messagesEl.appendChild(typingEl);
   panel.appendChild(messagesEl);
 
@@ -115,16 +159,11 @@
 
   function syncSeen() {
     if (!sessionId) return Promise.resolve();
-    return fetch(
-      cfg.hubUrl +
-        "/api/chat/sessions/" +
-        encodeURIComponent(sessionId) +
-        "/messages",
-      { headers: headers() }
-    )
-      .then(function (r) {
-        return r.json();
-      })
+    return fetch(apiUrl("api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"), {
+      headers: headers(),
+      credentials: useProxy ? "same-origin" : "omit",
+    })
+      .then(parseBody)
       .then(function (data) {
         (data.messages || []).forEach(function (m) {
           if (m.id) seenIds[m.id] = true;
@@ -138,19 +177,16 @@
     stopPoll();
     pollTimer = setInterval(function () {
       if (!sessionId) return;
-      fetch(
-        cfg.hubUrl +
-          "/api/chat/sessions/" +
-          encodeURIComponent(sessionId) +
-          "/messages" +
-          (lastMessageAt
-            ? "?after=" + encodeURIComponent(lastMessageAt)
-            : ""),
-        { headers: headers() }
-      )
-        .then(function (r) {
-          return r.json();
-        })
+      var path =
+        "api/chat/sessions/" +
+        encodeURIComponent(sessionId) +
+        "/messages" +
+        (lastMessageAt ? "?after=" + encodeURIComponent(lastMessageAt) : "");
+      fetch(apiUrl(path), {
+        headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
+      })
+        .then(parseBody)
         .then(function (data) {
           if (!data.messages) return;
           data.messages.forEach(function (m) {
@@ -174,9 +210,10 @@
 
   function startSession() {
     setTyping(true);
-    fetch(cfg.hubUrl + "/api/chat/sessions", {
+    fetch(apiUrl("api/chat/sessions"), {
       method: "POST",
       headers: headers(),
+      credentials: useProxy ? "same-origin" : "omit",
       body: JSON.stringify({
         page_url: cfg.pageUrl,
         page_title: cfg.pageTitle,
@@ -185,7 +222,7 @@
       }),
     })
       .then(function (r) {
-        return r.json().then(function (data) {
+        return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Could not start chat");
           return data;
         });
@@ -218,64 +255,29 @@
     setTyping(true);
     sendBtn.disabled = true;
 
+    // Prefer non-stream through proxy (WP may buffer streams).
     fetch(
-      cfg.hubUrl +
-        "/api/chat/sessions/" +
-        encodeURIComponent(sessionId) +
-        "/messages",
+      apiUrl(
+        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"
+      ),
       {
         method: "POST",
         headers: headers(),
-        body: JSON.stringify({ body: text, stream: true }),
+        credentials: useProxy ? "same-origin" : "omit",
+        body: JSON.stringify({ body: text, stream: false }),
       }
     )
       .then(function (r) {
-        var ctype = r.headers.get("content-type") || "";
-        if (ctype.indexOf("application/json") !== -1) {
-          return r.json().then(function (data) {
-            if (!r.ok) throw new Error(data.error || "Send failed");
-            if (data.message && data.message.body) {
-              appendBubble(
-                "assistant",
-                data.message.body,
-                data.message.id
-              );
-              lastMessageAt = data.message.created_at;
-            } else if (data.message && typeof data.message === "string") {
-              appendBubble("assistant", data.message);
-            }
-            if (data.handoff) lead.classList.add("is-on");
-          });
-        }
-        if (!r.ok) {
-          return r.text().then(function (t) {
-            throw new Error(t || "Send failed");
-          });
-        }
-        var reader = r.body && r.body.getReader && r.body.getReader();
-        if (!reader) {
-          return r.text().then(function (t) {
-            appendBubble("assistant", t);
-          });
-        }
-        var decoder = new TextDecoder();
-        var bubble = el("div", "pm-chat__bubble pm-chat__bubble--assistant", "");
-        messagesEl.insertBefore(bubble, typingEl);
-        setTyping(false);
-        function read() {
-          return reader.read().then(function (result) {
-            if (result.done) {
-              if (r.headers.get("X-Chat-Handoff") === "1") {
-                lead.classList.add("is-on");
-              }
-              return syncSeen();
-            }
-            bubble.textContent += decoder.decode(result.value, { stream: true });
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            return read();
-          });
-        }
-        return read();
+        return parseBody(r).then(function (data) {
+          if (!r.ok) throw new Error(data.error || "Send failed");
+          if (data.message && data.message.body) {
+            appendBubble("assistant", data.message.body, data.message.id);
+            lastMessageAt = data.message.created_at;
+          } else if (typeof data.message === "string") {
+            appendBubble("assistant", data.message);
+          }
+          if (data.handoff) lead.classList.add("is-on");
+        });
       })
       .catch(function (err) {
         appendBubble(
@@ -298,18 +300,18 @@
       company: companyInput.value.trim(),
     };
     fetch(
-      cfg.hubUrl +
-        "/api/chat/sessions/" +
-        encodeURIComponent(sessionId) +
-        "/handoff",
+      apiUrl(
+        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/handoff"
+      ),
       {
         method: "POST",
         headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
         body: JSON.stringify(payload),
       }
     )
       .then(function (r) {
-        return r.json().then(function (data) {
+        return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Handoff failed");
           (data.messages || []).forEach(function (m) {
             appendBubble(m.role, m.body, m.id);
@@ -330,13 +332,11 @@
       return;
     }
     fetch(
-      cfg.hubUrl +
-        "/api/chat/sessions/" +
-        encodeURIComponent(sessionId) +
-        "/lead",
+      apiUrl("api/chat/sessions/" + encodeURIComponent(sessionId) + "/lead"),
       {
         method: "POST",
         headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
         body: JSON.stringify({
           name: nameInput.value.trim(),
           email: email,
@@ -345,7 +345,7 @@
       }
     )
       .then(function (r) {
-        return r.json().then(function (data) {
+        return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Could not save details");
           if (data.message) {
             appendBubble("assistant", data.message.body, data.message.id);
