@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     category: body.category ?? "",
     year: Number(body.year) || new Date().getFullYear(),
     status: body.status ?? "watching",
+    submission_deadline: body.submission_deadline || null,
     ceremony_at: body.ceremony_at || null,
     owner: body.owner ?? "",
     event_id: body.event_id || null,

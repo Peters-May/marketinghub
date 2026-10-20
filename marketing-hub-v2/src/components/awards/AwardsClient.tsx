@@ -40,6 +40,7 @@ const emptyForm = {
   category: "",
   year: String(new Date().getFullYear()),
   status: "watching" as AwardStatus,
+  submission_deadline: "",
   ceremony_at: "",
   owner: "",
   notes: "",
@@ -54,6 +55,7 @@ function toEditForm(item: AwardEntry): EditForm {
     category: item.category,
     year: String(item.year),
     status: item.status,
+    submission_deadline: item.submission_deadline ?? "",
     ceremony_at: item.ceremony_at ?? "",
     owner: item.owner,
     notes: item.notes,
@@ -132,8 +134,8 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
       awards: withYear
         .filter((item) => item.year === year)
         .sort((a, b) => {
-          const aDate = a.ceremony_at ?? "";
-          const bDate = b.ceremony_at ?? "";
+          const aDate = a.submission_deadline || a.ceremony_at || "";
+          const bDate = b.submission_deadline || b.ceremony_at || "";
           if (aDate && bDate) return aDate.localeCompare(bDate);
           if (aDate) return -1;
           if (bDate) return 1;
@@ -159,6 +161,7 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
       body: JSON.stringify({
         ...form,
         year: Number(form.year) || new Date().getFullYear(),
+        submission_deadline: form.submission_deadline || null,
         ceremony_at: form.ceremony_at || null,
       }),
     });
@@ -197,6 +200,7 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
             category: edit.category,
             year: Number(edit.year) || new Date().getFullYear(),
             status: edit.status,
+            submission_deadline: edit.submission_deadline || null,
             ceremony_at: edit.ceremony_at || null,
             owner: edit.owner,
             notes: edit.notes,
@@ -231,7 +235,7 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
     return STATUSES.find((s) => s.id === status)?.label ?? status;
   }
 
-  function formatCeremony(value: string | null) {
+  function formatDate(value: string | null | undefined) {
     if (!value) return "—";
     try {
       return format(parseISO(value), "d MMM yyyy");
@@ -354,6 +358,9 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
                     {[item.organisation, item.category, String(item.year)]
                       .filter(Boolean)
                       .join(" · ")}
+                    {item.submission_deadline
+                      ? ` · submit by ${format(parseISO(item.submission_deadline), "d MMM yyyy")}`
+                      : ""}
                     {item.ceremony_at
                       ? ` · ceremony ${format(parseISO(item.ceremony_at), "d MMM yyyy")}`
                       : ""}
@@ -497,7 +504,15 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
                                         .filter(Boolean)
                                         .join(" · ")}
                                     </p>
-                                    {item.ceremony_at ? (
+                                    {item.submission_deadline ? (
+                                      <p className="mt-1 text-[11px] text-muted">
+                                        Submit by{" "}
+                                        {format(
+                                          parseISO(item.submission_deadline),
+                                          "d MMM"
+                                        )}
+                                      </p>
+                                    ) : item.ceremony_at ? (
                                       <p className="mt-1 text-[11px] text-muted">
                                         Ceremony{" "}
                                         {format(
@@ -591,8 +606,12 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
                 <dd>{selected.year || "—"}</dd>
               </div>
               <div>
+                <dt className="label !mb-0.5">Submission deadline</dt>
+                <dd>{formatDate(selected.submission_deadline)}</dd>
+              </div>
+              <div>
                 <dt className="label !mb-0.5">Ceremony date</dt>
-                <dd>{formatCeremony(selected.ceremony_at)}</dd>
+                <dd>{formatDate(selected.ceremony_at)}</dd>
               </div>
               <div>
                 <dt className="label !mb-0.5">Owner</dt>
@@ -712,6 +731,17 @@ function AwardFields({
             onChange({ ...form, status: status as AwardStatus })
           }
           options={STATUSES.map((s) => ({ value: s.id, label: s.label }))}
+        />
+      </div>
+      <div>
+        <label className="label">Submission deadline</label>
+        <input
+          className="field"
+          type="date"
+          value={form.submission_deadline}
+          onChange={(e) =>
+            onChange({ ...form, submission_deadline: e.target.value })
+          }
         />
       </div>
       <div>

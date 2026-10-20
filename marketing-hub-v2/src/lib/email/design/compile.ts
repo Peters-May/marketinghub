@@ -203,14 +203,32 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
 
 function renderSection(section: EmailSection, design: EmailDesign): string {
   const background = section.background || design.styles.contentBackground;
-  const cells = section.columns
+  const valign =
+    section.verticalAlign === "middle"
+      ? "middle"
+      : section.verticalAlign === "bottom"
+        ? "bottom"
+        : "top";
+  // Reverse DOM order + dir=rtl keeps desktop LTR while stacking right-first on mobile.
+  const reverse = section.mobileStack === "reverse";
+  const ordered = reverse ? [...section.columns].reverse() : section.columns;
+  const cells = ordered
     .map((col, index) => {
-      const gap = index === 0 ? 0 : section.columnGap;
+      const padLeft = reverse
+        ? index === ordered.length - 1
+          ? 0
+          : section.columnGap
+        : index === 0
+          ? 0
+          : section.columnGap;
       const inner = col.blocks.map((block) => renderBlock(block, design)).join("");
-      return `<td class="em-stack" valign="top" width="${col.width}%" style="width:${col.width}%;padding-left:${gap}px;vertical-align:top;">${inner}</td>`;
+      return `<td class="em-stack" valign="${valign}" width="${col.width}%" style="width:${col.width}%;padding-left:${padLeft}px;vertical-align:${valign};${
+        reverse ? "direction:ltr;" : ""
+      }">${inner}</td>`;
     })
     .join("");
-  return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></td></tr>`;
+  const rowAttr = reverse ? ' dir="rtl"' : "";
+  return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr${rowAttr}>${cells}</tr></table></td></tr>`;
 }
 
 export function compileEmailDesign(design: EmailDesign): string {
@@ -227,7 +245,7 @@ export function compileEmailDesign(design: EmailDesign): string {
   body { margin:0; padding:0; }
   @media only screen and (max-width: 620px) {
     .em-container { width:100% !important; }
-    .em-stack { display:block !important; width:100% !important; max-width:100% !important; padding-left:0 !important; }
+    .em-stack { display:block !important; width:100% !important; max-width:100% !important; padding-left:0 !important; direction:ltr !important; }
   }
 </style>
 </head>

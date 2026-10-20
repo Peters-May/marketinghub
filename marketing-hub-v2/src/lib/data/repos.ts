@@ -1593,6 +1593,7 @@ function awardFromEvent(event: EventItem): AwardEntry {
     category: "",
     year,
     status: "watching",
+    submission_deadline: null,
     ceremony_at: event.starts_at ? event.starts_at.slice(0, 10) : null,
     owner: "",
     event_id: event.id,
@@ -1622,8 +1623,10 @@ export async function listAwards() {
   await ensureAwardsFromEvents();
   const store = await readStore();
   return [...(store.awards ?? [])].sort((a, b) => {
-    const da = a.ceremony_at || `${a.year}-12-31`;
-    const db = b.ceremony_at || `${b.year}-12-31`;
+    const da =
+      a.submission_deadline || a.ceremony_at || `${a.year}-12-31`;
+    const db =
+      b.submission_deadline || b.ceremony_at || `${b.year}-12-31`;
     return da.localeCompare(db);
   });
 }
@@ -2761,6 +2764,7 @@ function normalizeEmailCampaign(
     design: normalizeEmailDesign(c.design),
     template_id: c.template_id ?? null,
     audience_id: c.audience_id ?? null,
+    exclude_audience_id: c.exclude_audience_id ?? null,
     list_ids: Array.isArray(c.list_ids) ? c.list_ids : [],
     recipient_ids: Array.isArray(c.recipient_ids) ? c.recipient_ids : [],
     brief: c.brief ?? "",
@@ -3190,6 +3194,7 @@ export async function bumpEmailCampaignStat(
  */
 export async function resolveEmailRecipients(opts: {
   audienceId?: string | null;
+  excludeAudienceId?: string | null;
   listIds?: string[];
   recipientIds?: string[];
   excludeUnsubscribed?: boolean;
@@ -3229,6 +3234,27 @@ export async function resolveEmailRecipients(opts: {
     if (list) for (const cid of list.contact_ids ?? []) idSet.add(cid);
   }
 
+  const excludeEmails = new Set<string>();
+  if (opts.excludeAudienceId) {
+    const excludeAudience = (store.email_audiences ?? []).find(
+      (a) => a.id === opts.excludeAudienceId
+    );
+    if (excludeAudience) {
+      const excludeIds = new Set<string>([
+        ...(excludeAudience.contact_ids ?? []),
+      ]);
+      for (const listId of excludeAudience.list_ids ?? []) {
+        const list = lists.find((l) => l.id === listId);
+        if (list) for (const cid of list.contact_ids ?? []) excludeIds.add(cid);
+      }
+      for (const id of excludeIds) {
+        const contact = contacts.find((row) => row.id === id);
+        const email = (contact?.email ?? "").trim().toLowerCase();
+        if (email) excludeEmails.add(email);
+      }
+    }
+  }
+
   const out: Contact[] = [];
   for (const id of idSet) {
     const c = contacts.find((x) => x.id === id);
@@ -3237,6 +3263,7 @@ export async function resolveEmailRecipients(opts: {
     if (!email || !email.includes("@")) continue;
     if (c.marketing_consent !== true) continue;
     if (excludeUnsubscribed && suppressions.has(email)) continue;
+    if (excludeEmails.has(email)) continue;
     if (
       audienceTopic &&
       normalizeTopicOptOuts(c.email_topic_opt_outs).includes(audienceTopic)

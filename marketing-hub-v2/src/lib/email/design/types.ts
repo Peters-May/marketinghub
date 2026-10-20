@@ -129,6 +129,10 @@ export type EmailColumn = {
   blocks: EmailBlock[];
 };
 
+export type SectionVerticalAlign = "top" | "middle" | "bottom";
+/** How columns stack on narrow viewports. */
+export type SectionMobileStack = "default" | "reverse";
+
 export type EmailSection = {
   id: string;
   background: string;
@@ -137,6 +141,8 @@ export type EmailSection = {
   paddingBottom: number;
   paddingLeft: number;
   columnGap: number;
+  verticalAlign: SectionVerticalAlign;
+  mobileStack: SectionMobileStack;
   columns: EmailColumn[];
 };
 
@@ -151,6 +157,8 @@ export type SectionPreset =
   | "2"
   | "3"
   | "4"
+  | "third-left"
+  | "third-right"
   | "image-left"
   | "image-right";
 

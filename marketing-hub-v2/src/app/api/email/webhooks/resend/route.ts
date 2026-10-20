@@ -4,6 +4,8 @@ import { jsonError, jsonOk } from "@/lib/api";
 import {
   addEmailSuppression,
   appendEmailEvent,
+  bumpEmailCampaignStat,
+  findEmailSuppression,
   listContacts,
   updateContact,
 } from "@/lib/data/repos";
@@ -82,12 +84,20 @@ export async function POST(request: NextRequest) {
         contacts.find(
           (c) => c.email.trim().toLowerCase() === email.toLowerCase()
         ) ?? null;
+      const alreadySuppressed = await findEmailSuppression(email);
       await addEmailSuppression({
         email,
         reason: kind === "complained" ? "complaint" : "bounce",
         contact_id: contact?.id ?? null,
         campaign_id: campaignId,
       });
+      if (!alreadySuppressed) {
+        await bumpEmailCampaignStat(
+          campaignId,
+          kind === "complained" ? "complained" : "bounced",
+          1
+        );
+      }
       if (contact && kind === "complained") {
         await updateContact(contact.id, { marketing_consent: false });
       }

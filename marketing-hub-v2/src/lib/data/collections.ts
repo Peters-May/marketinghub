@@ -538,6 +538,10 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
       f("category"),
       f("year", { type: "number" }),
       f("status", { type: "select", options: AWARD_STATUS }),
+      f("submission_deadline", {
+        type: "date",
+        label: "Submission deadline",
+      }),
       f("ceremony_at", { type: "date", label: "Ceremony" }),
       ownerField(),
       f("event_id", { label: "Event id" }),

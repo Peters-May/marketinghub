@@ -22,6 +22,7 @@ export function campaignCloneInput(
     design: existing.design,
     template_id: existing.template_id,
     audience_id: existing.audience_id,
+    exclude_audience_id: existing.exclude_audience_id,
     list_ids: existing.list_ids,
     recipient_ids: existing.recipient_ids,
     brief: existing.brief,

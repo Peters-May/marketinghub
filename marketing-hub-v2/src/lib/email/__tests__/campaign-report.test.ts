@@ -17,6 +17,7 @@ function campaign(patch: Partial<EmailCampaign> = {}): EmailCampaign {
     design: null,
     template_id: null,
     audience_id: null,
+    exclude_audience_id: null,
     list_ids: [],
     recipient_ids: [],
     brief: "",
@@ -129,6 +130,40 @@ describe("campaign report", () => {
     expect(report.suppressions.unsubscribe).toBe(2);
     expect(report.links).toEqual([]);
     expect(report.days).toEqual([]);
+    expect(report.unsubscribedPeople).toEqual([]);
+    expect(report.bouncedPeople).toEqual([]);
+  });
+
+  it("lists who unsubscribed and who bounced", () => {
+    const report = buildCampaignReport({
+      campaign: campaign({ adj_open_rate: null, adj_click_rate: null }),
+      events: [
+        event({ id: "u1", kind: "unsubscribed", email: "lea@example.com" }),
+        event({ id: "b1", kind: "bounced", email: "bad@example.com" }),
+      ],
+      contacts: [
+        { email: "lea@example.com", name: "Lea" },
+        { email: "bad@example.com", name: "Bad address" },
+      ],
+      suppressions: [
+        {
+          campaign_id: "ecamp_test",
+          reason: "unsubscribe",
+          email: "lea@example.com",
+        },
+        {
+          campaign_id: "ecamp_test",
+          reason: "bounce",
+          email: "bad@example.com",
+        },
+      ],
+    });
+    expect(report.unsubscribedPeople).toEqual([
+      { name: "Lea", email: "lea@example.com", reason: "unsubscribe" },
+    ]);
+    expect(report.bouncedPeople).toEqual([
+      { name: "Bad address", email: "bad@example.com", reason: "bounce" },
+    ]);
   });
 
   it("names the mail client from the user agent", () => {

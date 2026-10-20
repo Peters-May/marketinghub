@@ -1295,6 +1295,9 @@ export function createSeedStore(): HubStore {
         category: "Logistics / maritime",
         year: 2026,
         status: "entering",
+        submission_deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14)
+          .toISOString()
+          .slice(0, 10),
         ceremony_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30)
           .toISOString()
           .slice(0, 10),
@@ -1311,6 +1314,9 @@ export function createSeedStore(): HubStore {
         category: "Freight forwarder",
         year: 2026,
         status: "watching",
+        submission_deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 60)
+          .toISOString()
+          .slice(0, 10),
         ceremony_at: new Date(Date.now() + 1000 * 60 * 60 * 24 * 90)
           .toISOString()
           .slice(0, 10),
@@ -1327,6 +1333,7 @@ export function createSeedStore(): HubStore {
         category: "Support services",
         year: 2026,
         status: "submitted",
+        submission_deadline: null,
         ceremony_at: null,
         owner: "Sophie",
         event_id: null,

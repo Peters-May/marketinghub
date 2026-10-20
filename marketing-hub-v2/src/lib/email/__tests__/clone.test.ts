@@ -24,6 +24,7 @@ describe("campaignCloneInput", () => {
       design: null,
       template_id: "etpl_sailing_schedules",
       audience_id: "eaud_51d6c3cc",
+      exclude_audience_id: null,
       list_ids: ["ml_385a4ffb"],
       recipient_ids: ["ctc_1"],
       brief: "Weekly",

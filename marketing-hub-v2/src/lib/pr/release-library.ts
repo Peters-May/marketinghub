@@ -107,6 +107,7 @@ function email(input: {
     design: null,
     template_id: null,
     audience_id: null,
+    exclude_audience_id: null,
     list_ids: [],
     recipient_ids: [],
     brief: "",

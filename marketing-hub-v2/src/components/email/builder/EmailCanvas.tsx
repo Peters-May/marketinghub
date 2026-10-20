@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Copy, GripVertical, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Columns2,
+  Copy,
+  GripVertical,
+  Minus,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import type { EmailBlock, EmailDesign } from "@/lib/email/design";
 import { emailImageSrc, sanitizeHtmlBlock, sanitizeRichEmailHtml } from "@/lib/email/design/compile";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
@@ -57,6 +66,9 @@ export function EmailCanvas({
   onMoveSection,
   onDuplicateSection,
   onDeleteSection,
+  onAddSectionAfter,
+  onAddColumn,
+  onRemoveColumn,
 }: {
   design: EmailDesign;
   selection: CanvasSelection;
@@ -78,6 +90,9 @@ export function EmailCanvas({
   onMoveSection: (sectionId: string, direction: -1 | 1) => void;
   onDuplicateSection: (sectionId: string) => void;
   onDeleteSection: (sectionId: string) => void;
+  onAddSectionAfter: (sectionId: string) => void;
+  onAddColumn: (sectionId: string) => void;
+  onRemoveColumn: (sectionId: string, columnId: string) => void;
 }) {
   const frameWidth = device === "mobile" ? 375 : design.styles.contentWidth;
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -98,8 +113,15 @@ export function EmailCanvas({
         {design.sections.map((section, sectionIndex) => {
           const sectionSelected =
             selection.type === "section" && selection.sectionId === section.id;
+          const blockInSection =
+            selection.type === "block" && selection.sectionId === section.id;
+          const showHandles = !readOnly && (sectionSelected || blockInSection);
+          const columnOrder =
+            device === "mobile" && section.mobileStack === "reverse"
+              ? [...section.columns].reverse()
+              : section.columns;
           return (
-            <div key={section.id}>
+            <div key={section.id} className="relative">
               <SectionDrop
                 disabled={readOnly}
                 onDrop={(payload) =>
@@ -109,7 +131,8 @@ export function EmailCanvas({
               <section
                 className={cn(
                   "relative",
-                  sectionSelected && "outline outline-2 outline-[#007DC5]"
+                  (sectionSelected || blockInSection) &&
+                    "outline outline-2 outline-[#007DC5]"
                 )}
                 style={{
                   background: section.background || design.styles.contentBackground,
@@ -120,30 +143,74 @@ export function EmailCanvas({
                   onSelect({ type: "section", sectionId: section.id });
                 }}
               >
-                {!readOnly && sectionSelected ? (
-                  <div className="mb-2 flex justify-end gap-1">
-                    <IconButton label="Move section up" onClick={() => onMoveSection(section.id, -1)} disabled={sectionIndex === 0}>
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </IconButton>
-                    <IconButton label="Move section down" onClick={() => onMoveSection(section.id, 1)} disabled={sectionIndex === design.sections.length - 1}>
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </IconButton>
-                    <IconButton label="Duplicate section" onClick={() => onDuplicateSection(section.id)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </IconButton>
-                    <IconButton label="Delete section" onClick={() => onDeleteSection(section.id)} disabled={design.sections.length <= 1}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </IconButton>
-                  </div>
+                {showHandles ? (
+                  <>
+                    <div className="absolute -top-3 left-1/2 z-10 flex -translate-x-1/2 gap-1">
+                      <RoundHandle
+                        label="Add new column"
+                        disabled={section.columns.length >= 4}
+                        onClick={() => onAddColumn(section.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </RoundHandle>
+                    </div>
+                    <div className="absolute -right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1">
+                      <RoundHandle
+                        label="Add section below"
+                        onClick={() => onAddSectionAfter(section.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </RoundHandle>
+                      <RoundHandle
+                        label="Delete section"
+                        disabled={design.sections.length <= 1}
+                        onClick={() => onDeleteSection(section.id)}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </RoundHandle>
+                    </div>
+                    <div className="mb-2 flex flex-wrap justify-end gap-1">
+                      <IconButton label="Move section up" onClick={() => onMoveSection(section.id, -1)} disabled={sectionIndex === 0}>
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </IconButton>
+                      <IconButton label="Move section down" onClick={() => onMoveSection(section.id, 1)} disabled={sectionIndex === design.sections.length - 1}>
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </IconButton>
+                      <IconButton label="Duplicate section" onClick={() => onDuplicateSection(section.id)}>
+                        <Copy className="h-3.5 w-3.5" />
+                      </IconButton>
+                      <IconButton
+                        label="Add column"
+                        disabled={section.columns.length >= 4}
+                        onClick={() => onAddColumn(section.id)}
+                      >
+                        <Columns2 className="h-3.5 w-3.5" />
+                      </IconButton>
+                    </div>
+                  </>
                 ) : null}
-                <div className={cn("flex", device === "mobile" ? "flex-col gap-4" : "flex-row")} style={{ gap: device === "mobile" ? undefined : section.columnGap }}>
-                  {section.columns.map((column) => {
+                <div
+                  className={cn(
+                    "flex",
+                    device === "mobile" ? "flex-col gap-4" : "flex-row items-stretch"
+                  )}
+                  style={{
+                    gap: device === "mobile" ? undefined : section.columnGap,
+                    alignItems:
+                      section.verticalAlign === "middle"
+                        ? "center"
+                        : section.verticalAlign === "bottom"
+                          ? "flex-end"
+                          : "flex-start",
+                  }}
+                >
+                  {columnOrder.map((column) => {
                     const columnDropKey = `${section.id}:${column.id}:end`;
                     return (
                     <div
                       key={column.id}
                       className={cn(
-                        "min-h-[48px] min-w-0 flex-1 rounded transition-colors",
+                        "relative min-h-[72px] min-w-0 flex-1 rounded transition-colors",
                         dropTarget === columnDropKey && "bg-[#007DC5]/10 ring-1 ring-[#007DC5]"
                       )}
                       style={{ width: device === "mobile" ? "100%" : `${column.width}%` }}
@@ -171,9 +238,22 @@ export function EmailCanvas({
                         });
                       }}
                     >
+                      {showHandles && section.columns.length > 1 ? (
+                        <button
+                          type="button"
+                          title="Remove column"
+                          className="absolute -right-1 -top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-white text-muted shadow-sm hover:text-red-700"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRemoveColumn(section.id, column.id);
+                          }}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                      ) : null}
                       {column.blocks.length === 0 ? (
-                        <div className="rounded border border-dashed border-border px-2 py-6 text-center text-xs text-muted">
-                          Drop a block here
+                        <div className="flex min-h-[88px] items-center justify-center rounded border border-dashed border-slate-300 bg-slate-50/80 px-2 py-6 text-center text-xs text-muted">
+                          Drop content here
                         </div>
                       ) : null}
                       {column.blocks.map((block, blockIndex) => {
@@ -356,6 +436,34 @@ function IconButton({
   );
 }
 
+function RoundHandle({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#007DC5] bg-white text-[#007DC5] shadow-sm hover:bg-[#007DC5] hover:text-white disabled:opacity-40"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function BlockView({
   block,
   design,
@@ -469,10 +577,17 @@ function BlockView({
           />
         ) : (
           <div
-            className="inline-block rounded border border-dashed border-border px-3 py-8 text-center text-sm text-muted"
+            className="inline-flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-8 text-center text-sm text-muted"
             style={{ width: frame, maxWidth: "100%" }}
           >
-            {block.type === "logo" ? block.alt || "Peters & May" : "Upload an image"}
+            <span className="font-medium text-brand">
+              {block.type === "logo" ? "Add logo" : "Add image"}
+            </span>
+            <span className="text-xs">
+              {block.type === "logo"
+                ? "Choose a logo in the inspector on the right"
+                : "Upload or pick from the gallery in the inspector"}
+            </span>
           </div>
         )}
       </div>

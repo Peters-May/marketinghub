@@ -33,6 +33,11 @@ export type CampaignContactStat = {
   opens: number;
   clicks: number;
 };
+export type CampaignSuppressionPerson = {
+  name: string;
+  email: string;
+  reason: "unsubscribe" | "bounce" | "complaint";
+};
 export type CampaignDayStat = { label: string; opens: number; clicks: number };
 export type CampaignClientStat = { label: string; count: number };
 
@@ -52,12 +57,19 @@ export type CampaignReport = {
   links: CampaignLinkStat[];
   contacts: CampaignContactStat[];
   suppressions: { unsubscribe: number; bounce: number; complaint: number };
+  /** Named people who unsubscribed from this campaign. */
+  unsubscribedPeople: CampaignSuppressionPerson[];
+  /** Named people who bounced on this campaign. */
+  bouncedPeople: CampaignSuppressionPerson[];
   days: CampaignDayStat[];
   clients: CampaignClientStat[];
 };
 
 type ContactName = { email: string; name: string };
-type SuppressionRow = Pick<EmailSuppression, "campaign_id" | "reason">;
+type SuppressionRow = Pick<
+  EmailSuppression,
+  "campaign_id" | "reason" | "email"
+>;
 
 export function buildCampaignReport(input: {
   campaign: EmailCampaign;
@@ -110,12 +122,67 @@ export function buildCampaignReport(input: {
   }
 
   const suppressions = { unsubscribe: 0, bounce: 0, complaint: 0 };
+  const unsubscribedPeople: CampaignSuppressionPerson[] = [];
+  const bouncedPeople: CampaignSuppressionPerson[] = [];
+  const seenUnsub = new Set<string>();
+  const seenBounce = new Set<string>();
+
   for (const row of input.suppressions) {
     if (row.campaign_id !== input.campaign.id) continue;
     if (row.reason === "unsubscribe") suppressions.unsubscribe += 1;
     if (row.reason === "bounce") suppressions.bounce += 1;
     if (row.reason === "complaint") suppressions.complaint += 1;
+    const email = row.email.trim().toLowerCase();
+    if (!email) continue;
+    const person = {
+      email,
+      name: names.get(email) || email,
+      reason: row.reason,
+    } as CampaignSuppressionPerson;
+    if (row.reason === "unsubscribe" && !seenUnsub.has(email)) {
+      seenUnsub.add(email);
+      unsubscribedPeople.push(person);
+    }
+    if (row.reason === "bounce" && !seenBounce.has(email)) {
+      seenBounce.add(email);
+      bouncedPeople.push(person);
+    }
   }
+
+  for (const event of events) {
+    const email = event.email.trim().toLowerCase();
+    if (!email || email === "unknown") continue;
+    if (event.kind === "unsubscribed" && !seenUnsub.has(email)) {
+      seenUnsub.add(email);
+      unsubscribedPeople.push({
+        email,
+        name: names.get(email) || email,
+        reason: "unsubscribe",
+      });
+      if (
+        !input.suppressions.some(
+          (row) =>
+            row.campaign_id === input.campaign.id &&
+            row.reason === "unsubscribe" &&
+            row.email.trim().toLowerCase() === email
+        )
+      ) {
+        suppressions.unsubscribe += 1;
+      }
+    }
+    if (event.kind === "bounced" && !seenBounce.has(email)) {
+      seenBounce.add(email);
+      bouncedPeople.push({
+        email,
+        name: names.get(email) || email,
+        reason: "bounce",
+      });
+    }
+  }
+
+  unsubscribedPeople.sort((a, b) => a.name.localeCompare(b.name));
+  bouncedPeople.sort((a, b) => a.name.localeCompare(b.name));
+
   if (
     !tracked &&
     suppressions.unsubscribe === 0 &&
@@ -123,6 +190,17 @@ export function buildCampaignReport(input: {
   ) {
     suppressions.unsubscribe = stats.unsubscribed;
   }
+
+  const bouncedCount = Math.max(
+    stats.bounced,
+    suppressions.bounce,
+    bouncedPeople.length
+  );
+  const unsubscribedCount = Math.max(
+    stats.unsubscribed,
+    suppressions.unsubscribe,
+    unsubscribedPeople.length
+  );
 
   return {
     sentTo: stats.recipients,
@@ -136,8 +214,8 @@ export function buildCampaignReport(input: {
     tracked,
     delivery: {
       sent: stats.recipients,
-      bounced: stats.bounced,
-      unsubscribed: stats.unsubscribed,
+      bounced: bouncedCount,
+      unsubscribed: unsubscribedCount,
       complained: stats.complained,
     },
     links: [...linkCounts.values()].sort((a, b) => b.count - a.count || a.url.localeCompare(b.url)),
@@ -154,6 +232,8 @@ export function buildCampaignReport(input: {
       )
       .slice(0, 8),
     suppressions,
+    unsubscribedPeople,
+    bouncedPeople,
     days: engagementSeries(events),
     clients: CLIENTS.filter((label) => (clientCounts.get(label) ?? 0) > 0).map(
       (label) => ({ label, count: clientCounts.get(label) ?? 0 })

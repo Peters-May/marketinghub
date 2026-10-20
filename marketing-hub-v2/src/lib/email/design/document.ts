@@ -242,6 +242,10 @@ export function columnWidths(preset: SectionPreset): number[] {
       return [34, 33, 33];
     case "4":
       return [25, 25, 25, 25];
+    case "third-left":
+      return [33, 67];
+    case "third-right":
+      return [67, 33];
     case "image-left":
       return [40, 60];
     case "image-right":
@@ -249,6 +253,14 @@ export function columnWidths(preset: SectionPreset): number[] {
     default:
       return [100];
   }
+}
+
+function equalWidths(count: number): number[] {
+  if (count <= 1) return [100];
+  const base = Math.floor(100 / count);
+  const widths = Array.from({ length: count }, () => base);
+  widths[widths.length - 1] += 100 - base * count;
+  return widths;
 }
 
 function column(width: number, blocks: EmailBlock[] = []): EmailColumn {
@@ -280,6 +292,8 @@ export function createSection(
     paddingBottom: partial?.paddingBottom ?? 16,
     paddingLeft: partial?.paddingLeft ?? 24,
     columnGap: partial?.columnGap ?? 16,
+    verticalAlign: partial?.verticalAlign ?? "top",
+    mobileStack: partial?.mobileStack ?? "default",
     columns: partial?.columns ?? columns,
   };
 }
@@ -478,6 +492,12 @@ export function normalizeEmailDesign(raw: unknown): EmailDesign | null {
       });
     }
     if (columns.length === 0) continue;
+    const verticalAlign =
+      sectionRaw.verticalAlign === "middle" || sectionRaw.verticalAlign === "bottom"
+        ? sectionRaw.verticalAlign
+        : "top";
+    const mobileStack =
+      sectionRaw.mobileStack === "reverse" ? "reverse" : "default";
     sections.push({
       id: str(sectionRaw.id, uid("sec")),
       background: str(sectionRaw.background, ""),
@@ -486,6 +506,8 @@ export function normalizeEmailDesign(raw: unknown): EmailDesign | null {
       paddingBottom: num(sectionRaw.paddingBottom, 16, 0, 120),
       paddingLeft: num(sectionRaw.paddingLeft, 24, 0, 120),
       columnGap: num(sectionRaw.columnGap, 16, 0, 80),
+      verticalAlign,
+      mobileStack,
       columns,
     });
   }
@@ -789,4 +811,85 @@ export function moveSection(
   const [item] = sections.splice(index, 1);
   sections.splice(target, 0, item);
   return { ...design, sections };
+}
+
+export function addColumn(
+  design: EmailDesign,
+  sectionId: string
+): EmailDesign {
+  return {
+    ...design,
+    sections: design.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+      if (section.columns.length >= 4) return section;
+      const columns = [...section.columns, column(1)];
+      const widths = equalWidths(columns.length);
+      return {
+        ...section,
+        columns: columns.map((col, index) => ({
+          ...col,
+          width: widths[index] ?? col.width,
+        })),
+      };
+    }),
+  };
+}
+
+export function removeColumn(
+  design: EmailDesign,
+  sectionId: string,
+  columnId: string
+): EmailDesign {
+  return {
+    ...design,
+    sections: design.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+      if (section.columns.length <= 1) return section;
+      const removed = section.columns.find((col) => col.id === columnId);
+      const remaining = section.columns.filter((col) => col.id !== columnId);
+      if (!removed || remaining.length === 0) return section;
+      const widths = equalWidths(remaining.length);
+      const merged = remaining.map((col, index) => ({
+        ...col,
+        width: widths[index] ?? col.width,
+        blocks:
+          index === remaining.length - 1
+            ? [...col.blocks, ...removed.blocks]
+            : col.blocks,
+      }));
+      return { ...section, columns: merged };
+    }),
+  };
+}
+
+/** Set explicit column widths (percent). Values are normalised to sum 100. */
+export function setColumnWidths(
+  design: EmailDesign,
+  sectionId: string,
+  widths: number[]
+): EmailDesign {
+  return {
+    ...design,
+    sections: design.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+      if (widths.length !== section.columns.length) return section;
+      const cleaned = widths.map((width) =>
+        Math.max(5, Math.min(95, Math.round(width)))
+      );
+      const total = cleaned.reduce((sum, width) => sum + width, 0) || 100;
+      const normalised = cleaned.map((width) =>
+        Math.max(5, Math.round((width / total) * 100))
+      );
+      const drift =
+        100 - normalised.reduce((sum, width) => sum + width, 0);
+      normalised[normalised.length - 1] += drift;
+      return {
+        ...section,
+        columns: section.columns.map((col, index) => ({
+          ...col,
+          width: normalised[index] ?? col.width,
+        })),
+      };
+    }),
+  };
 }

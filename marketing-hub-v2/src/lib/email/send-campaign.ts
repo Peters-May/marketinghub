@@ -92,6 +92,7 @@ export async function sendEmailCampaign(
 
   const recipients = await resolveEmailRecipients({
     audienceId: campaign.audience_id,
+    excludeAudienceId: campaign.exclude_audience_id,
     listIds: campaign.list_ids,
     recipientIds: campaign.recipient_ids,
   });

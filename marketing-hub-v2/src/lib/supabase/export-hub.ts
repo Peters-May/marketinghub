@@ -222,6 +222,7 @@ export async function exportStoreToSupabase(
       category: a.category ?? "",
       year: a.year,
       status: a.status,
+      submission_deadline: dateOnly(a.submission_deadline),
       ceremony_at: dateOnly(a.ceremony_at),
       owner: a.owner ?? "",
       event_id: a.event_id,

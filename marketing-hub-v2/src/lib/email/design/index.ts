@@ -12,7 +12,9 @@ export type {
   HtmlBlock,
   ImageBlock,
   LogoBlock,
+  SectionMobileStack,
   SectionPreset,
+  SectionVerticalAlign,
   SocialBlock,
   SocialNetwork,
   StarterLayout,
@@ -20,6 +22,7 @@ export type {
 } from "@/lib/email/design/types";
 
 export {
+  addColumn,
   blankDesign,
   createBlock,
   createSection,
@@ -42,8 +45,10 @@ export {
   announcementDesign,
   normalizeEmailDesign,
   removeBlock,
+  removeColumn,
   removeSection,
   resolveEmailDesign,
+  setColumnWidths,
   setSectionPreset,
   starterDesign,
   updateBlock,

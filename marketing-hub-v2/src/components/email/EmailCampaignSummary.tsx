@@ -180,9 +180,11 @@ export function EmailCampaignSummary({
           )}
         </section>
 
-        <section className="rounded-xl border border-border bg-white px-4 py-4">
-          <h2 className="text-sm font-medium text-brand">Unsubscribes</h2>
-          <div className="mt-3 grid grid-cols-3 gap-3">
+        <section className="rounded-xl border border-border bg-white">
+          <h2 className="border-b border-border px-4 py-3 text-sm font-medium text-brand">
+            Unsubscribed
+          </h2>
+          <div className="grid grid-cols-3 gap-3 border-b border-border px-4 py-3">
             <Figure
               label="Unsubscribe"
               value={String(report.suppressions.unsubscribe)}
@@ -195,8 +197,49 @@ export function EmailCampaignSummary({
               plain
             />
           </div>
+          {report.unsubscribedPeople.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted">
+              No one has unsubscribed from this email yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {report.unsubscribedPeople.map((person) => (
+                <li key={person.email} className="px-4 py-3">
+                  <div className="text-sm font-medium text-brand">{person.name}</div>
+                  {person.name !== person.email ? (
+                    <div className="text-xs text-muted">{person.email}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
+
+      <section className="rounded-xl border border-border bg-white">
+        <h2 className="border-b border-border px-4 py-3 text-sm font-medium text-brand">
+          Bounced
+        </h2>
+        {report.bouncedPeople.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted">
+            No bounces recorded for this email.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {report.bouncedPeople.map((person) => (
+              <li key={person.email} className="px-4 py-3">
+                <div className="text-sm font-medium text-brand">{person.name}</div>
+                {person.name !== person.email ? (
+                  <div className="text-xs text-muted">{person.email}</div>
+                ) : null}
+                <div className="mt-1 text-xs text-muted">
+                  Removed from future marketing sends
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-xl border border-border bg-white px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">

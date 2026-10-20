@@ -30,11 +30,13 @@ const MERGE_TOKENS = [
 
 const PRESETS: { id: SectionPreset; label: string }[] = [
   { id: "1", label: "1 column" },
-  { id: "2", label: "2 columns" },
+  { id: "2", label: "2 columns (50/50)" },
+  { id: "third-left", label: "1/3 : 2/3" },
+  { id: "third-right", label: "2/3 : 1/3" },
   { id: "3", label: "3 columns" },
   { id: "4", label: "4 columns" },
-  { id: "image-left", label: "40/60 columns" },
-  { id: "image-right", label: "60/40 columns" },
+  { id: "image-left", label: "Image left (40/60)" },
+  { id: "image-right", label: "Image right (60/40)" },
 ];
 
 const SOCIAL_LABEL: Record<SocialNetwork, string> = {
@@ -169,6 +171,7 @@ export function EmailInspector({
   onDesign,
   onSection,
   onPreset,
+  onColumnWidths,
   onBlock,
   onInsertMerge,
   onRewrite,
@@ -183,6 +186,7 @@ export function EmailInspector({
   onDesign: (patch: Partial<EmailDesign["styles"]>) => void;
   onSection: (patch: Partial<EmailSection>) => void;
   onPreset: (preset: SectionPreset) => void;
+  onColumnWidths?: (widths: number[]) => void;
   onBlock: (patch: Partial<EmailBlock>) => void;
   onInsertMerge?: (token: string) => void;
   onRewrite?: (tone: "clearer" | "shorter" | "more_formal") => void;
@@ -228,9 +232,9 @@ export function EmailInspector({
           />
         ) : section ? (
           <>
-            <p className="text-sm font-medium text-brand">Section</p>
+            <p className="text-sm font-medium text-brand">Edit section</p>
             <label className="block text-sm">
-              <span className="text-muted">Columns</span>
+              <span className="text-muted">Layout (desktop)</span>
               <select
                 className="input mt-1 w-full"
                 value={presetFor(section)}
@@ -241,6 +245,58 @@ export function EmailInspector({
                     {item.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            {onColumnWidths && section.columns.length > 1 ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted">Column widths (%)</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {section.columns.map((column, index) => (
+                    <NumberField
+                      key={column.id}
+                      label={`Col ${index + 1}`}
+                      value={column.width}
+                      min={5}
+                      max={95}
+                      onChange={(width) => {
+                        const widths = section.columns.map((col) => col.width);
+                        widths[index] = width;
+                        onColumnWidths(widths);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <label className="block text-sm">
+              <span className="text-muted">Column alignment</span>
+              <select
+                className="input mt-1 w-full"
+                value={section.verticalAlign ?? "top"}
+                onChange={(event) =>
+                  onSection({
+                    verticalAlign: event.target.value as EmailSection["verticalAlign"],
+                  })
+                }
+              >
+                <option value="top">Top</option>
+                <option value="middle">Middle</option>
+                <option value="bottom">Bottom</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-muted">Mobile stacking</span>
+              <select
+                className="input mt-1 w-full"
+                value={section.mobileStack ?? "default"}
+                onChange={(event) =>
+                  onSection({
+                    mobileStack: event.target.value as EmailSection["mobileStack"],
+                  })
+                }
+              >
+                <option value="default">Left on top of right</option>
+                <option value="reverse">Right on top of left</option>
               </select>
             </label>
             <ColourField
@@ -364,6 +420,8 @@ function presetFor(section: EmailSection): SectionPreset {
   const widths = section.columns.map((column) => column.width).join(",");
   if (widths === "40,60") return "image-left";
   if (widths === "60,40") return "image-right";
+  if (widths === "33,67") return "third-left";
+  if (widths === "67,33") return "third-right";
   if (section.columns.length === 4) return "4";
   if (section.columns.length === 3) return "3";
   if (section.columns.length === 2) return "2";

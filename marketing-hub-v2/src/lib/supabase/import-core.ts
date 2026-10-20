@@ -815,13 +815,24 @@ function mapAwardRows(rows: Record<string, unknown>[], now: string): AwardEntry[
   return rows.map((row) => {
     const r = row as Record<string, unknown>;
     const id = asString(r.id) || uid("awd");
-    const deadline = asIsoDate(
-      pickField(r, [/^deadline$/i, /^ceremony/i, /^date$/i])
+    const submissionDeadline = asIsoDate(
+      pickField(r, [
+        /^submission_?deadline$/i,
+        /^entry_?deadline$/i,
+        /^submit_?(by|deadline|date)$/i,
+        /^deadline$/i,
+      ])
+    );
+    const ceremony = asIsoDate(
+      pickField(r, [/^ceremony/i, /^ceremony_?at$/i, /^ceremony_?date$/i])
     );
     const yearRaw = asString(pickField(r, [/^year$/i]));
+    const yearAnchor = submissionDeadline || ceremony;
     const year =
       Number.parseInt(yearRaw, 10) ||
-      (deadline ? new Date(deadline).getFullYear() : new Date().getFullYear());
+      (yearAnchor
+        ? new Date(yearAnchor).getFullYear()
+        : new Date().getFullYear());
     const category = asJoined(
       pickField(r, [
         /^suggested_?categories$/i,
@@ -859,7 +870,8 @@ function mapAwardRows(rows: Record<string, unknown>[], now: string): AwardEntry[
       category,
       year: Number.isFinite(year) ? year : new Date().getFullYear(),
       status: mapAwardStatus(asString(pickField(r, [/^status$/i]))),
-      ceremony_at: deadline?.slice(0, 10) ?? null,
+      submission_deadline: submissionDeadline?.slice(0, 10) ?? null,
+      ceremony_at: ceremony?.slice(0, 10) ?? null,
       owner: asString(
         pickField(r, [/^internal_?owner$/i, /^owner$/i, /^assignee$/i])
       ),

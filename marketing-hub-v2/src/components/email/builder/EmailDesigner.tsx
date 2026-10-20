@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Monitor, Redo2, Smartphone, Sparkles, Undo2 } from "lucide-react";
 import type { EmailBlock, EmailDesign, EmailSection } from "@/lib/email/design";
 import {
+  addColumn,
   compileEmailDesign,
   createBlock,
   createSection,
@@ -17,8 +18,10 @@ import {
   moveBlockBy,
   moveSection,
   removeBlock,
+  removeColumn,
   removeSection,
   resolveEmailDesign,
+  setColumnWidths,
   setSectionPreset,
   updateBlock,
   updateSection,
@@ -121,6 +124,7 @@ export function EmailDesigner({
   initialFromName = "Peters & May Marketing",
   initialFromEmail = "hello@petersandmay.com",
   initialAudienceId = "",
+  initialExcludeAudienceId = "",
   initialBrief = "",
   canDelete = false,
 }: {
@@ -137,6 +141,7 @@ export function EmailDesigner({
   initialFromName?: string;
   initialFromEmail?: string;
   initialAudienceId?: string;
+  initialExcludeAudienceId?: string;
   initialBrief?: string;
   /** Unsent drafts only. Scheduled and sent emails cannot be deleted. */
   canDelete?: boolean;
@@ -152,6 +157,9 @@ export function EmailDesigner({
   const [fromName, setFromName] = useState(initialFromName);
   const [fromEmail, setFromEmail] = useState(initialFromEmail);
   const [audienceId, setAudienceId] = useState(initialAudienceId);
+  const [excludeAudienceId, setExcludeAudienceId] = useState(
+    initialExcludeAudienceId
+  );
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [previewMenu, setPreviewMenu] = useState(false);
@@ -179,6 +187,34 @@ export function EmailDesigner({
   const saveRef = useRef<() => Promise<boolean>>(async () => false);
   const dirtyRef = useRef(false);
 
+  const [audienceOptions, setAudienceOptions] = useState(audiences);
+
+  useEffect(() => {
+    setAudienceOptions(audiences);
+  }, [audiences]);
+
+  useEffect(() => {
+    if (kind !== "campaign" || readOnly) return;
+    let cancelled = false;
+    void fetch("/api/email/audiences")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.audiences)) return;
+        setAudienceOptions(
+          data.audiences.map((row: { id: string; name: string }) => ({
+            id: row.id,
+            name: row.name,
+          }))
+        );
+      })
+      .catch(() => {
+        /* keep SSR list */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, readOnly]);
+
   useEffect(() => {
     if (kind !== "campaign" || !audienceId) {
       setRecipientCount(null);
@@ -188,7 +224,11 @@ export function EmailDesigner({
     void fetch("/api/email/campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "preview_recipients", audience_id: audienceId }),
+      body: JSON.stringify({
+        action: "preview_recipients",
+        audience_id: audienceId,
+        exclude_audience_id: excludeAudienceId || null,
+      }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -202,7 +242,7 @@ export function EmailDesigner({
     return () => {
       cancelled = true;
     };
-  }, [audienceId, kind]);
+  }, [audienceId, excludeAudienceId, kind]);
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true;
@@ -402,6 +442,7 @@ export function EmailDesigner({
             from_name: fromName,
             from_email: fromEmail,
             audience_id: audienceId || null,
+            exclude_audience_id: excludeAudienceId || null,
             design,
             html_body,
           };
@@ -436,7 +477,18 @@ export function EmailDesigner({
       void saveRef.current();
     }, 2500);
     return () => window.clearTimeout(timer);
-  }, [dirty, history.design, name, subject, previewText, fromName, fromEmail, audienceId, readOnly]);
+  }, [
+    dirty,
+    history.design,
+    name,
+    subject,
+    previewText,
+    fromName,
+    fromEmail,
+    audienceId,
+    excludeAudienceId,
+    readOnly,
+  ]);
 
   async function runAi(action: string, body: Record<string, unknown>) {
     setAiBusy(true);
@@ -519,7 +571,7 @@ export function EmailDesigner({
 
   async function draftFromBriefAi() {
     const audienceLabel =
-      audiences.find((audience) => audience.id === audienceId)?.name ?? "";
+      audienceOptions.find((audience) => audience.id === audienceId)?.name ?? "";
     const data = await runAi("draft_from_brief", {
       brief: brief || subject || name,
       audience: audienceLabel,
@@ -723,7 +775,10 @@ export function EmailDesigner({
   const compiled = compileEmailDesign(history.design);
   const frameWidth = device === "mobile" ? 375 : history.design.styles.contentWidth;
   const audienceName =
-    audiences.find((audience) => audience.id === audienceId)?.name ?? "";
+    audienceOptions.find((audience) => audience.id === audienceId)?.name ?? "";
+  const excludeAudienceName =
+    audienceOptions.find((audience) => audience.id === excludeAudienceId)
+      ?.name ?? "";
   const plannedIso =
     whenMode === "later" ? londonDateTimeToIso(scheduleDate, scheduleTime) : null;
 
@@ -903,10 +958,13 @@ export function EmailDesigner({
                     className="input w-full"
                     value={audienceId}
                     disabled={readOnly}
-                    onChange={(event) => setAudienceId(event.target.value)}
+                    onChange={(event) => {
+                      setAudienceId(event.target.value);
+                      markDirty();
+                    }}
                   >
                     <option value="">Choose an audience</option>
-                    {audiences.map((audience) => (
+                    {audienceOptions.map((audience) => (
                       <option key={audience.id} value={audience.id}>
                         {audience.name}
                       </option>
@@ -919,6 +977,32 @@ export function EmailDesigner({
                   ) : null}
                 </span>
               </label>
+              <label className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
+                <span className="text-muted">Don&apos;t send to</span>
+                <span>
+                  <select
+                    className="input w-full"
+                    value={excludeAudienceId}
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      setExcludeAudienceId(event.target.value);
+                      markDirty();
+                    }}
+                  >
+                    <option value="">None</option>
+                    {audienceOptions
+                      .filter((audience) => audience.id !== audienceId)
+                      .map((audience) => (
+                        <option key={audience.id} value={audience.id}>
+                          {audience.name}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-muted">
+                    Optional. Contacts in this list are removed from the send.
+                  </span>
+                </span>
+              </label>
               <div className="grid items-center gap-2 sm:grid-cols-[7rem_1fr]">
                 <span className="text-muted">From</span>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -927,14 +1011,20 @@ export function EmailDesigner({
                     aria-label="From name"
                     value={fromName}
                     disabled={readOnly}
-                    onChange={(event) => setFromName(event.target.value)}
+                    onChange={(event) => {
+                      setFromName(event.target.value);
+                      markDirty();
+                    }}
                   />
                   <input
                     className="input w-full"
                     aria-label="From email"
                     value={fromEmail}
                     disabled={readOnly}
-                    onChange={(event) => setFromEmail(event.target.value)}
+                    onChange={(event) => {
+                      setFromEmail(event.target.value);
+                      markDirty();
+                    }}
                   />
                 </div>
               </div>
@@ -1119,6 +1209,26 @@ export function EmailDesigner({
                 commitDesign(removeSection(history.designRef.current, sectionId));
                 setSelection({ type: "email" });
               }}
+              onAddSectionAfter={(sectionId) => {
+                const index = history.designRef.current.sections.findIndex(
+                  (item) => item.id === sectionId
+                );
+                const before =
+                  index >= 0
+                    ? history.designRef.current.sections[index + 1]?.id ?? null
+                    : null;
+                addSection("1", before);
+              }}
+              onAddColumn={(sectionId) => {
+                commitDesign(addColumn(history.designRef.current, sectionId));
+                setSelection({ type: "section", sectionId });
+              }}
+              onRemoveColumn={(sectionId, columnId) => {
+                commitDesign(
+                  removeColumn(history.designRef.current, sectionId, columnId)
+                );
+                setSelection({ type: "section", sectionId });
+              }}
             />
           )}
         </div>
@@ -1146,6 +1256,12 @@ export function EmailDesigner({
           onPreset={(preset) => {
             if (!section) return;
             commitDesign(setSectionPreset(history.designRef.current, section.id, preset));
+          }}
+          onColumnWidths={(widths) => {
+            if (!section) return;
+            commitDesign(
+              setColumnWidths(history.designRef.current, section.id, widths)
+            );
           }}
           onBlock={(patch: Partial<EmailBlock>) => {
             if (!block) return;
@@ -1198,6 +1314,10 @@ export function EmailDesigner({
                 <div>
                   <dt className="text-muted">Send to</dt>
                   <dd>{audienceName || "Choose an audience"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Don&apos;t send to</dt>
+                  <dd>{excludeAudienceName || "None"}</dd>
                 </div>
                 <div>
                   <dt className="text-muted">Total recipients</dt>

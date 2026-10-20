@@ -41,12 +41,38 @@ export type EventItem = PlannerFields & {
   division: string;
   notes: string;
   link_url: string;
+  /** Company gate — Peters & May are attending (not individual RSVP). */
+  pm_attending: boolean;
+  /** Attendance checklist — hotel/rooms sorted. */
+  accommodation_arranged: boolean;
+  /** Attendance checklist — stand/travel/hotel costs gathered. */
+  costs_collected: boolean;
+  /** Attendance checklist — stand / visitor passes / exhibitor entry. */
+  stand_or_passes_booked: boolean;
+  /** Attendance checklist — PR assets / press kit for the show. */
+  press_kit_ready: boolean;
   /** Admin checklist — company social post for this event is done. */
   social_media_post_completed: boolean;
   /** Admin checklist — personal/staff social graphics for this event are done. */
   personal_social_media_graphics_completed: boolean;
   /** Admin checklist — PR outreach to event organisers has been made. */
   reached_out_for_pr_to_organisers: boolean;
+  /** Hotel booking — property name. */
+  hotel_name: string;
+  /** Hotel booking — confirmation / booking reference. */
+  hotel_confirmation: string;
+  /** Hotel booking — check-in date (yyyy-MM-dd or empty). */
+  hotel_check_in: string;
+  /** Hotel booking — check-out date (yyyy-MM-dd or empty). */
+  hotel_check_out: string;
+  /** Hotel booking — guests / room summary. */
+  hotel_guests: string;
+  /** Hotel booking — cost estimate as free text (e.g. £2,400). */
+  hotel_cost_estimate: string;
+  /** Hotel booking — confirmation or booking URL. */
+  hotel_booking_url: string;
+  /** Hotel booking — extras (second hotel, late checkout, etc.). */
+  hotel_notes: string;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -576,6 +602,8 @@ export type AwardEntry = {
   category: string;
   year: number;
   status: AwardStatus;
+  /** When the entry must be submitted. */
+  submission_deadline: string | null;
   ceremony_at: string | null;
   owner: string;
   event_id: string | null;
@@ -662,6 +690,58 @@ export type WebEnquiry = {
   raw_payload: Record<string, unknown>;
   received_at: string;
   updated_at: string;
+};
+
+/** Website chatbot (WordPress plugin → Hub). */
+export type ChatSessionStatus = "ai" | "waiting" | "human" | "closed";
+export type ChatMessageRole = "visitor" | "assistant" | "staff" | "system";
+
+export type ChatSettings = {
+  id: string;
+  deployed: boolean;
+  greeting: string;
+  guidance: string;
+  office_hours_note: string;
+  notify_email: string;
+  updated_at: string;
+};
+
+export type ChatKbDocument = {
+  id: string;
+  title: string;
+  source_url: string;
+  body: string;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatSession = {
+  id: string;
+  status: ChatSessionStatus;
+  page_url: string;
+  page_title: string;
+  referrer: string;
+  utm: Record<string, unknown>;
+  visitor_name: string;
+  visitor_email: string;
+  visitor_company: string;
+  enquiry_id: string | null;
+  assignee_email: string;
+  is_test: boolean;
+  last_message_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  session_id: string;
+  role: ChatMessageRole;
+  body: string;
+  sources: Array<{ title: string; source_url?: string }>;
+  created_at: string;
 };
 
 /** WhatsApp → Hub MCP enquiries (own table; shown with web in one tab). */
@@ -882,6 +962,8 @@ export type EmailCampaign = {
   design: EmailDesign | null;
   template_id: string | null;
   audience_id: string | null;
+  /** Audience whose recipients are removed from the send list. */
+  exclude_audience_id: string | null;
   list_ids: string[];
   recipient_ids: string[];
   /** Planning notes / brief. */

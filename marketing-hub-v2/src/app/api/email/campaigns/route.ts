@@ -122,6 +122,7 @@ export async function POST(request: NextRequest) {
       design: existing.design,
       template_id: existing.template_id,
       audience_id: existing.audience_id,
+      exclude_audience_id: existing.exclude_audience_id,
       list_ids: existing.list_ids,
       recipient_ids: [],
       brief: existing.brief,
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
     const count = (
       await resolveEmailRecipients({
         audienceId: body.audience_id,
+        excludeAudienceId: body.exclude_audience_id,
         listIds: body.list_ids,
         recipientIds: body.recipient_ids,
       })
@@ -164,6 +166,7 @@ export async function POST(request: NextRequest) {
     design: body.design ?? null,
     template_id: body.template_id || null,
     audience_id: body.audience_id || null,
+    exclude_audience_id: body.exclude_audience_id || null,
     list_ids: Array.isArray(body.list_ids) ? body.list_ids : [],
     recipient_ids: Array.isArray(body.recipient_ids) ? body.recipient_ids : [],
     brief: body.brief ?? "",

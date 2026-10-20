@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
   Code2,
   Columns2,
@@ -9,6 +10,7 @@ import {
   Minus,
   MoveVertical,
   PanelBottom,
+  Search,
   Share2,
   Square,
   Type,
@@ -32,6 +34,8 @@ const BLOCKS: { type: EmailBlockType; label: string; icon: typeof Type }[] = [
 const LAYOUTS: { preset: SectionPreset; label: string }[] = [
   { preset: "1", label: "1 column" },
   { preset: "2", label: "2 columns" },
+  { preset: "third-left", label: "1/3 : 2/3" },
+  { preset: "third-right", label: "2/3 : 1/3" },
   { preset: "3", label: "3 columns" },
   { preset: "4", label: "4 columns" },
   { preset: "image-left", label: "Image left (40/60)" },
@@ -51,6 +55,26 @@ export function EmailPalette({
   onAddBlock: (type: EmailBlockType) => void;
   onAddSection: (preset: SectionPreset) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const blocks = useMemo(
+    () =>
+      BLOCKS.filter(
+        (item) => !q || item.label.toLowerCase().includes(q) || item.type.includes(q)
+      ),
+    [q]
+  );
+  const layouts = useMemo(
+    () =>
+      LAYOUTS.filter(
+        (item) =>
+          !q ||
+          item.label.toLowerCase().includes(q) ||
+          item.preset.includes(q)
+      ),
+    [q]
+  );
+
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-white">
       <div className="grid grid-cols-2 border-b border-border">
@@ -69,9 +93,20 @@ export function EmailPalette({
           </button>
         ))}
       </div>
+      <div className="border-b border-border p-2">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+          <input
+            className="input w-full py-1.5 pl-7 text-sm"
+            placeholder="Search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
         {tab === "content"
-          ? BLOCKS.map((item) => {
+          ? blocks.map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -85,12 +120,13 @@ export function EmailPalette({
                     writeDrag(event, { source: "block", blockType: item.type })
                   }
                 >
+                  <GripDots />
                   <Icon className="h-4 w-4 text-muted" />
                   {item.label}
                 </button>
               );
             })
-          : LAYOUTS.map((item) => (
+          : layouts.map((item) => (
               <button
                 key={item.preset}
                 type="button"
@@ -102,11 +138,29 @@ export function EmailPalette({
                   writeDrag(event, { source: "section", preset: item.preset })
                 }
               >
+                <GripDots />
                 <Columns2 className="h-4 w-4 text-muted" />
                 {item.label}
               </button>
             ))}
+        {(tab === "content" ? blocks : layouts).length === 0 ? (
+          <p className="px-2 py-4 text-xs text-muted">No matches.</p>
+        ) : null}
       </div>
     </aside>
+  );
+}
+
+function GripDots() {
+  return (
+    <span
+      className="grid h-3 w-3 grid-cols-2 gap-0.5 opacity-40"
+      aria-hidden
+    >
+      <span className="h-1 w-1 rounded-full bg-slate-500" />
+      <span className="h-1 w-1 rounded-full bg-slate-500" />
+      <span className="h-1 w-1 rounded-full bg-slate-500" />
+      <span className="h-1 w-1 rounded-full bg-slate-500" />
+    </span>
   );
 }
