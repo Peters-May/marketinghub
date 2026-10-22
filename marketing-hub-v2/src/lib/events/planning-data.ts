@@ -21,7 +21,11 @@ export async function listEventOffices(eventId: string) {
   return (store.event_offices ?? []).filter((row) => row.event_id === eventId);
 }
 
-export async function addEventOffice(eventId: string, office: string, notes = "") {
+export async function addEventOffice(
+  eventId: string,
+  office: string,
+  notes = ""
+): Promise<EventOffice | null> {
   const label = office.trim();
   if (!label) return null;
   let row: EventOffice | null = null;
@@ -71,7 +75,7 @@ export async function addEventBooking(input: {
   cost_estimate: string;
   url: string;
   notes: string;
-}) {
+}): Promise<EventBooking | null> {
   let row: EventBooking | null = null;
   await updateStore((store) => {
     if (!store.event_bookings) store.event_bookings = [];
@@ -109,7 +113,7 @@ export async function updateAttendanceTravel(input: {
   role?: string;
   arrival_on?: string | null;
   departure_on?: string | null;
-}) {
+}): Promise<EventAttendance | null> {
   let row: EventAttendance | null = null;
   await updateStore((store) => {
     const idx = store.event_attendance.findIndex(
@@ -140,7 +144,10 @@ export async function listProfileOffices() {
   return store.profile_offices ?? [];
 }
 
-export async function setProfileOffice(userId: string, office: string) {
+export async function setProfileOffice(
+  userId: string,
+  office: string
+): Promise<ProfileOffice | null> {
   let row: ProfileOffice | null = null;
   await updateStore((store) => {
     if (!store.profile_offices) store.profile_offices = [];
@@ -175,7 +182,7 @@ export async function saveAttendanceRequest(input: {
   office: string;
   status: AttendanceRequestStatus;
   notes: string;
-}) {
+}): Promise<EventAttendanceRequest | null> {
   let row: EventAttendanceRequest | null = null;
   await updateStore((store) => {
     if (!store.event_attendance_requests) store.event_attendance_requests = [];
@@ -220,7 +227,7 @@ export async function addAttendanceRequestLine(input: {
   role: string;
   status: AttendanceRequestLineStatus;
   notes: string;
-}) {
+}): Promise<EventAttendanceRequestLine | null> {
   let row: EventAttendanceRequestLine | null = null;
   await updateStore((store) => {
     if (!store.event_attendance_request_lines) {

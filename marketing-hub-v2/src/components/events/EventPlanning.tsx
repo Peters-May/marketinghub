@@ -21,7 +21,7 @@ export function EventPlanning({
   const [bookings, setBookings] = useState<EventBooking[]>([]);
   const [attendance, setAttendance] = useState<EventAttendance[]>([]);
   const [profileOffice, setProfileOffice] = useState("");
-  const [office, setOffice] = useState(HUB_OFFICE_LABELS[0]);
+  const [office, setOffice] = useState<string>(HUB_OFFICE_LABELS[0]);
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<EventBooking["kind"]>("hotel");
   const [reference, setReference] = useState("");
