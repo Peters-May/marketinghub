@@ -20,6 +20,10 @@ import {
   shouldPushSocialToPlanable,
 } from "@/lib/planable/sync";
 import type { ContentItem } from "@/lib/types";
+import {
+  loadOwnerDirectory,
+  matchOwnerUserId,
+} from "@/lib/identity/owners";
 
 async function maybePushPlanable(
   item: ContentItem
@@ -128,6 +132,12 @@ export async function POST(request: NextRequest) {
     if (patch.channel !== undefined) {
       patch.channel = normalizeChannels(patch.channel);
     }
+    if (typeof patch.owner === "string" && patch.owner_user_id === undefined) {
+      patch.owner_user_id = matchOwnerUserId(
+        patch.owner,
+        await loadOwnerDirectory()
+      );
+    }
     // User edits mark hub as source before push
     if (isSocialContentItem({ ...existing, ...patch } as ContentItem)) {
       patch.sync_source = "hub";
@@ -178,6 +188,10 @@ export async function POST(request: NextRequest) {
     channel: normalizeChannels(body.channel ?? body.channels ?? ["LinkedIn"]),
     content_type: body.content_type ?? "Social",
     owner: body.owner ?? "",
+    owner_user_id: matchOwnerUserId(
+      body.owner ?? "",
+      await loadOwnerDirectory()
+    ),
     due_date: body.due_date ?? null,
     deadline_date: body.deadline_date ?? null,
     status: body.status ?? "idea",

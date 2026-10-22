@@ -1,4 +1,5 @@
 import { ReportsClient } from "@/components/reports/ReportsClient";
+import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { getFieldOptionsMap } from "@/lib/data/data-admin";
 import {
   listAdvertisements,
@@ -9,6 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
+  await requireAdminPage();
   const [
     reports,
     paidCampaigns,

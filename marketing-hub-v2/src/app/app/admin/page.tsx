@@ -1,5 +1,6 @@
 import { Database, KeyRound, Users, Wallet } from "lucide-react";
 import { ModuleCard, PageHeader } from "@/components/ui/PageHeader";
+import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { getAiKeyPublicStatus } from "@/lib/ai/ai-key";
 
 function aiKeyDescription(days: number | null, expiresOn: string): string {
@@ -12,6 +13,7 @@ function aiKeyDescription(days: number | null, expiresOn: string): string {
 }
 
 export default async function AdminPage() {
+  await requireAdminPage();
   const ai = await getAiKeyPublicStatus();
 
   return (
