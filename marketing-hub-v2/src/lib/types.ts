@@ -113,8 +113,6 @@ export type ContentItem = {
   /** Kind of piece from source post_type (Social, Editorial, Newsletter, …) */
   content_type: string;
   owner: string;
-  /** Set only when the owner text matches one hub user name exactly. */
-  owner_user_id?: string | null;
   /** Publish / go-live date (calendar) */
   due_date: string | null;
   /** Optional internal deadline (Content table date_due) */
@@ -637,8 +635,6 @@ export type HubTask = {
   category: string;
   status: TaskStatus;
   owner: string;
-  /** Set only when the owner text matches one hub user name exactly. */
-  owner_user_id?: string | null;
   /** Linked record kind — empty/null when unlinked. */
   related_type: TaskRelatedType | "";
   related_id: string | null;
@@ -1102,20 +1098,10 @@ export type NewsroomSettings = {
   updated_at: string;
 };
 
-/** Content pieces linked to an event. Tasks keep using related_type/related_id. */
-export type EventContentLink = {
-  id: string;
-  event_id: string;
-  content_id: string;
-  created_at: string;
-};
-
 export type HubStore = {
   events: EventItem[];
   /** Per-user RSVP rows for Events. */
   event_attendance: EventAttendance[];
-  /** Event ↔ content joins. Not a second content table. */
-  event_content: EventContentLink[];
   content: ContentItem[];
   sponsorships: Sponsorship[];
   contacts: Contact[];

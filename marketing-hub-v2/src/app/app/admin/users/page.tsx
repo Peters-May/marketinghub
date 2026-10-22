@@ -1,5 +1,4 @@
 import { UsersAdminClient } from "@/components/admin/UsersAdminClient";
-import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { listHubUsers } from "@/lib/data/repos";
 import {
   hasServiceRoleKey,
@@ -7,7 +6,6 @@ import {
 } from "@/lib/supabase/hub-users";
 
 export default async function AdminUsersPage() {
-  await requireAdminPage();
   if (hasServiceRoleKey()) {
     try {
       const users = await listSupabaseHubUsers();

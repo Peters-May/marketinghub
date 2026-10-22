@@ -10,7 +10,6 @@ import type {
   Contact,
   EventAttendance,
   EventAttendanceStatus,
-  EventContentLink,
   EventItem,
 } from "@/lib/types";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
@@ -51,7 +50,6 @@ import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
-import { EventContentLinks } from "@/components/events/EventContentLinks";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { createPersonContact } from "@/lib/contacts/create-person";
 import {
@@ -899,8 +897,6 @@ export function EventsClient({
   currentUserId,
   currentUserName,
   fieldOptions: fieldOptionsProp,
-  contentOptions = [],
-  eventContentLinks = [],
 }: {
   initialEvents: EventItem[];
   initialAttendance?: EventAttendance[];
@@ -908,8 +904,6 @@ export function EventsClient({
   currentUserName: string | null;
   /** From Field Manager — drives select option order on this page. */
   fieldOptions?: Record<string, FieldOption[]>;
-  contentOptions?: { id: string; title: string }[];
-  eventContentLinks?: EventContentLink[];
 }) {
   const { view } = useHubView();
   const canDelete = view === "admin";
@@ -2017,16 +2011,6 @@ export function EventsClient({
                   relatedType="event"
                   relatedId={selected.id}
                 />
-                <EventContentLinks
-                  eventId={selected.id}
-                  links={eventContentLinks}
-                  events={events.map((event) => ({
-                    id: event.id,
-                    title: event.title,
-                  }))}
-                  content={contentOptions}
-                  canEdit={showAdminChecks}
-                />
 
                 {currentUserId ? (
                   <div
@@ -2273,18 +2257,6 @@ export function EventsClient({
             relatedType="event"
             relatedId={editingId}
           />
-          {editingId ? (
-            <EventContentLinks
-              eventId={editingId}
-              links={eventContentLinks}
-              events={events.map((event) => ({
-                id: event.id,
-                title: event.title,
-              }))}
-              content={contentOptions}
-              canEdit={showAdminChecks}
-            />
-          ) : null}
         </RecordDrawer>
       ) : null}
     </div>

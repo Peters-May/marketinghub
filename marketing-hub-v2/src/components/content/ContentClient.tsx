@@ -10,7 +10,7 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import type { ContentItem, ContentStatus, EventContentLink } from "@/lib/types";
+import type { ContentItem, ContentStatus } from "@/lib/types";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
@@ -63,9 +63,6 @@ import { statusEventColor } from "@/lib/ui/statusTokens";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
-import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
-import { EventContentLinks } from "@/components/events/EventContentLinks";
-import { groupContentItems, type ContentGroupBy } from "@/lib/content/group";
 
 const COLUMNS: { id: ContentStatus; label: string }[] = [
   { id: "idea", label: "Idea" },
@@ -113,8 +110,6 @@ function emptyFormForScope(scope: "all" | "content" | "social") {
     planable_url: "",
     asset_url: "",
     status: "idea" as ContentStatus,
-    owner: "",
-    theme_id: "",
   };
 }
 
@@ -132,8 +127,6 @@ type EditForm = {
   planable_url: string;
   asset_url: string;
   status: ContentStatus;
-  owner: string;
-  theme_id: string;
 };
 
 function toEditForm(item: ContentItem): EditForm {
@@ -151,8 +144,6 @@ function toEditForm(item: ContentItem): EditForm {
     planable_url: item.planable_url,
     asset_url: item.asset_url,
     status: item.status === "approved" ? "review" : item.status,
-    owner: item.owner ?? "",
-    theme_id: item.theme_id ?? "",
   };
 }
 
@@ -239,9 +230,6 @@ export function ContentClient({
   hideHeader = false,
   scope = "all",
   fieldOptions: fieldOptionsProp,
-  themes = [],
-  events = [],
-  eventContentLinks = [],
 }: {
   initial: ContentItem[];
   hideHeader?: boolean;
@@ -249,9 +237,6 @@ export function ContentClient({
   scope?: "all" | "content" | "social";
   /** From Field Manager — drives select option order on this page. */
   fieldOptions?: Record<string, FieldOption[]>;
-  themes?: { id: string; title: string }[];
-  events?: { id: string; title: string }[];
-  eventContentLinks?: EventContentLink[];
 }) {
   const fieldOptions = useManagedFieldOptions("content", fieldOptionsProp);
   const contentTypeOptions = optionsForField(
@@ -290,9 +275,6 @@ export function ContentClient({
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [ownerFilter, setOwnerFilter] = useState<string[]>([]);
-  const [themeFilter, setThemeFilter] = useState<string[]>([]);
-  const [groupBy, setGroupBy] = useState<ContentGroupBy>("none");
   const [channelFilter, setChannelFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [datedOnly, setDatedOnly] = useState<"upcoming" | "past" | "all" | "undated">(
@@ -340,30 +322,6 @@ export function ContentClient({
     return orderedFilterValues(contentTypeOptions, present);
   }, [scopedItems, contentTypeOptions]);
 
-  const ownerOptions = useMemo(() => {
-    const names = new Set(
-      scopedItems.map((item) => item.owner.trim()).filter(Boolean)
-    );
-    return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [scopedItems]);
-
-  const themeOptions = useMemo(() => {
-    const known = new Map(themes.map((theme) => [theme.id, theme.title]));
-    for (const item of scopedItems) {
-      if (item.theme_id && !known.has(item.theme_id)) {
-        known.set(item.theme_id, "Campaign");
-      }
-    }
-    return Array.from(known.entries())
-      .map(([id, title]) => ({ id, title }))
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [scopedItems, themes]);
-
-  const themeTitle = useCallback((themeId: string | null) => {
-    if (!themeId) return "No campaign";
-    return themes.find((theme) => theme.id === themeId)?.title || "Campaign";
-  }, [themes]);
-
   const scopedTypeOptions = useMemo(() => {
     const matched = contentTypeOptions.filter((option) => {
       const social = isSocialContentItem({
@@ -386,7 +344,6 @@ export function ContentClient({
           item.title,
           formatChannels(item.channel),
           item.content_type,
-          item.owner,
           plainTextFromHtml(item.notes),
           item.status,
         ])
@@ -412,18 +369,6 @@ export function ContentClient({
       ) {
         return false;
       }
-      if (
-        ownerFilter.length > 0 &&
-        !ownerFilter.includes(item.owner.trim() || "No owner")
-      ) {
-        return false;
-      }
-      if (
-        themeFilter.length > 0 &&
-        !themeFilter.includes(item.theme_id || "none")
-      ) {
-        return false;
-      }
       return true;
     });
   }, [
@@ -432,8 +377,6 @@ export function ContentClient({
     statusFilter,
     channelFilter,
     typeFilter,
-    ownerFilter,
-    themeFilter,
   ]);
 
   /** Lists / Kanban / Timeline — future-focused unless date filter opened up. */
@@ -506,16 +449,13 @@ export function ContentClient({
         const start = i.due_date!.slice(0, 10);
         return {
           id: i.id,
-          title:
-            groupBy === "none"
-              ? i.title
-              : `${groupContentItems([i], groupBy, themeTitle)[0]?.label ?? ""} · ${i.title}`,
+          title: i.title,
           start,
           allDay: true,
           extendedProps: { itemId: i.id },
         };
       }),
-    [calendarItems, groupBy, themeTitle]
+    [calendarItems]
   );
 
   const calendarItemById = useMemo(() => {
@@ -638,8 +578,6 @@ export function ContentClient({
             planable_url: edit.planable_url,
             asset_url: edit.asset_url,
             status: edit.status,
-            owner: edit.owner,
-            theme_id: edit.theme_id || null,
           },
         }),
       });
@@ -820,7 +758,6 @@ export function ContentClient({
         <p className="mt-1 text-xs text-muted">
           {item.content_type ? `${item.content_type} · ` : ""}
           {formatChannels(item.channel)}
-          {item.owner ? ` · ${item.owner}` : ""}
           {item.due_date ? ` · due ${item.due_date}` : ""}
           {item.status === "published" ? " · Locked" : ""}
         </p>
@@ -984,44 +921,6 @@ export function ContentClient({
             options: contentTypes.map((t) => ({ value: t, label: t })),
           },
           {
-            id: "campaign",
-            label: "Campaign",
-            multiple: true,
-            value: themeFilter,
-            onChange: setThemeFilter,
-            allLabel: "All campaigns",
-            options: [
-              { value: "none", label: "No campaign" },
-              ...themeOptions.map((theme) => ({
-                value: theme.id,
-                label: theme.title,
-              })),
-            ],
-          },
-          {
-            id: "owner",
-            label: "Owner",
-            multiple: true,
-            value: ownerFilter,
-            onChange: setOwnerFilter,
-            allLabel: "All owners",
-            options: ownerOptions.map((name) => ({ value: name, label: name })),
-          },
-          {
-            id: "group",
-            label: "Group by",
-            value: groupBy,
-            onChange: (value) => setGroupBy(value as ContentGroupBy),
-            clearValue: "none",
-            options: [
-              { value: "none", label: "No grouping" },
-              { value: "theme", label: "Campaign" },
-              { value: "type", label: "Type" },
-              { value: "status", label: "Status" },
-              { value: "owner", label: "Owner" },
-            ],
-          },
-          {
             id: "channel",
             label: "Channel",
             multiple: true,
@@ -1058,27 +957,6 @@ export function ContentClient({
               className="field"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Owner</label>
-            <ContactOwnerSelect
-              value={form.owner}
-              onChange={(owner) => setForm({ ...form, owner })}
-            />
-          </div>
-          <div>
-            <label className="label">Campaign</label>
-            <SearchSelect
-              className="field"
-              value={form.theme_id}
-              allowEmpty
-              emptyLabel="No campaign"
-              onChange={(theme_id) => setForm({ ...form, theme_id })}
-              options={themeOptions.map((theme) => ({
-                value: theme.id,
-                label: theme.title,
-              }))}
             />
           </div>
           <div>
@@ -1266,26 +1144,14 @@ export function ContentClient({
                       <h2 className="text-sm font-semibold text-brand">{col.label}</h2>
                       <span className="text-xs text-muted">{colItems.length}</span>
                     </div>
-                    <div className="flex flex-col gap-3">
-                      {(groupBy === "none" || groupBy === "status"
-                        ? [{ key: "all", label: "", items: colItems }]
-                        : groupContentItems(colItems, groupBy, themeTitle)
-                      ).map((cluster) => (
-                        <div key={cluster.key} className="flex flex-col gap-2">
-                          {cluster.label ? (
-                            <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                              {cluster.label}
-                            </p>
-                          ) : null}
-                          {cluster.items.map((item) => (
+                    <div className="flex flex-col gap-2">
+                      {colItems.map((item) => (
                         <article
                           key={item.id}
                           className="rounded-xl border border-border bg-sand/60 p-3"
                         >
                           <CardSummary item={item} />
                         </article>
-                          ))}
-                        </div>
                       ))}
                     </div>
                   </div>
@@ -1445,40 +1311,22 @@ export function ContentClient({
           ) : null}
 
           {view === "timeline" ? (
-            (groupBy === "none"
-              ? [{ key: "all", label: "", items: listItems }]
-              : groupContentItems(listItems, groupBy, themeTitle)
-            ).map((group) => {
-              const ids = new Set(group.items.map((item) => item.id));
-              const groupedTimeline = timelineItems.filter((item) =>
-                ids.has(item.id)
-              );
-              return (
-                <div key={group.key} className="mb-6">
-                  {group.label ? (
-                    <h2 className="mb-2 font-display text-lg text-brand">
-                      {group.label}
-                    </h2>
-                  ) : null}
-                  <TimelineChart
-                    items={groupedTimeline}
-                    onSelect={(id) => {
-                      const item = listItems.find((entry) => entry.id === id);
-                      if (item) openEdit(item);
-                    }}
-                    emptyMessage="No dated pieces in this filter. Add due dates, or set When to All dates / Past."
-                    footer={
-                      group.key === "all" && undatedCount > 0 ? (
-                        <p className="mt-4 text-xs text-muted">
-                          {undatedCount} piece(s) have no due date and are hidden here
-                          — switch to Kanban to edit them.
-                        </p>
-                      ) : null
-                    }
-                  />
-                </div>
-              );
-            })
+            <TimelineChart
+              items={timelineItems}
+              onSelect={(id) => {
+                const item = listItems.find((i) => i.id === id);
+                if (item) openEdit(item);
+              }}
+              emptyMessage="No dated pieces in this filter. Add due dates, or set When to All dates / Past."
+              footer={
+                undatedCount > 0 ? (
+                  <p className="mt-4 text-xs text-muted">
+                    {undatedCount} piece(s) have no due date and are hidden here
+                    — switch to Kanban to edit them.
+                  </p>
+                ) : null
+              }
+            />
           ) : null}
       </div>
 
@@ -1568,29 +1416,6 @@ export function ContentClient({
                     className="field"
                     value={edit.title}
                     onChange={(e) => setEdit({ ...edit, title: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Owner</label>
-                  <ContactOwnerSelect
-                    value={edit.owner}
-                    disabled={editLocked}
-                    onChange={(owner) => setEdit({ ...edit, owner })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Campaign</label>
-                  <SearchSelect
-                    className="field"
-                    value={edit.theme_id}
-                    allowEmpty
-                    emptyLabel="No campaign"
-                    disabled={editLocked}
-                    onChange={(theme_id) => setEdit({ ...edit, theme_id })}
-                    options={themeOptions.map((theme) => ({
-                      value: theme.id,
-                      label: theme.title,
-                    }))}
                   />
                 </div>
                 <div>
@@ -1815,18 +1640,6 @@ export function ContentClient({
                   relatedId={editingId}
                 />
               </fieldset>
-              {editingId ? (
-                <EventContentLinks
-                  contentId={editingId}
-                  links={eventContentLinks}
-                  events={events}
-                  content={items.map((item) => ({
-                    id: item.id,
-                    title: item.title,
-                  }))}
-                  canEdit={!editLocked}
-                />
-              ) : null}
         </RecordDrawer>
       ) : null}
     </div>

@@ -39,7 +39,7 @@ export const ALLOWLISTED_SITE_PAGES: SitePageDef[] = [
     title: "Sailing Schedules",
     url: "https://www.petersandmay.com/sailings/",
     keywords:
-      /\b(sailing schedules?|upcoming sailings?|next sailings?)\b|\b(is there|are there|any|do you have)\b.{0,50}\bsailings?\b|\bsailings?\s+(for|to|from|into|out of)\b|\b(next|upcoming|when|schedule|departure|departing|etd)\b.{0,80}\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b|\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b.{0,80}\b(next|upcoming|when|schedule|departure|departing|etd)\b/i,
+      /\b(sailing schedules?|upcoming sailings?)\b|\b(next|upcoming|when|schedule|departure|departing|etd)\b.{0,80}\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b|\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b.{0,80}\b(next|upcoming|when|schedule|departure|departing|etd)\b/i,
   },
 ];
 

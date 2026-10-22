@@ -16,7 +16,6 @@ import {
   HUB_ACCESS_ROLE_ORDER,
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
-import { matchOwnerUserId, loadOwnerDirectory } from "@/lib/identity/owners";
 import { readStore, updateStore } from "@/lib/store/local";
 import { statusForThemeQuarter } from "@/lib/themes/calendar";
 import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
@@ -41,7 +40,6 @@ import type {
   ContentStatus,
   EventAttendance,
   EventAttendanceStatus,
-  EventContentLink,
   EventItem,
   HubAccessRole,
   HubTask,
@@ -259,39 +257,6 @@ export async function deleteEventAttendance(eventId: string, userId: string) {
     s.event_attendance = s.event_attendance.filter(
       (a) => !(a.event_id === eventId && a.user_id === userId)
     );
-  });
-}
-
-export async function listEventContentLinks() {
-  const store = await readStore();
-  return [...(store.event_content ?? [])];
-}
-
-export async function linkEventContent(eventId: string, contentId: string) {
-  let row: EventContentLink | null = null;
-  await updateStore((s) => {
-    if (!s.event_content) s.event_content = [];
-    const existing = s.event_content.find(
-      (link) => link.event_id === eventId && link.content_id === contentId
-    );
-    if (existing) {
-      row = existing;
-      return;
-    }
-    row = {
-      id: uid("ecl"),
-      event_id: eventId,
-      content_id: contentId,
-      created_at: nowIso(),
-    };
-    s.event_content.push(row);
-  });
-  return row;
-}
-
-export async function unlinkEventContent(id: string) {
-  await updateStore((s) => {
-    s.event_content = (s.event_content ?? []).filter((link) => link.id !== id);
   });
 }
 
@@ -1743,7 +1708,6 @@ export async function listTasks(options?: {
     .map((t) => ({
       ...t,
       start_date: t.start_date ?? null,
-      owner_user_id: t.owner_user_id ?? null,
       related_type: t.related_type ?? "",
       related_id: t.related_id ?? null,
     }));
@@ -1781,13 +1745,9 @@ export async function listTasks(options?: {
 export async function createTask(
   input: Omit<HubTask, "id" | "created_at" | "updated_at">
 ) {
-  const ownerUserId =
-    input.owner_user_id ??
-    matchOwnerUserId(input.owner, await loadOwnerDirectory());
   const item: HubTask = {
     ...input,
     start_date: input.start_date || null,
-    owner_user_id: ownerUserId,
     related_type: input.related_type || "",
     related_id: input.related_id || null,
     id: uid("tsk"),
@@ -1804,13 +1764,6 @@ export async function createTask(
 }
 
 export async function updateTask(id: string, patch: Partial<HubTask>) {
-  const nextPatch = { ...patch };
-  if (patch.owner !== undefined && patch.owner_user_id === undefined) {
-    nextPatch.owner_user_id = matchOwnerUserId(
-      patch.owner,
-      await loadOwnerDirectory()
-    );
-  }
   let updated: HubTask | null = null;
   await updateStore((s) => {
     if (!s.tasks) s.tasks = [];
@@ -1818,7 +1771,7 @@ export async function updateTask(id: string, patch: Partial<HubTask>) {
     if (idx === -1) return;
     s.tasks[idx] = {
       ...s.tasks[idx],
-      ...nextPatch,
+      ...patch,
       id,
       updated_at: nowIso(),
     };

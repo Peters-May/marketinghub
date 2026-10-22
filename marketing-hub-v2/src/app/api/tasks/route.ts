@@ -1,63 +1,38 @@
 import { NextRequest } from "next/server";
-import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import {
   createTask,
   deleteTask,
   listTasks,
   updateTask,
 } from "@/lib/data/repos";
-import { ownerMatchesViewer } from "@/lib/identity/owners";
-
-function ownsTask(
-  task: { owner: string; owner_user_id?: string | null },
-  user: { id: string; full_name: string }
-) {
-  return ownerMatchesViewer(task.owner, task.owner_user_id, {
-    id: user.id,
-    fullName: user.full_name,
-  });
-}
 
 export async function GET(request: NextRequest) {
-  const { user, error } = await requireStaff();
-  if (error || !user) return error;
+  const { error } = await requireAdmin();
+  if (error) return error;
   const relatedType = request.nextUrl.searchParams.get("related_type") ?? undefined;
   const relatedId = request.nextUrl.searchParams.get("related_id") ?? undefined;
-  const tasks = await listTasks(
-    relatedType && relatedId ? { relatedType, relatedId } : undefined
-  );
   return jsonOk({
-    tasks:
-      user.role === "admin"
-        ? tasks
-        : tasks.filter((task) => ownsTask(task, user)),
+    tasks: await listTasks(
+      relatedType && relatedId ? { relatedType, relatedId } : undefined
+    ),
   });
 }
 
 export async function POST(request: NextRequest) {
-  const { user, error } = await requireStaff();
-  if (error || !user) return error;
+  const { error } = await requireAdmin();
+  if (error) return error;
   try {
     const body = await request.json();
     const action = body.action as string | undefined;
 
     if (action === "update") {
-      const existing = (await listTasks()).find((task) => task.id === body.id);
-      if (!existing) return jsonError("Not found", 404);
-      if (user.role !== "admin" && !ownsTask(existing, user)) {
-        return jsonError("You can only update your own tasks", 403);
-      }
       const updated = await updateTask(body.id, body.patch ?? {});
       if (!updated) return jsonError("Not found", 404);
       return jsonOk({ item: updated });
     }
 
     if (action === "delete") {
-      const existing = (await listTasks()).find((task) => task.id === body.id);
-      if (!existing) return jsonError("Not found", 404);
-      if (user.role !== "admin" && !ownsTask(existing, user)) {
-        return jsonError("You can only delete your own tasks", 403);
-      }
       await deleteTask(body.id);
       return jsonOk({ ok: true });
     }

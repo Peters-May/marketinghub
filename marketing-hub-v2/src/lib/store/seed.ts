@@ -47,7 +47,6 @@ export function createSeedStore(): HubStore {
       },
     ],
     event_attendance: [],
-    event_content: [],
     content: [
       {
         id: "cnt_seed_1",

@@ -75,9 +75,8 @@ export const STAFF_NAV: NavItem[] = [
   {
     href: "/app/tasks",
     label: "Tasks",
-    description: "Your marketing to-dos, including work linked to events and content",
+    description: "Marketing to-dos — From, Deadline, status (admin only)",
     icon: CheckSquare,
-    member: true,
   },
   {
     href: "/app/partners",

@@ -207,20 +207,16 @@ export function TaskRelatedFields({
 export function TaskRelatedChip({
   related_type,
   related_id,
-  recordTitle,
   className,
 }: {
   related_type?: TaskRelatedType | "" | null;
   related_id?: string | null;
-  recordTitle?: string;
   className?: string;
 }) {
   const type = related_type || "";
   const href = relatedHref(type);
   if (!type || !related_id || !href) return null;
-  const label = recordTitle
-    ? `${relatedTypeLabel(type)} · ${recordTitle}`
-    : relatedTypeLabel(type);
+  const label = relatedTypeLabel(type);
   return (
     <Link
       href={href}

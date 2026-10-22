@@ -1,5 +1,4 @@
 import { ContactsClient } from "@/components/contacts/ContactsClient";
-import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { listContacts } from "@/lib/data/repos";
 
 export default async function ContactsPage({
@@ -7,7 +6,6 @@ export default async function ContactsPage({
 }: {
   searchParams?: { id?: string; view?: string };
 }) {
-  await requireAdminPage();
   return (
     <ContactsClient
       initial={await listContacts()}

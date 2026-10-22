@@ -8,7 +8,7 @@ import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import { ModuleSkeleton } from "@/components/ui/ModuleSkeleton";
 import { useHubView } from "@/lib/hub-view";
 import type { FieldOption } from "@/lib/data/collections";
-import type { ContentItem, EventContentLink } from "@/lib/types";
+import type { ContentItem } from "@/lib/types";
 
 const ContentClient = dynamic(
   () =>
@@ -40,15 +40,9 @@ const PLANABLE_CALENDAR_URL =
 export function ContentSocialHub({
   initialContent,
   fieldOptions,
-  themes = [],
-  events = [],
-  eventContentLinks = [],
 }: {
   initialContent: ContentItem[];
   fieldOptions?: Record<string, FieldOption[]>;
-  themes?: { id: string; title: string }[];
-  events?: { id: string; title: string }[];
-  eventContentLinks?: EventContentLink[];
 }) {
   const { view } = useHubView();
   const isMemberView = view !== "admin";
@@ -103,9 +97,6 @@ export function ContentSocialHub({
         hideHeader
         scope={scope}
         fieldOptions={fieldOptions}
-        themes={themes}
-        events={events}
-        eventContentLinks={eventContentLinks}
       />
     </div>
   );

@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { useHubDataRefresh } from "@/lib/command/refresh";
-import { ownerMatchesViewer } from "@/lib/identity/owner-match";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import {
   TASK_CATEGORIES,
@@ -139,13 +138,9 @@ function isOverdue(item: HubTask) {
 export function TasksClient({
   initial,
   fieldOptions: fieldOptionsProp,
-  viewer,
-  relatedLabels = {},
 }: {
   initial: HubTask[];
   fieldOptions?: Record<string, FieldOption[]>;
-  viewer: { id: string; fullName: string; isAdmin: boolean };
-  relatedLabels?: Record<string, string>;
 }) {
   const fieldOptions = useManagedFieldOptions("tasks", fieldOptionsProp);
   const categoryOptions = optionsForField(
@@ -179,9 +174,6 @@ export function TasksClient({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
-  const [queue, setQueue] = useState<"all" | "mine" | "overdue">(
-    viewer.isAdmin ? "all" : "mine"
-  );
   const [view, setView] = useState<ViewId>("kanban");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
@@ -231,22 +223,9 @@ export function TasksClient({
         return false;
       }
       if (ownerFilter !== "all" && item.owner !== ownerFilter) return false;
-      if (
-        queue === "mine" &&
-        !ownerMatchesViewer(item.owner, item.owner_user_id, viewer)
-      ) {
-        return false;
-      }
-      if (queue === "overdue" && !isOverdue(item)) return false;
-      if (
-        !viewer.isAdmin &&
-        !ownerMatchesViewer(item.owner, item.owner_user_id, viewer)
-      ) {
-        return false;
-      }
       return true;
     });
-  }, [items, search, statusFilter, ownerFilter, queue, viewer]);
+  }, [items, search, statusFilter, ownerFilter]);
 
   const calendarEvents = useMemo(
     () =>
@@ -594,38 +573,6 @@ export function TasksClient({
         ))}
       </div>
 
-      <div
-        className="mb-4 inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white p-1"
-        role="tablist"
-        aria-label="Task queue"
-      >
-        {(
-          [
-            ...(viewer.isAdmin
-              ? [{ id: "all" as const, label: "All tasks" }]
-              : []),
-            { id: "mine" as const, label: "My tasks" },
-            { id: "overdue" as const, label: "Overdue" },
-          ]
-        ).map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={queue === item.id}
-            className={cn(
-              "rounded-xl px-3.5 py-2 text-sm font-medium transition",
-              queue === item.id
-                ? "bg-brand text-white shadow-sm"
-                : "text-muted hover:bg-sand hover:text-foreground"
-            )}
-            onClick={() => setQueue(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       <FilterBar
         search={search}
         onSearchChange={setSearch}
@@ -781,11 +728,6 @@ export function TasksClient({
                   <TaskRelatedChip
                     related_type={item.related_type}
                     related_id={item.related_id}
-                    recordTitle={
-                      item.related_type && item.related_id
-                        ? relatedLabels[`${item.related_type}:${item.related_id}`]
-                        : undefined
-                    }
                   />
                 </div>
                 <p className="mt-1 text-xs text-muted">
@@ -893,13 +835,6 @@ export function TasksClient({
                         <TaskRelatedChip
                           related_type={item.related_type}
                           related_id={item.related_id}
-                          recordTitle={
-                            item.related_type && item.related_id
-                              ? relatedLabels[
-                                  `${item.related_type}:${item.related_id}`
-                                ]
-                              : undefined
-                          }
                         />
                       </div>
                       <p className="mt-1 text-xs text-muted">

@@ -214,7 +214,6 @@ function withDefaults(store: Partial<HubStore>): HubStore {
   const base: HubStore = {
     events: migrateEvents(store.events) ?? seed.events,
     event_attendance: store.event_attendance ?? seed.event_attendance,
-    event_content: store.event_content ?? [],
     content: migrateContent(store.content) ?? seed.content,
     sponsorships:
       migrateSponsorships(store.sponsorships) ?? seed.sponsorships,
