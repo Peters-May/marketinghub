@@ -18,6 +18,7 @@
   var startersShown = false;
   var teamJoined = false;
   var collectState = null;
+  var lastCollectKind = "";
   /** Prevent restarting the guided form after it has just been submitted. */
   var suppressCollectTrigger = false;
   /** Plain-text lines for download on close. */
@@ -186,20 +187,51 @@
     return "";
   }
 
+  function clockNow() {
+    try {
+      return new Intl.DateTimeFormat("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date());
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function initialOf(name) {
+    var n = String(name || "").trim();
+    return n ? n.charAt(0).toUpperCase() : "P";
+  }
+
   function appendBubble(role, body, id, authorName) {
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
+    var text = String(body || "").trim();
+    if (role === "system") {
+      var line = el("div", "pm-chat__system", text);
+      messagesEl.insertBefore(line, typingEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (text) transcriptLines.push("[System] " + text);
+      return line;
+    }
     var wrap = el("div", "pm-chat__msg pm-chat__msg--" + role);
     var label = senderLabel(role, authorName);
-    if (label) {
-      wrap.appendChild(el("div", "pm-chat__sender", label));
-    }
     var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
-    wrap.appendChild(bubble);
+    if (role === "staff") {
+      var avatar = el("span", "pm-chat__avatar", initialOf(authorName));
+      avatar.setAttribute("aria-hidden", "true");
+      var copy = el("div", "pm-chat__staff-copy");
+      if (label) copy.appendChild(el("div", "pm-chat__sender", label));
+      copy.appendChild(bubble);
+      wrap.appendChild(avatar);
+      wrap.appendChild(copy);
+    } else {
+      if (label) wrap.appendChild(el("div", "pm-chat__sender", label));
+      wrap.appendChild(bubble);
+    }
     messagesEl.insertBefore(wrap, typingEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     var who = label || (role === "visitor" ? "You" : role);
-    var text = String(body || "").trim();
     if (text) transcriptLines.push("[" + who + "] " + text);
     return wrap;
   }
@@ -224,8 +256,8 @@
   /** Free-type message box always stays at the bottom (never hide). */
   function ensureComposerVisible() {
     composer.classList.remove("is-hidden");
-    if (footer.parentNode === panel) panel.appendChild(footer);
     if (composer.parentNode === panel) panel.appendChild(composer);
+    if (footer.parentNode === panel) panel.appendChild(footer);
   }
 
   function noteTeamJoined(authorName) {
@@ -235,9 +267,21 @@
     var chips = messagesEl.querySelectorAll(".pm-chat__choices");
     for (var i = 0; i < chips.length; i++) chips[i].parentNode.removeChild(chips[i]);
     var who = (authorName || "").trim() || "A colleague";
-    appendBubble("system", who + " from the team joined");
+    var first = who.split(/\s+/)[0];
+    var when = clockNow();
+    appendBubble(
+      "system",
+      who + " from the team joined" + (when ? " · " + when : "")
+    );
     var title = headerText.querySelector(".pm-chat__title");
-    if (title) title.textContent = who;
+    var sub = headerText.querySelector(".pm-chat__subtitle");
+    if (title) title.textContent = first;
+    if (sub) {
+      sub.textContent =
+        lastCollectKind === "freight"
+          ? "Freight forwarding team"
+          : "Yacht transport team";
+    }
   }
 
   function setTyping(on) {
@@ -414,106 +458,80 @@
   var panel = el("div", "pm-chat__panel");
   var header = el("div", "pm-chat__header");
   if (cfg.logoUrl) {
-    var mark = el("img", "pm-chat__mark");
-    mark.src = cfg.logoUrl;
-    mark.alt = "";
-    header.appendChild(mark);
+    var lockup = el("img", "pm-chat__lockup");
+    lockup.src = cfg.logoUrl;
+    lockup.alt = "";
+    header.appendChild(lockup);
+    header.appendChild(el("span", "pm-chat__header-rule"));
   }
   var headerText = el("div", "pm-chat__header-text");
   headerText.appendChild(el("p", "pm-chat__title", cfg.labels.title));
   headerText.appendChild(el("p", "pm-chat__subtitle", cfg.labels.subtitle));
   header.appendChild(headerText);
   var headerActions = el("div", "pm-chat__header-actions");
-  var minimizeBtn = el("button", "pm-chat__icon-btn", "–");
+  var minimizeBtn = el("button", "pm-chat__icon-btn");
   minimizeBtn.type = "button";
-  minimizeBtn.setAttribute(
-    "aria-label",
-    (cfg.labels && cfg.labels.minimize) || "Minimise chat"
-  );
-  minimizeBtn.title = (cfg.labels && cfg.labels.minimize) || "Minimise";
-  var closeBtn = el("button", "pm-chat__icon-btn", "×");
+  minimizeBtn.setAttribute("aria-label", "Minimise chat");
+  minimizeBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  var closeBtn = el("button", "pm-chat__icon-btn");
   closeBtn.type = "button";
-  closeBtn.setAttribute("aria-label", cfg.labels.close);
-  closeBtn.title = cfg.labels.close || "Close";
+  closeBtn.setAttribute("aria-label", "End chat");
+  closeBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   headerActions.appendChild(minimizeBtn);
   headerActions.appendChild(closeBtn);
   header.appendChild(headerActions);
   panel.appendChild(header);
 
-  var actions = el("div", "pm-chat__actions");
   var speakBtn = el("button", "pm-chat__speak", cfg.labels.speak);
   speakBtn.type = "button";
-  actions.appendChild(speakBtn);
-  panel.appendChild(actions);
 
   var messagesEl = el("div", "pm-chat__messages");
   messagesEl.setAttribute("aria-live", "polite");
-  var typingEl = el(
-    "div",
-    "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing"
-  );
+  var typingEl = el("div", "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing");
   typingEl.setAttribute("aria-label", "Assistant is typing");
-  typingEl.textContent = "…";
+  typingEl.appendChild(el("span"));
+  typingEl.appendChild(el("span"));
+  typingEl.appendChild(el("span"));
   messagesEl.appendChild(typingEl);
   panel.appendChild(messagesEl);
 
   var startersEl = el("div", "pm-chat__starters");
-  panel.appendChild(startersEl);
+  var collectEl = el("div", "pm-chat__card");
 
-  var collectEl = el("div", "pm-chat__collect");
-  panel.appendChild(collectEl);
-
-  var lead = el("div", "pm-chat__lead");
-  var leadBar = el("div", "pm-chat__lead-bar");
-  leadBar.appendChild(el("span", "pm-chat__lead-title", "Your details"));
-  var leadMinBtn = el("button", "pm-chat__lead-toggle", "Minimise");
-  leadMinBtn.type = "button";
-  leadBar.appendChild(leadMinBtn);
-  var leadBody = el("div", "pm-chat__lead-body");
-  var nameInput = el("input", "");
+  var nameInput = el("input", "pm-chat__collect-input");
   nameInput.type = "text";
-  nameInput.placeholder = cfg.labels.name;
-  var emailInput = el("input", "");
+  nameInput.placeholder = "Alex Morgan";
+  var emailInput = el("input", "pm-chat__collect-input");
   emailInput.type = "email";
-  emailInput.placeholder = cfg.labels.email;
-  var companyInput = el("input", "");
+  emailInput.placeholder = "alex@company.com";
+  var companyInput = el("input", "pm-chat__collect-input");
   companyInput.type = "text";
-  companyInput.placeholder = cfg.labels.company;
-  var leadSend = el("button", "", "Send details");
+  companyInput.placeholder = "Company name";
+  var leadSend = el("button", "pm-chat__btn-primary", "Send to the team");
   leadSend.type = "button";
-  function labelledField(labelText, inputEl) {
-    var wrap = el("label", "pm-chat__field");
-    wrap.appendChild(el("span", "pm-chat__field-label", labelText));
-    wrap.appendChild(inputEl);
-    return wrap;
-  }
-  leadBody.appendChild(labelledField(cfg.labels.name || "Name", nameInput));
-  leadBody.appendChild(
-    labelledField(cfg.labels.email || "Business email", emailInput)
-  );
-  leadBody.appendChild(
-    labelledField((cfg.labels.company || "Company") + " (optional)", companyInput)
-  );
-  leadSend.className = "pm-chat__collect-primary";
-  leadSend.textContent = "Send to the team";
-  leadBody.appendChild(leadSend);
-  lead.appendChild(leadBar);
-  lead.appendChild(leadBody);
-  panel.appendChild(lead);
+  var lead = el("div", "pm-chat__card");
 
   var footer = el("div", "pm-chat__footer");
+  footer.appendChild(
+    el("span", "", "Automated answers from our published information")
+  );
   footer.appendChild(speakBtn);
-  panel.appendChild(footer);
 
   var composer = el("div", "pm-chat__composer");
   var input = el("input", "");
   input.type = "text";
-  input.placeholder = cfg.labels.placeholder;
-  var sendBtn = el("button", "", cfg.labels.send);
+  input.placeholder = cfg.labels.placeholder || "Message…";
+  var sendBtn = el("button", "pm-chat__send");
   sendBtn.type = "button";
+  sendBtn.setAttribute("aria-label", "Send");
+  sendBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
   composer.appendChild(input);
   composer.appendChild(sendBtn);
   panel.appendChild(composer);
+  panel.appendChild(footer);
 
   var launcher = el("button", "pm-chat__launcher");
   launcher.type = "button";
@@ -554,17 +572,29 @@
     clearNode(startersEl);
   }
 
+  function placeInThread(node) {
+    if (node.parentNode !== messagesEl) {
+      messagesEl.insertBefore(node, typingEl);
+    }
+  }
+
   function showStarters() {
-    if (startersShown) return;
+    if (startersShown || teamJoined) return;
     startersShown = true;
     clearNode(startersEl);
     startersEl.classList.add("is-on");
 
     function addStarter(title, desc, onClick) {
-      var btn = el("button", "pm-chat__chip pm-chat__starter");
+      var btn = el("button", "pm-chat__starter");
       btn.type = "button";
-      btn.appendChild(el("span", "pm-chat__starter-title", title));
-      btn.appendChild(el("span", "pm-chat__starter-desc", desc));
+      var copy = el("span", "pm-chat__starter-copy");
+      copy.appendChild(el("span", "pm-chat__starter-title", title));
+      copy.appendChild(el("span", "pm-chat__starter-desc", desc));
+      btn.appendChild(copy);
+      btn.insertAdjacentHTML(
+        "beforeend",
+        '<svg class="pm-chat__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
+      );
       btn.addEventListener("click", function () {
         hideStarters();
         onClick();
@@ -572,18 +602,19 @@
       startersEl.appendChild(btn);
     }
 
-    addStarter("Get a quote", "Yacht or freight details, step by step", function () {
+    addStarter("Get a quote", "Yacht transport or freight", function () {
       showQuoteTypeStarters();
     });
-    addStarter("Ask a question", "Published information, offices and sailings", function () {
+    addStarter("Ask a question", "Services, offices, sailing schedules", function () {
       appendBubble("visitor", "Ask a question");
       appendBubble("assistant", "What would you like to know?");
       ensureComposerVisible();
       input.focus();
     });
-    addStarter("Speak to the team", "Leave your details for a colleague", function () {
-      handoff();
+    addStarter("Speak to the team", "A colleague replies here or by email", function () {
+      showSpeakCard();
     });
+    placeInThread(startersEl);
   }
 
   function showWhatElseChip() {
@@ -606,8 +637,9 @@
       downloadTranscriptFile();
     });
     addChip("Speak to the team", function () {
-      handoff();
+      showSpeakCard();
     });
+    placeInThread(startersEl);
   }
 
   function showStartersFresh() {
@@ -658,6 +690,7 @@
     addChip("Other quote", function () {
       startCollect("yacht", { force: true });
     });
+    placeInThread(startersEl);
   }
 
   function offerGuidedCollect(kind) {
@@ -684,13 +717,58 @@
       startCollect(kind || "yacht", { pasteFirst: true, force: true });
     });
     startersEl.appendChild(paste);
+    placeInThread(startersEl);
   }
 
   function stopCollect() {
     collectState = null;
-    collectEl.classList.remove("is-on");
     clearNode(collectEl);
+    if (collectEl.parentNode) collectEl.parentNode.removeChild(collectEl);
+    if (!teamJoined) input.placeholder = cfg.labels.placeholder || "Message…";
     ensureComposerVisible();
+  }
+
+  function showSpeakCard() {
+    if (teamJoined) return;
+    hideStarters();
+    stopCollect();
+    clearNode(lead);
+    var head = el("div", "pm-chat__card-head");
+    head.appendChild(el("span", "pm-chat__card-title", "Speak to the team"));
+    var dismiss = el("button", "pm-chat__card-close", "×");
+    dismiss.type = "button";
+    dismiss.setAttribute("aria-label", "Close");
+    dismiss.addEventListener("click", function () {
+      if (lead.parentNode) lead.parentNode.removeChild(lead);
+    });
+    head.appendChild(dismiss);
+    lead.appendChild(head);
+    var body = el("div", "pm-chat__card-body");
+    var hours = (cfg.labels && cfg.labels.hours) || "";
+    body.appendChild(
+      el(
+        "p",
+        "pm-chat__hint",
+        "A colleague will reply here. If you close this window, we'll reply by email." +
+          (hours ? " " + hours : "")
+      )
+    );
+    function fieldBlock(labelText, inputEl) {
+      var wrap = el("label", "pm-chat__field");
+      wrap.appendChild(el("span", "pm-chat__field-label", labelText));
+      wrap.appendChild(inputEl);
+      return wrap;
+    }
+    body.appendChild(fieldBlock("Name", nameInput));
+    body.appendChild(fieldBlock("Business email", emailInput));
+    body.appendChild(fieldBlock("Company (optional)", companyInput));
+    leadSend.className = "pm-chat__btn-primary";
+    leadSend.textContent = "Send to the team";
+    leadSend.style.width = "100%";
+    body.appendChild(leadSend);
+    lead.appendChild(body);
+    placeInThread(lead);
+    nameInput.focus();
   }
 
   function startCollect(kind, opts) {
@@ -698,6 +776,7 @@
     if (suppressCollectTrigger && !opts.force) return;
     // Explicit chip restart of a new quote.
     if (opts.force) suppressCollectTrigger = false;
+    lastCollectKind = kind;
     var steps = kind === "freight" ? FREIGHT_STEPS : YACHT_STEPS;
     collectState = {
       kind: kind,
@@ -715,37 +794,54 @@
         ? "Thank you. I can take a few details for our forwarding team — one at a time. You can also paste a full enquiry or specification if you prefer."
         : "Thank you. I can take a few yacht details for our team — one at a time. If you have a specification sheet, you can paste the details in one go instead.";
     appendBubble("assistant", intro);
+    input.placeholder = "Or ask a question…";
     renderCollectStep();
+  }
+
+  function cardHead(title, stepLabel) {
+    var head = el("div", "pm-chat__card-head");
+    head.appendChild(el("span", "pm-chat__card-title", title));
+    if (stepLabel) head.appendChild(el("span", "pm-chat__card-step", stepLabel));
+    var dismiss = el("button", "pm-chat__card-close", "×");
+    dismiss.type = "button";
+    dismiss.setAttribute("aria-label", "Close form");
+    dismiss.addEventListener("click", function () {
+      stopCollect();
+    });
+    head.appendChild(dismiss);
+    return head;
   }
 
   function renderCollectStep() {
     if (!collectState) return;
     clearNode(collectEl);
-    collectEl.classList.add("is-on");
+    placeInThread(collectEl);
+    input.placeholder = "Or ask a question…";
 
     if (collectState.pasteMode) {
-      collectEl.appendChild(
+      collectEl.appendChild(cardHead("Paste your yacht details", ""));
+      var body = el("div", "pm-chat__card-body");
+      body.appendChild(
         el(
           "p",
-          "pm-chat__collect-label",
-          "Paste your details or specification notes"
-        )
-      );
-      collectEl.appendChild(
-        el(
-          "p",
-          "pm-chat__collect-hint",
-          "A spec sheet, broker listing or email is fine. We will only ask for what is still missing."
+          "pm-chat__hint",
+          "Spec sheet, broker listing or an email. We'll pick out what the team needs and only ask for anything missing."
         )
       );
       var ta = el("textarea", "pm-chat__collect-input");
-      ta.rows = 8;
-      ta.placeholder =
-        "Paste make/model, dimensions, ports, contact details…";
-      collectEl.appendChild(ta);
-
-      var row = el("div", "pm-chat__collect-row");
-      var submit = el("button", "pm-chat__collect-primary", "Send details");
+      ta.rows = 6;
+      ta.style.minHeight = "150px";
+      ta.placeholder = "Paste make, model, dimensions, ports and contact details";
+      body.appendChild(ta);
+      collectEl.appendChild(body);
+      var row = el("div", "pm-chat__card-actions");
+      var back = el("button", "pm-chat__btn-secondary", "Answer step by step");
+      back.type = "button";
+      back.addEventListener("click", function () {
+        collectState.pasteMode = false;
+        renderCollectStep();
+      });
+      var submit = el("button", "pm-chat__btn-primary", "Send details");
       submit.type = "button";
       submit.addEventListener("click", function () {
         var text = (ta.value || "").trim();
@@ -755,14 +851,8 @@
         }
         finishCollectFromPaste(text);
       });
-      var back = el("button", "pm-chat__collect-secondary", "Step by step");
-      back.type = "button";
-      back.addEventListener("click", function () {
-        collectState.pasteMode = false;
-        renderCollectStep();
-      });
-      row.appendChild(submit);
       row.appendChild(back);
+      row.appendChild(submit);
       collectEl.appendChild(row);
       ta.focus();
       return;
@@ -772,9 +862,19 @@
     var total = collectState.steps.length;
     var step = collectState.index + 1;
     collectEl.appendChild(
-      el("p", "pm-chat__collect-progress", "Step " + step + " of " + total)
+      cardHead(stepDef.title, "Step " + step + " of " + total)
     );
-    collectEl.appendChild(el("p", "pm-chat__collect-label", stepDef.title));
+    var progress = el("div", "pm-chat__progress");
+    for (var p = 0; p < total; p++) {
+      var seg = document.createElement("i");
+      if (p <= collectState.index) seg.className = "is-on";
+      progress.appendChild(seg);
+    }
+    collectEl.appendChild(progress);
+
+    var formBody = el("div", "pm-chat__card-body");
+    var gridKeys = { length: 1, beam: 1, height: 1, weight: 1 };
+    var grid = null;
     var inputs = [];
     stepDef.keys.forEach(function (key) {
       var field = fieldByKey(collectState.kind, key);
@@ -798,13 +898,36 @@
       wrap.appendChild(inputEl);
       var err = el("span", "pm-chat__field-error");
       wrap.appendChild(err);
-      collectEl.appendChild(wrap);
+      if (gridKeys[key] && stepDef.title === "The yacht") {
+        if (!grid) {
+          grid = el("div", "pm-chat__grid");
+          formBody.appendChild(grid);
+        }
+        grid.appendChild(wrap);
+      } else {
+        formBody.appendChild(wrap);
+      }
       inputs.push({ field: field, input: inputEl, error: err });
     });
+    if (stepDef.title === "The yacht") {
+      var hint = el("p", "pm-chat__hint");
+      hint.appendChild(
+        document.createTextNode("Metres or feet are fine. Have a spec sheet? ")
+      );
+      var pasteLink = el("button", "pm-chat__linkish", "Paste it instead");
+      pasteLink.type = "button";
+      pasteLink.addEventListener("click", function () {
+        collectState.pasteMode = true;
+        renderCollectStep();
+      });
+      hint.appendChild(pasteLink);
+      formBody.appendChild(hint);
+    }
+    collectEl.appendChild(formBody);
 
-    var row = el("div", "pm-chat__collect-row");
+    var actions = el("div", "pm-chat__card-actions");
     if (collectState.index > 0) {
-      var backStep = el("button", "pm-chat__collect-secondary", "Back");
+      var backStep = el("button", "pm-chat__btn-ghost", "Back");
       backStep.type = "button";
       backStep.addEventListener("click", function () {
         inputs.forEach(function (item) {
@@ -813,11 +936,13 @@
         collectState.index -= 1;
         renderCollectStep();
       });
-      row.appendChild(backStep);
+      actions.appendChild(backStep);
+    } else {
+      actions.appendChild(el("span", ""));
     }
     var next = el(
       "button",
-      "pm-chat__collect-primary",
+      "pm-chat__btn-primary",
       collectState.index === total - 1 ? "Send to team" : "Continue"
     );
     next.type = "button";
@@ -848,15 +973,8 @@
         renderCollectStep();
       }
     });
-    var pasteBtn = el("button", "pm-chat__collect-secondary", "Paste it instead");
-    pasteBtn.type = "button";
-    pasteBtn.addEventListener("click", function () {
-      collectState.pasteMode = true;
-      renderCollectStep();
-    });
-    row.appendChild(next);
-    row.appendChild(pasteBtn);
-    collectEl.appendChild(row);
+    actions.appendChild(next);
+    collectEl.appendChild(actions);
     if (inputs[0]) inputs[0].input.focus();
   }
 
@@ -1116,7 +1234,7 @@
     var custom = cfg.greeting && String(cfg.greeting).trim();
     return (
       custom ||
-      "Hi — how can I help today? I can take a shipping or yacht enquiry, answer questions from our published information, or put you in touch with the team."
+      "Hello. I can start a yacht or freight enquiry, answer questions from our published information, or put you in touch with the team."
     );
   }
 
@@ -1164,8 +1282,9 @@
           }
         }
         if (data.office_hours_note) {
+          cfg.labels.hours = data.office_hours_note;
           var sub = headerText.querySelector(".pm-chat__subtitle");
-          if (sub) sub.textContent = data.office_hours_note;
+          if (sub && !teamJoined) sub.textContent = data.office_hours_note;
         }
         showStarters();
         return sessionId;
@@ -1234,22 +1353,38 @@
           } else if (typeof data.message === "string") {
             presentAssistant(data.message, null, null, data.choices);
           }
-          if (data.handoff) lead.classList.add("is-on");
+          if (data.handoff) showSpeakCard();
         });
       })
       .catch(function (err) {
         if (visitorWrap) {
-          var alert = el("div", "pm-chat__alert");
-          alert.setAttribute("role", "alert");
-          alert.appendChild(document.createTextNode("Not sent. "));
-          var retry = el("button", "pm-chat__retry", "Try again");
+          visitorWrap.appendChild(el("div", "pm-chat__not-sent", "Not sent"));
+          var notice = el("div", "pm-chat__notice");
+          notice.setAttribute("role", "alert");
+          notice.appendChild(el("strong", "", "Chat isn't available right now"));
+          notice.appendChild(
+            el(
+              "span",
+              "",
+              "Your message is saved above. Try again in a moment, or contact your nearest office directly."
+            )
+          );
+          var actions = el("div", "pm-chat__notice-actions");
+          var retry = el("button", "", "Try again");
           retry.type = "button";
           retry.addEventListener("click", function () {
             if (visitorWrap.parentNode) visitorWrap.parentNode.removeChild(visitorWrap);
+            if (notice.parentNode) notice.parentNode.removeChild(notice);
             sendMessageText(text, opts);
           });
-          alert.appendChild(retry);
-          visitorWrap.appendChild(alert);
+          var office = el("a", "", "Find an office");
+          office.href = "https://www.petersandmay.com/offices/";
+          office.target = "_blank";
+          office.rel = "noreferrer";
+          actions.appendChild(retry);
+          actions.appendChild(office);
+          notice.appendChild(actions);
+          messagesEl.insertBefore(notice, typingEl);
         } else {
           appendBubble(
             "system",
@@ -1279,7 +1414,7 @@
     }
     hideStarters();
     stopCollect();
-    lead.classList.add("is-on");
+    if (lead.parentNode) lead.parentNode.removeChild(lead);
     var payload = {
       name: nameInput.value.trim(),
       email: emailInput.value.trim(),
@@ -1337,7 +1472,7 @@
           if (!opts.quiet && data.message) {
             appendBubble("assistant", data.message.body, data.message.id);
           }
-          lead.classList.remove("is-on");
+          if (lead.parentNode) lead.parentNode.removeChild(lead);
         });
       })
       .catch(function (err) {
@@ -1362,7 +1497,7 @@
 
   document.addEventListener("keydown", function (e) {
     if (!open || e.key !== "Escape") return;
-    var sheet = panel.querySelector(".pm-chat__sheet");
+    var sheet = panel.querySelector(".pm-chat__scrim");
     if (sheet) {
       sheet.remove();
       return;
@@ -1387,8 +1522,7 @@
     stopCollect();
     hideStarters();
     ensureComposerVisible();
-    lead.classList.remove("is-on", "is-collapsed");
-    leadMinBtn.textContent = "Minimise";
+    if (lead.parentNode) lead.parentNode.removeChild(lead);
     clearNode(messagesEl);
     messagesEl.appendChild(typingEl);
   }
@@ -1401,47 +1535,51 @@
     showCloseSheet();
   });
   function showCloseSheet() {
-    var existing = panel.querySelector(".pm-chat__sheet");
+    var existing = panel.querySelector(".pm-chat__scrim");
     if (existing) return;
+    var scrim = el("div", "pm-chat__scrim");
     var sheet = el("div", "pm-chat__sheet");
-    sheet.appendChild(el("p", "pm-chat__collect-label", "End this chat?"));
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-label", "End this chat?");
+    sheet.appendChild(el("h2", "pm-chat__sheet-title", "End this chat?"));
     sheet.appendChild(
       el(
         "p",
-        "pm-chat__collect-hint",
-        "The team still has your details if you already sent them."
+        "pm-chat__sheet-body",
+        "The team still has your details and will reply by email. You can keep a copy of the conversation first."
       )
     );
-    var row = el("div", "pm-chat__collect-row");
-    var download = el("button", "pm-chat__collect-secondary", "Download transcript");
+    var download = el("button", "pm-chat__btn-secondary", "Download transcript");
     download.type = "button";
     download.addEventListener("click", function () {
       downloadTranscriptFile();
     });
-    var keep = el("button", "pm-chat__collect-secondary", "Keep chatting");
+    var row = el("div", "pm-chat__sheet-row");
+    var keep = el("button", "pm-chat__btn-mist", "Keep chatting");
     keep.type = "button";
     keep.addEventListener("click", function () {
-      sheet.remove();
+      scrim.remove();
     });
-    var end = el("button", "pm-chat__collect-primary", "End chat");
+    var end = el("button", "pm-chat__btn-navy", "End chat");
     end.type = "button";
     end.addEventListener("click", function () {
-      sheet.remove();
+      scrim.remove();
       closeSessionOnHub().finally(function () {
         resetChatUi();
         setOpen(false);
       });
     });
-    row.appendChild(download);
     row.appendChild(keep);
     row.appendChild(end);
+    sheet.appendChild(download);
     sheet.appendChild(row);
-    panel.appendChild(sheet);
+    scrim.appendChild(sheet);
+    scrim.addEventListener("click", function (e) {
+      if (e.target === scrim) scrim.remove();
+    });
+    panel.appendChild(scrim);
+    keep.focus();
   }
-  leadMinBtn.addEventListener("click", function () {
-    var collapsed = lead.classList.toggle("is-collapsed");
-    leadMinBtn.textContent = collapsed ? "Show details" : "Minimise";
-  });
   sendBtn.addEventListener("click", sendMessage);
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
@@ -1449,6 +1587,12 @@
       sendMessage();
     }
   });
-  speakBtn.addEventListener("click", handoff);
-  leadSend.addEventListener("click", submitLead);
+  speakBtn.addEventListener("click", showSpeakCard);
+  leadSend.addEventListener("click", function () {
+    if (!emailInput.value.trim()) {
+      emailInput.focus();
+      return;
+    }
+    handoff();
+  });
 })();

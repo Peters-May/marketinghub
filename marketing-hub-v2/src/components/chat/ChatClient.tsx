@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import {
   DEFAULT_CHAT_GREETING,
   DEFAULT_ENQUIRY_CHAT_GUIDANCE,
@@ -48,17 +49,36 @@ function formatSessionWhen(s: ChatSession): string {
   }
 }
 
+function waitAge(s: ChatSession): string {
+  const t = sessionActivityAt(s);
+  if (!t) return "";
+  const mins = Math.max(1, Math.round((Date.now() - t) / 60000));
+  if (mins < 60) return `${mins} min`;
+  const hours = Math.round(mins / 60);
+  return `${hours} hr`;
+}
+
 function statusLabel(s: ChatSession): string {
-  if (s.status === "waiting") return "Waiting for team";
+  if (s.status === "waiting") return `Waiting · ${waitAge(s)}`;
   if (s.status === "human") {
-    return s.assignee_email ? `With ${s.assignee_email}` : "With the team";
+    const first = (s.assignee_email || "").split("@")[0];
+    return first ? `With ${first}` : "With the team";
   }
   if (s.status === "closed") return "Closed";
   return "Assistant answering";
 }
 
+function statusTone(s: ChatSession): string {
+  if (s.status === "waiting") return "bg-[#f6efe0] text-[#7a5a10]";
+  if (s.status === "human") return "bg-[#0B2545] text-white";
+  if (s.status === "closed") return "bg-[#f4f6f7] text-[#5b6472]";
+  return "bg-[#e6f2fa] text-[#005f97]";
+}
+
 function visitorLabel(s: ChatSession): string {
-  return s.visitor_name || s.visitor_email || "Website visitor";
+  if (s.visitor_name) return s.visitor_name;
+  if (s.visitor_email) return s.visitor_email;
+  return s.page_title ? `Visitor on ${s.page_title}` : "Website visitor";
 }
 
 function stripChoiceTag(body: string): string {
@@ -90,7 +110,9 @@ function formatMessageWhen(iso: string): string {
 
 export function ChatClient({ configured, initialSessionId }: Props) {
   const [tab, setTab] = useState<Tab>("inbox");
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessions, setSessions] = useState<
+    Array<ChatSession & { last_body?: string }>
+  >([]);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialSessionId ?? null
   );
@@ -115,9 +137,14 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   const [savedGuidance, setSavedGuidance] = useState("");
   const [savedGreeting, setSavedGreeting] = useState("");
   const [testInput, setTestInput] = useState("");
+  const [testSessionId, setTestSessionId] = useState("");
+  const [testUseDraft, setTestUseDraft] = useState(false);
+  const [insightRange, setInsightRange] = useState<"30" | "90" | "all">("30");
+  const [inboxQuery, setInboxQuery] = useState("");
   const [testLog, setTestLog] = useState<
-    Array<{ role: string; body: string }>
+    Array<{ role: string; body: string; choices?: string[] }>
   >([]);
+  const [kbOpen, setKbOpen] = useState(false);
   const [kbForm, setKbForm] = useState({
     id: "",
     title: "",
@@ -126,19 +153,11 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   });
 
   const loadSessions = useCallback(async () => {
-    const status =
-      inboxFilter === "needs"
-        ? "waiting"
-        : inboxFilter === "closed"
-          ? "closed"
-          : "open";
-    const res = await fetch(
-      `/api/chat/admin?view=sessions&status=${encodeURIComponent(status)}`
-    );
+    const res = await fetch("/api/chat/admin?view=sessions&status=all");
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load sessions");
     setSessions(sortSessionsByDate(data.sessions ?? []));
-  }, [inboxFilter]);
+  }, []);
 
   const loadSettings = useCallback(async () => {
     const res = await fetch("/api/chat/admin?view=settings");
@@ -158,11 +177,19 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   }, []);
 
   const loadInsights = useCallback(async () => {
-    const res = await fetch("/api/chat/admin?view=insights");
+    const from =
+      insightRange === "all"
+        ? ""
+        : new Date(
+            Date.now() - Number(insightRange) * 24 * 60 * 60 * 1000
+          ).toISOString();
+    const res = await fetch(
+      `/api/chat/admin?view=insights${from ? `&from=${encodeURIComponent(from)}` : ""}`
+    );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to load insights");
     setInsights(data.insights ?? null);
-  }, []);
+  }, [insightRange]);
 
   const loadTranscript = useCallback(async (sessionId: string) => {
     const res = await fetch("/api/chat/admin", {
@@ -345,6 +372,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "KB save failed");
       setKbForm({ id: "", title: "", source_url: "", body: "" });
+      setKbOpen(false);
       await loadKb();
     } catch (e) {
       setError(e instanceof Error ? e.message : "KB save failed");
@@ -383,13 +411,23 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       const res = await fetch("/api/chat/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "test", message: userLine }),
+        body: JSON.stringify({
+          action: "test",
+          message: userLine,
+          session_id: testSessionId || undefined,
+          guidance: testUseDraft ? settings?.guidance : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Test failed");
+      if (data.session?.id) setTestSessionId(data.session.id);
       setTestLog((prev) => [
         ...prev,
-        { role: "assistant", body: stripChoiceTag(data.reply?.body ?? "") },
+        {
+          role: "assistant",
+          body: stripChoiceTag(data.reply?.body ?? ""),
+          choices: Array.isArray(data.choices) ? data.choices : [],
+        },
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test failed");
@@ -427,23 +465,59 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     <div className="space-y-4">
       <PageHeader
         title="Website chat"
-        description="Train knowledge and tone, test answers, deploy to WordPress, and reply when visitors ask for the team."
+        description="Reply to visitors who ask for the team, and tune what the assistant says."
+        actions={
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium",
+              settings?.deployed
+                ? "bg-[#e5f3ea] text-[#1f7a4c]"
+                : "bg-[#f4f6f7] text-[#5b6472]"
+            )}
+          >
+            <span
+              className={cn(
+                "h-2 w-2 rounded-full",
+                settings?.deployed ? "bg-[#1f7a4c]" : "bg-[#5b6472]"
+              )}
+            />
+            {settings?.deployed
+              ? "Live on petersandmay.com"
+              : "Not live"}
+          </span>
+        }
       />
 
-      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+      <div className="flex flex-wrap gap-1 border-b border-[#e3e6e9]">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              if (
+                tab === "train" &&
+                t.id !== "train" &&
+                ((settings?.guidance ?? "") !== savedGuidance ||
+                  (settings?.greeting ?? "") !== savedGreeting) &&
+                !window.confirm("Leave Train with unsaved changes?")
+              ) {
+                return;
+              }
+              setTab(t.id);
+            }}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm",
+              "border-b-2 px-3 py-2 text-base",
               tab === t.id
-                ? "bg-[#0B2545] text-white"
-                : "bg-sand text-foreground hover:bg-border/60"
+                ? "border-[#007DC5] font-semibold text-[#005f97]"
+                : "border-transparent text-[#5b6472]"
             )}
           >
             {t.label}
+            {t.id === "inbox" ? (
+              <span className="ml-2 rounded-full bg-[#f6efe0] px-2 py-0.5 text-xs text-[#7a5a10]">
+                {sessions.filter((s) => s.status === "waiting").length}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -455,42 +529,81 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       ) : null}
 
       {tab === "inbox" ? (
-        <div className="grid gap-4 lg:grid-cols-[240px_1fr_220px]">
-          <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-white">
-            <div className="flex gap-1 border-b border-border p-2">
+        <div className="grid overflow-hidden rounded-lg border border-[#e3e6e9] bg-white lg:grid-cols-[320px_minmax(0,1fr)_296px]">
+          <div className="max-h-[70vh] overflow-y-auto border-r border-[#e3e6e9]">
+            <div className="border-b border-[#e3e6e9] p-2">
+              <input
+                className="field"
+                placeholder="Search name, email or page"
+                value={inboxQuery}
+                onChange={(e) => setInboxQuery(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-1 border-b border-[#e3e6e9] p-2 text-sm">
               {(
                 [
-                  ["needs", "Needs reply"],
-                  ["open", "Open"],
-                  ["closed", "Closed"],
+                  ["needs", "Needs reply", sessions.filter((s) => s.status === "waiting").length],
+                  ["open", "Open", sessions.filter((s) => s.status !== "closed").length],
+                  ["closed", "Closed", null],
                 ] as const
-              ).map(([id, label]) => (
+              ).map(([id, label, count]) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => setInboxFilter(id)}
                   className={cn(
-                    "rounded px-2 py-1 text-xs",
+                    "flex-1 rounded px-2 py-1.5 text-xs font-semibold",
                     inboxFilter === id
                       ? "bg-[#0B2545] text-white"
-                      : "text-muted hover:bg-sand"
+                      : "text-[#5b6472]"
                   )}
                 >
                   {label}
+                  {count != null ? ` · ${count}` : ""}
                 </button>
               ))}
             </div>
-            {sessions.length === 0 ? (
+            {sessions.filter((s) => {
+              const statusOk =
+                inboxFilter === "needs"
+                  ? s.status === "waiting"
+                  : inboxFilter === "closed"
+                    ? s.status === "closed"
+                    : s.status !== "closed";
+              if (!statusOk) return false;
+              const q = inboxQuery.trim().toLowerCase();
+              if (!q) return true;
+              return [s.visitor_name, s.visitor_email, s.page_title, s.last_body]
+                .join(" ")
+                .toLowerCase()
+                .includes(q);
+            }).length === 0 ? (
               <p className="p-4 text-sm text-muted">No conversations in this view.</p>
             ) : (
-              sessions.map((s) => (
+              sessions
+                .filter((s) => {
+                  const statusOk =
+                    inboxFilter === "needs"
+                      ? s.status === "waiting"
+                      : inboxFilter === "closed"
+                        ? s.status === "closed"
+                        : s.status !== "closed";
+                  if (!statusOk) return false;
+                  const q = inboxQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return [s.visitor_name, s.visitor_email, s.page_title, s.last_body]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(q);
+                })
+                .map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   onClick={() => setSelectedId(s.id)}
                   className={cn(
                     "block w-full border-b border-border px-3 py-3 text-left text-sm",
-                    selectedId === s.id ? "bg-sand" : "hover:bg-sand/60"
+                    selectedId === s.id ? "bg-[#e6f2fa]" : "hover:bg-[#f4f6f7]"
                   )}
                 >
                   <div className="flex items-baseline justify-between gap-2">
@@ -501,9 +614,13 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                       {formatSessionWhen(s)}
                     </div>
                   </div>
-                  <div className="truncate text-xs text-muted">
-                    {statusLabel(s)}
-                    {s.page_title ? ` · ${s.page_title}` : ""}
+                  <div className="truncate text-[13px] text-[#33404f]">
+                    {s.last_body || s.page_title || "No messages yet"}
+                  </div>
+                  <div className="mt-1">
+                    <span className={cn("rounded px-2 py-0.5 text-xs", statusTone(s))}>
+                      {statusLabel(s)}
+                    </span>
                   </div>
                 </button>
               ))
@@ -525,7 +642,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   </span>
                   {selected.enquiry_id ? (
                     <a
-                      href="/app/enquiries"
+                      href={`/app/enquiries?open=${encodeURIComponent(selected.enquiry_id)}`}
                       className="text-xs text-[#007DC5] underline"
                     >
                       Linked enquiry
@@ -585,12 +702,25 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     </button>
                   </div>
                 </div>
+                {selected.status === "waiting" ? (
+                  <div className="flex items-center gap-3 border-b border-[#e7dcc2] bg-[#f6efe0] px-4 py-2 text-sm text-[#7a5a10]">
+                    <span className="flex-1">
+                      <strong>
+                        {visitorLabel(selected)} asked for the team {waitAge(selected)} ago.
+                      </strong>{" "}
+                      The assistant has stopped replying.
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={busy}
+                      onClick={() => setStatus("human")}
+                    >
+                      Take over
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                  {selected.status === "human" ? (
-                    <p className="rounded-md bg-[#007DC5]/10 px-3 py-2 text-xs text-[#0B2545]">
-                      You have taken this chat. The assistant stays quiet while you reply.
-                    </p>
-                  ) : null}
                   {messages.map((m) => (
                     <div
                       key={m.id}
@@ -625,16 +755,17 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     <p className="text-sm text-muted">
                       The visitor closed this chat, so it cannot be taken over.
                     </p>
-                  ) : selected.status !== "human" ? (
-                    <p className="text-sm text-muted">
-                      Take over before you reply, so the assistant and the team are not both answering.
-                    </p>
                   ) : (
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
-                        placeholder="Reply as the team…"
+                    <div>
+                      <textarea
+                        className="field min-h-[72px]"
+                        placeholder={
+                          selected.status === "human"
+                            ? "Reply as the team…"
+                            : "Take over to reply as yourself"
+                        }
                         value={reply}
+                        disabled={selected.status !== "human"}
                         onChange={(e) => setReply(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -643,14 +774,19 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                           }
                         }}
                       />
-                      <button
-                        type="button"
-                        disabled={busy || !reply.trim()}
-                        onClick={() => void sendReply()}
-                        className="rounded-md bg-[#0B2545] px-4 py-2 text-sm text-white disabled:opacity-50"
-                      >
-                        Send
-                      </button>
+                      <div className="mt-1 flex items-center justify-between text-xs text-[#5b6472]">
+                        <span>Enter to send · Shift+Enter for a new line</span>
+                        {selected.status === "human" ? (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={busy || !reply.trim()}
+                            onClick={() => void sendReply()}
+                          >
+                            Send
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -694,7 +830,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   <dd>
                     {selected.enquiry_id ? (
                       <a
-                        href="/app/enquiries"
+                        href={`/app/enquiries?open=${encodeURIComponent(selected.enquiry_id)}`}
                         className="text-[#007DC5] underline"
                       >
                         Open enquiries ({selected.enquiry_id.slice(0, 8)})
@@ -825,14 +961,15 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                         <button
                           type="button"
                           className="text-left font-medium text-[#0B2545]"
-                          onClick={() =>
+                          onClick={() => {
                             setKbForm({
                               id: d.id,
                               title: d.title,
                               source_url: d.source_url,
                               body: d.body,
-                            })
-                          }
+                            });
+                            setKbOpen(true);
+                          }}
                         >
                           {d.title}
                         </button>
@@ -845,50 +982,70 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 </tbody>
               </table>
             </div>
-            <input
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-              placeholder="Title"
-              value={kbForm.title}
-              onChange={(e) =>
-                setKbForm((f) => ({ ...f, title: e.target.value }))
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setKbForm({ id: "", title: "", source_url: "", body: "" });
+                setKbOpen(true);
+              }}
+            >
+              Add document
+            </button>
+            <RecordDrawer
+              open={kbOpen}
+              onClose={() => setKbOpen(false)}
+              title={kbForm.id ? "Edit document" : "Add document"}
+              footer={
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveKb().then(() => setKbOpen(false))}
+                    className="btn-primary"
+                  >
+                    {kbForm.id ? "Update document" : "Add document"}
+                  </button>
+                  {kbForm.id ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void removeKb(kbForm.id)}
+                      className="btn-secondary"
+                    >
+                      Delete document
+                    </button>
+                  ) : null}
+                </div>
               }
-            />
-            <input
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-              placeholder="Source URL (optional)"
-              value={kbForm.source_url}
-              onChange={(e) =>
-                setKbForm((f) => ({ ...f, source_url: e.target.value }))
-              }
-            />
-            <textarea
-              className="min-h-[120px] w-full rounded-md border border-border px-3 py-2 text-sm"
-              placeholder="Approved public content"
-              value={kbForm.body}
-              onChange={(e) =>
-                setKbForm((f) => ({ ...f, body: e.target.value }))
-              }
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void saveKb()}
-                className="rounded-md bg-[#0B2545] px-3 py-2 text-sm text-white disabled:opacity-50"
-              >
-                {kbForm.id ? "Update document" : "Add document"}
-              </button>
-              {kbForm.id ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void removeKb(kbForm.id)}
-                  className="rounded-md border border-border px-3 py-2 text-sm text-[#0B2545] disabled:opacity-50"
-                >
-                  Delete document
-                </button>
-              ) : null}
-            </div>
+            >
+              <div className="space-y-3">
+                <input
+                  className="field"
+                  placeholder="Title"
+                  value={kbForm.title}
+                  onChange={(e) =>
+                    setKbForm((f) => ({ ...f, title: e.target.value }))
+                  }
+                />
+                <input
+                  className="field"
+                  placeholder="Source URL (optional)"
+                  value={kbForm.source_url}
+                  onChange={(e) =>
+                    setKbForm((f) => ({ ...f, source_url: e.target.value }))
+                  }
+                />
+                <textarea
+                  className="field min-h-[160px]"
+                  placeholder="Approved public content"
+                  value={kbForm.body}
+                  onChange={(e) =>
+                    setKbForm((f) => ({ ...f, body: e.target.value }))
+                  }
+                />
+              </div>
+            </RecordDrawer>
             <div>
               <h3 className="text-xs font-semibold text-[#0B2545]">
                 Published pages the assistant may read
@@ -928,10 +1085,20 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             ))}
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs text-muted"
-              onClick={() => setTestLog([])}
+              className="btn-secondary"
+              onClick={() => {
+                setTestLog([]);
+                setTestSessionId("");
+              }}
             >
-              Reset
+              Start over
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setTestUseDraft((v) => !v)}
+            >
+              {testUseDraft ? "Using unsaved guidance" : "Use unsaved guidance"}
             </button>
           </div>
           <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md bg-sand/40 p-3">
@@ -949,6 +1116,22 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   )}
                 >
                   {stripChoiceTag(m.body)}
+                  {m.choices && m.choices.length > 1 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {m.choices.map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-sm font-semibold text-[#005f97]"
+                          onClick={() => {
+                            setTestInput(choice);
+                          }}
+                        >
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ))
             )}
@@ -1049,18 +1232,42 @@ export function ChatClient({ configured, initialSessionId }: Props) {
 
       {tab === "analyze" && insights ? (
         <div className="space-y-4">
+          <div className="flex gap-1 text-sm font-semibold">
+            {(
+              [
+                ["30", "Last 30 days"],
+                ["90", "90 days"],
+                ["all", "All time"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setInsightRange(id)}
+                className={cn(
+                  "rounded px-3 py-1.5",
+                  insightRange === id
+                    ? "bg-[#0B2545] text-white"
+                    : "text-[#5b6472]"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ["Leads captured", insights.with_lead],
+              ["Leads captured", insights.with_lead, "Chats that left an email"],
               [
                 "Lead rate",
                 insights.total_sessions
                   ? `${Math.round((insights.with_lead / insights.total_sessions) * 100)}%`
                   : "0%",
+                "Leads ÷ conversations",
               ],
-              ["Asked for the team", `${insights.handoff_rate}%`],
-              ["Waiting now", insights.waiting],
-            ].map(([label, value]) =>
+              ["Asked for the team", `${insights.handoff_rate}%`, "Of all conversations"],
+              ["Waiting now", insights.waiting, "Open in Inbox"],
+            ].map(([label, value, hint]) =>
               label === "Waiting now" ? (
                 <button
                   key={label}
@@ -1072,29 +1279,59 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   className="rounded-lg border border-border bg-white p-4 text-left"
                 >
                   <div className="text-xs text-muted">{label}</div>
-                  <div className="text-2xl font-semibold text-[#0B2545]">
+                  <div className="text-2xl font-semibold text-[#9a6b13]">
                     {value}
                   </div>
+                  <div className="text-sm font-semibold text-[#005f97]">{hint}</div>
                 </button>
               ) : (
                 <div
-                  key={label}
+                  key={String(label)}
                   className="rounded-lg border border-border bg-white p-4"
                 >
                   <div className="text-xs text-muted">{label}</div>
                   <div className="text-2xl font-semibold text-[#0B2545]">
                     {value}
                   </div>
+                  <div className="text-sm text-[#5b6472]">{hint}</div>
                 </div>
               )
             )}
           </div>
-          <p className="text-sm text-muted">
-            {insights.total_sessions} conversations, then{" "}
-            {Math.round((insights.handoff_rate / 100) * insights.total_sessions)}{" "}
-            asked for the team, then {insights.with_lead} leads. A lead can be
-            captured from the guided form without a handoff.
-          </p>
+          <div className="rounded-lg border border-[#e3e6e9] bg-white p-5">
+            <div className="mb-3 font-semibold text-[#0B2545]">
+              From conversation to lead
+            </div>
+            {(
+              [
+                ["Conversations", insights.total_sessions, "#0B2545"],
+                [
+                  "Asked for the team",
+                  Math.round((insights.handoff_rate / 100) * insights.total_sessions),
+                  "#1b3a5b",
+                ],
+                ["Lead captured", insights.with_lead, "#007DC5"],
+              ] as const
+            ).map(([label, count, color]) => (
+              <div
+                key={label}
+                className="mb-2 grid grid-cols-[170px_1fr_48px] items-center gap-3 text-sm"
+              >
+                <span>{label}</span>
+                <div
+                  className="h-5 rounded-sm"
+                  style={{
+                    width: `${insights.total_sessions ? Math.max(4, Math.round((Number(count) / insights.total_sessions) * 100)) : 0}%`,
+                    background: color,
+                  }}
+                />
+                <span className="text-right font-semibold">{count}</span>
+              </div>
+            ))}
+            <p className="mt-2 text-sm text-[#5b6472]">
+              Leads can exceed handoffs because the guided quote form captures email without asking for the team.
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

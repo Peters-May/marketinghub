@@ -69,6 +69,8 @@ export function shouldForceHandoff(text: string): boolean {
 export async function streamAssistantReply(input: {
   visitorMessage: string;
   history: ChatMessage[];
+  /** Playground only. Saved guidance is used when this is omitted. */
+  guidanceOverride?: string;
 }): Promise<{
   textStream: AsyncIterable<string>;
   sources: ChatMessage["sources"];
@@ -110,7 +112,9 @@ export async function streamAssistantReply(input: {
       ? "(No knowledge base or allowlisted website excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
       : kbParts.join("\n\n");
 
-  const guidance = resolveChatGuidance(settings.guidance);
+  const guidance = resolveChatGuidance(
+    input.guidanceOverride ?? settings.guidance
+  );
   const hasSailingSchedule = sitePages.some((p) =>
     p.url.includes("/sailings")
   );
@@ -180,6 +184,7 @@ ${kbBlock}`;
 export async function generateAssistantReply(input: {
   visitorMessage: string;
   history: ChatMessage[];
+  guidanceOverride?: string;
 }): Promise<{
   body: string;
   choices: string[];

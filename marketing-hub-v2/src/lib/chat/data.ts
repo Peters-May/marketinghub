@@ -432,7 +432,32 @@ export async function addChatMessage(input: {
   return rowToMessage(data as Record<string, unknown>);
 }
 
-export async function getChatInsights(): Promise<{
+export async function latestMessagePreviews(
+  sessionIds: string[]
+): Promise<Record<string, string>> {
+  if (sessionIds.length === 0) return {};
+  const supabase = requireService();
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("session_id, body, created_at")
+    .in("session_id", sessionIds)
+    .order("created_at", { ascending: false })
+    .limit(800);
+  if (error) throw new Error(error.message);
+  const out: Record<string, string> = {};
+  for (const row of data ?? []) {
+    const id = String(row.session_id ?? "");
+    if (!id || out[id]) continue;
+    const body = String(row.body ?? "")
+      .replace(/\[\[choices:[\s\S]*?\]\]/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (body) out[id] = body.slice(0, 140);
+  }
+  return out;
+}
+
+export async function getChatInsights(from?: string | null): Promise<{
   total_sessions: number;
   waiting: number;
   human: number;
@@ -440,9 +465,13 @@ export async function getChatInsights(): Promise<{
   with_lead: number;
   handoff_rate: number;
 }> {
-  const sessions = await listChatSessions({ limit: 500 });
+  const all = await listChatSessions({ limit: 500, status: "all" });
+  const start = from ? new Date(from).getTime() : NaN;
+  const sessions = Number.isFinite(start)
+    ? all.filter((s) => new Date(s.created_at).getTime() >= start)
+    : all;
+  const waiting = all.filter((s) => s.status === "waiting").length;
   const total = sessions.length;
-  const waiting = sessions.filter((s) => s.status === "waiting").length;
   const human = sessions.filter((s) => s.status === "human").length;
   const closed = sessions.filter((s) => s.status === "closed").length;
   const withLead = sessions.filter((s) => Boolean(s.enquiry_id)).length;

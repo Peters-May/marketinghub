@@ -33,9 +33,15 @@ add_action('wp_enqueue_scripts', static function () {
 
     $handle = 'pm-website-chat';
     wp_enqueue_style(
+        'pm-website-chat-archivo',
+        'https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&display=swap',
+        [],
+        null
+    );
+    wp_enqueue_style(
         $handle,
         PM_WEBSITE_CHAT_PLUGIN_URL . 'assets/chat.css',
-        [],
+        ['pm-website-chat-archivo'],
         PM_WEBSITE_CHAT_VERSION
     );
     wp_enqueue_script(
@@ -59,7 +65,7 @@ add_action('wp_enqueue_scripts', static function () {
         'hubUrl' => '',
         'siteKey' => '',
         'greeting' => $opts['greeting'],
-        'logoUrl' => PM_WEBSITE_CHAT_PLUGIN_URL . 'assets/pm-group-logo.png',
+        'logoUrl' => '',
         'position' => $opts['position'],
         'pageUrl' => home_url(add_query_arg([])),
         'pageTitle' => wp_get_document_title(),
@@ -68,20 +74,20 @@ add_action('wp_enqueue_scripts', static function () {
             : '',
         'utm' => $utm,
         'labels' => [
-            'title' => 'Peters & May',
-            'subtitle' => 'Ask a question or get a quote',
+            'title' => 'How can we help?',
+            'subtitle' => 'Replies in UK business hours',
             'placeholder' => 'Message…',
             'speak' => 'Speak to the team',
             'send' => 'Send',
             'email' => 'Business email',
             'name' => 'Name',
             'company' => 'Company',
-            'close' => 'Close',
-            'minimize' => 'Minimise',
+            'close' => 'End chat',
+            'minimize' => 'Minimise chat',
             'closeConfirm' =>
                 "Would you like to close the chat?\n\nThis ends the chat.",
             'open' => 'Chat',
-            'botSender' => 'Your P&M friendly assistant',
+            'botSender' => 'Peters & May assistant',
         ],
     ]);
 });

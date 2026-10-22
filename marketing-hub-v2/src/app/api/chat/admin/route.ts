@@ -1,6 +1,7 @@
 import { jsonError, jsonOk, requireEnquiriesAccess } from "@/lib/api";
 import {
   getChatInsights,
+  latestMessagePreviews,
   getChatSettings,
   listChatSessions,
   listKbDocuments,
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
       return jsonOk({ configured: true, documents });
     }
     if (view === "insights") {
-      const insights = await getChatInsights();
+      const insights = await getChatInsights(url.searchParams.get("from"));
       return jsonOk({ configured: true, insights });
     }
 
@@ -59,7 +60,14 @@ export async function GET(request: Request) {
         ? (statusRaw as ChatSessionStatus | "open" | "all")
         : "open";
     const sessions = await listChatSessions({ status, limit: 150 });
-    return jsonOk({ configured: true, sessions });
+    const previews = await latestMessagePreviews(sessions.map((s) => s.id));
+    return jsonOk({
+      configured: true,
+      sessions: sessions.map((s) => ({
+        ...s,
+        last_body: previews[s.id] ?? "",
+      })),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed";
     return jsonError(message, 500);
@@ -127,22 +135,33 @@ export async function POST(request: Request) {
     if (action === "test") {
       const message = String(body.message ?? "").trim();
       if (!message) return jsonError("message required");
-      const { session, welcome } = await createChatSession({
-        page_url: "https://hub-playground.local/",
-        page_title: "Hub playground",
-        is_test: true,
-      });
-      // Force playground even when not deployed — createChatSession always works;
-      // public API checks deployed separately.
+      const existingId =
+        typeof body.session_id === "string" ? body.session_id : "";
+      let session = existingId ? await getChatSession(existingId) : null;
+      let welcomeId = "";
+      if (!session || !session.is_test) {
+        const created = await createChatSession({
+          page_url: "https://hub-playground.local/",
+          page_title: "Hub playground",
+          is_test: true,
+        });
+        session = created.session;
+        welcomeId = created.welcome.id;
+      }
       await addChatMessage({
         session_id: session.id,
         role: "visitor",
         body: message,
       });
       const history = await listChatMessages(session.id);
+      const guidanceOverride =
+        typeof body.guidance === "string" ? body.guidance : undefined;
       const reply = await generateAssistantReply({
         visitorMessage: message,
-        history: history.filter((m) => m.id !== welcome.id).slice(0, -1),
+        history: history
+          .filter((m) => m.id !== welcomeId)
+          .slice(0, -1),
+        guidanceOverride,
       });
       const saved = await addChatMessage({
         session_id: session.id,
@@ -152,8 +171,8 @@ export async function POST(request: Request) {
       });
       return jsonOk({
         session,
-        welcome,
         reply: saved,
+        choices: reply.choices,
         handoff: reply.forceHandoff,
       });
     }
