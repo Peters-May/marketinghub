@@ -247,7 +247,7 @@ export function AiAssistantPanel({
     }
   }
 
-  async function confirmCommand(text?: string) {
+  async function confirmCommand(text?: string | null) {
     const commandText = (text ?? pendingCommand ?? commandPreview?.text)?.trim();
     if (!commandText || confirmingRef.current) return;
     confirmingRef.current = true;
