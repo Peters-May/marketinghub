@@ -37,6 +37,10 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import {
+  pickCurrentTheme,
+  statusForThemeQuarter,
+} from "@/lib/themes/calendar";
 
 const STATUS_LABEL: Record<ThemeStatus, string> = {
   previous: "Previous",
@@ -84,8 +88,16 @@ function themeToForm(theme: QuarterlyTheme): ThemeEditForm {
     summary: theme.summary,
     quarter: theme.quarter,
     year: String(theme.year),
-    status: theme.status,
+    status: statusForThemeQuarter(theme),
   };
+}
+
+function formThemeStatus(form: ThemeEditForm): ThemeStatus {
+  const year = Number.parseInt(form.year, 10);
+  return statusForThemeQuarter({
+    quarter: form.quarter,
+    year: Number.isFinite(year) ? year : new Date().getFullYear(),
+  });
 }
 
 function contentToForm(item: ContentItem): ContentEditForm {
@@ -112,7 +124,7 @@ function contentToForm(item: ContentItem): ContentEditForm {
 }
 
 function pickDefaultTheme(list: QuarterlyTheme[]) {
-  return list.find((t) => t.status === "active") ?? list[0] ?? null;
+  return pickCurrentTheme(list);
 }
 
 function uniqueYears(list: QuarterlyTheme[]) {
@@ -271,7 +283,7 @@ export function ThemesClient({
       themeEdit.summary !== selected.summary ||
       themeEdit.quarter !== selected.quarter ||
       themeEdit.year !== String(selected.year) ||
-      themeEdit.status !== selected.status
+      themeEdit.status !== statusForThemeQuarter(selected)
     );
   }, [selected, themeEdit]);
 
@@ -362,7 +374,7 @@ export function ThemesClient({
             summary: themeEdit.summary.trim(),
             quarter: themeEdit.quarter,
             year,
-            status: themeEdit.status,
+            status: formThemeStatus(themeEdit),
           },
         }),
       });
@@ -610,6 +622,7 @@ export function ThemesClient({
         {yearThemes.map((theme) => {
           const active = theme.id === selectedId;
           const count = mains.filter((m) => m.theme_id === theme.id).length;
+          const calendarStatus = statusForThemeQuarter(theme);
           return (
             <button
               key={theme.id}
@@ -627,12 +640,12 @@ export function ThemesClient({
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    theme.status === "active"
+                    calendarStatus === "active"
                       ? "bg-accent-soft text-brand"
                       : "bg-sand text-muted"
                   )}
                 >
-                  {STATUS_LABEL[theme.status]}
+                  {STATUS_LABEL[calendarStatus]}
                 </span>
               </div>
               <h2 className="mt-2 font-display text-lg text-brand">{theme.title}</h2>
@@ -695,12 +708,20 @@ export function ThemesClient({
               <SearchSelect
                 className="field"
                 value={themeEdit.quarter}
-                onChange={(quarter) =>
+                onChange={(quarter) => {
+                  const nextQuarter = quarter as QuarterlyTheme["quarter"];
+                  const year = Number.parseInt(themeEdit.year, 10);
                   setThemeEdit({
                     ...themeEdit,
-                    quarter: quarter as QuarterlyTheme["quarter"],
-                  })
-                }
+                    quarter: nextQuarter,
+                    status: statusForThemeQuarter({
+                      quarter: nextQuarter,
+                      year: Number.isFinite(year)
+                        ? year
+                        : new Date().getFullYear(),
+                    }),
+                  });
+                }}
                 aria-label="Quarter"
                 options={[
                   { value: "Q1", label: "Q1" },
@@ -715,27 +736,27 @@ export function ThemesClient({
                 min={2000}
                 max={2100}
                 value={themeEdit.year}
-                onChange={(e) =>
-                  setThemeEdit({ ...themeEdit, year: e.target.value })
-                }
-                aria-label="Year"
-              />
-              <SearchSelect
-                className="field"
-                value={themeEdit.status}
-                onChange={(status) =>
+                onChange={(e) => {
+                  const year = Number.parseInt(e.target.value, 10);
                   setThemeEdit({
                     ...themeEdit,
-                    status: status as ThemeStatus,
-                  })
-                }
-                aria-label="Status"
-                options={[
-                  { value: "previous", label: "Previous" },
-                  { value: "active", label: "Active" },
-                  { value: "upcoming", label: "Upcoming" },
-                ]}
+                    year: e.target.value,
+                    status: statusForThemeQuarter({
+                      quarter: themeEdit.quarter,
+                      year: Number.isFinite(year)
+                        ? year
+                        : new Date().getFullYear(),
+                    }),
+                  });
+                }}
+                aria-label="Year"
               />
+              <div
+                className="field flex items-center text-sm text-muted"
+                aria-label="Status"
+              >
+                {STATUS_LABEL[formThemeStatus(themeEdit)]}
+              </div>
             </div>
             <input
               className="field mt-3"

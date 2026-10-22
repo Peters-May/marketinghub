@@ -112,7 +112,7 @@ export async function generateAssistantChat(input: {
   attachments?: AssistantAttachment[];
 }) {
   const { text } = await generateText({
-    model: getHubOpenAIModel(),
+    model: await getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     messages: buildChatMessages(input),
   });
@@ -142,7 +142,7 @@ export async function draftEmailAssist(input: {
   attachments?: AssistantAttachment[];
 }) {
   const { object } = await generateObject({
-    model: getHubOpenAIModel(),
+    model: await getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     prompt: `Draft a short marketing email from this brief.${attachmentContext(input.attachments ?? [])}
 
@@ -165,7 +165,7 @@ export async function draftSocialAssist(input: {
   attachments?: AssistantAttachment[];
 }) {
   const { object } = await generateObject({
-    model: getHubOpenAIModel(),
+    model: await getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     prompt: `Draft a social post for Peters & May from this brief.${attachmentContext(input.attachments ?? [])}
 
@@ -192,7 +192,7 @@ export async function rewriteAssist(input: {
   attachments?: AssistantAttachment[];
 }) {
   const { object } = await generateObject({
-    model: getHubOpenAIModel(),
+    model: await getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     prompt: `Rewrite the following copy to be clearer and more on-brand.${attachmentContext(input.attachments ?? [])}
 
@@ -210,7 +210,7 @@ export async function summariseAssist(input: {
   attachments?: AssistantAttachment[];
 }) {
   const { object } = await generateObject({
-    model: getHubOpenAIModel(),
+    model: await getHubOpenAIModel(),
     system: HUB_ASSISTANT_SYSTEM,
     prompt: `Summarise the attached materials and/or notes for a marketing teammate.${attachmentContext(input.attachments ?? [])}
 

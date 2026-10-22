@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { AiKeyReminder } from "@/components/admin/AiKeyReminder";
 import { HomeModules } from "@/components/home/HomeModules";
 import { HomeStats } from "@/components/home/HomeStats";
 import {
@@ -15,9 +16,11 @@ import { listWebEnquiries } from "@/lib/data/web-enquiries";
 import { computeEnquiryStats } from "@/lib/data/web-enquiries-stats";
 import { isClosedTaskStatus } from "@/lib/data/collections";
 import { format } from "date-fns";
+import { pickCurrentTheme } from "@/lib/themes/calendar";
 import { allowDemoAuth, DEMO_STAFF, hasSupabaseConfig } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
+import { getAiKeyPublicStatus } from "@/lib/ai/ai-key";
 
 export default async function AppHomePage() {
   const user =
@@ -27,7 +30,7 @@ export default async function AppHomePage() {
   }
   const isAdmin = user?.role === "admin";
 
-  const [events, content, sponsorships, themes, mains, tasks, enquiries] =
+  const [events, content, sponsorships, themes, mains, tasks, enquiries, aiKey] =
     await Promise.all([
       listEvents(),
       listContent(),
@@ -38,6 +41,7 @@ export default async function AppHomePage() {
       hasServiceRoleKey()
         ? listWebEnquiries({ includeTest: false }).catch(() => [])
         : Promise.resolve([]),
+      isAdmin ? getAiKeyPublicStatus() : Promise.resolve(null),
     ]);
   const supabaseReady = hasSupabaseConfig();
 
@@ -63,8 +67,7 @@ export default async function AppHomePage() {
   const enquiryStats = computeEnquiryStats(enquiries);
   const newEnquiries = enquiryStats.thisWeek;
 
-  const currentTheme =
-    themes.find((t) => t.status === "active") ?? themes[0] ?? null;
+  const currentTheme = pickCurrentTheme(themes);
   const themeMains = currentTheme
     ? mains.filter((m) => m.theme_id === currentTheme.id).slice(0, 3)
     : [];
@@ -75,6 +78,8 @@ export default async function AppHomePage() {
         title="Marketing Hub"
         description="Plan events, content, partners, and share media — without the Airtable-style builder."
       />
+
+      {aiKey ? <AiKeyReminder status={aiKey} /> : null}
 
       {currentTheme ? (
         <div className="surface-card mb-8 overflow-hidden">

@@ -1043,6 +1043,22 @@ export type EmailGalleryImage = {
   created_at: string;
 };
 
+/** OpenAI project key stored for the hub assistant. The secret is encrypted. */
+export type AiKeyNotice = "14" | "7" | "1" | "0";
+
+export type AiKeySettings = {
+  /** Encrypted API key. Empty when the key has not been saved in Admin. */
+  api_key: string;
+  /** Last four characters, safe to show in Admin. */
+  key_hint: string;
+  /** Calendar date (YYYY-MM-DD) the key expires. Empty when unknown. */
+  expires_on: string;
+  /** Reminder thresholds already emailed. */
+  notices_sent: AiKeyNotice[];
+  updated_at: string;
+  updated_by: string;
+};
+
 /** Global email marketing defaults (footer links, preference centre). */
 export type EmailSettings = {
   show_unsubscribe_link: boolean;
@@ -1145,6 +1161,8 @@ export type HubStore = {
   email_gallery: EmailGalleryImage[];
   /** Global email marketing settings (unsubscribe / preferences). */
   email_settings: EmailSettings;
+  /** OpenAI key and expiry, managed under Admin → AI key. */
+  ai_settings: AiKeySettings;
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };

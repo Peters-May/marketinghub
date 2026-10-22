@@ -10,7 +10,7 @@ Never invent clients, quotes, case studies, statistics, office counts, or certif
 Leave factsheet placeholders if a figure would otherwise be needed.
 Do not use emoji, exclamation marks, or hype words.`;
 
-function model() {
+async function model() {
   return getHubOpenAIModel();
 }
 
@@ -19,7 +19,7 @@ export async function suggestSubjects(input: {
   excerpt: string;
 }) {
   const { object } = await generateObject({
-    model: model(),
+    model: await model(),
     system: SYSTEM,
     prompt: `Suggest 4 subject lines and matching preview text for a marketing email.
 
@@ -47,7 +47,7 @@ export async function improvePreview(input: {
   excerpt: string;
 }) {
   const { object } = await generateObject({
-    model: model(),
+    model: await model(),
     system: SYSTEM,
     prompt: `Write 2 inbox preview lines for this email. Each under 90 characters.
 
@@ -72,7 +72,7 @@ export async function rewriteCopy(input: {
         ? "more formal"
         : "clearer";
   const { object } = await generateObject({
-    model: model(),
+    model: await model(),
     system: SYSTEM,
     prompt: `Rewrite the following email ${input.html ? "HTML" : "text"} to be ${toneLabel}. Keep personalisation tokens like {{name}} unchanged. ${
       input.html
@@ -101,7 +101,7 @@ export async function draftFromBrief(input: {
 }) {
   // Flat schema (no discriminatedUnion) — OpenAI structured output is more reliable.
   const { object } = await generateObject({
-    model: model(),
+    model: await model(),
     system: SYSTEM,
     prompt: `Draft a short marketing email from this brief.
 

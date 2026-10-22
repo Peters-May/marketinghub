@@ -3,6 +3,10 @@
     {
       "path": "/api/email/scheduled",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/admin/ai-key/notify",
+      "schedule": "0 8 * * *"
     }
   ]
 }

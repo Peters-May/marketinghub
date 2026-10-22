@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const { error } = await requireAdmin();
   if (error) return error;
 
-  if (!isHubAiConfigured()) {
+  if (!(await isHubAiConfigured())) {
     return jsonError(AI_NOT_CONFIGURED_MESSAGE, 503);
   }
 

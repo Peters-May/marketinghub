@@ -164,7 +164,7 @@ export const STAFF_NAV: NavItem[] = [
   {
     href: "/app/admin",
     label: "Admin",
-    description: "Users and data tables",
+    description: "Users, AI key, and data tables",
     icon: Settings,
   },
 ];

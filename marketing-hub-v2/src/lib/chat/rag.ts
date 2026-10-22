@@ -36,21 +36,21 @@ export function retrieveKb(
   return scored.slice(0, limit).map((x) => x.d);
 }
 
-function model() {
-  const apiKey =
-    process.env.OPENAI_API_KEY ||
-    process.env.AI_GATEWAY_API_KEY ||
-    process.env.VERCEL_AI_GATEWAY_API_KEY;
+async function model() {
+  const { getHubOpenAIApiKey, AI_NOT_CONFIGURED_MESSAGE } = await import(
+    "@/lib/ai/openai"
+  );
+  const apiKey = await getHubOpenAIApiKey();
   if (!apiKey) {
-    throw new Error(
-      "AI is not configured. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY."
-    );
+    throw new Error(AI_NOT_CONFIGURED_MESSAGE);
   }
   const openai = createOpenAI({
     apiKey,
     baseURL: process.env.OPENAI_BASE_URL || undefined,
   });
-  return openai(process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini");
+  return openai(
+    process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_MODEL || "gpt-4o-mini"
+  );
 }
 
 /** Force handoff for explicit human request or hard quote pressure mid-flow. */
@@ -159,7 +159,7 @@ ${kbBlock}`;
     }));
 
   const result = streamText({
-    model: model(),
+    model: await model(),
     system,
     messages: [
       ...historyMessages,

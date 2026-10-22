@@ -17,6 +17,7 @@ import {
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
 import { readStore, updateStore } from "@/lib/store/local";
+import { statusForThemeQuarter } from "@/lib/themes/calendar";
 import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 import { clothingProductById } from "@/lib/merch/north-sails";
 import {
@@ -1015,6 +1016,10 @@ export async function createTheme(
 ) {
   const item: QuarterlyTheme = {
     ...input,
+    status: statusForThemeQuarter({
+      quarter: input.quarter,
+      year: input.year,
+    }),
     id: uid("thm"),
     created_at: nowIso(),
     updated_at: nowIso(),
@@ -1030,8 +1035,18 @@ export async function updateTheme(id: string, patch: Partial<QuarterlyTheme>) {
   await updateStore((s) => {
     const idx = s.themes.findIndex((t) => t.id === id);
     if (idx === -1) return;
-    s.themes[idx] = { ...s.themes[idx], ...patch, id, updated_at: nowIso() };
-    updated = s.themes[idx];
+    const next = {
+      ...s.themes[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    next.status = statusForThemeQuarter({
+      quarter: next.quarter,
+      year: next.year,
+    });
+    s.themes[idx] = next;
+    updated = next;
   });
   return updated;
 }

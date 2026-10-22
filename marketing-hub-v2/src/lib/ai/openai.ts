@@ -1,24 +1,20 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { resolveHubOpenAIApiKey } from "@/lib/ai/ai-key";
 
 export const AI_NOT_CONFIGURED_MESSAGE =
-  "AI is not configured. Set OPENAI_API_KEY or AI_GATEWAY_API_KEY.";
+  "AI is not configured. Add the OpenAI key under Admin → AI key.";
 
-export function getHubOpenAIApiKey(): string | null {
-  return (
-    process.env.OPENAI_API_KEY ||
-    process.env.AI_GATEWAY_API_KEY ||
-    process.env.VERCEL_AI_GATEWAY_API_KEY ||
-    null
-  );
+export async function getHubOpenAIApiKey(): Promise<string | null> {
+  return (await resolveHubOpenAIApiKey()).key;
 }
 
-export function isHubAiConfigured(): boolean {
-  return Boolean(getHubOpenAIApiKey());
+export async function isHubAiConfigured(): Promise<boolean> {
+  return Boolean(await getHubOpenAIApiKey());
 }
 
-/** Shared OpenAI model used by email assist and the hub assistant. */
-export function getHubOpenAIModel() {
-  const apiKey = getHubOpenAIApiKey();
+/** Shared OpenAI model used by email assist, chat, and the hub assistant. */
+export async function getHubOpenAIModel() {
+  const apiKey = await getHubOpenAIApiKey();
   if (!apiKey) {
     throw new Error(AI_NOT_CONFIGURED_MESSAGE);
   }

@@ -28,10 +28,12 @@ import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { cache } from "react";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 import { normalizeEmailSettings } from "@/lib/email/email-settings";
+import { normalizeAiKeySettings } from "@/lib/ai/ai-key-status";
 import {
   applyReleaseLibrary,
   needsReleaseLibrary,
 } from "@/lib/pr/release-library";
+import { applyCalendarThemeStatuses } from "@/lib/themes/calendar";
 
 const DATA_DIR = getDataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
@@ -222,7 +224,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     advertisements: store.advertisements ?? seed.advertisements,
     platform_credentials:
       store.platform_credentials ?? seed.platform_credentials,
-    themes: store.themes ?? seed.themes,
+    themes: applyCalendarThemeStatuses(store.themes ?? seed.themes),
     theme_mains: migrateThemeMains(store.theme_mains) ?? seed.theme_mains,
     theme_offshoots: store.theme_offshoots ?? seed.theme_offshoots,
     merch_orders:
@@ -263,6 +265,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     email_settings: normalizeEmailSettings(
       store.email_settings ?? seed.email_settings
     ),
+    ai_settings: normalizeAiKeySettings(store.ai_settings ?? seed.ai_settings),
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -336,6 +339,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_events ||
     !store.email_gallery ||
     !store.email_settings ||
+    !store.ai_settings ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );
