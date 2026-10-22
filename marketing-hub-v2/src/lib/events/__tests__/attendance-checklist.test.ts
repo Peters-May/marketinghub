@@ -22,12 +22,25 @@ describe("attendance checklist", () => {
     expect(formatAttendanceChecklistCount(progress)).toBe("1/6");
   });
 
+  it("hides hotel booking until accommodation is arranged", () => {
+    const hidden = attendanceChecklistProgress({
+      social_media_post_completed: true,
+    });
+    expect(hidden).toEqual({ done: 1, total: 7, na: 0 });
+
+    const shown = attendanceChecklistProgress({
+      accommodation_arranged: true,
+      social_media_post_completed: true,
+    });
+    expect(shown).toEqual({ done: 2, total: 8, na: 0 });
+  });
+
   it("treats a fully N/A checklist as complete", () => {
     const attendance_checklist_na = Object.fromEntries(
       ATTENDANCE_CHECKLIST_KEYS.map((key) => [key, true])
     );
     const progress = attendanceChecklistProgress({ attendance_checklist_na });
-    expect(progress).toEqual({ done: 0, total: 0, na: 8 });
+    expect(progress).toEqual({ done: 0, total: 0, na: 7 });
     expect(progress.done >= progress.total).toBe(true);
     expect(formatAttendanceChecklistCount(progress)).toBe("N/A");
   });

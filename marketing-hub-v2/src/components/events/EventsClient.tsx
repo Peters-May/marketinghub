@@ -69,6 +69,7 @@ import {
   attendanceChecklistProgress,
   emptyAttendanceOpsFields,
   formatAttendanceChecklistCount,
+  hotelChecklistVisible,
   patchAttendanceChecklist,
   readAttendanceOpsFields,
   type EventAttendanceOpsFields,
@@ -339,6 +340,7 @@ function AttendanceOpsPanel({
   disabled?: boolean;
 }) {
   const progress = attendanceChecklistProgress(values);
+  const showHotel = hotelChecklistVisible(values);
   const hotelMark = attendanceChecklistMark(values, "hotel_booked");
   return (
     <div className="space-y-3 rounded-lg border border-border bg-sand/40 px-3 py-3">
@@ -361,7 +363,9 @@ function AttendanceOpsPanel({
             <p className="label !mb-1">
               Attendance checklist ({formatAttendanceChecklistCount(progress)})
             </p>
-            {ATTENDANCE_CHECKLIST_KEYS.map((key) => {
+            {ATTENDANCE_CHECKLIST_KEYS.filter(
+              (key) => key !== "hotel_booked" || showHotel
+            ).map((key) => {
               const mark = attendanceChecklistMark(values, key);
               return (
                 <div
@@ -422,7 +426,7 @@ function AttendanceOpsPanel({
               );
             })}
           </div>
-          {hotelMark !== "na" ? (
+          {showHotel && hotelMark !== "na" ? (
           <div className="space-y-3 border-t border-border/70 pt-3">
             <p className="label !mb-1">Hotel details</p>
             <div className="grid gap-3 md:grid-cols-2">
@@ -764,6 +768,9 @@ function EventAttendeeManager({
               >
                 <span>
                   {person.user_name}
+                  {person.attendance_status === "maybe" ? (
+                    <span className="ml-1 text-xs text-muted">(maybe)</span>
+                  ) : null}
                   {person.user_id === currentUserId ? (
                     <span className="ml-1 text-xs text-muted">(you)</span>
                   ) : null}
@@ -1075,7 +1082,12 @@ export function EventsClient({
   const attendingByEventId = useMemo(() => {
     const map = new Map<string, EventAttendance[]>();
     for (const row of allAttendance) {
-      if (row.attendance_status !== "attending") continue;
+      if (
+        row.attendance_status !== "attending" &&
+        row.attendance_status !== "maybe"
+      ) {
+        continue;
+      }
       const list = map.get(row.event_id);
       if (list) list.push(row);
       else map.set(row.event_id, [row]);
@@ -1095,7 +1107,12 @@ export function EventsClient({
   }, [attendance, currentUserId]);
 
   const attendingPeople = useMemo(
-    () => attendance.filter((a) => a.attendance_status === "attending"),
+    () =>
+      attendance.filter(
+        (a) =>
+          a.attendance_status === "attending" ||
+          a.attendance_status === "maybe"
+      ),
     [attendance]
   );
 
@@ -1220,7 +1237,9 @@ export function EventsClient({
         ? allAttendance
             .filter(
               (a) =>
-                a.event_id === editingId && a.attendance_status === "attending"
+                a.event_id === editingId &&
+                (a.attendance_status === "attending" ||
+                  a.attendance_status === "maybe")
             )
             .sort((a, b) => a.user_name.localeCompare(b.user_name))
         : [],
@@ -1242,7 +1261,12 @@ export function EventsClient({
   const attendeePeople = useMemo(() => {
     const byId = new Map<string, string>();
     for (const row of allAttendance) {
-      if (row.attendance_status !== "attending") continue;
+      if (
+        row.attendance_status !== "attending" &&
+        row.attendance_status !== "maybe"
+      ) {
+        continue;
+      }
       const id = row.user_id.trim();
       const name = row.user_name.trim();
       if (!id || !name) continue;

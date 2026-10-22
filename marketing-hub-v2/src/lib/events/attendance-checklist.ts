@@ -130,6 +130,11 @@ export function attendanceChecklistMark(
   return "open";
 }
 
+/** Hotel booking only applies once accommodation has been arranged. */
+export function hotelChecklistVisible(event: Partial<EventItem>): boolean {
+  return attendanceChecklistMark(event, "accommodation_arranged") === "done";
+}
+
 /** Toggle one checklist row. N/A clears the done flag; done clears N/A. */
 export function patchAttendanceChecklist(
   current: Pick<
@@ -158,12 +163,16 @@ export function attendanceChecklistProgress(event: Partial<EventItem>): {
 } {
   let done = 0;
   let na = 0;
+  let counted = 0;
+  const showHotel = hotelChecklistVisible(event);
   for (const key of ATTENDANCE_CHECKLIST_KEYS) {
+    if (key === "hotel_booked" && !showHotel) continue;
+    counted += 1;
     const mark = attendanceChecklistMark(event, key);
     if (mark === "na") na += 1;
     else if (mark === "done") done += 1;
   }
-  return { done, total: ATTENDANCE_CHECKLIST_KEYS.length - na, na };
+  return { done, total: counted - na, na };
 }
 
 /** `3/8`, or `N/A` when every item is marked not applicable. */
