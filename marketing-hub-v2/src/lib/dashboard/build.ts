@@ -413,7 +413,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
     .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
     .filter((row) => !actionKeys.has(row.key))
     .slice(0, 6)
-    .map(({ updated_at: _updated, ...row }) => row);
+    .map(({ key, title, detail, href }) => ({ key, title, detail, href }));
 
   const unowned = viewer.isAdmin
     ? [
