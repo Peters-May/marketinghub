@@ -208,8 +208,10 @@
     if (id) seenIds[id] = true;
     var text = String(body || "").trim();
     if (role === "system") {
+      if (/asked to speak to the team/i.test(text)) return null;
       var line = el("div", "pm-chat__system", text);
       messagesEl.insertBefore(line, typingEl);
+      pinFollowUps();
       messagesEl.scrollTop = messagesEl.scrollHeight;
       if (text) transcriptLines.push("[System] " + text);
       return line;
@@ -230,6 +232,7 @@
       wrap.appendChild(bubble);
     }
     messagesEl.insertBefore(wrap, typingEl);
+    pinFollowUps();
     messagesEl.scrollTop = messagesEl.scrollHeight;
     var who = label || (role === "visitor" ? "You" : role);
     if (text) transcriptLines.push("[" + who + "] " + text);
@@ -570,12 +573,17 @@
   function hideStarters() {
     startersEl.classList.remove("is-on");
     clearNode(startersEl);
+    if (startersEl.parentNode) startersEl.parentNode.removeChild(startersEl);
   }
 
   function placeInThread(node) {
-    if (node.parentNode !== messagesEl) {
-      messagesEl.insertBefore(node, typingEl);
-    }
+    if (!node) return;
+    messagesEl.insertBefore(node, typingEl);
+  }
+
+  function pinFollowUps() {
+    if (!startersEl.classList.contains("is-on")) return;
+    messagesEl.insertBefore(startersEl, typingEl);
   }
 
   function showStarters() {

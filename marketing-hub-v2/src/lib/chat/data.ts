@@ -363,6 +363,7 @@ export async function closeAbandonedChatSessions(opts: {
 export async function listChatSessions(opts?: {
   status?: ChatSessionStatus | "open" | "all";
   limit?: number;
+  includeTest?: boolean;
 }): Promise<ChatSession[]> {
   const supabase = requireService();
   const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
@@ -371,6 +372,9 @@ export async function listChatSessions(opts?: {
     .select("*")
     .order("last_message_at", { ascending: false })
     .limit(limit);
+  if (!opts?.includeTest) {
+    q = q.eq("is_test", false);
+  }
   if (opts?.status === "open") {
     q = q.in("status", ["ai", "waiting", "human"]);
   } else if (opts?.status && opts.status !== "all") {

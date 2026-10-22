@@ -210,10 +210,7 @@ function ShellInner({
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-white/90 px-4 py-3 backdrop-blur md:hidden">
             <BrandLockup size={28} />
-            <div className="flex items-center gap-2">
-              <div className="w-56">
-                <ViewToggle canToggle={canToggleAdminView} />
-              </div>
+            <div className="flex shrink-0 items-center gap-2">
               {canUseAssistant ? (
                 <button
                   type="button"
@@ -249,6 +246,9 @@ function ShellInner({
               data-tour="sidebar"
               className="border-b border-border bg-white md:hidden"
             >
+              <div className="px-3 pt-3">
+                <ViewToggle canToggle={canToggleAdminView} />
+              </div>
               {Nav}
               <div className="border-t border-border px-5 py-3">
                 <p className="text-xs text-muted">Signed in as {userName}</p>

@@ -156,6 +156,7 @@ export function AiAssistantPanel({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [fullPage, setFullPage] = useState(false);
   const [commandPreview, setCommandPreview] = useState<CommandPreview | null>(
     null
   );
@@ -426,10 +427,35 @@ export function AiAssistantPanel({
   }
 
   useEffect(() => {
+    const sheet = window.matchMedia("(max-width: 767px)");
+    const apply = () => setFullPage(sheet.matches);
+    apply();
+    sheet.addEventListener("change", apply);
+    return () => sheet.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const sheet = window.matchMedia("(max-width: 767px)");
+    const previousOverflow = document.body.style.overflow;
+    const lock = () => {
+      document.body.style.overflow = sheet.matches ? "hidden" : previousOverflow;
+    };
+    lock();
+    if (sheet.matches) panelRef.current?.focus();
+    sheet.addEventListener("change", lock);
+    return () => {
+      sheet.removeEventListener("change", lock);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (!panelRef.current?.contains(document.activeElement)) return;
+      const sheet = window.matchMedia("(max-width: 767px)").matches;
+      if (!sheet && !panelRef.current?.contains(document.activeElement)) return;
       onClose();
     };
     document.addEventListener("keydown", onKeyDown);
@@ -450,13 +476,16 @@ export function AiAssistantPanel({
   return (
     <aside
       ref={panelRef}
+      tabIndex={-1}
       className={cn(
-        "shrink-0 border-l border-border bg-white",
+        "shrink-0 border-border bg-white outline-none",
         open
-          ? "flex h-[min(50vh,28rem)] w-full flex-col md:sticky md:top-0 md:h-screen md:max-h-screen md:w-[22rem]"
-          : "hidden md:sticky md:top-0 md:flex md:h-screen md:w-11 md:flex-col",
+          ? "pm-assistant-sheet fixed inset-0 z-50 flex h-dvh w-full max-h-none flex-col border-0 md:sticky md:inset-auto md:top-0 md:z-auto md:h-screen md:max-h-screen md:w-[22rem] md:border-l"
+          : "hidden border-l md:sticky md:top-0 md:flex md:h-screen md:w-11 md:flex-col",
         className
       )}
+      role={open && fullPage ? "dialog" : undefined}
+      aria-modal={open && fullPage ? true : undefined}
       aria-label="Assistant"
     >
       {open ? (
@@ -478,7 +507,7 @@ export function AiAssistantPanel({
               Hide
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-1.5">
           {MODE_OPTIONS.map((option) => (
@@ -634,7 +663,7 @@ export function AiAssistantPanel({
         </div>
       </div>
           </div>
-          <div className="border-t border-border px-4 py-3">
+          <div className="border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <form onSubmit={onSubmit} className="space-y-2">
               {attachments.length ? (
                 <ul className="flex flex-wrap gap-1.5">

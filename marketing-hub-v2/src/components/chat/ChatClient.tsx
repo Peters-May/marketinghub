@@ -58,10 +58,17 @@ function waitAge(s: ChatSession): string {
   return `${hours} hr`;
 }
 
+function staffFirstName(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const token = local.split(/[._+\-]/).find((part) => part.trim()) ?? "";
+  if (!token) return "";
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
 function statusLabel(s: ChatSession): string {
   if (s.status === "waiting") return `Waiting · ${waitAge(s)}`;
   if (s.status === "human") {
-    const first = (s.assignee_email || "").split("@")[0];
+    const first = staffFirstName(s.assignee_email || "");
     return first ? `With ${first}` : "With the team";
   }
   if (s.status === "closed") return "Closed";
@@ -93,6 +100,28 @@ function messageWho(m: ChatMessage): string {
   if (m.role === "staff") return m.author_name || "Team";
   if (m.role === "assistant") return "Peters & May assistant";
   return "System";
+}
+
+function guidedEnquiry(body: string): {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+} | null {
+  const text = stripChoiceTag(body);
+  if (!/enquiry \((guided form|pasted details)\):/i.test(text)) return null;
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const title = (lines[0] ?? "Enquiry").replace(/:$/, "");
+  const rows = lines.slice(1).map((line) => {
+    const split = line.indexOf(":");
+    if (split < 0) return { label: "Note", value: line };
+    return {
+      label: line.slice(0, split).trim(),
+      value: line.slice(split + 1).trim(),
+    };
+  });
+  return { title, rows };
 }
 
 function formatMessageWhen(iso: string): string {
@@ -400,11 +429,11 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     }
   }
 
-  async function runTest() {
-    if (!testInput.trim()) return;
+  async function runTest(message?: string) {
+    const userLine = (message ?? testInput).trim();
+    if (!userLine) return;
     setBusy(true);
     setError("");
-    const userLine = testInput.trim();
     setTestLog((prev) => [...prev, { role: "visitor", body: userLine }]);
     setTestInput("");
     try {
@@ -513,7 +542,8 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             )}
           >
             {t.label}
-            {t.id === "inbox" ? (
+            {t.id === "inbox" &&
+            sessions.filter((s) => s.status === "waiting").length > 0 ? (
               <span className="ml-2 rounded-full bg-[#f6efe0] px-2 py-0.5 text-xs text-[#7a5a10]">
                 {sessions.filter((s) => s.status === "waiting").length}
               </span>
@@ -651,7 +681,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   <div className="ml-auto flex gap-2">
                     <button
                       type="button"
-                      className="rounded border border-border px-2 py-1 text-xs"
+                      className="btn-ghost"
                       disabled={busy || messages.length === 0}
                       onClick={() => {
                         const lines = messages
@@ -684,21 +714,23 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     >
                       Download transcript
                     </button>
+                    {selected.status === "ai" ? (
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => setStatus("human")}
+                        disabled={busy}
+                      >
+                        Take over
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
-                      onClick={() => setStatus("human")}
-                      disabled={busy || selected.status === "closed"}
-                    >
-                      Take over
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
+                      className="btn-secondary"
                       onClick={() => setStatus("closed")}
                       disabled={busy || selected.status === "closed"}
                     >
-                      Close
+                      Close chat
                     </button>
                   </div>
                 </div>
@@ -720,35 +752,62 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     </button>
                   </div>
                 ) : null}
-                <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "max-w-[85%] rounded-xl px-3 py-2 text-sm",
-                        m.role === "visitor"
-                          ? "ml-auto bg-[#0B2545] text-white"
-                          : m.role === "staff"
-                            ? "bg-[#007DC5]/15 text-[#0B2545]"
-                            : m.role === "system"
-                              ? "mx-auto bg-sand text-xs text-muted"
-                              : "bg-[#E3E6E9] text-[#0B2545]"
-                      )}
-                    >
+                <div className="flex flex-1 flex-col gap-3 overflow-y-auto bg-[#f4f6f7] p-4">
+                  {messages.map((m) => {
+                    const guided =
+                      m.role === "visitor" ? guidedEnquiry(m.body) : null;
+                    const when = formatMessageWhen(m.created_at);
+                    return (
                       <div
+                        key={m.id}
                         className={cn(
-                          "mb-1 text-[11px]",
-                          m.role === "visitor" ? "text-white/70" : "text-muted"
+                          "flex max-w-[85%] flex-col gap-1",
+                          m.role === "visitor"
+                            ? "ml-auto items-end"
+                            : m.role === "system"
+                              ? "mx-auto w-full max-w-none items-center"
+                              : "mr-auto items-start"
                         )}
                       >
-                        {messageWho(m)}
-                        {formatMessageWhen(m.created_at)
-                          ? ` · ${formatMessageWhen(m.created_at)}`
-                          : ""}
+                        {m.role === "system" ? null : (
+                          <div className="text-xs text-[#5b6472]">
+                            {messageWho(m)}
+                            {when ? ` · ${when}` : ""}
+                          </div>
+                        )}
+                        {guided ? (
+                          <div className="w-full rounded-xl border border-[#e3e6e9] bg-white px-3 py-2 text-sm text-[#1f2937]">
+                            <div className="mb-2 font-semibold text-[#0B2545]">
+                              {guided.title}
+                            </div>
+                            <dl className="grid grid-cols-[minmax(0,140px)_1fr] gap-x-3 gap-y-1">
+                              {guided.rows.map((row) => (
+                                <div key={`${row.label}-${row.value}`} className="contents">
+                                  <dt className="text-[#5b6472]">{row.label}</dt>
+                                  <dd>{row.value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>
+                        ) : (
+                          <div
+                            className={cn(
+                              "rounded-xl px-3 py-2 text-sm",
+                              m.role === "visitor"
+                                ? "bg-[#0B2545] text-white"
+                                : m.role === "staff"
+                                  ? "bg-[#e6f2fa] text-[#0B2545]"
+                                  : m.role === "system"
+                                    ? "bg-transparent px-0 text-center text-xs text-[#5b6472]"
+                                    : "bg-white text-[#1f2937]"
+                            )}
+                          >
+                            {stripChoiceTag(m.body)}
+                          </div>
+                        )}
                       </div>
-                      {stripChoiceTag(m.body)}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="border-t border-border p-3">
                   {selected.status === "closed" ? (
@@ -891,11 +950,11 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 )
               }
             />
-            <div className="max-w-[85%] rounded-xl bg-[#E3E6E9] px-3 py-2 text-sm text-[#0B2545]">
-              <div className="mb-1 text-[11px] text-muted">
-                Peters & May assistant
+            <div className="flex max-w-[85%] flex-col gap-1">
+              <div className="text-xs text-[#5b6472]">Peters & May assistant</div>
+              <div className="rounded-xl bg-white px-3 py-2 text-sm text-[#1f2937]">
+                {settings?.greeting?.trim() || DEFAULT_CHAT_GREETING}
               </div>
-              {settings?.greeting?.trim() || DEFAULT_CHAT_GREETING}
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -923,7 +982,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                       : s
                   );
                 }}
-                className="rounded-md border border-border px-3 py-2 text-sm text-[#0B2545] disabled:opacity-50"
+                className="btn-secondary disabled:opacity-50"
               >
                 Restore recommended
               </button>
@@ -936,7 +995,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     greeting: settings?.greeting,
                   })
                 }
-                className="rounded-md bg-[#0B2545] px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="btn-primary disabled:opacity-50"
               >
                 Save guidance
               </button>
@@ -1063,12 +1122,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       ) : null}
 
       {tab === "test" ? (
-        <div className="mx-auto max-w-xl space-y-3 rounded-lg border border-border bg-white p-4">
-          <p className="text-sm text-muted">
-            Try a question against the saved guidance. Choice tags stay hidden.
-            This does not message a visitor.
-          </p>
-          <div className="flex flex-wrap gap-2">
+        <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-xl border border-[#e3e6e9] bg-white shadow-[0_12px_32px_rgba(29,30,31,0.14)]">
+          <div className="bg-[#0B2545] px-4 py-3 text-white">
+            <div className="font-semibold">How can we help?</div>
+            <div className="text-xs text-white/80">Test · not a live visitor</div>
+          </div>
+          <div className="flex flex-wrap gap-2 border-b border-[#e3e6e9] px-3 py-2">
             {[
               "Is there a sailing for Fort Lauderdale?",
               "I need to ship a yacht",
@@ -1077,12 +1136,79 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               <button
                 key={q}
                 type="button"
-                className="rounded border border-border px-2 py-1 text-xs text-[#0B2545]"
-                onClick={() => setTestInput(q)}
+                className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-left text-sm font-semibold text-[#005f97]"
+                onClick={() => void runTest(q)}
               >
                 {q}
               </button>
             ))}
+          </div>
+          <div className="flex min-h-[320px] flex-col gap-3 bg-white p-3">
+            {testLog.length === 0 ? (
+              <p className="text-sm text-[#5b6472]">Ask a test question…</p>
+            ) : (
+              testLog.map((m, i) => (
+                <div
+                  key={`${i}-${m.role}`}
+                  className={cn(
+                    "flex max-w-[85%] flex-col gap-1",
+                    m.role === "visitor" ? "ml-auto items-end" : "mr-auto items-start"
+                  )}
+                >
+                  <div className="text-xs text-[#5b6472]">
+                    {m.role === "visitor" ? "You" : "Peters & May assistant"}
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-xl px-3 py-2 text-base",
+                      m.role === "visitor"
+                        ? "bg-[#0B2545] text-white"
+                        : "bg-[#f4f6f7] text-[#1f2937]"
+                    )}
+                  >
+                    {stripChoiceTag(m.body)}
+                  </div>
+                  {m.role === "assistant" && m.choices && m.choices.length > 1 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {m.choices.map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-sm font-semibold text-[#005f97]"
+                          onClick={() => void runTest(choice)}
+                        >
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex gap-2 border-t border-[#e3e6e9] p-3">
+            <input
+              className="field min-h-11 flex-1 text-base"
+              value={testInput}
+              onChange={(e) => setTestInput(e.target.value)}
+              placeholder="Message…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void runTest();
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void runTest()}
+              className="btn-primary min-h-11 min-w-11 disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 border-t border-[#e3e6e9] px-3 py-2">
             <button
               type="button"
               className="btn-secondary"
@@ -1101,132 +1227,105 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               {testUseDraft ? "Using unsaved guidance" : "Use unsaved guidance"}
             </button>
           </div>
-          <div className="max-h-[50vh] space-y-2 overflow-y-auto rounded-md bg-sand/40 p-3">
-            {testLog.length === 0 ? (
-              <p className="text-sm text-muted">Ask a test question…</p>
-            ) : (
-              testLog.map((m, i) => (
-                <div
-                  key={`${i}-${m.role}`}
-                  className={cn(
-                    "rounded-2xl px-3 py-2 text-sm",
-                    m.role === "visitor"
-                      ? "ml-8 bg-[#0B2545] text-white"
-                      : "mr-8 bg-[#E3E6E9] text-[#0B2545]"
-                  )}
-                >
-                  {stripChoiceTag(m.body)}
-                  {m.choices && m.choices.length > 1 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {m.choices.map((choice) => (
-                        <button
-                          key={choice}
-                          type="button"
-                          className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-sm font-semibold text-[#005f97]"
-                          onClick={() => {
-                            setTestInput(choice);
-                          }}
-                        >
-                          {choice}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-          <div className="flex gap-2">
-            <input
-              className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
-              value={testInput}
-              onChange={(e) => setTestInput(e.target.value)}
-              placeholder="Message…"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void runTest();
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void runTest()}
-              className="rounded-md bg-[#0B2545] px-4 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
         </div>
       ) : null}
 
       {tab === "deploy" ? (
-        <div className="max-w-xl space-y-4 rounded-lg border border-border bg-white p-4">
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={Boolean(settings?.deployed)}
+        <div className="grid max-w-4xl gap-4 lg:grid-cols-2">
+          <section className="rounded-xl border border-[#e3e6e9] bg-white p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-[#0B2545]">
+                  Live on the website
+                </h2>
+                <p className="mt-1 text-sm text-[#5b6472]">
+                  Visitors see the assistant when this is on. It saves straight away, and it is separate from guidance and the handover note.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(settings?.deployed)}
+                aria-label="Live on the website"
+                disabled={busy || !settings}
+                onClick={() =>
+                  void saveSettings({ deployed: !settings?.deployed })
+                }
+                className={cn(
+                  "relative h-7 w-12 shrink-0 rounded-full disabled:opacity-50",
+                  settings?.deployed ? "bg-[#007DC5]" : "bg-[#c7ccd1]"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-6 w-6 rounded-full bg-white",
+                    settings?.deployed ? "left-5" : "left-0.5"
+                  )}
+                />
+              </button>
+            </div>
+          </section>
+          <section className="rounded-xl border border-[#e3e6e9] bg-white p-4">
+            <h2 className="text-base font-semibold text-[#0B2545]">
+              Before you go live
+            </h2>
+            <ul className="mt-3 space-y-2 text-sm text-[#1f2937]">
+              <li>
+                {siteKeyConfigured ? "Done" : "Check"} — site key is set
+              </li>
+              <li>
+                {settings?.deployed ? "Done" : "Check"} — live answers are on
+              </li>
+              <li>Check — plugin is active on the website</li>
+              <li>Check — HubSpot chat is turned off</li>
+            </ul>
+          </section>
+          <section className="space-y-3 rounded-xl border border-[#e3e6e9] bg-white p-4 lg:col-span-2">
+            <h2 className="text-base font-semibold text-[#0B2545]">
+              Handover
+            </h2>
+            <label className="block text-sm text-[#5b6472]">
+              Office hours note, shown when someone asks for the team
+            </label>
+            <textarea
+              className="field min-h-[80px] w-full text-base"
+              value={settings?.office_hours_note ?? ""}
               onChange={(e) =>
-                void saveSettings({ deployed: e.target.checked })
+                setSettings((s) =>
+                  s ? { ...s, office_hours_note: e.target.value } : s
+                )
               }
             />
-            Live answers
-          </label>
-          <p className="text-xs text-muted">
-            This switch saves immediately. It is separate from guidance and the office-hours note.
-          </p>
-          <ul className="space-y-1 text-sm text-[#0B2545]">
-            <li>Site key: {siteKeyConfigured ? "set" : "missing"}</li>
-            <li>Live answers: {settings?.deployed ? "on" : "off"}</li>
-            <li>Plugin active on the website</li>
-            <li>HubSpot chat turned off</li>
-          </ul>
-          <label className="block text-xs text-muted">
-            Office hours note (shown on handoff)
-          </label>
-          <textarea
-            className="min-h-[80px] w-full rounded-md border border-border px-3 py-2 text-sm"
-            value={settings?.office_hours_note ?? ""}
-            onChange={(e) =>
-              setSettings((s) =>
-                s ? { ...s, office_hours_note: e.target.value } : s
-              )
-            }
-          />
-          <label className="block text-xs text-muted">
-            Notify email — all website chat quotes / leads email here first
-            (office auto-routing is off; forward manually for now)
-          </label>
-          <input
-            className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            value={settings?.notify_email ?? ""}
-            onChange={(e) =>
-              setSettings((s) =>
-                s ? { ...s, notify_email: e.target.value } : s
-              )
-            }
-            placeholder="sophie@petersandmay.com"
-          />
-          <button
-            type="button"
-            disabled={busy || !settings}
-            onClick={() =>
-              void saveSettings({
-                office_hours_note: settings?.office_hours_note,
-                notify_email: settings?.notify_email,
-              })
-            }
-            className="rounded-md bg-[#0B2545] px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Save deploy settings
-          </button>
-          <div className="rounded-md bg-sand px-3 py-2 text-xs text-muted">
-            Leads also land in Hub Enquiries → Website chat, and mirror to the
-            Portal. WordPress: Hub URL{" "}
-            <code>https://marketing.petersandmay.com</code> +{" "}
-            <code>CHAT_SITE_KEY</code>.
-          </div>
+            <label className="block text-sm text-[#5b6472]">
+              Notify email. Quotes and leads come here first. Office routing stays off.
+            </label>
+            <input
+              className="field w-full text-base"
+              value={settings?.notify_email ?? ""}
+              onChange={(e) =>
+                setSettings((s) =>
+                  s ? { ...s, notify_email: e.target.value } : s
+                )
+              }
+              placeholder="sophie@petersandmay.com"
+            />
+            <button
+              type="button"
+              disabled={busy || !settings}
+              onClick={() =>
+                void saveSettings({
+                  office_hours_note: settings?.office_hours_note,
+                  notify_email: settings?.notify_email,
+                })
+              }
+              className="btn-primary disabled:opacity-50"
+            >
+              Save handover
+            </button>
+            <p className="text-sm text-[#5b6472]">
+              Leads also land in Hub Enquiries, Website chat, and mirror to the Portal.
+            </p>
+          </section>
         </div>
       ) : null}
 

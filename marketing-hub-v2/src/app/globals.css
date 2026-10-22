@@ -45,6 +45,21 @@ body {
   }
 }
 
+@keyframes pm-assistant-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+  .pm-assistant-sheet {
+    animation: pm-assistant-in 180ms ease-out;
+  }
+}
+
 @layer components {
   .surface-card {
     @apply rounded-2xl border bg-white;
