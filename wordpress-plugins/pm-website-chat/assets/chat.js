@@ -413,7 +413,12 @@
 
   var panel = el("div", "pm-chat__panel");
   var header = el("div", "pm-chat__header");
-  header.appendChild(el("div", "pm-chat__mark"));
+  if (cfg.logoUrl) {
+    var mark = el("img", "pm-chat__mark");
+    mark.src = cfg.logoUrl;
+    mark.alt = "";
+    header.appendChild(mark);
+  }
   var headerText = el("div", "pm-chat__header-text");
   headerText.appendChild(el("p", "pm-chat__title", cfg.labels.title));
   headerText.appendChild(el("p", "pm-chat__subtitle", cfg.labels.subtitle));

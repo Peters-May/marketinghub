@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { AiKeyReminder } from "@/components/admin/AiKeyReminder";
 import { HomeModules } from "@/components/home/HomeModules";
 import { HomeDashboard } from "@/components/home/HomeDashboard";
+import { HomeNotifications } from "@/components/home/HomeNotifications";
 import { buildDashboard } from "@/lib/dashboard/build";
 import {
   listAllAttendance,
@@ -140,6 +141,7 @@ export default async function AppHomePage() {
         </div>
       ) : null}
 
+      <HomeNotifications />
       <HomeDashboard mine={mine} everyone={everyone} canToggle={isAdmin} />
 
       <div className="mt-8">

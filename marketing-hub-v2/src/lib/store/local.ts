@@ -215,6 +215,16 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     events: migrateEvents(store.events) ?? seed.events,
     event_attendance: store.event_attendance ?? seed.event_attendance,
     event_content: store.event_content ?? [],
+    event_offices: store.event_offices ?? [],
+    event_bookings: store.event_bookings ?? [],
+    event_attendance_requests: store.event_attendance_requests ?? [],
+    event_attendance_request_lines: store.event_attendance_request_lines ?? [],
+    profile_offices: store.profile_offices ?? [],
+    notifications: store.notifications ?? [],
+    notification_rules: store.notification_rules?.length
+      ? store.notification_rules
+      : seed.notification_rules,
+    automation_runs: store.automation_runs ?? [],
     content: migrateContent(store.content) ?? seed.content,
     sponsorships:
       migrateSponsorships(store.sponsorships) ?? seed.sponsorships,

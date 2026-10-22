@@ -15,7 +15,11 @@ import { ownerMatchesViewer } from "@/lib/identity/owners";
 
 export const dynamic = "force-dynamic";
 
-export default async function TasksPage() {
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams?: { open?: string };
+}) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
   if (!user || (user.role !== "admin" && user.role !== "staff")) {
@@ -60,6 +64,7 @@ export default async function TasksPage() {
 
   return (
     <TasksClient
+      initialOpenId={searchParams?.open ?? null}
       initial={visible}
       fieldOptions={fieldOptions}
       viewer={viewer}

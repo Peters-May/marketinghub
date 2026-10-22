@@ -16,6 +16,7 @@ import {
   isHubAiConfigured,
 } from "@/lib/ai/openai";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
+import { assistantReadContext } from "@/lib/ai/read-context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -89,7 +90,11 @@ export async function POST(request: NextRequest) {
       if (!messages.length) {
         return jsonError("Add a message for the assistant.", 400);
       }
-      const reply = await generateAssistantChat({ messages, attachments });
+      const reply = await generateAssistantChat({
+        messages,
+        attachments,
+        readContext: await assistantReadContext(),
+      });
       return jsonOk({ mode, reply });
     }
 

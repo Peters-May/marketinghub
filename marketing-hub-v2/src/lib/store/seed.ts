@@ -48,6 +48,17 @@ export function createSeedStore(): HubStore {
     ],
     event_attendance: [],
     event_content: [],
+    event_offices: [],
+    event_bookings: [],
+    event_attendance_requests: [],
+    event_attendance_request_lines: [],
+    profile_offices: [],
+    notifications: [],
+    notification_rules: [
+      { id: "rule_event_prep", key: "event_prep", enabled: true, days_before: 21 },
+      { id: "rule_task_due", key: "task_due", enabled: true, days_before: 2 },
+    ],
+    automation_runs: [],
     content: [
       {
         id: "cnt_seed_1",

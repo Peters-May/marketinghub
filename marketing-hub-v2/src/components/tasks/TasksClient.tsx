@@ -137,11 +137,13 @@ function isOverdue(item: HubTask) {
 }
 
 export function TasksClient({
+  initialOpenId = null,
   initial,
   fieldOptions: fieldOptionsProp,
   viewer,
   relatedLabels = {},
 }: {
+  initialOpenId?: string | null;
   initial: HubTask[];
   fieldOptions?: Record<string, FieldOption[]>;
   viewer: { id: string; fullName: string; isAdmin: boolean };
@@ -173,8 +175,11 @@ export function TasksClient({
   }, [statusOptions, items]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [edit, setEdit] = useState<EditForm | null>(null);
+  const openedTask = initial.find((item) => item.id === initialOpenId) ?? null;
+  const [editingId, setEditingId] = useState<string | null>(openedTask?.id ?? null);
+  const [edit, setEdit] = useState<EditForm | null>(
+    openedTask ? toEditForm(openedTask) : null
+  );
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");

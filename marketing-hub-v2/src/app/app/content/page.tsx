@@ -11,7 +11,11 @@ import { getSessionUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function ContentPage() {
+export default async function ContentPage({
+  searchParams,
+}: {
+  searchParams?: { open?: string };
+}) {
   const user = await getSessionUser();
   const isAdmin = user?.role === "admin";
   const [content, fieldOptions, themes, events, eventContentLinks] =
@@ -39,6 +43,7 @@ export default async function ContentPage() {
 
   return (
     <ContentSocialHub
+      initialOpenId={searchParams?.open ?? null}
       initialContent={initialContent}
       fieldOptions={fieldOptions}
       themes={themes.map((theme) => ({ id: theme.id, title: theme.title }))}

@@ -10,7 +10,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function EventsPage() {
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams?: { open?: string };
+}) {
   const [events, attendance, user, fieldOptions, content, eventContentLinks] =
     await Promise.all([
       listEvents(),
@@ -29,6 +33,7 @@ export default async function EventsPage() {
     .map((item) => ({ id: item.id, title: item.title }));
   return (
     <EventsClient
+      initialOpenId={searchParams?.open ?? null}
       initialEvents={events}
       initialAttendance={attendance}
       currentUserId={user?.id ?? null}

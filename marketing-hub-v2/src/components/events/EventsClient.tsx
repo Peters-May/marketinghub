@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -13,7 +14,9 @@ import type {
   EventContentLink,
   EventItem,
 } from "@/lib/types";
+import { EventPlanning } from "@/components/events/EventPlanning";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { participationColor, participationOf } from "@/lib/events/participation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
@@ -894,6 +897,7 @@ function EventAttendeeManager({
 }
 
 export function EventsClient({
+  initialOpenId = null,
   initialEvents,
   initialAttendance = [],
   currentUserId,
@@ -902,6 +906,7 @@ export function EventsClient({
   contentOptions = [],
   eventContentLinks = [],
 }: {
+  initialOpenId?: string | null;
   initialEvents: EventItem[];
   initialAttendance?: EventAttendance[];
   currentUserId: string | null;
@@ -934,7 +939,12 @@ export function EventsClient({
   );
 
   const [events, setEvents] = useState(initialEvents);
-  const [selected, setSelected] = useState<EventItem | null>(null);
+  const [selected, setSelected] = useState<EventItem | null>(
+    () => initialEvents.find((event) => event.id === initialOpenId) ?? null
+  );
+  const [detailTab, setDetailTab] = useState<"overview" | "people" | "travel">(
+    "overview"
+  );
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EventForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1287,7 +1297,9 @@ export function EventsClient({
   const calendarEvents = useMemo(
     () =>
       calendarDated.map((e) => {
-        const color = eventTypeColor(e.event_type);
+        const color = participationColor(
+          participationOf(e, allAttendance)
+        );
         const startIso = e.starts_at!;
         const allDay = isDateOnlyIso(startIso);
         let end: string | undefined;
@@ -1324,7 +1336,7 @@ export function EventsClient({
           },
         };
       }),
-    [calendarDated, attendingByEventId]
+    [calendarDated, attendingByEventId, allAttendance]
   );
 
   const typeLegend = useMemo(() => {
@@ -1564,6 +1576,9 @@ export function EventsClient({
         description="Add and edit shows and meetings. Mark whether you're attending, and add who else is going."
         actions={
           <>
+            <Link href="/app/events/requests" className="btn-secondary">
+              Attendance requests
+            </Link>
             <div className="relative">
               <button
                 type="button"
@@ -1697,7 +1712,27 @@ export function EventsClient({
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted">
-        <span className="font-medium text-foreground">Type (calendar colour)</span>
+        <span className="font-medium text-foreground">Participation</span>
+        {(
+          [
+            ["attending", "Attending"],
+            ["mixed", "Mixed"],
+            ["watching", "Watching"],
+          ] as const
+        ).map(([kind, label]) => {
+          const color = participationColor(kind);
+          return (
+            <span key={kind} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: color.bg, boxShadow: `inset 0 0 0 1px ${color.border}` }}
+                aria-hidden
+              />
+              {label}
+            </span>
+          );
+        })}
+        <span className="font-medium text-foreground">Type</span>
         {typeLegend.map((name) => {
           const color = eventTypeColor(name);
           return (
@@ -1844,7 +1879,10 @@ export function EventsClient({
                 const checklistTotal = Number(
                   arg.event.extendedProps.checklistTotal ?? 0
                 );
-                const color = eventTypeColor(eventType);
+                const color = {
+                  bg: arg.event.backgroundColor || "#E3E6E9",
+                  text: arg.event.textColor || "#1B3A5B",
+                };
                 const isList = arg.view.type.startsWith("list");
                 return (
                   <div
@@ -1867,6 +1905,11 @@ export function EventsClient({
                       style={{ color: color.text }}
                     >
                       {arg.event.title}
+                      {eventType ? (
+                        <span className="ml-1 font-medium opacity-80">
+                          {eventType}
+                        </span>
+                      ) : null}
                     </span>
                     {showAdminChecks && pmAttending ? (
                       <span
@@ -1943,6 +1986,42 @@ export function EventsClient({
                   </button>
                 </div>
 
+                <div className="flex flex-wrap gap-1" role="tablist" aria-label="Event detail">
+                  {(
+                    [
+                      ["overview", "Overview"],
+                      ["people", "People"],
+                      ["travel", "Travel"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={detailTab === id}
+                      className={
+                        detailTab === id
+                          ? "btn-primary !px-2.5 !py-1 text-xs"
+                          : "btn-secondary !px-2.5 !py-1 text-xs"
+                      }
+                      onClick={() => setDetailTab(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {detailTab !== "overview" ? (
+                  <EventPlanning
+                    eventId={selected.id}
+                    isAdmin={showAdminChecks}
+                    currentUserId={currentUserId}
+                    tab={detailTab}
+                  />
+                ) : null}
+
+                {detailTab === "overview" ? (
+                <>
                 <dl className="space-y-2 text-sm">
                   <div>
                     <dt className="label !mb-0.5">When</dt>
@@ -2135,6 +2214,8 @@ export function EventsClient({
                     </button>
                   ) : null}
                 </div>
+                </>
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted">

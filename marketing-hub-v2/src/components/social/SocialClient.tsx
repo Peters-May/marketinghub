@@ -414,11 +414,13 @@ function PostCard({
 export function SocialClient({
   hideHeader = false,
   memberView = false,
+  initialOpenId = null,
   initialContent,
 }: {
   hideHeader?: boolean;
   /** Members: scheduled/published only, read-only calendar. */
   memberView?: boolean;
+  initialOpenId?: string | null;
   /** SSR content rows — skips duplicate /api/content fetch on first load. */
   initialContent?: ContentItem[];
 }) {
@@ -434,7 +436,7 @@ export function SocialClient({
   const [dateWindow, setDateWindow] = useState<"upcoming" | "past" | "all">(
     "upcoming"
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialOpenId);
   const [overflowDay, setOverflowDay] = useState<{
     dateLabel: string;
     posts: SocialPost[];

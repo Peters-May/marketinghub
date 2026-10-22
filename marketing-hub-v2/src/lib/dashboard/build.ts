@@ -96,6 +96,19 @@ function assignedToViewer(owner: string, ownerUserId: string | null | undefined,
   return ownerMatchesViewer(owner, ownerUserId, viewer);
 }
 
+function recordPath(
+  kind: "task" | "content" | "event" | "award" | "enquiry" | "email",
+  id: string
+) {
+  const encoded = encodeURIComponent(id);
+  if (kind === "task") return `/app/tasks?open=${encoded}`;
+  if (kind === "content") return `/app/content?open=${encoded}`;
+  if (kind === "event") return `/app/events?open=${encoded}`;
+  if (kind === "award") return `/app/awards?open=${encoded}`;
+  if (kind === "enquiry") return `/app/enquiries?open=${encoded}`;
+  return `/app/email?campaign=${encoded}`;
+}
+
 function contentDate(item: ContentItem) {
   return dayFrom(item.deadline_date) ?? dayFrom(item.due_date);
 }
@@ -107,7 +120,13 @@ export function buildDashboard(input: BuildInput): DashboardModel {
   const seen = new Set<string>();
   const actions: DashboardAction[] = [];
 
-  const openTasks = input.tasks.filter((task) => !isClosedTaskStatus(task.status));
+  const openTasks: HubTask[] = [];
+  const seenTaskIds = new Set<string>();
+  for (const task of input.tasks) {
+    if (isClosedTaskStatus(task.status) || seenTaskIds.has(task.id)) continue;
+    seenTaskIds.add(task.id);
+    openTasks.push(task);
+  }
   const taskRows = openTasks
     .filter((task) =>
       personal ? assignedToViewer(task.owner, task.owner_user_id, viewer) : true
@@ -162,7 +181,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       when: row.due
         ? `${overdue ? "Overdue" : "Due"} ${formatDay(row.due)}`
         : "No deadline",
-      href: "/app/tasks",
+      href: recordPath("task", row.task.id),
       tone: overdue ? "overdue" : "soon",
     });
   }
@@ -189,7 +208,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       reason:
         item.status === "review" ? "Content in review" : "Content in draft",
       when: `${overdue ? "Overdue" : "Due"} ${formatDay(due)}`,
-      href: "/app/content",
+      href: recordPath("content", item.id),
       tone: overdue ? "overdue" : "soon",
     });
   }
@@ -224,7 +243,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       title: event.title,
       reason: `Preparation ${progress.done}/${progress.total}`,
       when: formatDay(start),
-      href: "/app/events",
+      href: recordPath("event", event.id),
       tone: "attention",
     });
   }
@@ -242,7 +261,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
         title: enquiry.customer_name.trim() || "Website enquiry",
         reason: "Enquiry needs review",
         when: null,
-        href: "/app/enquiries",
+        href: recordPath("enquiry", enquiry.id),
         tone: "attention",
       });
     }
@@ -269,7 +288,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
         title: award.title,
         reason: "Award deadline",
         when: `${overdue ? "Overdue" : "Deadline"} ${formatDay(due)}`,
-        href: "/app/awards",
+        href: recordPath("award", award.id),
         tone: overdue ? "overdue" : "soon",
       });
     }
@@ -290,7 +309,7 @@ export function buildDashboard(input: BuildInput): DashboardModel {
         title: email.title,
         reason: failed ? "Email send failed" : "Scheduled email is overdue",
         when: scheduled ? formatDay(scheduled) : null,
-        href: "/app/email",
+        href: recordPath("email", email.id),
         tone: "overdue",
       });
     }
@@ -318,84 +337,96 @@ export function buildDashboard(input: BuildInput): DashboardModel {
         title: award.title,
         reason: "Award deadline",
         when: `${overdue ? "Overdue" : "Deadline"} ${formatDay(due)}`,
-        href: "/app/awards",
+        href: recordPath("award", award.id),
         tone: overdue ? "overdue" : "soon",
       });
     }
   }
 
-  const actionKeys = new Set(actions.map((action) => action.key));
+  const placed = new Set(actions.map((action) => action.key));
+  function takeFresh(rows: DashboardRow[], limit: number) {
+    const picked: DashboardRow[] = [];
+    for (const row of rows) {
+      if (placed.has(row.key)) continue;
+      placed.add(row.key);
+      picked.push(row);
+      if (picked.length >= limit) break;
+    }
+    return picked;
+  }
 
-  const upcomingEvents = input.events
-    .filter((event) => {
-      const start = dayFrom(event.starts_at);
-      if (!start) return false;
-      const days = differenceInCalendarDays(start, today);
-      return days >= 0 && days <= EVENT_HORIZON_DAYS;
-    })
-    .sort(
-      (a, b) =>
-        (dayFrom(a.starts_at)?.getTime() ?? 0) -
-        (dayFrom(b.starts_at)?.getTime() ?? 0)
-    )
-    .filter((event) => !actionKeys.has(`event:${event.id}`))
-    .slice(0, 5)
-    .map((event) => ({
-      key: `event:${event.id}`,
-      title: event.title,
-      detail: [
-        event.starts_at ? formatDay(dayFrom(event.starts_at)!) : "",
-        event.division,
-        event.location,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      href: "/app/events",
-    }));
+  const upcomingEvents = takeFresh(
+    input.events
+      .filter((event) => {
+        const start = dayFrom(event.starts_at);
+        if (!start) return false;
+        const days = differenceInCalendarDays(start, today);
+        return days >= 0 && days <= EVENT_HORIZON_DAYS;
+      })
+      .sort(
+        (a, b) =>
+          (dayFrom(a.starts_at)?.getTime() ?? 0) -
+          (dayFrom(b.starts_at)?.getTime() ?? 0)
+      )
+      .map((event) => ({
+        key: `event:${event.id}`,
+        title: event.title,
+        detail: [
+          event.starts_at ? formatDay(dayFrom(event.starts_at)!) : "",
+          event.division,
+          event.location,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        href: recordPath("event", event.id),
+      })),
+    5
+  );
 
-  const contentDeadlines = input.content
-    .filter((item) => {
-      if (viewer.isAdmin) {
-        return item.status === "draft" || item.status === "review" || item.status === "scheduled";
-      }
-      return item.status === "scheduled";
-    })
-    .map((item) => ({ item, due: contentDate(item) }))
-    .filter((row) => {
-      if (!row.due) return false;
-      const days = differenceInCalendarDays(row.due, today);
-      return days >= 0 && days <= 30;
-    })
-    .filter((row) => !actionKeys.has(`content:${row.item.id}`))
-    .sort((a, b) => a.due!.getTime() - b.due!.getTime())
-    .slice(0, 5)
-    .map((row) => ({
-      key: `content:${row.item.id}`,
-      title: row.item.title,
-      detail: `${row.item.content_type || "Content"} · ${formatDay(row.due!)}`,
-      href: "/app/content",
-    }));
+  const contentDeadlines = takeFresh(
+    input.content
+      .filter((item) => {
+        if (viewer.isAdmin) {
+          return item.status === "draft" || item.status === "review" || item.status === "scheduled";
+        }
+        return item.status === "scheduled";
+      })
+      .map((item) => ({ item, due: contentDate(item) }))
+      .filter((row) => {
+        if (!row.due) return false;
+        const days = differenceInCalendarDays(row.due, today);
+        return days >= 0 && days <= 30;
+      })
+      .sort((a, b) => a.due!.getTime() - b.due!.getTime())
+      .map((row) => ({
+        key: `content:${row.item.id}`,
+        title: row.item.title,
+        detail: `${row.item.content_type || "Content"} · ${formatDay(row.due!)}`,
+        href: recordPath("content", row.item.id),
+      })),
+    5
+  );
 
   const recentSources: (DashboardRow & { updated_at: string })[] = [
     ...input.events.map((event) => ({
       key: `event:${event.id}`,
       title: event.title,
       detail: "Event",
-      href: "/app/events",
+      href: recordPath("event", event.id),
       updated_at: event.updated_at,
     })),
     ...input.tasks.map((task) => ({
       key: `task:${task.id}`,
       title: task.title,
       detail: "Task",
-      href: "/app/tasks",
+      href: recordPath("task", task.id),
       updated_at: task.updated_at,
     })),
     ...input.awards.map((award) => ({
       key: `award:${award.id}`,
       title: award.title,
       detail: "Award",
-      href: "/app/awards",
+      href: recordPath("award", award.id),
       updated_at: award.updated_at,
     })),
     ...(viewer.isAdmin
@@ -403,44 +434,46 @@ export function buildDashboard(input: BuildInput): DashboardModel {
           key: `content:${item.id}`,
           title: item.title,
           detail: "Content",
-          href: "/app/content",
+          href: recordPath("content", item.id),
           updated_at: item.updated_at,
         }))
       : []),
   ];
 
-  const recentlyUpdated = recentSources
-    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
-    .filter((row) => !actionKeys.has(row.key))
-    .slice(0, 6)
-    .map(({ key, title, detail, href }) => ({ key, title, detail, href }));
+  const recentlyUpdated = takeFresh(
+    recentSources.sort((a, b) =>
+      (b.updated_at || "").localeCompare(a.updated_at || "")
+    ),
+    6
+  );
 
   const unowned = viewer.isAdmin
-    ? [
-        ...openTasks
-          .filter((task) => !task.owner.trim())
-          .slice(0, 5)
-          .map((task) => ({
-            key: `task:${task.id}`,
-            title: task.title,
-            detail: "Task with no owner",
-            href: "/app/tasks",
-          })),
-        ...input.content
-          .filter(
-            (item) =>
-              !item.owner.trim() &&
-              item.status !== "published" &&
-              item.status !== "cancelled"
-          )
-          .slice(0, 5)
-          .map((item) => ({
-            key: `content:${item.id}`,
-            title: item.title,
-            detail: "Content with no owner",
-            href: "/app/content",
-          })),
-      ].slice(0, 8)
+    ? takeFresh(
+        [
+          ...openTasks
+            .filter((task) => !task.owner.trim())
+            .map((task) => ({
+              key: `task:${task.id}`,
+              title: task.title,
+              detail: "Task with no owner",
+              href: recordPath("task", task.id),
+            })),
+          ...input.content
+            .filter(
+              (item) =>
+                !item.owner.trim() &&
+                item.status !== "published" &&
+                item.status !== "cancelled"
+            )
+            .map((item) => ({
+              key: `content:${item.id}`,
+              title: item.title,
+              detail: "Content with no owner",
+              href: recordPath("content", item.id),
+            })),
+        ],
+        8
+      )
     : [];
 
   return {

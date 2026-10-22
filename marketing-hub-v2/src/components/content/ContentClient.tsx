@@ -235,6 +235,7 @@ function matchesDateWindow(
 }
 
 export function ContentClient({
+  initialOpenId = null,
   initial,
   hideHeader = false,
   scope = "all",
@@ -243,6 +244,7 @@ export function ContentClient({
   events = [],
   eventContentLinks = [],
 }: {
+  initialOpenId?: string | null;
   initial: ContentItem[];
   hideHeader?: boolean;
   /** When "content", hide social posts; when "social", only social. */
@@ -283,8 +285,11 @@ export function ContentClient({
   const [creatingIdea, setCreatingIdea] = useState(false);
   const [parkingId, setParkingId] = useState<string | null>(null);
   const [parkingActive, setParkingActive] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [edit, setEdit] = useState<EditForm | null>(null);
+  const openedItem = initial.find((item) => item.id === initialOpenId) ?? null;
+  const [editingId, setEditingId] = useState<string | null>(openedItem?.id ?? null);
+  const [edit, setEdit] = useState<EditForm | null>(
+    openedItem ? toEditForm(openedItem) : null
+  );
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);

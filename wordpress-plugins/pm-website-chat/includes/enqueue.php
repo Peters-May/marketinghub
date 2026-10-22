@@ -59,6 +59,7 @@ add_action('wp_enqueue_scripts', static function () {
         'hubUrl' => '',
         'siteKey' => '',
         'greeting' => $opts['greeting'],
+        'logoUrl' => PM_WEBSITE_CHAT_PLUGIN_URL . 'assets/pm-group-logo.png',
         'position' => $opts['position'],
         'pageUrl' => home_url(add_query_arg([])),
         'pageTitle' => wp_get_document_title(),

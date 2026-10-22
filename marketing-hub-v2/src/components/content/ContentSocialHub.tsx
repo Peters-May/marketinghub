@@ -38,12 +38,14 @@ const PLANABLE_CALENDAR_URL =
   "https://app.planable.io/calendar/25GtzkN5qqaTuMfEH";
 
 export function ContentSocialHub({
+  initialOpenId = null,
   initialContent,
   fieldOptions,
   themes = [],
   events = [],
   eventContentLinks = [],
 }: {
+  initialOpenId?: string | null;
   initialContent: ContentItem[];
   fieldOptions?: Record<string, FieldOption[]>;
   themes?: { id: string; title: string }[];
@@ -65,6 +67,7 @@ export function ContentSocialHub({
           key="member-social"
           hideHeader
           memberView
+          initialOpenId={initialOpenId}
           initialContent={initialContent}
         />
       </div>
@@ -99,6 +102,7 @@ export function ContentSocialHub({
 
       <ContentClient
         key={scope}
+        initialOpenId={initialOpenId}
         initial={initialContent}
         hideHeader
         scope={scope}

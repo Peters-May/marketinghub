@@ -110,10 +110,14 @@ export function buildChatMessages(input: {
 export async function generateAssistantChat(input: {
   messages: AssistantChatMessage[];
   attachments?: AssistantAttachment[];
+  readContext?: string;
 }) {
+  const snapshot = input.readContext?.trim();
   const { text } = await generateText({
     model: await getHubOpenAIModel(),
-    system: HUB_ASSISTANT_SYSTEM,
+    system: snapshot
+      ? `${HUB_ASSISTANT_SYSTEM}\n\n${snapshot}\n\nUse this snapshot when the admin asks what is outstanding. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
+      : HUB_ASSISTANT_SYSTEM,
     messages: buildChatMessages(input),
   });
   return text;

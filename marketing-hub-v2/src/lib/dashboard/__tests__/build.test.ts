@@ -121,6 +121,13 @@ describe("buildDashboard", () => {
       "Finish the blog",
       "Press note",
     ]);
+    expect(model.actions.map((row) => row.href)).toEqual([
+      "/app/tasks?open=t1",
+      "/app/content?open=c2",
+    ]);
+    expect(model.actions.filter((row) => row.key.startsWith("task:")).map((row) => row.key)).toEqual([
+      "task:t1",
+    ]);
     expect(model.actions[0]?.tone).toBe("overdue");
     expect(model.actions.filter((row) => row.key === "content:c1")).toHaveLength(0);
   });
@@ -173,6 +180,8 @@ describe("buildDashboard", () => {
 
     const mine = buildDashboard({ ...shared, scope: "mine" });
     expect(mine.actions.map((row) => row.key)).toEqual(["event:e1"]);
+    expect(mine.actions[0]?.href).toBe("/app/events?open=e1");
+    expect(mine.upcomingEvents.map((row) => row.key)).not.toContain("event:e1");
 
     const everyone = buildDashboard({ ...shared, scope: "everyone" });
     expect(everyone.actions.map((row) => row.key)).toEqual([

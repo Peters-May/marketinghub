@@ -3,7 +3,7 @@ PM Website Chat — install / update
 Upload this file
 ----------------
   exports/pm-website-chat-VERSION/pm-website-chat-VERSION.zip
-  (same layout as 1.0.10 — e.g. exports/pm-website-chat-1.0.23/pm-website-chat-1.0.23.zip)
+  (same layout as 1.0.10 — e.g. exports/pm-website-chat-1.0.24/pm-website-chat-1.0.24.zip)
 
 Inside the zip (one folder):
 

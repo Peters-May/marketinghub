@@ -8,6 +8,8 @@ export type Profile = {
   email: string;
   full_name: string;
   role: UserRole;
+  /** Enquiry-style office label, such as UK or Southampton. */
+  office?: string;
 };
 
 /** Hub access directory roles (Admin → Users). */
@@ -92,8 +94,102 @@ export type EventAttendance = {
   /** Display name captured at RSVP time. */
   user_name: string;
   attendance_status: EventAttendanceStatus;
+  /** Office label for this person on this event. */
+  office?: string;
+  /** Role at the event, such as stand lead. */
+  role?: string;
+  arrival_on?: string | null;
+  departure_on?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type EventOffice = {
+  id: string;
+  event_id: string;
+  office: string;
+  notes: string;
+  created_at: string;
+};
+
+export type EventBookingKind = "hotel" | "flight" | "other";
+
+export type EventBooking = {
+  id: string;
+  event_id: string;
+  kind: EventBookingKind;
+  /** Empty when the booking is shared rather than one person's. */
+  attendee_user_id: string | null;
+  attendee_name: string;
+  label: string;
+  /** Confirmation or ticket reference. Hidden unless admin or the attendee. */
+  reference: string;
+  starts_on: string;
+  ends_on: string;
+  cost_estimate: string;
+  url: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AttendanceRequestStatus = "draft" | "open" | "closed";
+export type AttendanceRequestLineStatus = "requested" | "approved" | "declined";
+
+export type EventAttendanceRequest = {
+  id: string;
+  year: number;
+  title: string;
+  office: string;
+  status: AttendanceRequestStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventAttendanceRequestLine = {
+  id: string;
+  request_id: string;
+  event_id: string | null;
+  event_title: string;
+  user_id: string | null;
+  person_name: string;
+  office: string;
+  role: string;
+  status: AttendanceRequestLineStatus;
+  notes: string;
+  created_at: string;
+};
+
+export type ProfileOffice = {
+  user_id: string;
+  office: string;
+};
+
+export type HubNotification = {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  href: string;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type NotificationRule = {
+  id: string;
+  key: "event_prep" | "task_due";
+  enabled: boolean;
+  days_before: number;
+};
+
+export type AutomationRun = {
+  id: string;
+  key: string;
+  started_at: string;
+  finished_at: string;
+  status: "ok" | "error";
+  summary: string;
 };
 
 export type ContentStatus =
@@ -642,6 +738,8 @@ export type HubTask = {
   /** Linked record kind — empty/null when unlinked. */
   related_type: TaskRelatedType | "";
   related_id: string | null;
+  /** Set by a reminder job so the same task is not created again. */
+  automation_key?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1116,6 +1214,14 @@ export type HubStore = {
   event_attendance: EventAttendance[];
   /** Event ↔ content joins. Not a second content table. */
   event_content: EventContentLink[];
+  event_offices: EventOffice[];
+  event_bookings: EventBooking[];
+  event_attendance_requests: EventAttendanceRequest[];
+  event_attendance_request_lines: EventAttendanceRequestLine[];
+  profile_offices: ProfileOffice[];
+  notifications: HubNotification[];
+  notification_rules: NotificationRule[];
+  automation_runs: AutomationRun[];
   content: ContentItem[];
   sponsorships: Sponsorship[];
   contacts: Contact[];

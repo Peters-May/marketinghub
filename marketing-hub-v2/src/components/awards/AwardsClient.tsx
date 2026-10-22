@@ -62,7 +62,13 @@ function toEditForm(item: AwardEntry): EditForm {
   };
 }
 
-export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
+export function AwardsClient({
+  initialOpenId = null,
+  initial,
+}: {
+  initialOpenId?: string | null;
+  initial: AwardEntry[];
+}) {
   const { view: hubView } = useHubView();
   const isAdmin = hubView === "admin";
 
@@ -70,7 +76,9 @@ export function AwardsClient({ initial }: { initial: AwardEntry[] }) {
   const [view, setView] = useState<ViewId>("list");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [selected, setSelected] = useState<AwardEntry | null>(null);
+  const [selected, setSelected] = useState<AwardEntry | null>(
+    () => initial.find((item) => item.id === initialOpenId) ?? null
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);

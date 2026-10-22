@@ -719,9 +719,11 @@ function downloadCsv(rows: HubEnquiry[]) {
 }
 
 export function EnquiriesClient({
+  initialOpenId = null,
   initial,
   configured: initialConfigured,
 }: {
+  initialOpenId?: string | null;
   initial: HubEnquiry[];
   configured: boolean;
 }) {
@@ -742,7 +744,9 @@ export function EnquiriesClient({
   const [showTest, setShowTest] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [showAdsCampaigns, setShowAdsCampaigns] = useState(false);
-  const [selected, setSelected] = useState<HubEnquiry | null>(null);
+  const [selected, setSelected] = useState<HubEnquiry | null>(
+    () => initial.find((item) => item.id === initialOpenId) ?? null
+  );
   const [saving, setSaving] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [showSourceUpdate, setShowSourceUpdate] = useState(false);

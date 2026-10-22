@@ -100,9 +100,7 @@ export function HomeDashboard({
   everyone: DashboardModel | null;
   canToggle: boolean;
 }) {
-  const [scope, setScope] = useState<"mine" | "everyone">(
-    canToggle ? "everyone" : "mine"
-  );
+  const [scope, setScope] = useState<"mine" | "everyone">("mine");
   const model = scope === "everyone" && everyone ? everyone : mine;
 
   return (
