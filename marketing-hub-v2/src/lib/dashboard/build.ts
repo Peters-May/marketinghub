@@ -7,7 +7,7 @@ import {
 } from "date-fns";
 import { attendanceChecklistProgress } from "@/lib/events/attendance-checklist";
 import { isClosedTaskStatus } from "@/lib/data/collections";
-import { ownerMatchesViewer } from "@/lib/identity/owners";
+import { ownerMatchesViewer } from "@/lib/identity/owner-match";
 import type {
   AwardEntry,
   ContentItem,

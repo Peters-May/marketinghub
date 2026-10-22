@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { useHubDataRefresh } from "@/lib/command/refresh";
-import { ownerMatchesViewer } from "@/lib/identity/owners";
+import { ownerMatchesViewer } from "@/lib/identity/owner-match";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import {
   TASK_CATEGORIES,
