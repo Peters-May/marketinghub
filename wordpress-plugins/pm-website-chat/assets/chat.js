@@ -8,6 +8,8 @@
   if (!useProxy && (!cfg.hubUrl || !cfg.siteKey)) return;
 
   var sessionId = null;
+  var sessionPromise = null;
+  var greetingNode = null;
   var lastMessageAt = null;
   var seenIds = {};
   var pollTimer = null;
@@ -974,6 +976,7 @@
           return;
         }
         rememberSession(id);
+        greetingNode = null;
         clearNode(messagesEl);
         messagesEl.appendChild(typingEl);
         seenIds = {};
@@ -1008,9 +1011,25 @@
       });
   }
 
+  function localGreeting() {
+    var custom = cfg.greeting && String(cfg.greeting).trim();
+    return (
+      custom ||
+      "Hi — how can I help today? I can take a shipping or yacht enquiry, answer questions from our published information, or put you in touch with the team."
+    );
+  }
+
+  function showOpeningGreeting() {
+    if (greetingNode) return;
+    greetingNode = appendBubble("assistant", localGreeting());
+    showStarters();
+  }
+
   function startSession() {
-    setTyping(true);
-    fetch(apiUrl("api/chat/sessions"), {
+    if (sessionId) return Promise.resolve(sessionId);
+    if (sessionPromise) return sessionPromise;
+    showOpeningGreeting();
+    sessionPromise = fetch(apiUrl("api/chat/sessions"), {
       method: "POST",
       headers: headers(),
       credentials: useProxy ? "same-origin" : "omit",
@@ -1029,29 +1048,44 @@
       })
       .then(function (data) {
         rememberSession(data.session && data.session.id);
-        if (data.message) {
-          var body = data.message.body;
-          if (cfg.greeting) body = cfg.greeting;
-          appendBubble("assistant", body, data.message.id);
+        if (data.message && data.message.id) {
+          seenIds[data.message.id] = true;
           lastMessageAt = data.message.created_at;
+          var serverBody = data.message.body;
+          if (cfg.greeting) serverBody = cfg.greeting;
+          if (
+            greetingNode &&
+            serverBody &&
+            serverBody !== localGreeting()
+          ) {
+            var bubble = greetingNode.querySelector(".pm-chat__bubble");
+            if (bubble) bubble.textContent = serverBody;
+          }
         }
         showStarters();
+        return sessionId;
       })
       .catch(function (err) {
+        sessionPromise = null;
         appendBubble(
           "system",
           err.message || "Chat is temporarily unavailable."
         );
-      })
-      .finally(function () {
-        setTyping(false);
+        return null;
       });
+    return sessionPromise;
   }
 
   function sendMessageText(text, opts) {
     opts = opts || {};
     text = (text || "").trim();
-    if (!text || !sessionId) return;
+    if (!text) return;
+    if (!sessionId) {
+      startSession().then(function () {
+        if (sessionId) sendMessageText(text, opts);
+      });
+      return;
+    }
     hideStarters();
     if (!opts.skipCollect) {
       maybeStartCollectFromVisitor(text);
@@ -1118,7 +1152,12 @@
   }
 
   function handoff() {
-    if (!sessionId) return;
+    if (!sessionId) {
+      startSession().then(function () {
+        if (sessionId) handoff();
+      });
+      return;
+    }
     hideStarters();
     stopCollect();
     lead.classList.add("is-on");

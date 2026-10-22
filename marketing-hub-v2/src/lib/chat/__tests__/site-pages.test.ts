@@ -31,6 +31,20 @@ describe("selectSitePagesForQuery", () => {
     expect(pages.map((p) => p.id)).toContain("sailings");
   });
 
+  it("selects sailing schedules when they ask if there is a sailing for a port", () => {
+    const pages = selectSitePagesForQuery(
+      "Can you tell me if there is a sailing for Fort Lauderdale first?"
+    );
+    expect(pages.map((p) => p.id)).toContain("sailings");
+  });
+
+  it("does not fetch sailing schedules for a sailing yacht quote", () => {
+    const pages = selectSitePagesForQuery(
+      "I have a sailing yacht in Genoa to move to Antigua"
+    );
+    expect(pages.map((p) => p.id)).not.toContain("sailings");
+  });
+
   it("does not fetch sailing schedules for a normal yacht quote", () => {
     const pages = selectSitePagesForQuery(
       "Ship my yacht from Southampton to Antigua"
