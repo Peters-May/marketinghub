@@ -812,9 +812,12 @@ export function parseHubCommands(input: string, now = new Date()): MultiParseRes
     else commands.push(parsed.command);
   }
   if (!commands.length) {
-    return fail(
-      "None of those lines start with add or update, then task, event, or post."
-    );
+    return {
+      ok: false,
+      message:
+        "None of those lines start with add or update, then task, event, or post.",
+      examples: COMMAND_EXAMPLES,
+    };
   }
   return { ok: true, commands, skipped };
 }
