@@ -28,9 +28,8 @@ yarn-error.log*
 .env*.local
 .env
 
-# secrets / local plugin export artefacts (do not commit keys)
-exports/**/CHAT_SITE_KEY.txt
-exports/CHAT_SITE_KEY.txt
+# secrets / local plugin export zips (keep on disk, do not commit)
+/exports/
 **/CHAT_SITE_KEY.txt
 
 # vercel
