@@ -214,6 +214,18 @@ function normalizeInput(input: WhatsAppEnquiryInput) {
   };
 }
 
+/** Hub stays source of truth. Await the portal write so the function does not finish first and drop it. */
+async function pushWhatsAppEnquiryToPortal(enquiry: WhatsAppEnquiry): Promise<void> {
+  const result = await syncWhatsAppEnquiryToPortal(enquiry);
+  if (!result.ok) {
+    console.error(
+      "[whatsapp] portal sync failed",
+      enquiry.external_id,
+      result.error
+    );
+  }
+}
+
 /** Create or upsert by external_id (ChatGPT / Hub MCP). */
 export async function upsertWhatsAppEnquiry(
   input: WhatsAppEnquiryInput
@@ -304,8 +316,7 @@ export async function upsertWhatsAppEnquiry(
 
   if (error) throw new Error(error.message);
   const enquiry = rowToWhatsApp(data as Record<string, unknown>);
-  // Hub remains SoT: store succeeds even when Portal sync fails.
-  void syncWhatsAppEnquiryToPortal(enquiry);
+  await pushWhatsAppEnquiryToPortal(enquiry);
   return enquiry;
 }
 
@@ -483,7 +494,7 @@ export async function updateWhatsAppEnquiry(
   if (error) throw new Error(error.message);
   if (!data) return null;
   const enquiry = rowToWhatsApp(data as Record<string, unknown>);
-  void syncWhatsAppEnquiryToPortal(enquiry);
+  await pushWhatsAppEnquiryToPortal(enquiry);
   return enquiry;
 }
 
