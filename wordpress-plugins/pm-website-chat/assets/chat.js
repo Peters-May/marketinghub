@@ -206,6 +206,140 @@
     while (node.firstChild) node.removeChild(node.firstChild);
   }
 
+  function tidyChoiceLabel(raw) {
+    var t = String(raw || "")
+      .replace(/\s+/g, " ")
+      .replace(/[?.]+$/g, "")
+      .trim();
+    t = t.replace(
+      /^(you(?:'re| are)\s+looking to\s+(?:transport|ship|move)\s+)/i,
+      ""
+    );
+    t = t.replace(/^or\s+/i, "");
+    t = t.replace(/^(a|an|the)\s+/i, "");
+    if (t.length < 2 || t.length > 40) return "";
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function uniqueChoiceLabels(parts) {
+    var seen = {};
+    var out = [];
+    parts.forEach(function (part) {
+      if (!part || out.length >= 5) return;
+      var key = part.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(part);
+    });
+    return out.length >= 2 ? out : [];
+  }
+
+  /** Closed-set questions become tappable answers. Open questions stay free type. */
+  function splitReplyChoices(raw) {
+    var text = String(raw || "").trim();
+    var tagged = text.match(/\[\[choices:\s*([^\]]+?)\]\]/i);
+    var body = text
+      .replace(/\[\[choices:\s*[^\]]+?\]\]/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (tagged) {
+      return {
+        body: body,
+        choices: uniqueChoiceLabels(
+          tagged[1].split("|").map(tidyChoiceLabel)
+        ),
+      };
+    }
+    return { body: body, choices: inferChoiceLabels(body) };
+  }
+
+  function inferChoiceLabels(body) {
+    if (!body || body.length > 700) return [];
+    var question = body.match(/([^.!?\n]{8,220}\?)\s*$/);
+    if (!question) return [];
+    var sentence = question[1];
+    if (!/\bor\b/i.test(sentence)) return [];
+    if (
+      !/\b(whether|either|or something else|which of|looking to|yacht|freight)\b/i.test(
+        sentence
+      )
+    ) {
+      return [];
+    }
+    if (
+      /\b(name|e-?mail|company|length|loa|beam|height|weight|displacement|value|destination|port|dimension|phone|address|timeframe)\b/i.test(
+        sentence
+      ) &&
+      !/something else/i.test(sentence)
+    ) {
+      return [];
+    }
+    var clause = sentence.replace(/\?\s*$/, "");
+    var whether = clause.match(/\bwhether\b\s+([\s\S]+)$/i);
+    if (whether) clause = whether[1];
+    clause = clause.replace(
+      /^.*?\b(?:looking to|want to|like to)\s+(?:transport|ship|move)\s+/i,
+      ""
+    );
+    var parts = clause.split(/\s*,\s*|\s+\bor\b\s+/i).map(function (part) {
+      return tidyChoiceLabel(
+        part.replace(
+          /^you(?:'re| are)\s+looking to\s+(?:transport|ship|move)\s+/i,
+          ""
+        )
+      );
+    });
+    if (
+      parts.some(function (part) {
+        return (
+          part &&
+          /\b(name|e-?mail|company|length|loa|beam|height|weight|value|destination|port)\b/i.test(
+            part
+          )
+        );
+      })
+    ) {
+      return [];
+    }
+    return uniqueChoiceLabels(parts);
+  }
+
+  function offerChoiceChips(choices) {
+    if (!choices || choices.length < 2 || collectState) return false;
+    clearNode(startersEl);
+    startersEl.classList.add("is-on");
+    choices.forEach(function (label) {
+      var btn = el("button", "pm-chat__chip pm-chat__chip--choice", label);
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        hideStarters();
+        sendMessageText(label);
+      });
+      startersEl.appendChild(btn);
+    });
+    ensureComposerVisible();
+    return true;
+  }
+
+  function presentAssistant(body, id, authorName, choices) {
+    var parsed = splitReplyChoices(body);
+    var labels =
+      choices && choices.length >= 2 ? choices : parsed.choices;
+    appendBubble(
+      "assistant",
+      parsed.body,
+      id,
+      authorName
+    );
+    if (looksLikeHandover(parsed.body) || isGuidedEnquiryPayload(parsed.body)) {
+      endGuidedEnquiryUi();
+      return;
+    }
+    if (collectState) return;
+    if (offerChoiceChips(labels)) return;
+    maybeOfferGuidedFromAssistant(parsed.body);
+  }
+
   function looksLikeYachtChecklist(text) {
     var t = String(text || "").toLowerCase();
     var hits = 0;
@@ -362,6 +496,8 @@
       showQuoteTypeStarters();
     });
     addChip("Ask a question", function () {
+      appendBubble("visitor", "Ask a question");
+      appendBubble("assistant", "What would you like to know?");
       ensureComposerVisible();
       input.focus();
     });
@@ -788,7 +924,7 @@
             if (m.role === "staff" || m.role === "system") {
               appendBubble(m.role, m.body, m.id, m.author_name);
             } else if (m.role === "assistant") {
-              appendBubble(m.role, m.body, m.id);
+              presentAssistant(m.body, m.id);
             } else if (m.id) {
               seenIds[m.id] = true;
             }
@@ -840,6 +976,16 @@
         });
         startersShown = true;
         hideStarters();
+        var last = (data.messages || [])[(data.messages || []).length - 1];
+        if (last && last.role === "assistant") {
+          var resumed = splitReplyChoices(last.body);
+          if (
+            !looksLikeHandover(resumed.body) &&
+            !isGuidedEnquiryPayload(resumed.body)
+          ) {
+            offerChoiceChips(resumed.choices);
+          }
+        }
       })
       .catch(function () {
         rememberSession(null);
@@ -918,19 +1064,24 @@
           if (!r.ok) throw new Error(data.error || "Send failed");
           if (data.deferred) return;
           if (data.message && data.message.body) {
-            appendBubble(
-              data.message.role || "assistant",
-              data.message.body,
-              data.message.id,
-              data.message.author_name
-            );
             lastMessageAt = data.message.created_at;
             if ((data.message.role || "assistant") === "assistant") {
-              maybeOfferGuidedFromAssistant(data.message.body);
+              presentAssistant(
+                data.message.body,
+                data.message.id,
+                data.message.author_name,
+                data.choices
+              );
+            } else {
+              appendBubble(
+                data.message.role,
+                data.message.body,
+                data.message.id,
+                data.message.author_name
+              );
             }
           } else if (typeof data.message === "string") {
-            appendBubble("assistant", data.message);
-            maybeOfferGuidedFromAssistant(data.message);
+            presentAssistant(data.message, null, null, data.choices);
           }
           if (data.handoff) lead.classList.add("is-on");
         });

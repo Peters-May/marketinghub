@@ -8,6 +8,7 @@ import {
   updateChatSession,
 } from "@/lib/chat/data";
 import { streamAssistantReply } from "@/lib/chat/rag";
+import { extractReplyChoices } from "@/lib/chat/reply-choices";
 import { notifyChatStaff } from "@/lib/chat/notify";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
@@ -142,6 +143,7 @@ export async function POST(request: Request, ctx: Ctx) {
       return chatJson(request, {
         mode: "ai",
         message: saved,
+        choices: reply.choices,
         handoff: reply.forceHandoff,
       });
     }
@@ -171,10 +173,11 @@ export async function POST(request: Request, ctx: Ctx) {
               "I am not sure from our published information. Please speak to the team and we will follow up.";
             controller.enqueue(encoder.encode(full));
           }
+          const extracted = extractReplyChoices(full);
           await addChatMessage({
             session_id: id,
             role: "assistant",
-            body: full.trim(),
+            body: extracted.body,
             sources: streamed.sources,
           });
           if (streamed.forceHandoff) {

@@ -165,6 +165,12 @@ export async function POST(request: Request) {
       }
       const session = await getChatSession(sessionId);
       if (!session) return jsonError("Not found", 404);
+      if (session.status === "closed") {
+        return jsonError(
+          "The visitor closed this chat, so it cannot be taken over.",
+          409
+        );
+      }
       const fullName = (gate.user.full_name || "").trim();
       const emailLocal = (gate.user.email || "").split("@")[0] || "";
       const rawFirst =
@@ -190,6 +196,14 @@ export async function POST(request: Request) {
       const sessionId = String(body.session_id ?? "");
       if (!sessionId) return jsonError("session_id required");
       const status = body.status as ChatSessionStatus | undefined;
+      const existing = await getChatSession(sessionId);
+      if (!existing) return jsonError("Not found", 404);
+      if (existing.status === "closed" && status && status !== "closed") {
+        return jsonError(
+          "The visitor closed this chat, so it cannot be taken over.",
+          409
+        );
+      }
       const updated = await updateChatSession(sessionId, {
         ...(status ? { status } : {}),
         ...(typeof body.assignee_email === "string"

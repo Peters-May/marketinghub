@@ -1,6 +1,7 @@
 /**
  * Allowlisted public website pages the chat may fetch when a visitor asks
- * about leadership, offices, careers, etc. Not a full-site crawl.
+ * about leadership, offices, careers, or published sailing schedules.
+ * Not a full-site crawl.
  */
 
 export type SitePageDef = {
@@ -32,6 +33,13 @@ export const ALLOWLISTED_SITE_PAGES: SitePageDef[] = [
     url: "https://www.petersandmay.com/careers/",
     keywords:
       /\b(career|careers|job|jobs|vacanc|work (for|with) (you|peters)|employment|recruit|hiring|skipper|crew)\b/i,
+  },
+  {
+    id: "sailings",
+    title: "Sailing Schedules",
+    url: "https://www.petersandmay.com/sailings/",
+    keywords:
+      /\b(sailing schedules?|upcoming sailings?)\b|\b(next|upcoming|when|schedule|departure|departing|etd)\b.{0,80}\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b|\b(sail(?:ing)?s?|depart(?:ure|ing)?)\b.{0,80}\b(next|upcoming|when|schedule|departure|departing|etd)\b/i,
   },
 ];
 

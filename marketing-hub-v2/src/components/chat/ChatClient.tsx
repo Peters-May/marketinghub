@@ -174,6 +174,10 @@ export function ChatClient({ configured, initialSessionId }: Props) {
 
   async function sendReply() {
     if (!selectedId || !reply.trim()) return;
+    if (selected?.status === "closed") {
+      setError("The visitor closed this chat, so it cannot be taken over.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -200,6 +204,10 @@ export function ChatClient({ configured, initialSessionId }: Props) {
 
   async function setStatus(status: ChatSession["status"]) {
     if (!selectedId) return;
+    if (selected?.status === "closed" && status !== "closed") {
+      setError("The visitor closed this chat, so it cannot be taken over.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/chat/admin", {
@@ -472,17 +480,17 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-border px-2 py-1 text-xs"
+                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
                       onClick={() => setStatus("human")}
-                      disabled={busy}
+                      disabled={busy || selected.status === "closed"}
                     >
                       Take over
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-border px-2 py-1 text-xs"
+                      className="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
                       onClick={() => setStatus("closed")}
-                      disabled={busy}
+                      disabled={busy || selected.status === "closed"}
                     >
                       Close
                     </button>
@@ -508,28 +516,34 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   ))}
                 </div>
                 <div className="border-t border-border p-3">
-                  <div className="flex gap-2">
-                    <input
-                      className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
-                      placeholder="Reply as the team…"
-                      value={reply}
-                      onChange={(e) => setReply(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          void sendReply();
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={busy || !reply.trim()}
-                      onClick={() => void sendReply()}
-                      className="rounded-md bg-[#0B2545] px-4 py-2 text-sm text-white disabled:opacity-50"
-                    >
-                      Send
-                    </button>
-                  </div>
+                  {selected.status === "closed" ? (
+                    <p className="text-sm text-muted">
+                      The visitor closed this chat, so it cannot be taken over.
+                    </p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 rounded-md border border-border px-3 py-2 text-sm"
+                        placeholder="Reply as the team…"
+                        value={reply}
+                        onChange={(e) => setReply(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendReply();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy || !reply.trim()}
+                        onClick={() => void sendReply()}
+                        className="rounded-md bg-[#0B2545] px-4 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

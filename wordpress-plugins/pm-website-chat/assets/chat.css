@@ -344,6 +344,18 @@
   color: var(--pm-chat-blue) !important;
 }
 
+#pm-website-chat-root .pm-chat__chip--choice {
+  background: var(--pm-chat-navy) !important;
+  color: var(--pm-chat-white) !important;
+  border-color: var(--pm-chat-navy) !important;
+}
+
+#pm-website-chat-root .pm-chat__chip--choice:hover {
+  background: var(--pm-chat-blue) !important;
+  border-color: var(--pm-chat-blue) !important;
+  color: var(--pm-chat-white) !important;
+}
+
 .pm-chat__collect {
   display: none;
   padding: 10px 12px 12px;

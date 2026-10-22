@@ -1,5 +1,6 @@
-# Pack PM Website Chat for WordPress upload.
-# One zip at exports/pm-website-chat.zip — entries start with pm-website-chat/
+# Pack PM Website Chat like the working 1.0.10 layout:
+#   exports/pm-website-chat-VERSION/pm-website-chat-VERSION.zip
+# Zip entries: pm-website-chat/... (one folder, forward slashes)
 # Usage: powershell -File scripts/pack-pm-website-chat.ps1
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.IO.Compression
@@ -14,18 +15,22 @@ $verLine = Select-String -Path $mainPhp -Pattern '^\s*\*\s*Version:\s*(.+)$' | S
 $ver = ($verLine.Matches.Groups[1].Value).Trim()
 if (-not $ver) { throw "Could not read Version from plugin header" }
 
-$exportsDir = Join-Path $root "exports"
-New-Item -ItemType Directory -Force -Path $exportsDir | Out-Null
+$outDir = Join-Path $root "exports\pm-website-chat-$ver"
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-# Single top-level zip only (not a folder of zips, not two copies).
-$zipPath = Join-Path $exportsDir "pm-website-chat.zip"
+$zipPath = Join-Path $outDir "pm-website-chat-$ver.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+# Remove any accidental plain duplicate in this folder
+$plainDup = Join-Path $outDir "pm-website-chat.zip"
+if (Test-Path $plainDup) { Remove-Item $plainDup -Force }
+# Remove loose top-level copy if present
+$loose = Join-Path $root "exports\pm-website-chat-$ver.zip"
+if (Test-Path $loose) { Remove-Item $loose -Force }
 
 $zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
 try {
   Get-ChildItem -Path $pluginRoot -Recurse -File | Sort-Object FullName | ForEach-Object {
     $rel = $_.FullName.Substring($pluginRoot.Length).TrimStart("\").Replace("\", "/")
-    # Folder must be exactly pm-website-chat/ so WP updates the same plugin.
     $entryName = "pm-website-chat/$rel"
     [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
       $zip,

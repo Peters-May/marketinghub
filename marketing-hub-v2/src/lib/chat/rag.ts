@@ -2,6 +2,7 @@ import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
 import { resolveChatGuidance } from "@/lib/chat/enquiry-guidance";
+import { extractReplyChoices } from "@/lib/chat/reply-choices";
 import { fetchRelevantSitePages } from "@/lib/chat/site-pages";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
 import { listKbDocuments, getChatSettings } from "@/lib/chat/data";
@@ -110,6 +111,20 @@ export async function streamAssistantReply(input: {
       : kbParts.join("\n\n");
 
   const guidance = resolveChatGuidance(settings.guidance);
+  const hasSailingSchedule = sitePages.some((p) =>
+    p.url.includes("/sailings")
+  );
+  const sailingRule = hasSailingSchedule
+    ? `
+Sailing schedule (this message only):
+- A Sailing Schedules excerpt is below. Answer a sailing or departure question from that excerpt only.
+- Mention the published loading or ETD dates that match the port or route they asked about. Do not recite the full list.
+- Say these are scheduled sailings currently listed, not a confirmed space and not the only option.
+- In the same reply, say other options are available, including liner services and bespoke routings, and the team can look at what suits them.
+- Do not promise space, a guaranteed date, or that their yacht is booked on that vessel.
+- If nothing in the excerpt matches, say you cannot see that route in the published list and the team can check other options.
+- This overrides any Guidance line that forbids mentioning a sailing date. It does not override the ban on inventing dates or promising a booking.`
+    : "";
 
   const system = `${BRAND_AI_SUMMARY}
 
@@ -120,10 +135,11 @@ ${guidance}
 
 Hard rules:
 - Follow Guidance for qualification flows, specialist replies (careers, personal effects, suppliers, existing bookings), and what never to promise.
-- Use knowledge base and allowlisted website excerpts below for factual extras (leadership, offices, careers, contacts). Do not invent contacts, names, titles, or URLs not present in those excerpts.
+- Use knowledge base and allowlisted website excerpts below for factual extras (leadership, offices, careers, contacts, published sailing schedules). Do not invent contacts, names, titles, sailing dates, or URLs not present in those excerpts.
 - British English. Short paragraphs. No emoji. No exclamation marks. No hype.
-- Never invent rates, capacity, sailing dates, clients, case studies, leadership names, or company figures. Published facts are allowed only when present in the excerpts below (Train KB or fetched website pages).
+- Never invent rates, capacity, sailing dates, clients, case studies, leadership names, or company figures. Published facts are allowed only when present in the excerpts below (Train KB or fetched website pages). A published sailing date must be followed by the point that other options are available and the team can look further.${sailingRule}
 - Ask conversationally. Prefer one or two questions at a time. Stop when enough exists for a team review, then confirm handover and ask for a business email if missing.
+- When a question has 2 to 5 mutually exclusive answers (yacht or freight, yes or no, air or sea), end the message with exactly one line: [[choices: First option | Second option | Third option]]. Use short labels. Do not add that line for open questions such as name, email, port, dimensions, dates, or “what would you like to know?”. The visitor can still type their own answer.
 - If they insist on rates/quotes or a person, invite Speak to the team / email capture without inventing numbers.
 - If you cannot answer from the excerpts, say so briefly, optionally offer Speak to the team, then ask what else you can help with.
 
@@ -161,7 +177,12 @@ ${kbBlock}`;
 export async function generateAssistantReply(input: {
   visitorMessage: string;
   history: ChatMessage[];
-}): Promise<{ body: string; sources: ChatMessage["sources"]; forceHandoff: boolean }> {
+}): Promise<{
+  body: string;
+  choices: string[];
+  sources: ChatMessage["sources"];
+  forceHandoff: boolean;
+}> {
   const streamed = await streamAssistantReply(input);
   let body = "";
   for await (const chunk of streamed.textStream) {
@@ -170,8 +191,13 @@ export async function generateAssistantReply(input: {
   if (streamed.forceHandoff && !/team|email|follow/i.test(body)) {
     body = `${body.trim()}\n\nFor a quote or personal help, use Speak to the team and leave your business email.`.trim();
   }
+  const extracted = extractReplyChoices(
+    body.trim() ||
+      "I am not sure from our published information. Please speak to the team and we will follow up."
+  );
   return {
-    body: body.trim() || "I am not sure from our published information. Please speak to the team and we will follow up.",
+    body: extracted.body,
+    choices: streamed.forceHandoff ? [] : extracted.choices,
     sources: streamed.sources,
     forceHandoff: streamed.forceHandoff,
   };
