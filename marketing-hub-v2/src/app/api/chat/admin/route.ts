@@ -14,6 +14,7 @@ import {
   updateChatSession,
 } from "@/lib/chat/data";
 import { generateAssistantReply } from "@/lib/chat/rag";
+import { emailVisitorStaffReply } from "@/lib/chat/notify";
 import { syncClosedChatSessionToPortal } from "@/lib/chat/lead";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import type { ChatSessionStatus } from "@/lib/types";
@@ -187,6 +188,14 @@ export async function POST(request: Request) {
         await updateChatSession(sessionId, {
           status: "human",
           assignee_email: gate.user.email ?? "",
+        });
+      }
+      const visitorEmail = session.visitor_email.trim();
+      if (visitorEmail) {
+        void emailVisitorStaffReply({
+          to: visitorEmail,
+          reply: text,
+          authorName,
         });
       }
       return jsonOk({ message: msg });

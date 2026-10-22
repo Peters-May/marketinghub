@@ -11,6 +11,7 @@ export function chatJson(
   init?: { status?: number }
 ) {
   const res = NextResponse.json(data, { status: init?.status ?? 200 });
+  res.headers.set("Cache-Control", "no-store");
   return applyChatCors(request, res);
 }
 

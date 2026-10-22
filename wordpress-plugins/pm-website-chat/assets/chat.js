@@ -41,15 +41,14 @@
     { key: "name", label: "Your name" },
     { key: "email", label: "Business email", type: "email" },
     {
+      key: "visitor_location",
+      label: "Where are you based? (country or city)",
+      placeholder: "e.g. London, UK",
+    },
+    {
       key: "yacht_location",
       label: "Where is the yacht now? (country or port)",
       placeholder: "e.g. Southampton, UK",
-    },
-    {
-      key: "visitor_location",
-      label: "Where are you based? (optional)",
-      placeholder: "e.g. London",
-      optional: true,
     },
     { key: "make_model", label: "Yacht make / model" },
     { key: "length", label: "Length (LOA)" },
@@ -77,6 +76,11 @@
   var FREIGHT_FIELDS = [
     { key: "name", label: "Your name" },
     { key: "email", label: "Business email", type: "email" },
+    {
+      key: "visitor_location",
+      label: "Where are you based? (country or city)",
+      placeholder: "e.g. London, UK",
+    },
     { key: "company", label: "Company", optional: true },
     { key: "commodity", label: "What are you shipping?" },
     { key: "origin", label: "Origin" },
@@ -905,22 +909,28 @@
 
   function startPoll() {
     stopPoll();
-    pollTimer = setInterval(function () {
-      if (!sessionId) return;
+    function pollOnce() {
+      if (!sessionId || !open) return;
       var path =
         "api/chat/sessions/" +
         encodeURIComponent(sessionId) +
-        "/messages" +
-        (lastMessageAt ? "?after=" + encodeURIComponent(lastMessageAt) : "");
+        "/messages?t=" +
+        Date.now();
       fetch(apiUrl(path), {
         headers: headers(),
         credentials: useProxy ? "same-origin" : "omit",
+        cache: "no-store",
       })
         .then(parseBody)
         .then(function (data) {
           if (!data.messages) return;
           data.messages.forEach(function (m) {
-            if (m.role === "visitor") return;
+            if (m.id && seenIds[m.id]) return;
+            if (m.role === "visitor") {
+              if (m.id) seenIds[m.id] = true;
+              if (m.created_at) lastMessageAt = m.created_at;
+              return;
+            }
             if (m.role === "staff" || m.role === "system") {
               appendBubble(m.role, m.body, m.id, m.author_name);
             } else if (m.role === "assistant") {
@@ -932,7 +942,9 @@
           });
         })
         .catch(function () {});
-    }, 5000);
+    }
+    pollOnce();
+    pollTimer = setInterval(pollOnce, 4000);
   }
 
   function stopPoll() {

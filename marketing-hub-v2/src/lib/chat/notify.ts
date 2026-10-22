@@ -205,3 +205,36 @@ export async function emailChatTranscript(params: {
 
   return { sent, errors };
 }
+
+/** Email a staff reply to the visitor when we have their address. */
+export async function emailVisitorStaffReply(params: {
+  to: string;
+  reply: string;
+  authorName?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const to = params.to.trim();
+  const reply = params.reply.trim();
+  if (!to.includes("@") || !reply) {
+    return { success: false, error: "No visitor email" };
+  }
+  const who = (params.authorName || "The team").trim() || "The team";
+  const subject = "Peters & May replied to your website chat";
+  const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: system-ui, sans-serif; line-height: 1.6; color: #0B2545; max-width: 640px; margin: 0 auto; padding: 20px;">
+  <p>${escapeHtml(who)} from Peters &amp; May replied to your website chat:</p>
+  <div style="margin-top: 16px; padding: 16px; background: #F5F6F8; border-radius: 8px; font-size: 14px;">
+    ${transcriptToHtml(reply)}
+  </div>
+  <p>If the chat is still open on the website, you can continue the conversation there.</p>
+  <p style="color: #666; font-size: 12px; margin-top: 20px;">Peters &amp; May — automated chat reply.</p>
+</body>
+</html>`.trim();
+  return sendResendEmail({
+    to,
+    subject,
+    html,
+    text: `${who} from Peters & May replied to your website chat:\n\n${reply}\n\nIf the chat is still open on the website, you can continue the conversation there.`,
+  });
+}
