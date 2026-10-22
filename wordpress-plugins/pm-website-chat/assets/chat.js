@@ -16,6 +16,7 @@
   var open = false;
   var inflightSends = 0;
   var startersShown = false;
+  var teamJoined = false;
   var collectState = null;
   /** Prevent restarting the guided form after it has just been submitted. */
   var suppressCollectTrigger = false;
@@ -69,6 +70,12 @@
       optional: true,
     },
     {
+      key: "timeframe",
+      label: "Preferred timeframe",
+      placeholder: "e.g. March 2027",
+      optional: true,
+    },
+    {
       key: "specs",
       label: "Drawings or specifications (optional — paste notes here)",
       optional: true,
@@ -92,6 +99,26 @@
     { key: "weight", label: "Weight", optional: true },
     { key: "timeframe", label: "Preferred timeframe", optional: true },
   ];
+
+  var YACHT_STEPS = [
+    { title: "About you", keys: ["name", "email", "visitor_location"] },
+    { title: "The yacht", keys: ["make_model", "length", "beam", "height", "weight"] },
+    { title: "The move", keys: ["yacht_location", "destination", "loading_port", "timeframe"] },
+    { title: "Value and documents", keys: ["value", "specs"] },
+  ];
+  var FREIGHT_STEPS = [
+    { title: "About you", keys: ["name", "email", "visitor_location", "company"] },
+    { title: "The cargo", keys: ["commodity", "pieces", "dimensions", "weight"] },
+    { title: "The route", keys: ["origin", "destination", "timeframe"] },
+  ];
+
+  function fieldByKey(kind, key) {
+    var list = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].key === key) return list[i];
+    }
+    return null;
+  }
 
   function apiUrl(hubPath) {
     if (useProxy) {
@@ -148,13 +175,14 @@
     if (role === "assistant") {
       return (
         (cfg.labels && cfg.labels.botSender) ||
-        "Your P&M friendly assistant"
+        "Peters & May assistant"
       );
     }
     if (role === "staff") {
       var name = (authorName || "").trim();
-      return name || "Team";
+      return (name || "Team") + " · Peters & May";
     }
+    if (role === "visitor") return "You";
     return "";
   }
 
@@ -196,10 +224,20 @@
   /** Free-type message box always stays at the bottom (never hide). */
   function ensureComposerVisible() {
     composer.classList.remove("is-hidden");
-    // Keep composer last in the panel so it stays under collect / lead.
-    if (composer.parentNode === panel) {
-      panel.appendChild(composer);
-    }
+    if (footer.parentNode === panel) panel.appendChild(footer);
+    if (composer.parentNode === panel) panel.appendChild(composer);
+  }
+
+  function noteTeamJoined(authorName) {
+    if (teamJoined) return;
+    teamJoined = true;
+    hideStarters();
+    var chips = messagesEl.querySelectorAll(".pm-chat__choices");
+    for (var i = 0; i < chips.length; i++) chips[i].parentNode.removeChild(chips[i]);
+    var who = (authorName || "").trim() || "A colleague";
+    appendBubble("system", who + " from the team joined");
+    var title = headerText.querySelector(".pm-chat__title");
+    if (title) title.textContent = who;
   }
 
   function setTyping(on) {
@@ -310,19 +348,29 @@
     return uniqueChoiceLabels(parts);
   }
 
-  function offerChoiceChips(choices) {
-    if (!choices || choices.length < 2 || collectState) return false;
-    clearNode(startersEl);
-    startersEl.classList.add("is-on");
+  function offerChoiceChips(choices, anchor) {
+    if (!choices || choices.length < 2 || collectState || teamJoined) return false;
+    var group = el("div", "pm-chat__choices");
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "Suggested answers");
     choices.forEach(function (label) {
       var btn = el("button", "pm-chat__chip pm-chat__chip--choice", label);
       btn.type = "button";
       btn.addEventListener("click", function () {
-        hideStarters();
+        group.remove();
         sendMessageText(label);
       });
-      startersEl.appendChild(btn);
+      group.appendChild(btn);
     });
+    group.appendChild(
+      el("p", "pm-chat__choice-hint", "Or type your own answer below.")
+    );
+    if (anchor) anchor.appendChild(group);
+    else {
+      clearNode(startersEl);
+      startersEl.classList.add("is-on");
+      startersEl.appendChild(group);
+    }
     ensureComposerVisible();
     return true;
   }
@@ -331,7 +379,7 @@
     var parsed = splitReplyChoices(body);
     var labels =
       choices && choices.length >= 2 ? choices : parsed.choices;
-    appendBubble(
+    var wrap = appendBubble(
       "assistant",
       parsed.body,
       id,
@@ -341,8 +389,8 @@
       endGuidedEnquiryUi();
       return;
     }
-    if (collectState) return;
-    if (offerChoiceChips(labels)) return;
+    if (collectState || teamJoined) return;
+    if (offerChoiceChips(labels, wrap)) return;
     maybeOfferGuidedFromAssistant(parsed.body);
   }
 
@@ -388,17 +436,19 @@
   panel.appendChild(header);
 
   var actions = el("div", "pm-chat__actions");
-  var speakBtn = el("button", "", cfg.labels.speak);
+  var speakBtn = el("button", "pm-chat__speak", cfg.labels.speak);
   speakBtn.type = "button";
   actions.appendChild(speakBtn);
   panel.appendChild(actions);
 
   var messagesEl = el("div", "pm-chat__messages");
+  messagesEl.setAttribute("aria-live", "polite");
   var typingEl = el(
     "div",
-    "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing",
-    "…"
+    "pm-chat__bubble pm-chat__bubble--assistant pm-chat__typing"
   );
+  typingEl.setAttribute("aria-label", "Assistant is typing");
+  typingEl.textContent = "…";
   messagesEl.appendChild(typingEl);
   panel.appendChild(messagesEl);
 
@@ -426,13 +476,29 @@
   companyInput.placeholder = cfg.labels.company;
   var leadSend = el("button", "", "Send details");
   leadSend.type = "button";
-  leadBody.appendChild(nameInput);
-  leadBody.appendChild(emailInput);
-  leadBody.appendChild(companyInput);
+  function labelledField(labelText, inputEl) {
+    var wrap = el("label", "pm-chat__field");
+    wrap.appendChild(el("span", "pm-chat__field-label", labelText));
+    wrap.appendChild(inputEl);
+    return wrap;
+  }
+  leadBody.appendChild(labelledField(cfg.labels.name || "Name", nameInput));
+  leadBody.appendChild(
+    labelledField(cfg.labels.email || "Business email", emailInput)
+  );
+  leadBody.appendChild(
+    labelledField((cfg.labels.company || "Company") + " (optional)", companyInput)
+  );
+  leadSend.className = "pm-chat__collect-primary";
+  leadSend.textContent = "Send to the team";
   leadBody.appendChild(leadSend);
   lead.appendChild(leadBar);
   lead.appendChild(leadBody);
   panel.appendChild(lead);
+
+  var footer = el("div", "pm-chat__footer");
+  footer.appendChild(speakBtn);
+  panel.appendChild(footer);
 
   var composer = el("div", "pm-chat__composer");
   var input = el("input", "");
@@ -446,16 +512,13 @@
 
   var launcher = el("button", "pm-chat__launcher");
   launcher.type = "button";
-  launcher.setAttribute(
-    "aria-label",
-    (cfg.labels && cfg.labels.open) || "Open chat"
-  );
-  // Modern circular chat icon (no text label).
+  launcher.setAttribute("aria-label", "Chat with us");
   launcher.innerHTML =
     '<svg class="pm-chat__launcher-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
     '<path d="M21 12a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.7-.3-3.9-.9L3 21l1.5-4.4A8.4 8.4 0 0 1 3.5 12 8.5 8.5 0 1 1 21 12Z"/>' +
     '<path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>' +
-    "</svg>";
+    "</svg>" +
+    '<span class="pm-chat__launcher-label">Chat with us</span>';
 
   root.appendChild(panel);
   root.appendChild(launcher);
@@ -471,9 +534,13 @@
     }
     if (open) {
       startPoll();
+      document.body.classList.add("pm-chat-lock");
+      panel.setAttribute("tabindex", "-1");
       input.focus();
     } else {
       stopPoll();
+      document.body.classList.remove("pm-chat-lock");
+      launcher.focus();
     }
   }
 
@@ -488,9 +555,11 @@
     clearNode(startersEl);
     startersEl.classList.add("is-on");
 
-    function addChip(label, onClick) {
-      var btn = el("button", "pm-chat__chip", label);
+    function addStarter(title, desc, onClick) {
+      var btn = el("button", "pm-chat__chip pm-chat__starter");
       btn.type = "button";
+      btn.appendChild(el("span", "pm-chat__starter-title", title));
+      btn.appendChild(el("span", "pm-chat__starter-desc", desc));
       btn.addEventListener("click", function () {
         hideStarters();
         onClick();
@@ -498,16 +567,16 @@
       startersEl.appendChild(btn);
     }
 
-    addChip("Get a quote", function () {
+    addStarter("Get a quote", "Yacht or freight details, step by step", function () {
       showQuoteTypeStarters();
     });
-    addChip("Ask a question", function () {
+    addStarter("Ask a question", "Published information, offices and sailings", function () {
       appendBubble("visitor", "Ask a question");
       appendBubble("assistant", "What would you like to know?");
       ensureComposerVisible();
       input.focus();
     });
-    addChip("Speak to the team", function () {
+    addStarter("Speak to the team", "Leave your details for a colleague", function () {
       handoff();
     });
   }
@@ -624,10 +693,11 @@
     if (suppressCollectTrigger && !opts.force) return;
     // Explicit chip restart of a new quote.
     if (opts.force) suppressCollectTrigger = false;
-    var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
+    var steps = kind === "freight" ? FREIGHT_STEPS : YACHT_STEPS;
     collectState = {
       kind: kind,
-      fields: fields,
+      fields: kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS,
+      steps: steps,
       index: 0,
       values: {},
       pasteMode: !!opts.pasteFirst,
@@ -656,8 +726,15 @@
           "Paste your details or specification notes"
         )
       );
+      collectEl.appendChild(
+        el(
+          "p",
+          "pm-chat__collect-hint",
+          "A spec sheet, broker listing or email is fine. We will only ask for what is still missing."
+        )
+      );
       var ta = el("textarea", "pm-chat__collect-input");
-      ta.rows = 5;
+      ta.rows = 8;
       ta.placeholder =
         "Paste make/model, dimensions, ports, contact details…";
       collectEl.appendChild(ta);
@@ -686,28 +763,53 @@
       return;
     }
 
-    var field = collectState.fields[collectState.index];
-    var total = collectState.fields.length;
+    var stepDef = collectState.steps[collectState.index];
+    var total = collectState.steps.length;
     var step = collectState.index + 1;
     collectEl.appendChild(
       el("p", "pm-chat__collect-progress", "Step " + step + " of " + total)
     );
-    collectEl.appendChild(el("p", "pm-chat__collect-label", field.label));
-
-    var inputEl =
-      field.key === "specs"
-        ? el("textarea", "pm-chat__collect-input")
-        : el("input", "pm-chat__collect-input");
-    if (inputEl.tagName === "INPUT") {
-      inputEl.type = field.type || "text";
-    } else {
-      inputEl.rows = 3;
-    }
-    inputEl.placeholder =
-      field.placeholder || (field.optional ? "Optional" : "");
-    collectEl.appendChild(inputEl);
+    collectEl.appendChild(el("p", "pm-chat__collect-label", stepDef.title));
+    var inputs = [];
+    stepDef.keys.forEach(function (key) {
+      var field = fieldByKey(collectState.kind, key);
+      if (!field) return;
+      var wrap = el("label", "pm-chat__field");
+      wrap.appendChild(
+        el(
+          "span",
+          "pm-chat__field-label",
+          field.label + (field.optional ? " (optional)" : "")
+        )
+      );
+      var inputEl =
+        field.key === "specs"
+          ? el("textarea", "pm-chat__collect-input")
+          : el("input", "pm-chat__collect-input");
+      if (inputEl.tagName === "INPUT") inputEl.type = field.type || "text";
+      else inputEl.rows = 3;
+      inputEl.placeholder = field.placeholder || "";
+      inputEl.value = collectState.values[field.key] || "";
+      wrap.appendChild(inputEl);
+      var err = el("span", "pm-chat__field-error");
+      wrap.appendChild(err);
+      collectEl.appendChild(wrap);
+      inputs.push({ field: field, input: inputEl, error: err });
+    });
 
     var row = el("div", "pm-chat__collect-row");
+    if (collectState.index > 0) {
+      var backStep = el("button", "pm-chat__collect-secondary", "Back");
+      backStep.type = "button";
+      backStep.addEventListener("click", function () {
+        inputs.forEach(function (item) {
+          collectState.values[item.field.key] = (item.input.value || "").trim();
+        });
+        collectState.index -= 1;
+        renderCollectStep();
+      });
+      row.appendChild(backStep);
+    }
     var next = el(
       "button",
       "pm-chat__collect-primary",
@@ -715,46 +817,42 @@
     );
     next.type = "button";
     next.addEventListener("click", function () {
-      advanceCollect(inputEl);
-    });
-    inputEl.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && inputEl.tagName === "INPUT") {
-        e.preventDefault();
-        advanceCollect(inputEl);
+      var ok = true;
+      inputs.forEach(function (item) {
+        var value = (item.input.value || "").trim();
+        item.error.textContent = "";
+        if (!value && !item.field.optional) {
+          item.error.textContent = "Please complete this.";
+          ok = false;
+        } else if (
+          item.field.type === "email" &&
+          value &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+        ) {
+          item.error.textContent = "Enter a valid email address.";
+          ok = false;
+        } else {
+          collectState.values[item.field.key] = value;
+        }
+      });
+      if (!ok) return;
+      collectState.index += 1;
+      if (collectState.index >= collectState.steps.length) {
+        finishCollectFromFields();
+      } else {
+        renderCollectStep();
       }
     });
-
-    var pasteBtn = el(
-      "button",
-      "pm-chat__collect-secondary",
-      "Paste all instead"
-    );
+    var pasteBtn = el("button", "pm-chat__collect-secondary", "Paste it instead");
     pasteBtn.type = "button";
     pasteBtn.addEventListener("click", function () {
       collectState.pasteMode = true;
       renderCollectStep();
     });
-
-    var skip = null;
-    if (field.optional) {
-      skip = el("button", "pm-chat__collect-secondary", "Skip");
-      skip.type = "button";
-      skip.addEventListener("click", function () {
-        collectState.values[field.key] = "";
-        collectState.index += 1;
-        if (collectState.index >= collectState.fields.length) {
-          finishCollectFromFields();
-        } else {
-          renderCollectStep();
-        }
-      });
-    }
-
     row.appendChild(next);
     row.appendChild(pasteBtn);
-    if (skip) row.appendChild(skip);
     collectEl.appendChild(row);
-    inputEl.focus();
+    if (inputs[0]) inputs[0].input.focus();
   }
 
   function advanceCollect(inputEl) {
@@ -772,10 +870,6 @@
       }
     }
     collectState.values[field.key] = value;
-    // Echo short confirmation in thread for clarity.
-    if (value) {
-      appendBubble("visitor", field.label + ": " + value);
-    }
     collectState.index += 1;
     if (collectState.index >= collectState.fields.length) {
       finishCollectFromFields();
@@ -934,6 +1028,7 @@
               return;
             }
             if (m.role === "staff" || m.role === "system") {
+              if (m.role === "staff") noteTeamJoined(m.author_name);
               appendBubble(m.role, m.body, m.id, m.author_name);
             } else if (m.role === "assistant") {
               presentAssistant(m.body, m.id);
@@ -985,6 +1080,7 @@
           if (m.role === "visitor") {
             appendBubble("visitor", m.body, m.id);
           } else {
+            if (m.role === "staff") noteTeamJoined(m.author_name);
             appendBubble(m.role, m.body, m.id, m.author_name);
           }
           if (m.created_at) lastMessageAt = m.created_at;
@@ -1062,6 +1158,10 @@
             if (bubble) bubble.textContent = serverBody;
           }
         }
+        if (data.office_hours_note) {
+          var sub = headerText.querySelector(".pm-chat__subtitle");
+          if (sub) sub.textContent = data.office_hours_note;
+        }
         showStarters();
         return sessionId;
       })
@@ -1090,7 +1190,7 @@
     if (!opts.skipCollect) {
       maybeStartCollectFromVisitor(text);
     }
-    appendBubble("visitor", text);
+    var visitorWrap = appendBubble("visitor", text);
     inflightSends += 1;
     setTyping(true);
 
@@ -1133,10 +1233,24 @@
         });
       })
       .catch(function (err) {
-        appendBubble(
-          "system",
-          err.message || "Something went wrong. Please try again."
-        );
+        if (visitorWrap) {
+          var alert = el("div", "pm-chat__alert");
+          alert.setAttribute("role", "alert");
+          alert.appendChild(document.createTextNode("Not sent. "));
+          var retry = el("button", "pm-chat__retry", "Try again");
+          retry.type = "button";
+          retry.addEventListener("click", function () {
+            if (visitorWrap.parentNode) visitorWrap.parentNode.removeChild(visitorWrap);
+            sendMessageText(text, opts);
+          });
+          alert.appendChild(retry);
+          visitorWrap.appendChild(alert);
+        } else {
+          appendBubble(
+            "system",
+            err.message || "Something went wrong. Please try again."
+          );
+        }
       })
       .finally(function () {
         inflightSends = Math.max(0, inflightSends - 1);
@@ -1241,6 +1355,16 @@
     ).catch(function () {});
   }
 
+  document.addEventListener("keydown", function (e) {
+    if (!open || e.key !== "Escape") return;
+    var sheet = panel.querySelector(".pm-chat__sheet");
+    if (sheet) {
+      sheet.remove();
+      return;
+    }
+    setOpen(false);
+  });
+
   launcher.addEventListener("click", function () {
     setOpen(true);
   });
@@ -1269,22 +1393,46 @@
       setOpen(false);
       return;
     }
-    var end = window.confirm(
-      cfg.labels.closeConfirm ||
-        "Would you like to close the chat?\n\nThis ends the chat."
-    );
-    if (!end) return;
-    var wantDownload = window.confirm(
-      "Download a copy of this chat transcript before closing?"
-    );
-    if (wantDownload) {
-      downloadTranscriptFile();
-    }
-    closeSessionOnHub().finally(function () {
-      resetChatUi();
-      setOpen(false);
-    });
+    showCloseSheet();
   });
+  function showCloseSheet() {
+    var existing = panel.querySelector(".pm-chat__sheet");
+    if (existing) return;
+    var sheet = el("div", "pm-chat__sheet");
+    sheet.appendChild(el("p", "pm-chat__collect-label", "End this chat?"));
+    sheet.appendChild(
+      el(
+        "p",
+        "pm-chat__collect-hint",
+        "The team still has your details if you already sent them."
+      )
+    );
+    var row = el("div", "pm-chat__collect-row");
+    var download = el("button", "pm-chat__collect-secondary", "Download transcript");
+    download.type = "button";
+    download.addEventListener("click", function () {
+      downloadTranscriptFile();
+    });
+    var keep = el("button", "pm-chat__collect-secondary", "Keep chatting");
+    keep.type = "button";
+    keep.addEventListener("click", function () {
+      sheet.remove();
+    });
+    var end = el("button", "pm-chat__collect-primary", "End chat");
+    end.type = "button";
+    end.addEventListener("click", function () {
+      sheet.remove();
+      closeSessionOnHub().finally(function () {
+        resetChatUi();
+        setOpen(false);
+      });
+    });
+    row.appendChild(download);
+    row.appendChild(keep);
+    row.appendChild(end);
+    sheet.appendChild(row);
+    panel.appendChild(sheet);
+  }
   leadMinBtn.addEventListener("click", function () {
     var collapsed = lead.classList.toggle("is-collapsed");
     leadMinBtn.textContent = collapsed ? "Show details" : "Minimise";
