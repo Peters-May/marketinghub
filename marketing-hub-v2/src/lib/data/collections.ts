@@ -7,6 +7,7 @@ export type CollectionKey = Exclude<
   | "hub_users"
   | "access_requests"
   | "event_attendance"
+  | "event_content"
   | "page_notes"
   | "merch_catalogue"
   | "budget_lines"

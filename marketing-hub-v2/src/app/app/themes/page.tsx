@@ -1,4 +1,5 @@
 import { ThemesClient } from "@/components/themes/ThemesClient";
+import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { getFieldOptionsMap } from "@/lib/data/data-admin";
 import {
   listContent,
@@ -10,6 +11,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ThemesPage() {
+  await requireAdminPage();
   const [themes, mains, offshoots, content, contentFieldOptions] =
     await Promise.all([
       listThemes(),
