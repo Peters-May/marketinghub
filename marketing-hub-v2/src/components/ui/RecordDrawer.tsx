@@ -75,14 +75,14 @@ export function RecordDrawer({
   return (
     <>
       <div
-        className="fixed inset-0 z-40 bg-black/25 md:left-sidebar md:right-[var(--assistant-dock,0px)]"
+        className="fixed inset-0 z-40 bg-black/25 md:left-sidebar lg:right-[var(--assistant-dock,0px)]"
         onClick={onClose}
         aria-hidden
       />
       <aside
         ref={panelRef}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-white shadow-soft md:right-[var(--assistant-dock,0px)]",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-white shadow-soft lg:right-[var(--assistant-dock,0px)]",
           className
         )}
         role="dialog"

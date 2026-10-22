@@ -1,9 +1,20 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
-import { executeHubCommand } from "@/lib/command/execute";
-import { parseHubCommand } from "@/lib/command/parse";
+import { executeHubCommands } from "@/lib/command/execute";
+import { parseHubCommands, type HubCommand } from "@/lib/command/parse";
 
 export const dynamic = "force-dynamic";
+
+function previewSummary(commands: HubCommand[], skippedCount: number) {
+  if (commands.length === 1 && skippedCount === 0) return commands[0].summary;
+  const countLabel =
+    commands.length === 1 ? "1 action" : `${commands.length} actions`;
+  const skip =
+    skippedCount > 0
+      ? ` ${skippedCount} line${skippedCount === 1 ? "" : "s"} could not be read.`
+      : "";
+  return `${countLabel} ready to save.${skip}`;
+}
 
 export async function POST(request: NextRequest) {
   const { user, error } = await requireStaff();
@@ -16,8 +27,8 @@ export async function POST(request: NextRequest) {
     return jsonError("Type what to add or update.");
   }
 
-  const text = typeof body.text === "string" ? body.text.slice(0, 500) : "";
-  const parsed = parseHubCommand(text);
+  const text = typeof body.text === "string" ? body.text.slice(0, 12000) : "";
+  const parsed = parseHubCommands(text);
   if (!parsed.ok) {
     return jsonOk({
       ok: false,
@@ -26,26 +37,36 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const summary = previewSummary(parsed.commands, parsed.skipped.length);
+
   if (body.confirm !== true) {
     return jsonOk({
       ok: true,
       preview: {
-        summary: parsed.command.summary,
-        verb: parsed.command.verb,
-        href: parsed.command.href,
+        summary,
+        verb: parsed.commands[0].verb,
+        href: parsed.commands[0].href,
+        items: parsed.commands.map((command) => command.summary),
+        skipped: parsed.skipped.slice(0, 8),
+        skippedCount: parsed.skipped.length,
       },
     });
   }
 
   try {
-    const result = await executeHubCommand(parsed.command, user);
+    const result = await executeHubCommands(parsed.commands, user);
     if (!result.ok) return jsonOk({ ok: false, error: result.message });
+    const skippedNote =
+      parsed.skipped.length > 0
+        ? ` ${parsed.skipped.length} line${parsed.skipped.length === 1 ? "" : "s"} could not be read.`
+        : "";
     return jsonOk({
       ok: true,
       done: {
-        message: result.message,
+        message: `${result.message}${skippedNote}`,
         href: result.href,
         area: result.area,
+        areas: result.areas ?? [result.area],
       },
     });
   } catch (err) {

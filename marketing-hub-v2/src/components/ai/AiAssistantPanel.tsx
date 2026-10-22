@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   extractHubCommand,
+  isHubRunConfirmation,
   type AssistantAttachment,
   type AssistantMode,
 } from "@/lib/ai/assistant-shared";
@@ -74,6 +75,8 @@ type CommandPreview = {
   verb: "Add" | "Update";
   href: string;
   text: string;
+  items: string[];
+  skipped: string[];
 };
 
 const MODE_OPTIONS: { id: AssistantMode; label: string }[] = [
@@ -164,6 +167,8 @@ export function AiAssistantPanel({
     message: string;
     href?: string;
   } | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
+  const confirmingRef = useRef(false);
 
   const clearSession = useCallback(() => {
     setMessages([]);
@@ -173,6 +178,7 @@ export function AiAssistantPanel({
     setError(null);
     setCommandPreview(null);
     setCommandNotice(null);
+    setPendingCommand(null);
     setCopied(false);
   }, []);
 
@@ -228,6 +234,10 @@ export function AiAssistantPanel({
           verb: data.preview.verb,
           href: data.preview.href,
           text,
+          items: Array.isArray(data.preview.items) ? data.preview.items : [],
+          skipped: Array.isArray(data.preview.skipped)
+            ? data.preview.skipped
+            : [],
         });
       }
     } catch {
@@ -237,15 +247,17 @@ export function AiAssistantPanel({
     }
   }
 
-  async function confirmCommand() {
-    if (!commandPreview || busy) return;
+  async function confirmCommand(text?: string) {
+    const commandText = (text ?? pendingCommand ?? commandPreview?.text)?.trim();
+    if (!commandText || confirmingRef.current) return;
+    confirmingRef.current = true;
     setBusy(true);
     setCommandNotice(null);
     try {
       const res = await fetch("/api/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: commandPreview.text, confirm: true }),
+        body: JSON.stringify({ text: commandText, confirm: true }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -255,19 +267,42 @@ export function AiAssistantPanel({
         return;
       }
       if (data.done) {
-        setCommandPreview(null);
+        setCommandPreview((current) =>
+          current?.text === commandText ? null : current
+        );
+        setPendingCommand((current) =>
+          current === commandText ? null : current
+        );
         setCommandNotice({
           message: data.done.message,
           href: data.done.href,
         });
-        if (data.done.area) {
-          notifyHubDataChanged(data.done.area as HubDataArea);
+        const areas = Array.isArray(data.done.areas)
+          ? data.done.areas
+          : data.done.area
+            ? [data.done.area]
+            : [];
+        for (const area of areas) {
+          notifyHubDataChanged(area as HubDataArea);
         }
+        setMessages((prev) => [
+          ...prev.map((message) =>
+            message.commandText === commandText
+              ? { ...message, commandText: null }
+              : message
+          ),
+          {
+            id: newId(),
+            role: "assistant",
+            content: String(data.done.message),
+          },
+        ]);
         router.refresh();
       }
     } catch {
       setCommandNotice({ message: "The hub could not save that. Try again." });
     } finally {
+      confirmingRef.current = false;
       setBusy(false);
     }
   }
@@ -275,6 +310,16 @@ export function AiAssistantPanel({
   async function submitChat() {
     const text = composer.trim();
     if (!text || busy) return;
+    if (pendingCommand && isHubRunConfirmation(text)) {
+      setMessages((prev) => [
+        ...prev,
+        { id: newId(), role: "user", content: text },
+      ]);
+      setComposer("");
+      setError(null);
+      await confirmCommand(pendingCommand);
+      return;
+    }
     const userMsg: ThreadMessage = {
       id: newId(),
       role: "user",
@@ -287,6 +332,7 @@ export function AiAssistantPanel({
     setError(null);
     setCommandPreview(null);
     setCommandNotice(null);
+    setPendingCommand(null);
 
     const assistantId = newId();
     setMessages((prev) => [
@@ -332,13 +378,14 @@ export function AiAssistantPanel({
           m.id === assistantId
             ? {
                 ...m,
-                content: displayText || "Proposed action ready — review below.",
+                content: displayText || "Proposed action ready. Press Confirm, or type do it.",
                 commandText,
               }
             : m
         )
       );
       if (commandText) {
+        setPendingCommand(commandText);
         await previewCommand(commandText);
       }
     } catch {
@@ -378,7 +425,9 @@ export function AiAssistantPanel({
       } else if (mode === "draft_social" && data.draft) {
         setDraft({ kind: "social", ...data.draft });
         if (data.draft.suggestedCommand) {
-          await previewCommand(String(data.draft.suggestedCommand));
+          const command = String(data.draft.suggestedCommand);
+          setPendingCommand(command);
+          await previewCommand(command);
         }
       } else if (mode === "rewrite" && data.draft?.text) {
         setDraft({ kind: "rewrite", text: data.draft.text });
@@ -436,7 +485,7 @@ export function AiAssistantPanel({
 
   useEffect(() => {
     if (!open) return;
-    const sheet = window.matchMedia("(max-width: 767px)");
+    const sheet = window.matchMedia("(max-width: 1023px)");
     const previousOverflow = document.body.style.overflow;
     const lock = () => {
       document.body.style.overflow = sheet.matches ? "hidden" : previousOverflow;
@@ -454,7 +503,7 @@ export function AiAssistantPanel({
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      const sheet = window.matchMedia("(max-width: 767px)").matches;
+      const sheet = window.matchMedia("(max-width: 1023px)").matches;
       if (!sheet && !panelRef.current?.contains(document.activeElement)) return;
       onClose();
     };
@@ -480,8 +529,8 @@ export function AiAssistantPanel({
       className={cn(
         "shrink-0 border-border bg-white outline-none",
         open
-          ? "pm-assistant-sheet fixed inset-0 z-50 flex h-dvh w-full max-h-none flex-col border-0 md:sticky md:inset-auto md:top-0 md:z-auto md:h-screen md:max-h-screen md:w-[22rem] md:border-l"
-          : "hidden border-l md:sticky md:top-0 md:flex md:h-screen md:w-11 md:flex-col",
+          ? "pm-assistant-sheet fixed inset-0 z-50 flex h-dvh w-auto max-h-none flex-col border-0 shadow-soft md:z-40 lg:sticky lg:inset-auto lg:top-0 lg:z-auto lg:h-screen lg:max-h-screen lg:w-[22rem] lg:border-l lg:shadow-none"
+          : "hidden border-l lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-11 lg:flex-col",
         className
       )}
       role={open && fullPage ? "dialog" : undefined}
@@ -545,44 +594,6 @@ export function AiAssistantPanel({
           </p>
         ) : null}
 
-        {commandPreview ? (
-          <div className="rounded-xl border border-brand/20 bg-accent-soft/40 px-3 py-2.5 text-xs">
-            <p className="font-medium text-brand">{commandPreview.summary}</p>
-            <p className="mt-1 text-muted">Press Confirm to save.</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                className="btn-primary px-2.5 py-1 text-xs disabled:opacity-50"
-                disabled={busy}
-                onClick={() => void confirmCommand()}
-              >
-                Confirm
-              </button>
-              <button
-                type="button"
-                className="btn-secondary px-2.5 py-1 text-xs"
-                onClick={() => setCommandPreview(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {commandNotice ? (
-          <p className="text-xs text-brand" aria-live="polite">
-            {commandNotice.message}{" "}
-            {commandNotice.href ? (
-              <Link
-                href={commandNotice.href}
-                className="font-medium underline"
-              >
-                Open it
-              </Link>
-            ) : null}
-          </p>
-        ) : null}
-
         {draft ? (
           <div className="rounded-xl border border-border bg-sand/40 px-3 py-3 text-xs">
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -616,9 +627,11 @@ export function AiAssistantPanel({
                   type="button"
                   className="btn-secondary px-2 py-1 text-[11px]"
                   disabled={busy}
-                  onClick={() =>
-                    void previewCommand(draft.suggestedCommand as string)
-                  }
+                  onClick={() => {
+                    const command = draft.suggestedCommand as string;
+                    setPendingCommand(command);
+                    void previewCommand(command);
+                  }}
                 >
                   Propose as content
                 </button>
@@ -649,14 +662,17 @@ export function AiAssistantPanel({
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
               {msg.commandText ? (
-                <button
-                  type="button"
-                  className="mt-2 text-[11px] font-medium underline opacity-90"
-                  disabled={busy}
-                  onClick={() => void previewCommand(msg.commandText as string)}
-                >
-                  Review proposed action
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary px-2.5 py-1 text-[11px] disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void confirmCommand(msg.commandText)}
+                  >
+                    Confirm
+                  </button>
+                  <span className="text-[11px] text-muted">or type do it</span>
+                </div>
               ) : null}
             </div>
           ))}
@@ -664,6 +680,63 @@ export function AiAssistantPanel({
       </div>
           </div>
           <div className="border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {commandPreview ? (
+              <div className="mb-3 rounded-xl border border-brand/20 bg-accent-soft/40 px-3 py-2.5 text-xs">
+                <p className="font-medium text-brand">{commandPreview.summary}</p>
+                {commandPreview.items.length > 1 ? (
+                  <ul className="mt-1 max-h-28 list-disc space-y-0.5 overflow-y-auto pl-4 text-muted">
+                    {commandPreview.items.map((item, index) => (
+                      <li key={`${index}-${item}`}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {commandPreview.skipped.length ? (
+                  <p className="mt-1 text-muted">
+                    Not included: {commandPreview.skipped.join("; ")}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-muted">Press Confirm, or type do it.</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary px-2.5 py-1 text-xs disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => void confirmCommand()}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary px-2.5 py-1 text-xs"
+                    onClick={() => {
+                      const dropped = pendingCommand;
+                      setCommandPreview(null);
+                      setPendingCommand(null);
+                      if (!dropped) return;
+                      setMessages((prev) =>
+                        prev.map((message) =>
+                          message.commandText === dropped
+                            ? { ...message, commandText: null }
+                            : message
+                        )
+                      );
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {commandNotice ? (
+              <p className="mb-2 text-xs text-brand" aria-live="polite">
+                {commandNotice.message}{" "}
+                {commandNotice.href ? (
+                  <Link href={commandNotice.href} className="font-medium underline">
+                    Open it
+                  </Link>
+                ) : null}
+              </p>
+            ) : null}
             <form onSubmit={onSubmit} className="space-y-2">
               {attachments.length ? (
                 <ul className="flex flex-wrap gap-1.5">

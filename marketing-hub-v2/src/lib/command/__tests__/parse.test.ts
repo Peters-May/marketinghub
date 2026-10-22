@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHubCommand } from "@/lib/command/parse";
+import { parseHubCommand, parseHubCommands } from "@/lib/command/parse";
 
 const now = new Date(2026, 9, 1, 12, 0, 0);
 
@@ -136,6 +136,23 @@ describe("parseHubCommand", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.message).toMatch(/Planable/);
+  });
+
+  it("reads each line of a block and skips lines it cannot run", () => {
+    const result = parseHubCommands(
+      `1. Add an event Monaco Yacht Show on 24 Sep 2026 in Monaco
+2. Update attendance for Düsseldorf with Simon
+3. Add an event Genoa Boat Show on 18 Sep 2026 in Genoa`,
+      now
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.commands).toHaveLength(2);
+    expect(result.commands[0].kind).toBe("create_event");
+    expect(result.commands[1].kind).toBe("create_event");
+    expect(result.skipped).toEqual([
+      "Update attendance for Düsseldorf with Simon",
+    ]);
   });
 
   it("asks for a clearer instruction", () => {

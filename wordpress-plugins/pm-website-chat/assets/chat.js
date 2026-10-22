@@ -463,7 +463,7 @@
   if (cfg.logoUrl) {
     var lockup = el("img", "pm-chat__lockup");
     lockup.src = cfg.logoUrl;
-    lockup.alt = "";
+    lockup.alt = "Peters & May";
     header.appendChild(lockup);
     header.appendChild(el("span", "pm-chat__header-rule"));
   }
@@ -571,9 +571,56 @@
   }
 
   function hideStarters() {
-    startersEl.classList.remove("is-on");
+    startersEl.classList.remove("is-on", "pm-chat__followups");
     clearNode(startersEl);
     if (startersEl.parentNode) startersEl.parentNode.removeChild(startersEl);
+  }
+
+  function addStarter(title, desc, onClick) {
+    var btn = el("button", "pm-chat__starter");
+    btn.type = "button";
+    var copy = el("span", "pm-chat__starter-copy");
+    copy.appendChild(el("span", "pm-chat__starter-title", title));
+    copy.appendChild(el("span", "pm-chat__starter-desc", desc));
+    btn.appendChild(copy);
+    btn.insertAdjacentHTML(
+      "beforeend",
+      '<svg class="pm-chat__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
+    );
+    btn.addEventListener("click", function () {
+      hideStarters();
+      onClick();
+    });
+    startersEl.appendChild(btn);
+  }
+
+  function showUnavailableNotice(onRetry) {
+    var notice = el("div", "pm-chat__notice");
+    notice.setAttribute("role", "alert");
+    notice.appendChild(el("strong", "", "Chat isn't available right now"));
+    notice.appendChild(
+      el(
+        "span",
+        "",
+        "Try again in a moment, or contact your nearest office directly."
+      )
+    );
+    var actions = el("div", "pm-chat__notice-actions");
+    var retry = el("button", "", "Try again");
+    retry.type = "button";
+    retry.addEventListener("click", function () {
+      if (notice.parentNode) notice.parentNode.removeChild(notice);
+      onRetry();
+    });
+    var office = el("a", "", "Find an office");
+    office.href = "https://www.petersandmay.com/offices/";
+    office.target = "_blank";
+    office.rel = "noreferrer";
+    actions.appendChild(retry);
+    actions.appendChild(office);
+    notice.appendChild(actions);
+    messagesEl.insertBefore(notice, typingEl);
+    return notice;
   }
 
   function placeInThread(node) {
@@ -590,25 +637,8 @@
     if (startersShown || teamJoined) return;
     startersShown = true;
     clearNode(startersEl);
+    startersEl.classList.remove("pm-chat__followups");
     startersEl.classList.add("is-on");
-
-    function addStarter(title, desc, onClick) {
-      var btn = el("button", "pm-chat__starter");
-      btn.type = "button";
-      var copy = el("span", "pm-chat__starter-copy");
-      copy.appendChild(el("span", "pm-chat__starter-title", title));
-      copy.appendChild(el("span", "pm-chat__starter-desc", desc));
-      btn.appendChild(copy);
-      btn.insertAdjacentHTML(
-        "beforeend",
-        '<svg class="pm-chat__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
-      );
-      btn.addEventListener("click", function () {
-        hideStarters();
-        onClick();
-      });
-      startersEl.appendChild(btn);
-    }
 
     addStarter("Get a quote", "Yacht transport or freight", function () {
       showQuoteTypeStarters();
@@ -628,9 +658,9 @@
   function showWhatElseChip() {
     if (collectState) return;
     clearNode(startersEl);
-    startersEl.classList.add("is-on");
-    function addChip(label, onClick) {
-      var btn = el("button", "pm-chat__chip", label);
+    startersEl.classList.add("is-on", "pm-chat__followups");
+    function addFollow(label, onClick) {
+      var btn = el("button", "pm-chat__followup", label);
       btn.type = "button";
       btn.addEventListener("click", function () {
         hideStarters();
@@ -638,13 +668,13 @@
       });
       startersEl.appendChild(btn);
     }
-    addChip("What else can I help with?", function () {
+    addFollow("Something else", function () {
       showStartersFresh();
     });
-    addChip("Download transcript", function () {
+    addFollow("Download transcript", function () {
       downloadTranscriptFile();
     });
-    addChip("Speak to the team", function () {
+    addFollow("Speak to the team", function () {
       showSpeakCard();
     });
     placeInThread(startersEl);
@@ -677,26 +707,17 @@
 
   function showQuoteTypeStarters() {
     clearNode(startersEl);
+    startersEl.classList.remove("pm-chat__followups");
     startersEl.classList.add("is-on");
-
-    function addChip(label, onClick) {
-      var btn = el("button", "pm-chat__chip", label);
-      btn.type = "button";
-      btn.addEventListener("click", function () {
-        hideStarters();
-        onClick();
-      });
-      startersEl.appendChild(btn);
-    }
-
-    addChip("Yacht / boat transport", function () {
+    addStarter("Yacht transport", "Motor or sail, any size", function () {
       startCollect("yacht", { force: true });
     });
-    addChip("Freight / cargo", function () {
+    addStarter("Freight or cargo", "Commercial cargo, air, sea or road", function () {
       startCollect("freight", { force: true });
     });
-    addChip("Other quote", function () {
-      startCollect("yacht", { force: true });
+    addStarter("Something else", "Tell us in your own words", function () {
+      ensureComposerVisible();
+      input.focus();
     });
     placeInThread(startersEl);
   }
@@ -799,8 +820,8 @@
 
     var intro =
       kind === "freight"
-        ? "Thank you. I can take a few details for our forwarding team — one at a time. You can also paste a full enquiry or specification if you prefer."
-        : "Thank you. I can take a few yacht details for our team — one at a time. If you have a specification sheet, you can paste the details in one go instead.";
+        ? "Thank you. I'll take a few details in three short steps. You can also paste a full enquiry if you prefer."
+        : "Thank you. I'll take a few details in four short steps. If you have a specification sheet, you can paste it instead.";
     appendBubble("assistant", intro);
     input.placeholder = "Or ask a question…";
     renderCollectStep();
@@ -827,19 +848,29 @@
     input.placeholder = "Or ask a question…";
 
     if (collectState.pasteMode) {
-      collectEl.appendChild(cardHead("Paste your yacht details", ""));
+      var freightPaste = collectState.kind === "freight";
+      collectEl.appendChild(
+        cardHead(
+          freightPaste ? "Paste your cargo details" : "Paste your yacht details",
+          ""
+        )
+      );
       var body = el("div", "pm-chat__card-body");
       body.appendChild(
         el(
           "p",
           "pm-chat__hint",
-          "Spec sheet, broker listing or an email. We'll pick out what the team needs and only ask for anything missing."
+          freightPaste
+            ? "Packing list, commercial invoice or an email. We'll pick out what the team needs and only ask for anything missing."
+            : "Spec sheet, broker listing or an email. We'll pick out what the team needs and only ask for anything missing."
         )
       );
       var ta = el("textarea", "pm-chat__collect-input");
       ta.rows = 6;
       ta.style.minHeight = "150px";
-      ta.placeholder = "Paste make, model, dimensions, ports and contact details";
+      ta.placeholder = freightPaste
+        ? "Paste the cargo, size, weight, ports and contact details"
+        : "Paste make, model, dimensions, ports and contact details";
       body.appendChild(ta);
       collectEl.appendChild(body);
       var row = el("div", "pm-chat__card-actions");
@@ -1102,7 +1133,6 @@
       offerGuidedCollect("yacht");
       return;
     }
-    showWhatElseChip();
   }
 
   /**
@@ -1297,12 +1327,11 @@
         showStarters();
         return sessionId;
       })
-      .catch(function (err) {
+      .catch(function () {
         sessionPromise = null;
-        appendBubble(
-          "system",
-          err.message || "Chat is temporarily unavailable."
-        );
+        showUnavailableNotice(function () {
+          startSession();
+        });
         return null;
       });
     return sessionPromise;
@@ -1367,32 +1396,10 @@
       .catch(function (err) {
         if (visitorWrap) {
           visitorWrap.appendChild(el("div", "pm-chat__not-sent", "Not sent"));
-          var notice = el("div", "pm-chat__notice");
-          notice.setAttribute("role", "alert");
-          notice.appendChild(el("strong", "", "Chat isn't available right now"));
-          notice.appendChild(
-            el(
-              "span",
-              "",
-              "Your message is saved above. Try again in a moment, or contact your nearest office directly."
-            )
-          );
-          var actions = el("div", "pm-chat__notice-actions");
-          var retry = el("button", "", "Try again");
-          retry.type = "button";
-          retry.addEventListener("click", function () {
+          showUnavailableNotice(function () {
             if (visitorWrap.parentNode) visitorWrap.parentNode.removeChild(visitorWrap);
-            if (notice.parentNode) notice.parentNode.removeChild(notice);
             sendMessageText(text, opts);
           });
-          var office = el("a", "", "Find an office");
-          office.href = "https://www.petersandmay.com/offices/";
-          office.target = "_blank";
-          office.rel = "noreferrer";
-          actions.appendChild(retry);
-          actions.appendChild(office);
-          notice.appendChild(actions);
-          messagesEl.insertBefore(notice, typingEl);
         } else {
           appendBubble(
             "system",

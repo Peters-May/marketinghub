@@ -98,6 +98,12 @@ function migrateEvents(items: EventItem[] | undefined): EventItem[] | undefined 
       item.personal_social_media_graphics_completed ?? false,
     reached_out_for_pr_to_organisers:
       item.reached_out_for_pr_to_organisers ?? false,
+    hotel_booked: item.hotel_booked ?? false,
+    attendance_checklist_na:
+      item.attendance_checklist_na &&
+      typeof item.attendance_checklist_na === "object"
+        ? item.attendance_checklist_na
+        : {},
     hotel_name: item.hotel_name ?? "",
     hotel_confirmation: item.hotel_confirmation ?? "",
     hotel_check_in: item.hotel_check_in ?? "",

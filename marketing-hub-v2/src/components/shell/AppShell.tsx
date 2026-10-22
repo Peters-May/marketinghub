@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Menu, Sparkles, X } from "lucide-react";
 import { canAccessBudget as userCanAccessBudget } from "@/lib/auth/budget-access";
 import { navForView } from "@/lib/nav";
@@ -99,6 +99,7 @@ function ShellInner({
   canToggleAdminView: boolean;
 }) {
   const pathname = usePathname();
+  const mainRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(true);
   const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
@@ -110,7 +111,7 @@ function ShellInner({
     const saved = window.localStorage.getItem(ASSISTANT_DOCK_KEY);
     if (saved === "0") setAssistantOpen(false);
     else if (saved === "1") setAssistantOpen(true);
-    else if (!window.matchMedia("(min-width: 768px)").matches) {
+    else if (!window.matchMedia("(min-width: 1024px)").matches) {
       setAssistantOpen(false);
     }
   }, [canUseAssistant]);
@@ -122,6 +123,30 @@ function ShellInner({
     } catch {
       /* ignore */
     }
+  }, []);
+
+  // FullCalendar sizes its columns in pixels and only listens for window
+  // resizes. Opening or closing the assistant changes the main width without
+  // one, so the calendar stays at the docked width until we notify it.
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let width = el.getBoundingClientRect().width;
+    let frame = 0;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width ?? 0;
+      if (Math.abs(next - width) < 1) return;
+      width = next;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+    });
+    observer.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   const ensureAdminView = useCallback(() => {
@@ -258,7 +283,10 @@ function ShellInner({
           )}
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
-            <main className="order-2 min-w-0 flex-1 px-4 py-6 md:order-1 md:px-8 md:py-8">
+            <main
+              ref={mainRef}
+              className="order-2 min-w-0 flex-1 px-4 py-6 md:order-1 md:px-8 md:py-8"
+            >
               <MemberRouteGuard>{children}</MemberRouteGuard>
             </main>
             {canUseAssistant ? (

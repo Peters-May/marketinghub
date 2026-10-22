@@ -783,6 +783,42 @@ function fromFields(
   return { ok: true, command };
 }
 
+/** One command per line. List markers such as "1." or "-" are removed. */
+export function splitHubCommandLines(input: string): string[] {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:\d+[.)]|[-*•])\s+/, "").trim())
+    .filter(Boolean);
+}
+
+export type MultiParseResult =
+  | { ok: true; commands: HubCommand[]; skipped: string[] }
+  | { ok: false; message: string; examples: string[] };
+
+/** Parse one command, or each line of a block. Valid lines are kept; the rest are skipped. */
+export function parseHubCommands(input: string, now = new Date()): MultiParseResult {
+  const lines = splitHubCommandLines(input);
+  if (lines.length <= 1) {
+    const parsed = parseHubCommand(lines[0] ?? "", now);
+    if (!parsed.ok) return parsed;
+    return { ok: true, commands: [parsed.command], skipped: [] };
+  }
+
+  const commands: HubCommand[] = [];
+  const skipped: string[] = [];
+  for (const line of lines) {
+    const parsed = parseHubCommand(line, now);
+    if (!parsed.ok) skipped.push(line);
+    else commands.push(parsed.command);
+  }
+  if (!commands.length) {
+    return fail(
+      "None of those lines start with add or update, then task, event, or post."
+    );
+  }
+  return { ok: true, commands, skipped };
+}
+
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
   if (!text) {

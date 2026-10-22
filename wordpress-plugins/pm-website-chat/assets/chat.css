@@ -366,6 +366,23 @@
   display: flex;
 }
 
+#pm-website-chat-root .pm-chat__starters.pm-chat__followups.is-on {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+#pm-website-chat-root button.pm-chat__followup {
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #005f97;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 #pm-website-chat-root button.pm-chat__starter {
   display: flex;
   flex-direction: row;

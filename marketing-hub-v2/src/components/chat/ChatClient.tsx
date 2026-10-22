@@ -76,10 +76,10 @@ function statusLabel(s: ChatSession): string {
 }
 
 function statusTone(s: ChatSession): string {
-  if (s.status === "waiting") return "bg-[#f6efe0] text-[#7a5a10]";
+  if (s.status === "waiting") return "border border-[#e7dcc2] bg-[#f6efe0] text-[#7a5a10]";
   if (s.status === "human") return "bg-[#0B2545] text-white";
-  if (s.status === "closed") return "bg-[#f4f6f7] text-[#5b6472]";
-  return "bg-[#e6f2fa] text-[#005f97]";
+  if (s.status === "closed") return "border border-[#e3e6e9] bg-[#f4f6f7] text-[#5b6472]";
+  return "border border-[#cfe5f5] bg-[#e6f2fa] text-[#005f97]";
 }
 
 function visitorLabel(s: ChatSession): string {
@@ -122,6 +122,27 @@ function guidedEnquiry(body: string): {
     };
   });
   return { title, rows };
+}
+
+function guidedField(
+  guided: { rows: Array<{ label: string; value: string }> } | null,
+  match: (label: string) => boolean
+): string {
+  const row = guided?.rows.find((item) => match(item.label.toLowerCase()));
+  return row?.value || "Not given";
+}
+
+function formatDayMonth(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+    }).format(new Date(t));
+  } catch {
+    return "";
+  }
 }
 
 function formatMessageWhen(iso: string): string {
@@ -535,7 +556,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               setTab(t.id);
             }}
             className={cn(
-              "border-b-2 px-3 py-2 text-base",
+              "-mb-px border-b-2 px-3 py-2 text-base",
               tab === t.id
                 ? "border-[#007DC5] font-semibold text-[#005f97]"
                 : "border-transparent text-[#5b6472]"
@@ -553,7 +574,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       </div>
 
       {error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-md border border-[#e5c7c5] bg-[#f7e8e7] px-3 py-2 text-sm text-[#b3261e]">
           {error}
         </p>
       ) : null}
@@ -648,7 +669,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     {s.last_body || s.page_title || "No messages yet"}
                   </div>
                   <div className="mt-1">
-                    <span className={cn("rounded px-2 py-0.5 text-xs", statusTone(s))}>
+                    <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusTone(s))}>
                       {statusLabel(s)}
                     </span>
                   </div>
@@ -656,7 +677,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               ))
             )}
           </div>
-          <div className="flex min-h-[70vh] flex-col rounded-lg border border-border bg-white">
+          <div className="flex min-h-[70vh] flex-col bg-white">
             {!selected ? (
               <p className="p-6 text-sm text-muted">
                 Select a conversation to reply.
@@ -667,7 +688,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   <span className="text-sm font-medium text-[#0B2545]">
                     {selected.visitor_email || "No email yet"}
                   </span>
-                  <span className="rounded bg-sand px-2 py-0.5 text-xs">
+                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", statusTone(selected))}>
                     {statusLabel(selected)}
                   </span>
                   {selected.enquiry_id ? (
@@ -775,8 +796,14 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                             {when ? ` · ${when}` : ""}
                           </div>
                         )}
-                        {guided ? (
-                          <div className="w-full rounded-xl border border-[#e3e6e9] bg-white px-3 py-2 text-sm text-[#1f2937]">
+                        {m.role === "system" ? (
+                          <div className="flex w-full items-center gap-3 text-[13px] text-[#5b6472]">
+                            <span className="h-px flex-1 bg-[#e3e6e9]" />
+                            <span>{stripChoiceTag(m.body)}</span>
+                            <span className="h-px flex-1 bg-[#e3e6e9]" />
+                          </div>
+                        ) : guided ? (
+                          <div className="w-full rounded-lg border border-[#e3e6e9] bg-white px-3.5 py-2.5 text-[15px] text-[#1f2937]">
                             <div className="mb-2 font-semibold text-[#0B2545]">
                               {guided.title}
                             </div>
@@ -792,14 +819,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                         ) : (
                           <div
                             className={cn(
-                              "rounded-xl px-3 py-2 text-sm",
+                              "rounded-lg px-3.5 py-2.5 text-[15px]",
                               m.role === "visitor"
                                 ? "bg-[#0B2545] text-white"
                                 : m.role === "staff"
-                                  ? "bg-[#e6f2fa] text-[#0B2545]"
-                                  : m.role === "system"
-                                    ? "bg-transparent px-0 text-center text-xs text-[#5b6472]"
-                                    : "bg-white text-[#1f2937]"
+                                  ? "border border-[#cfe5f5] bg-[#e6f2fa] text-[#0B2545]"
+                                  : "border border-[#e3e6e9] bg-[#f4f6f7] text-[#0B2545]"
                             )}
                           >
                             {stripChoiceTag(m.body)}
@@ -852,57 +877,121 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               </>
             )}
           </div>
-          <aside className="max-h-[70vh] overflow-y-auto rounded-lg border border-border bg-white p-4 text-sm">
+          <aside className="max-h-[70vh] overflow-y-auto border-l border-[#e3e6e9] bg-white p-4 text-sm">
             {!selected ? (
               <p className="text-sm text-muted">Visitor details appear here.</p>
             ) : (
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs text-muted">Name</dt>
-                  <dd>{selected.visitor_name || "Not given"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Email</dt>
-                  <dd>{selected.visitor_email || "Not given"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Company</dt>
-                  <dd>{selected.visitor_company || "Not given"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Page</dt>
-                  <dd className="break-words">
-                    {selected.page_title || selected.page_url || "Not recorded"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Campaign</dt>
-                  <dd>
-                    {typeof selected.utm?.utm_campaign === "string" &&
-                    selected.utm.utm_campaign
-                      ? selected.utm.utm_campaign
-                      : "None"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Enquiry</dt>
-                  <dd>
-                    {selected.enquiry_id ? (
-                      <a
-                        href={`/app/enquiries?open=${encodeURIComponent(selected.enquiry_id)}`}
-                        className="text-[#007DC5] underline"
-                      >
-                        Open enquiries ({selected.enquiry_id.slice(0, 8)})
-                      </a>
-                    ) : (
-                      "No lead yet"
-                    )}
-                  </dd>
-                </div>
-                <p className="text-xs text-muted">
-                  Staff only. Where they are based is in the transcript. It does not choose an office, and it is separate from where the yacht or cargo is now.
-                </p>
-              </dl>
+              (() => {
+                const guided = [...messages]
+                  .reverse()
+                  .map((item) =>
+                    item.role === "visitor" ? guidedEnquiry(item.body) : null
+                  )
+                  .find((item) => item != null);
+                const enquiryType = /freight|cargo/i.test(guided?.title ?? "")
+                  ? "Freight or cargo"
+                  : /yacht/i.test(guided?.title ?? "")
+                    ? "Yacht transport"
+                    : guided?.title || "Not given";
+                return (
+                  <div className="space-y-4">
+                    <section>
+                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b6472]">
+                        Visitor
+                      </h2>
+                      <dl className="mt-3 grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+                        <dt className="text-[#5b6472]">Name</dt>
+                        <dd>{selected.visitor_name || "Not given"}</dd>
+                        <dt className="text-[#5b6472]">Email</dt>
+                        <dd className="break-words">{selected.visitor_email || "Not given"}</dd>
+                        <dt className="text-[#5b6472]">Company</dt>
+                        <dd>{selected.visitor_company || "Not given"}</dd>
+                        <dt className="text-[#5b6472]">Based</dt>
+                        <dd>
+                          {guidedField(guided ?? null, (label) =>
+                            label.includes("where are you based")
+                          )}
+                        </dd>
+                      </dl>
+                    </section>
+                    <section className="border-t border-[#e3e6e9] pt-4">
+                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b6472]">
+                        Enquiry
+                      </h2>
+                      <dl className="mt-3 grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+                        <dt className="text-[#5b6472]">Type</dt>
+                        <dd>{enquiryType}</dd>
+                        <dt className="text-[#5b6472]">Yacht/Cargo</dt>
+                        <dd>
+                          {guidedField(
+                            guided ?? null,
+                            (label) =>
+                              label.includes("make / model") ||
+                              label.includes("what are you shipping")
+                          )}
+                        </dd>
+                        <dt className="text-[#5b6472]">LOA</dt>
+                        <dd>
+                          {guidedField(guided ?? null, (label) =>
+                            label.includes("length (loa)")
+                          )}
+                        </dd>
+                        <dt className="text-[#5b6472]">From</dt>
+                        <dd>
+                          {guidedField(
+                            guided ?? null,
+                            (label) =>
+                              label.includes("yacht now") ||
+                              label.includes("origin") ||
+                              label.includes("loading port")
+                          )}
+                        </dd>
+                        <dt className="text-[#5b6472]">To</dt>
+                        <dd>
+                          {guidedField(guided ?? null, (label) =>
+                            label.includes("destination")
+                          )}
+                        </dd>
+                      </dl>
+                      {selected.enquiry_id ? (
+                        <a
+                          href={`/app/enquiries?open=${encodeURIComponent(selected.enquiry_id)}`}
+                          className="btn-secondary mt-4 w-full"
+                        >
+                          Open enquiry record
+                        </a>
+                      ) : (
+                        <button type="button" className="btn-secondary mt-4 w-full" disabled>
+                          Open enquiry record
+                        </button>
+                      )}
+                    </section>
+                    <section className="border-t border-[#e3e6e9] pt-4">
+                      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b6472]">
+                        Source · staff only
+                      </h2>
+                      <dl className="mt-3 grid grid-cols-[80px_1fr] gap-y-2 text-sm">
+                        <dt className="text-[#5b6472]">Page</dt>
+                        <dd className="break-words">
+                          {selected.page_title || selected.page_url || "Not recorded"}
+                        </dd>
+                        <dt className="text-[#5b6472]">Referrer</dt>
+                        <dd className="break-words">{selected.referrer || "Not recorded"}</dd>
+                        <dt className="text-[#5b6472]">Campaign</dt>
+                        <dd>
+                          {typeof selected.utm?.utm_campaign === "string" &&
+                          selected.utm.utm_campaign
+                            ? selected.utm.utm_campaign
+                            : "None"}
+                        </dd>
+                      </dl>
+                      <p className="mt-3 text-xs text-[#5b6472]">
+                        Staff only. Not shown to the visitor.
+                      </p>
+                    </section>
+                  </div>
+                );
+              })()
             )}
           </aside>
         </div>
@@ -910,28 +999,37 @@ export function ChatClient({ configured, initialSessionId }: Props) {
 
       {tab === "train" ? (
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-3 rounded-lg border border-border bg-white p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-[#0B2545]">
-                Tone and policies
-              </h2>
-              <span className="rounded bg-sand px-2 py-0.5 text-xs text-[#0B2545]">
+          <div className="overflow-hidden rounded-lg border border-[#e3e6e9] bg-white">
+            <div className="flex items-start justify-between gap-3 border-b border-[#e3e6e9] px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[#0B2545]">
+                  Tone and policies
+                </h2>
+                <p className="mt-1 text-sm text-[#5b6472]">
+                  Empty guidance uses the recommended enquiry qualification SOP. Load it here to edit and save your own version.
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                  (settings?.guidance ?? "") !== savedGuidance ||
+                    (settings?.greeting ?? "") !== savedGreeting
+                    ? "border border-[#e7dcc2] bg-[#f6efe0] text-[#7a5a10]"
+                    : "border border-[#cfe5f5] bg-[#e6f2fa] text-[#005f97]"
+                )}
+              >
                 {(settings?.guidance ?? "") !== savedGuidance ||
                 (settings?.greeting ?? "") !== savedGreeting
-                  ? "Unsaved"
+                  ? "Unsaved changes"
                   : !(settings?.guidance ?? "").trim() ||
                       settings?.guidance === DEFAULT_ENQUIRY_CHAT_GUIDANCE
                     ? "Recommended"
                     : "Custom"}
               </span>
             </div>
-            <p className="text-xs text-muted">
-              Empty guidance uses the recommended enquiry qualification SOP
-              (yacht, freight, customs, careers, suppliers, and so on). Load it
-              here to edit and save your own version.
-            </p>
+            <div className="space-y-3 px-6 py-5">
             <textarea
-              className="min-h-[220px] w-full rounded-md border border-border px-3 py-2 text-sm"
+              className="field min-h-[220px] w-full text-base"
               value={settings?.guidance ?? ""}
               placeholder="Leave blank to use the recommended Peters & May enquiry guidance…"
               onChange={(e) =>
@@ -940,9 +1038,9 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 )
               }
             />
-            <label className="block text-xs text-muted">Greeting</label>
+            <label className="block text-sm text-[#5b6472]">Greeting</label>
             <input
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
+              className="field w-full text-base"
               value={settings?.greeting ?? ""}
               onChange={(e) =>
                 setSettings((s) =>
@@ -952,11 +1050,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
             />
             <div className="flex max-w-[85%] flex-col gap-1">
               <div className="text-xs text-[#5b6472]">Peters & May assistant</div>
-              <div className="rounded-xl bg-white px-3 py-2 text-sm text-[#1f2937]">
+              <div className="rounded-lg border border-[#e3e6e9] bg-[#f4f6f7] px-3.5 py-2.5 text-[15px] text-[#0B2545]">
                 {settings?.greeting?.trim() || DEFAULT_CHAT_GREETING}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-[#e3e6e9] bg-[#f4f6f7] px-6 py-3">
               <button
                 type="button"
                 disabled={busy || !settings}
@@ -982,34 +1081,53 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                       : s
                   );
                 }}
-                className="btn-secondary disabled:opacity-50"
+                className="btn-ghost disabled:opacity-50"
               >
                 Restore recommended
               </button>
-              <button
-                type="button"
-                disabled={busy || !settings}
-                onClick={() =>
-                  void saveSettings({
-                    guidance: settings?.guidance,
-                    greeting: settings?.greeting,
-                  })
-                }
-                className="btn-primary disabled:opacity-50"
-              >
-                Save guidance
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setTestUseDraft(true);
+                    setTab("test");
+                  }}
+                >
+                  Test changes
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !settings}
+                  onClick={() =>
+                    void saveSettings({
+                      guidance: settings?.guidance,
+                      greeting: settings?.greeting,
+                    })
+                  }
+                  className="btn-primary disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
-          <div className="space-y-3 rounded-lg border border-border bg-white p-4">
-            <h2 className="text-sm font-semibold text-[#0B2545]">
-              Knowledge base
-            </h2>
-            <div className="max-h-48 overflow-y-auto text-sm">
+          <div className="overflow-hidden rounded-lg border border-[#e3e6e9] bg-white">
+            <div className="border-b border-[#e3e6e9] px-6 py-4">
+              <h2 className="text-lg font-semibold text-[#0B2545]">
+                Knowledge base
+              </h2>
+              <p className="mt-1 text-sm text-[#5b6472]">
+                Documents the assistant may quote, and the published pages it can read.
+              </p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+            <div className="overflow-x-auto text-sm">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="text-xs text-muted">
                     <th className="py-1 font-medium">Title</th>
+                    <th className="py-1 font-medium">Updated</th>
                     <th className="py-1 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -1033,8 +1151,20 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                           {d.title}
                         </button>
                       </td>
-                      <td className="py-2 text-xs text-muted">
-                        {d.active ? "Active" : "Inactive"}
+                      <td className="py-2 text-[#5b6472]">
+                        {formatDayMonth(d.updated_at)}
+                      </td>
+                      <td className="py-2">
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                            d.active
+                              ? "border border-[#cfe5f5] bg-[#e6f2fa] text-[#005f97]"
+                              : "border border-[#e3e6e9] bg-[#f4f6f7] text-[#5b6472]"
+                          )}
+                        >
+                          {d.active ? "Active" : "Inactive"}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -1116,6 +1246,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   </li>
                 ))}
               </ul>
+            </div>
             </div>
           </div>
         </div>
@@ -1329,9 +1460,9 @@ export function ChatClient({ configured, initialSessionId }: Props) {
         </div>
       ) : null}
 
-      {tab === "analyze" && insights ? (
+      {tab === "analyze" ? (
         <div className="space-y-4">
-          <div className="flex gap-1 text-sm font-semibold">
+          <div className="inline-flex rounded-lg bg-[#f4f6f7] p-1 text-sm font-semibold">
             {(
               [
                 ["30", "Last 30 days"],
@@ -1344,9 +1475,9 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 type="button"
                 onClick={() => setInsightRange(id)}
                 className={cn(
-                  "rounded px-3 py-1.5",
+                  "rounded-md px-3 py-1.5",
                   insightRange === id
-                    ? "bg-[#0B2545] text-white"
+                    ? "bg-white text-[#0B2545]"
                     : "text-[#5b6472]"
                 )}
               >
@@ -1354,6 +1485,17 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               </button>
             ))}
           </div>
+          {!insights ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[0, 1, 2].map((tile) => (
+                <div
+                  key={tile}
+                  className="h-28 animate-pulse rounded-lg border border-[#e3e6e9] bg-[#f4f6f7]"
+                />
+              ))}
+            </div>
+          ) : (
+            <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ["Leads captured", insights.with_lead, "Chats that left an email"],
@@ -1377,22 +1519,26 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   }}
                   className="rounded-lg border border-border bg-white p-4 text-left"
                 >
-                  <div className="text-xs text-muted">{label}</div>
-                  <div className="text-2xl font-semibold text-[#9a6b13]">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b6472]">
+                    {label}
+                  </div>
+                  <div className="mt-2 font-display text-[44px] font-semibold leading-none text-[#9a6b13]">
                     {value}
                   </div>
-                  <div className="text-sm font-semibold text-[#005f97]">{hint}</div>
+                  <div className="mt-2 text-sm font-semibold text-[#005f97]">{hint}</div>
                 </button>
               ) : (
                 <div
                   key={String(label)}
                   className="rounded-lg border border-border bg-white p-4"
                 >
-                  <div className="text-xs text-muted">{label}</div>
-                  <div className="text-2xl font-semibold text-[#0B2545]">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5b6472]">
+                    {label}
+                  </div>
+                  <div className="mt-2 font-display text-[44px] font-semibold leading-none text-[#0B2545]">
                     {value}
                   </div>
-                  <div className="text-sm text-[#5b6472]">{hint}</div>
+                  <div className="mt-2 text-sm text-[#5b6472]">{hint}</div>
                 </div>
               )
             )}
@@ -1431,6 +1577,8 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               Leads can exceed handoffs because the guided quote form captures email without asking for the team.
             </p>
           </div>
+            </>
+          )}
         </div>
       ) : null}
     </div>

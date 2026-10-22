@@ -21,6 +21,10 @@ export type AssistantChatMessage = {
 
 const HUB_COMMAND_FENCE = /:::hub-command\s*\n([\s\S]*?)\n:::/i;
 
+/** Short replies that mean “save the action already proposed”. */
+const RUN_CONFIRMATION =
+  /^(?:(?:yes|yep|yeah|ok|okay)(?:\s+please)?|yes\s+(?:do it|do that|sounds good|go ahead)|do it|do that|sounds good|go ahead|confirm(?:ed)?|please do(?:\s+it)?|proceed|run it|save it|execute(?:\s+it)?)$/i;
+
 export function isAssistantMode(value: unknown): value is AssistantMode {
   return (
     typeof value === "string" &&
@@ -40,4 +44,15 @@ export function extractHubCommand(reply: string): {
   const commandText = match[1].trim() || null;
   const displayText = reply.replace(HUB_COMMAND_FENCE, "").trim();
   return { displayText, commandText };
+}
+
+/** True when the admin is approving a proposal already on screen, not asking for a new one. */
+export function isHubRunConfirmation(input: string): boolean {
+  const text = input
+    .trim()
+    .replace(/[.!]+$/g, "")
+    .replace(/,/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return RUN_CONFIRMATION.test(text);
 }

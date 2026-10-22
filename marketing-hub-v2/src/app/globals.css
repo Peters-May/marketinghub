@@ -54,9 +54,17 @@ body {
   }
 }
 
-@media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
+@media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
   .pm-assistant-sheet {
     animation: pm-assistant-in 180ms ease-out;
+  }
+}
+
+/* Beat Tailwind's inset shorthand so the sheet starts after the sidebar. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pm-assistant-sheet {
+    left: 16rem;
+    width: auto;
   }
 }
 

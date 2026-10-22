@@ -65,8 +65,11 @@ import { LinkedSailings } from "@/components/events/LinkedSailings";
 import {
   ATTENDANCE_CHECKLIST_KEYS,
   ATTENDANCE_CHECKLIST_LABELS,
+  attendanceChecklistMark,
   attendanceChecklistProgress,
   emptyAttendanceOpsFields,
+  formatAttendanceChecklistCount,
+  patchAttendanceChecklist,
   readAttendanceOpsFields,
   type EventAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
@@ -122,12 +125,12 @@ function toEditForm(event: EventItem): EventForm {
 
 function AttendingBadge({ event }: { event: EventItem }) {
   if (!event.pm_attending) return null;
-  const { done, total } = attendanceChecklistProgress(event);
+  const progress = attendanceChecklistProgress(event);
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-brand/20 bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
       Attending
       <span className="text-brand/70">
-        {done}/{total}
+        {formatAttendanceChecklistCount(progress)}
       </span>
     </span>
   );
@@ -335,7 +338,8 @@ function AttendanceOpsPanel({
   onChange: (patch: Partial<EventAttendanceOpsFields>) => void;
   disabled?: boolean;
 }) {
-  const { done, total } = attendanceChecklistProgress(values);
+  const progress = attendanceChecklistProgress(values);
+  const hotelMark = attendanceChecklistMark(values, "hotel_booked");
   return (
     <div className="space-y-3 rounded-lg border border-border bg-sand/40 px-3 py-3">
       <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
@@ -355,26 +359,72 @@ function AttendanceOpsPanel({
         <>
           <div className="space-y-2 border-t border-border/70 pt-3">
             <p className="label !mb-1">
-              Attendance checklist ({done}/{total})
+              Attendance checklist ({formatAttendanceChecklistCount(progress)})
             </p>
-            {ATTENDANCE_CHECKLIST_KEYS.map((key) => (
-              <label
-                key={key}
-                className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
-              >
-                <input
-                  type="checkbox"
-                  className="rounded border-border"
-                  disabled={disabled}
-                  checked={Boolean(values[key])}
-                  onChange={(e) => onChange({ [key]: e.target.checked })}
-                />
-                {ATTENDANCE_CHECKLIST_LABELS[key]}
-              </label>
-            ))}
+            {ATTENDANCE_CHECKLIST_KEYS.map((key) => {
+              const mark = attendanceChecklistMark(values, key);
+              return (
+                <div
+                  key={key}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <label
+                    className={`flex min-w-0 cursor-pointer items-center gap-2 text-sm ${
+                      mark === "na"
+                        ? "text-muted line-through"
+                        : "text-foreground"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="rounded border-border"
+                      disabled={disabled}
+                      checked={mark === "done"}
+                      onChange={(e) =>
+                        onChange(
+                          patchAttendanceChecklist(
+                            values,
+                            key,
+                            e.target.checked ? "done" : "open"
+                          )
+                        )
+                      }
+                    />
+                    {ATTENDANCE_CHECKLIST_LABELS[key]}
+                  </label>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={mark === "na"}
+                    aria-label={
+                      mark === "na"
+                        ? `Clear not applicable for ${ATTENDANCE_CHECKLIST_LABELS[key]}`
+                        : `Mark ${ATTENDANCE_CHECKLIST_LABELS[key]} as not applicable`
+                    }
+                    className={
+                      mark === "na"
+                        ? "shrink-0 rounded-full bg-sand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground ring-1 ring-border"
+                        : "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted ring-1 ring-transparent hover:text-foreground hover:ring-border"
+                    }
+                    onClick={() =>
+                      onChange(
+                        patchAttendanceChecklist(
+                          values,
+                          key,
+                          mark === "na" ? "open" : "na"
+                        )
+                      )
+                    }
+                  >
+                    N/A
+                  </button>
+                </div>
+              );
+            })}
           </div>
+          {hotelMark !== "na" ? (
           <div className="space-y-3 border-t border-border/70 pt-3">
-            <p className="label !mb-1">Hotel booking</p>
+            <p className="label !mb-1">Hotel details</p>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="label">Hotel name</label>
@@ -465,6 +515,7 @@ function AttendanceOpsPanel({
               </div>
             </div>
           </div>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -1916,7 +1967,11 @@ export function EventsClient({
                         className="shrink-0 text-[10px] font-medium opacity-90"
                         style={{ color: color.text }}
                       >
-                        Attending {checklistDone}/{checklistTotal}
+                        Attending{" "}
+                        {formatAttendanceChecklistCount({
+                          done: checklistDone,
+                          total: checklistTotal,
+                        })}
                       </span>
                     ) : null}
                     <AttendeeInitials people={attendees} max={isList ? 5 : 3} />

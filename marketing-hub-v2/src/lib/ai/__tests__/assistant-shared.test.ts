@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractHubCommand,
   isAssistantMode,
+  isHubRunConfirmation,
 } from "@/lib/ai/assistant-shared";
 
 describe("extractHubCommand", () => {
@@ -18,6 +19,25 @@ describe("extractHubCommand", () => {
     expect(result.displayText).toBe("I can add that for you.");
     expect(result.commandText).toBe(
       "Add a task to call the organiser, due Friday"
+    );
+  });
+});
+
+describe("isHubRunConfirmation", () => {
+  it("accepts a short approval", () => {
+    expect(isHubRunConfirmation("do it")).toBe(true);
+    expect(isHubRunConfirmation("yes do it")).toBe(true);
+    expect(isHubRunConfirmation("Yes, sounds good.")).toBe(true);
+    expect(isHubRunConfirmation("yes sounds good")).toBe(true);
+    expect(isHubRunConfirmation("go ahead")).toBe(true);
+  });
+
+  it("rejects a new request that merely starts with yes", () => {
+    expect(isHubRunConfirmation("yes, but change the date to March")).toBe(
+      false
+    );
+    expect(isHubRunConfirmation("Add an event Monaco in September")).toBe(
+      false
     );
   });
 });

@@ -59,6 +59,12 @@ export type EventItem = PlannerFields & {
   personal_social_media_graphics_completed: boolean;
   /** Admin checklist — PR outreach to event organisers has been made. */
   reached_out_for_pr_to_organisers: boolean;
+  /** Attendance checklist — hotel is booked. */
+  hotel_booked: boolean;
+  /**
+   * Checklist keys set to true are not applicable and are left out of the count.
+   */
+  attendance_checklist_na: Partial<Record<string, boolean>>;
   /** Hotel booking — property name. */
   hotel_name: string;
   /** Hotel booking — confirmation / booking reference. */

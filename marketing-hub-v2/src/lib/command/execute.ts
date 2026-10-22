@@ -22,7 +22,13 @@ import {
 import type { ContentItem, ContentStatus } from "@/lib/types";
 
 export type ExecuteResult =
-  | { ok: true; message: string; href: string; area: HubCommand["area"] }
+  | {
+      ok: true;
+      message: string;
+      href: string;
+      area: HubCommand["area"];
+      areas?: HubCommand["area"][];
+    }
   | { ok: false; message: string };
 
 const ADMIN_MESSAGE =
@@ -50,6 +56,42 @@ async function syncContent(item: ContentItem): Promise<{
     };
   }
   return { item: pushed.item, note: "" };
+}
+
+export async function executeHubCommands(
+  commands: HubCommand[],
+  user: SessionUser
+): Promise<ExecuteResult> {
+  if (!commands.length) return { ok: false, message: "Nothing to save." };
+  if (commands.length === 1) return executeHubCommand(commands[0], user);
+
+  const saved: string[] = [];
+  const failed: string[] = [];
+  const areas: HubCommand["area"][] = [];
+  let href = commands[0].href;
+  for (const command of commands) {
+    const result = await executeHubCommand(command, user);
+    if (!result.ok) {
+      failed.push(result.message);
+      continue;
+    }
+    saved.push(result.message);
+    if (!areas.includes(result.area)) areas.push(result.area);
+    href = result.href;
+  }
+  if (!saved.length) {
+    return { ok: false, message: failed[0] ?? "Nothing was saved." };
+  }
+  const failNote = failed.length
+    ? ` ${failed.length} could not be saved.`
+    : "";
+  return {
+    ok: true,
+    message: `Saved ${saved.length} records.${failNote}`,
+    href,
+    area: areas[0],
+    areas,
+  };
 }
 
 export async function executeHubCommand(

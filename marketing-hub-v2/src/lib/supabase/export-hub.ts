@@ -73,6 +73,8 @@ export async function exportStoreToSupabase(
         e.personal_social_media_graphics_completed ?? false,
       reached_out_for_pr_to_organisers:
         e.reached_out_for_pr_to_organisers ?? false,
+      hotel_booked: e.hotel_booked ?? false,
+      attendance_checklist_na: e.attendance_checklist_na ?? {},
       hotel_name: e.hotel_name ?? "",
       hotel_confirmation: e.hotel_confirmation ?? "",
       hotel_check_in: dateOnly(e.hotel_check_in),
