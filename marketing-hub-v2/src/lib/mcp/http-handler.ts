@@ -268,7 +268,9 @@ export function createHubMcpHttpHandler(options: HubMcpHttpOptions) {
   }
 
   const modernHandler = createMcpHandler(async () => createHubMcpServer(), {
-    legacy: "reject",
+    // Keep 2025-03-26 (and the other 2025 revisions) alongside 2026-07-28.
+    // "reject" answers those handshakes with Unsupported protocol version.
+    legacy: "stateless",
     responseMode: "json",
     onerror: (err) => {
       console.error("[mcp] sdk error", err);
