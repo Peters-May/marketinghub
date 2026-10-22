@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
     ceremony_at: body.ceremony_at || null,
     owner: body.owner ?? "",
     event_id: body.event_id || null,
+    deadline_verified: body.deadline_verified === true,
+    parent_id: body.parent_id || null,
     notes: body.notes ?? "",
   });
   return jsonOk({ item }, { status: 201 });

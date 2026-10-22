@@ -13,6 +13,7 @@ import {
   Radar,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
+import type { PrPipelineRow } from "@/lib/pr/pipeline";
 
 type Card = {
   href: string;
@@ -98,8 +99,15 @@ const CARDS: Card[] = [
   },
 ];
 
+const STAGE_LABEL: Record<PrPipelineRow["stage"], string> = {
+  release: "Release",
+  pitched: "Pitched",
+  coverage: "Coverage logged",
+};
+
 export function PrHome({
   stats,
+  pipeline = [],
 }: {
   stats: {
     pressContacts: number;
@@ -109,6 +117,7 @@ export function PrHome({
     releases: number;
     mentions: number;
   };
+  pipeline?: PrPipelineRow[];
 }) {
   return (
     <div>
@@ -148,6 +157,50 @@ export function PrHome({
           </div>
         ))}
       </div>
+
+      {pipeline.length > 0 ? (
+        <section className="mb-8">
+          <h2 className="font-display text-lg text-brand">Release path</h2>
+          <p className="mt-1 text-sm text-muted">
+            Approved releases stay content rows. A pitch and coverage attach to
+            that same release.
+          </p>
+          <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
+            {pipeline.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+              >
+                <Link
+                  href={`/app/content?open=${encodeURIComponent(row.id)}`}
+                  className="font-medium text-brand"
+                >
+                  {row.title}
+                </Link>
+                <span className="text-muted">
+                  {STAGE_LABEL[row.stage]}
+                  {row.pitchId ? (
+                    <>
+                      {" · "}
+                      <Link href="/app/pr/emails" className="text-accent">
+                        Pitch
+                      </Link>
+                    </>
+                  ) : null}
+                  {row.coverageId ? (
+                    <>
+                      {" · "}
+                      <Link href="/app/pr/monitoring" className="text-accent">
+                        Coverage
+                      </Link>
+                    </>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {CARDS.map((card) => {

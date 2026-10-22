@@ -9,6 +9,8 @@ import { EmailTemplatesPanel } from "@/components/email/EmailTemplatesPanel";
 import { EmailReportsPanel } from "@/components/email/EmailReportsPanel";
 import { EmailSettingsPanel } from "@/components/email/EmailSettingsPanel";
 import type { EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
+import { EmailOverview } from "@/components/email/EmailOverview";
+import type { EmailOverviewRow } from "@/lib/email/overview";
 
 export type AudienceWithCount = EmailAudience & { recipient_count: number };
 
@@ -27,12 +29,14 @@ export function EmailMarketingHub({
   initialAudiences,
   initialLists,
   initialTab,
+  overview = [],
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
   initialAudiences: AudienceWithCount[];
   initialLists: MediaList[];
   initialTab?: Tab;
+  overview?: EmailOverviewRow[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "emails");
   const [audiencesOpen, setAudiencesOpen] = useState(false);
@@ -44,6 +48,8 @@ export function EmailMarketingHub({
   return (
     <div>
       <PageHeader title="Email" description={countLabel} />
+
+      {tab === "emails" ? <EmailOverview rows={overview} /> : null}
 
       <SegmentFilter
         label="Email section"

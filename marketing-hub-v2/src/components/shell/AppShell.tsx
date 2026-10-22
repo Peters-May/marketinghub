@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Menu, Sparkles, X } from "lucide-react";
 import { canAccessBudget as userCanAccessBudget } from "@/lib/auth/budget-access";
 import { navForView } from "@/lib/nav";
 import { HubViewProvider, useHubView } from "@/lib/hub-view";
 import {
+  ASSISTANT_DOCK_WIDTH,
   AiAssistantPanel,
   AiAssistantTrigger,
 } from "@/components/ai/AiAssistantPanel";
@@ -18,6 +19,8 @@ import { HubTourProvider } from "@/components/tour/HubTour";
 import { cn } from "@/lib/utils";
 import type { HubViewMode } from "@/lib/nav";
 import type { UserRole } from "@/lib/types";
+
+const ASSISTANT_DOCK_KEY = "hub-assistant-dock";
 
 function navTourId(href: string): string {
   if (href === "/app") return "home";
@@ -97,10 +100,29 @@ function ShellInner({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(true);
   const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
   const nav = navForView(view, { canAccessBudget, budgetInMemberNav });
   const canUseAssistant = accessRole === "admin";
+
+  useEffect(() => {
+    if (!canUseAssistant) return;
+    const saved = window.localStorage.getItem(ASSISTANT_DOCK_KEY);
+    if (saved === "0") setAssistantOpen(false);
+    else if (saved === "1") setAssistantOpen(true);
+    else if (!window.matchMedia("(min-width: 768px)").matches) {
+      setAssistantOpen(false);
+    }
+  }, [canUseAssistant]);
+
+  const setAssistant = useCallback((next: boolean) => {
+    setAssistantOpen(next);
+    try {
+      window.localStorage.setItem(ASSISTANT_DOCK_KEY, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const ensureAdminView = useCallback(() => {
     if (canToggleAdminView) setView("admin");
@@ -143,7 +165,15 @@ function ShellInner({
       onEnsureAdminView={ensureAdminView}
       onOpenMobileNav={() => setOpen(true)}
     >
-      <div className="min-h-screen md:flex">
+      <div
+        className="min-h-screen md:flex"
+        style={
+          {
+            "--assistant-dock":
+              canUseAssistant && assistantOpen ? ASSISTANT_DOCK_WIDTH : "0px",
+          } as CSSProperties
+        }
+      >
         <aside
           data-tour="sidebar"
           className="hidden w-64 shrink-0 border-r border-border bg-white/80 backdrop-blur md:flex md:flex-col"
@@ -161,7 +191,8 @@ function ShellInner({
           <div className="border-t border-border px-3 py-3">
             {canUseAssistant ? (
               <AiAssistantTrigger
-                onOpen={() => setAssistantOpen(true)}
+                open={assistantOpen}
+                onToggle={() => setAssistant(!assistantOpen)}
                 className="mb-1"
               />
             ) : null}
@@ -187,8 +218,11 @@ function ShellInner({
                 <button
                   type="button"
                   className="btn-secondary px-3 py-2"
-                  onClick={() => setAssistantOpen(true)}
-                  aria-label="Open AI assistant"
+                  onClick={() => setAssistant(!assistantOpen)}
+                  aria-pressed={assistantOpen}
+                  aria-label={
+                    assistantOpen ? "Collapse assistant" : "Show assistant"
+                  }
                 >
                   <Sparkles className="h-4 w-4" />
                 </button>
@@ -223,17 +257,21 @@ function ShellInner({
             </div>
           )}
 
-          <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-            <MemberRouteGuard>{children}</MemberRouteGuard>
-          </main>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+            <main className="order-2 min-w-0 flex-1 px-4 py-6 md:order-1 md:px-8 md:py-8">
+              <MemberRouteGuard>{children}</MemberRouteGuard>
+            </main>
+            {canUseAssistant ? (
+              <AiAssistantPanel
+                open={assistantOpen}
+                onClose={() => setAssistant(false)}
+                onOpen={() => setAssistant(true)}
+                className="order-1 md:order-2"
+              />
+            ) : null}
+          </div>
         </div>
       </div>
-      {canUseAssistant ? (
-        <AiAssistantPanel
-          open={assistantOpen}
-          onClose={() => setAssistantOpen(false)}
-        />
-      ) : null}
     </HubTourProvider>
   );
 }

@@ -8,6 +8,8 @@ import {
   getBudgetMeta,
   listBudgetLines,
   listBudgetPayments,
+  listEvents,
+  listThemes,
 } from "@/lib/data/repos";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +21,12 @@ export default async function BudgetPage() {
     redirect("/app");
   }
 
-  const [lines, payments, meta] = await Promise.all([
+  const [lines, payments, meta, events, themes] = await Promise.all([
     listBudgetLines(),
     listBudgetPayments(),
     getBudgetMeta(),
+    listEvents(),
+    listThemes(),
   ]);
 
   return (
@@ -30,6 +34,8 @@ export default async function BudgetPage() {
       lines={lines}
       payments={payments}
       meta={meta ?? createDefaultBudgetMeta()}
+      events={events.map((event) => ({ id: event.id, title: event.title }))}
+      themes={themes.map((theme) => ({ id: theme.id, title: theme.title }))}
     />
   );
 }

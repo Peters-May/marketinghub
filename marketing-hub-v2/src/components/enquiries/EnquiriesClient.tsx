@@ -20,6 +20,7 @@ import { EnquiryYearCompare } from "@/components/enquiries/EnquiryYearCompare";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { enquiryRoutingGap } from "@/lib/enquiries/routing";
 
 const MARKETING_SOURCE_UPDATE_KEY = "web-enquiries-marketing-source-1.3.24";
 
@@ -751,6 +752,10 @@ export function EnquiriesClient({
   const [showRaw, setShowRaw] = useState(false);
   const [showSourceUpdate, setShowSourceUpdate] = useState(false);
   const [listHint, setListHint] = useState("");
+  const unroutedCount = useMemo(
+    () => items.filter((item) => enquiryRoutingGap(item) !== null).length,
+    [items]
+  );
 
 
   useEffect(() => {
@@ -1016,6 +1021,14 @@ export function EnquiriesClient({
         size="lg"
         tourIdPrefix="enquiries-tab"
       />
+
+      {unroutedCount > 0 ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {unroutedCount} open{" "}
+          {unroutedCount === 1 ? "enquiry has" : "enquiries have"} no office, or
+          still need someone to route them.
+        </p>
+      ) : null}
 
       {intakeTab === "web" && showSourceUpdate ? (
         <div className="mb-6 rounded-xl border border-brand/20 bg-brand/5 px-4 py-3 text-sm text-foreground">

@@ -705,6 +705,10 @@ export type AwardEntry = {
   ceremony_at: string | null;
   owner: string;
   event_id: string | null;
+  /** False or missing means the deadline has not been checked. Do not fill a date in. */
+  deadline_verified?: boolean;
+  /** Set when this row is an extra submission of another award. */
+  parent_id?: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -947,6 +951,10 @@ export type BudgetPayment = {
   amount: number;
   status: BudgetPaymentStatus;
   invoice_url: string;
+  /** Optional show this spend belongs to. */
+  event_id?: string | null;
+  /** Optional theme (campaign) this spend belongs to. */
+  theme_id?: string | null;
   created_by: string;
   created_by_user_id: string | null;
   created_at: string;
@@ -1077,6 +1085,8 @@ export type EmailCampaign = {
   theme_id: string | null;
   /** Linked newsletter / content item. */
   content_id: string | null;
+  /** Linked event, when the send is for a show. */
+  event_id?: string | null;
   /** Folder such as Commercial or Forwarding. */
   folder: string;
   /** Parent campaign when this draft is a follow-up. */

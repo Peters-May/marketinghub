@@ -9,6 +9,7 @@ import {
   listPrPitches,
 } from "@/lib/data/repos";
 import { isPressContact } from "@/lib/pr/pitch-eml";
+import { buildPrPipeline } from "@/lib/pr/pipeline";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { PrHome } from "@/components/pr/PrHome";
 import { getSessionUser } from "@/lib/auth/session";
@@ -49,6 +50,7 @@ export default async function PrHomePage() {
 
   return (
     <PrHome
+      pipeline={buildPrPipeline({ content, pitches, coverage })}
       stats={{
         pressContacts: contacts.filter(isPressContact).length,
         lists: lists.filter(isContactSegment).length,

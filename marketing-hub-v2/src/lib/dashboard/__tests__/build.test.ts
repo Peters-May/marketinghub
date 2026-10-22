@@ -163,6 +163,7 @@ describe("buildDashboard", () => {
           id: "q1",
           customer_name: "Jane",
           needs_manual_review: true,
+          selected_office: "",
           status: "new" as const,
           updated_at: "2026-10-21T00:00:00.000Z",
         },

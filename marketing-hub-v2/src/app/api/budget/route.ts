@@ -167,6 +167,8 @@ async function paymentFromBody(
     amount,
     status: parseStatus(body.status),
     invoice_url: invoiceUrl,
+    event_id: optionalLinkId(body.event_id),
+    theme_id: optionalLinkId(body.theme_id),
     created_by: actor.full_name,
     created_by_user_id: actor.id,
   };
@@ -206,7 +208,14 @@ async function paymentPatchFromBody(
     if (invoiceUrl == null) return "Invoice/receipt link must be a valid URL";
     out.invoice_url = invoiceUrl;
   }
+  if (patch.event_id !== undefined) out.event_id = optionalLinkId(patch.event_id);
+  if (patch.theme_id !== undefined) out.theme_id = optionalLinkId(patch.theme_id);
   return out;
+}
+
+function optionalLinkId(value: unknown) {
+  const id = String(value ?? "").trim();
+  return id || null;
 }
 
 export async function GET() {

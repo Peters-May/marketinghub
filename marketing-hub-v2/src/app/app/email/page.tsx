@@ -4,12 +4,17 @@ import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
 import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
 import {
+  listContent,
   listEmailAudiences,
   listEmailCampaigns,
   listEmailTemplates,
+  listEventContentLinks,
+  listEvents,
   listMediaLists,
+  listThemes,
   resolveEmailRecipients,
 } from "@/lib/data/repos";
+import { buildEmailOverview } from "@/lib/email/overview";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -35,12 +40,24 @@ export default async function EmailPage({
     console.error("[email] scheduled send", err);
   }
 
-  const [campaigns, templates, audiences, lists] = await Promise.all([
-    listEmailCampaigns(),
-    listEmailTemplates(),
-    listEmailAudiences(),
-    listMediaLists(),
-  ]);
+  const [campaigns, templates, audiences, lists, themes, content, events, links] =
+    await Promise.all([
+      listEmailCampaigns(),
+      listEmailTemplates(),
+      listEmailAudiences(),
+      listMediaLists(),
+      listThemes(),
+      listContent(),
+      listEvents(),
+      listEventContentLinks(),
+    ]);
+  const overview = buildEmailOverview({
+    campaigns,
+    themes,
+    content,
+    events,
+    links,
+  });
 
   const audiencesWithCounts = await Promise.all(
     audiences.map(async (a) => {
@@ -67,6 +84,7 @@ export default async function EmailPage({
       initialAudiences={audiencesWithCounts}
       initialLists={marketingLists}
       initialTab={tab}
+      overview={overview}
     />
   );
 }

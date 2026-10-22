@@ -41,6 +41,7 @@ const emptyForm = {
   year: String(new Date().getFullYear()),
   status: "watching" as AwardStatus,
   submission_deadline: "",
+  deadline_verified: false,
   ceremony_at: "",
   owner: "",
   notes: "",
@@ -56,6 +57,7 @@ function toEditForm(item: AwardEntry): EditForm {
     year: String(item.year),
     status: item.status,
     submission_deadline: item.submission_deadline ?? "",
+    deadline_verified: item.deadline_verified === true,
     ceremony_at: item.ceremony_at ?? "",
     owner: item.owner,
     notes: item.notes,
@@ -170,6 +172,7 @@ export function AwardsClient({
         ...form,
         year: Number(form.year) || new Date().getFullYear(),
         submission_deadline: form.submission_deadline || null,
+        deadline_verified: form.deadline_verified === true,
         ceremony_at: form.ceremony_at || null,
       }),
     });
@@ -192,6 +195,33 @@ export function AwardsClient({
     setEdit(null);
   }
 
+  async function addSubmission(parent: AwardEntry) {
+    if (!isAdmin) return;
+    const res = await fetch("/api/awards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `${parent.title} — extra submission`,
+        organisation: parent.organisation,
+        category: parent.category,
+        year: parent.year,
+        status: "entering",
+        submission_deadline: null,
+        deadline_verified: false,
+        ceremony_at: parent.ceremony_at,
+        owner: parent.owner,
+        event_id: parent.event_id,
+        parent_id: parent.id,
+        notes: "",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const item = rowFromResponse<AwardEntry>(data);
+    if (!res.ok || !item) return;
+    setItems((prev) => upsertById(prev, item));
+    setSelected(item);
+  }
+
   async function saveEdit() {
     if (!isAdmin || !editingId || !edit) return;
     setSaving(true);
@@ -209,6 +239,7 @@ export function AwardsClient({
             year: Number(edit.year) || new Date().getFullYear(),
             status: edit.status,
             submission_deadline: edit.submission_deadline || null,
+            deadline_verified: edit.deadline_verified === true,
             ceremony_at: edit.ceremony_at || null,
             owner: edit.owner,
             notes: edit.notes,
@@ -367,8 +398,10 @@ export function AwardsClient({
                       .filter(Boolean)
                       .join(" · ")}
                     {item.submission_deadline
-                      ? ` · submit by ${format(parseISO(item.submission_deadline), "d MMM yyyy")}`
-                      : ""}
+                      ? ` · submit by ${format(parseISO(item.submission_deadline), "d MMM yyyy")}${item.deadline_verified === true ? "" : " (date not verified)"}`
+                      : item.status === "watching"
+                        ? " · needs research"
+                        : ""}
                     {item.ceremony_at
                       ? ` · ceremony ${format(parseISO(item.ceremony_at), "d MMM yyyy")}`
                       : ""}
@@ -519,6 +552,13 @@ export function AwardsClient({
                                           parseISO(item.submission_deadline),
                                           "d MMM"
                                         )}
+                                        {item.deadline_verified === true
+                                          ? ""
+                                          : " · date not verified"}
+                                      </p>
+                                    ) : item.status === "watching" ? (
+                                      <p className="mt-1 text-[11px] text-muted">
+                                        Needs research
                                       </p>
                                     ) : item.ceremony_at ? (
                                       <p className="mt-1 text-[11px] text-muted">
@@ -570,6 +610,13 @@ export function AwardsClient({
                   </button>
                   <button
                     type="button"
+                    className="btn-secondary"
+                    onClick={() => void addSubmission(selected)}
+                  >
+                    Add another submission
+                  </button>
+                  <button
+                    type="button"
                     className="btn-ghost text-[var(--danger)]"
                     onClick={() => void remove(selected.id)}
                   >
@@ -615,7 +662,17 @@ export function AwardsClient({
               </div>
               <div>
                 <dt className="label !mb-0.5">Submission deadline</dt>
-                <dd>{formatDate(selected.submission_deadline)}</dd>
+                <dd>
+                  {formatDate(selected.submission_deadline)}
+                  {selected.submission_deadline &&
+                  selected.deadline_verified !== true
+                    ? " · date not verified"
+                    : ""}
+                  {!selected.submission_deadline &&
+                  selected.status === "watching"
+                    ? "Needs research. No date has been added."
+                    : ""}
+                </dd>
               </div>
               <div>
                 <dt className="label !mb-0.5">Ceremony date</dt>
@@ -645,6 +702,26 @@ export function AwardsClient({
                 </div>
               ) : null}
             </dl>
+            {items.some((item) => item.parent_id === selected.id) ? (
+              <div>
+                <p className="label">Extra submissions</p>
+                <ul className="space-y-1 text-sm">
+                  {items
+                    .filter((item) => item.parent_id === selected.id)
+                    .map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className="text-brand underline-offset-2 hover:underline"
+                          onClick={() => setSelected(item)}
+                        >
+                          {item.title}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
             <RelatedTasksPanel
               className="mt-4"
               relatedType="award"
@@ -751,6 +828,16 @@ function AwardFields({
             onChange({ ...form, submission_deadline: e.target.value })
           }
         />
+        <label className="mt-2 flex items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={form.deadline_verified}
+            onChange={(e) =>
+              onChange({ ...form, deadline_verified: e.target.checked })
+            }
+          />
+          Deadline checked
+        </label>
       </div>
       <div>
         <label className="label">Ceremony date</label>

@@ -2103,6 +2103,8 @@ export async function updateBudgetPayment(
       | "amount"
       | "status"
       | "invoice_url"
+      | "event_id"
+      | "theme_id"
     >
   >
 ) {

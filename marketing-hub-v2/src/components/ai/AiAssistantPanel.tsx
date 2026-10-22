@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -13,6 +14,7 @@ import {
   Copy,
   FileUp,
   Loader2,
+  PanelRightClose,
   Sparkles,
   Trash2,
   X,
@@ -29,8 +31,10 @@ import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
 } from "@/lib/upload/allowed-types";
-import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { cn } from "@/lib/utils";
+
+/** Keep in step with the dock width class on the assistant aside. */
+export const ASSISTANT_DOCK_WIDTH = "22rem";
 
 type ChatRole = "user" | "assistant";
 
@@ -132,11 +136,16 @@ function draftPlainText(draft: DraftResult): string {
 export function AiAssistantPanel({
   open,
   onClose,
+  onOpen,
+  className,
 }: {
   open: boolean;
   onClose: () => void;
+  onOpen: () => void;
+  className?: string;
 }) {
   const router = useRouter();
+  const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<AssistantMode>("chat");
   const [composer, setComposer] = useState("");
@@ -416,6 +425,17 @@ export function AiAssistantPanel({
     }
   }
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (!panelRef.current?.contains(document.activeElement)) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   const placeholder =
     mode === "chat"
       ? "Ask anything, or ask to add a task / event / post…"
@@ -428,97 +448,37 @@ export function AiAssistantPanel({
             : "Notes to summarise (or rely on attachments)…";
 
   return (
-    <RecordDrawer
-      open={open}
-      onClose={onClose}
-      title="Assistant"
-      subtitle="Brand-aware help for admins"
-      className="max-w-lg"
-      footer={
-        <form onSubmit={onSubmit} className="space-y-2">
-          {attachments.length ? (
-            <ul className="flex flex-wrap gap-1.5">
-              {attachments.map((a) => (
-                <li
-                  key={a.url}
-                  className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-sand/50 px-2 py-1 text-[11px] text-brand"
-                >
-                  <span className="truncate">{a.name}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 text-muted hover:text-foreground"
-                    aria-label={`Remove ${a.name}`}
-                    onClick={() =>
-                      setAttachments((prev) =>
-                        prev.filter((x) => x.url !== a.url)
-                      )
-                    }
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <textarea
-            value={composer}
-            onChange={(e) => setComposer(e.target.value)}
-            rows={3}
-            placeholder={placeholder}
-            className="w-full resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none ring-brand/30 placeholder:text-muted focus:ring-2"
-            disabled={busy}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept={UPLOAD_ACCEPT}
-              multiple
-              onChange={onPickFiles}
-            />
+    <aside
+      ref={panelRef}
+      className={cn(
+        "shrink-0 border-l border-border bg-white",
+        open
+          ? "flex h-[min(50vh,28rem)] w-full flex-col md:sticky md:top-0 md:h-screen md:max-h-screen md:w-[22rem]"
+          : "hidden md:sticky md:top-0 md:flex md:h-screen md:w-11 md:flex-col",
+        className
+      )}
+      aria-label="Assistant"
+    >
+      {open ? (
+        <>
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-brand">Assistant</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Brand-aware help for admins
+              </p>
+            </div>
             <button
               type="button"
-              className="btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={busy || uploading}
+              className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs"
+              onClick={onClose}
+              aria-label="Collapse assistant"
             >
-              {uploading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <FileUp className="h-3.5 w-3.5" />
-              )}
-              Upload
-            </button>
-            <button
-              type="submit"
-              className="btn-primary ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
-              disabled={
-                busy ||
-                uploading ||
-                (!composer.trim() &&
-                  !(
-                    (mode === "summarise" ||
-                      mode === "draft_email" ||
-                      mode === "draft_social") &&
-                    attachments.length
-                  ))
-              }
-            >
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {busy ? "Working…" : mode === "chat" ? "Send" : "Generate"}
+              <PanelRightClose className="h-4 w-4" />
+              Hide
             </button>
           </div>
-          <p className="text-[11px] text-muted">
-            Images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
-          </p>
-        </form>
-      }
-    >
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-1.5">
           {MODE_OPTIONS.map((option) => (
@@ -587,7 +547,6 @@ export function AiAssistantPanel({
               <Link
                 href={commandNotice.href}
                 className="font-medium underline"
-                onClick={onClose}
               >
                 Open it
               </Link>
@@ -619,7 +578,6 @@ export function AiAssistantPanel({
                 <Link
                   href="/app/email"
                   className="btn-secondary px-2 py-1 text-[11px]"
-                  onClick={onClose}
                 >
                   Open Email
                 </Link>
@@ -675,26 +633,129 @@ export function AiAssistantPanel({
           ))}
         </div>
       </div>
-    </RecordDrawer>
+          </div>
+          <div className="border-t border-border px-4 py-3">
+            <form onSubmit={onSubmit} className="space-y-2">
+              {attachments.length ? (
+                <ul className="flex flex-wrap gap-1.5">
+                  {attachments.map((a) => (
+                    <li
+                      key={a.url}
+                      className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-sand/50 px-2 py-1 text-[11px] text-brand"
+                    >
+                      <span className="truncate">{a.name}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 text-muted hover:text-foreground"
+                        aria-label={`Remove ${a.name}`}
+                        onClick={() =>
+                          setAttachments((prev) =>
+                            prev.filter((x) => x.url !== a.url)
+                          )
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <textarea
+                value={composer}
+                onChange={(e) => setComposer(e.target.value)}
+                rows={3}
+                placeholder={placeholder}
+                className="w-full resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none ring-brand/30 placeholder:text-muted focus:ring-2"
+                disabled={busy}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept={UPLOAD_ACCEPT}
+                  multiple
+                  onChange={onPickFiles}
+                />
+                <button
+                  type="button"
+                  className="btn-secondary inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy || uploading}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileUp className="h-3.5 w-3.5" />
+                  )}
+                  Upload
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
+                  disabled={
+                    busy ||
+                    uploading ||
+                    (!composer.trim() &&
+                      !(
+                        (mode === "summarise" ||
+                          mode === "draft_email" ||
+                          mode === "draft_social") &&
+                        attachments.length
+                      ))
+                  }
+                >
+                  {busy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {busy ? "Working…" : mode === "chat" ? "Send" : "Generate"}
+                </button>
+              </div>
+              <p className="text-[11px] text-muted">
+                Images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
+              </p>
+            </form>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="flex h-full w-full flex-col items-center gap-3 py-4 text-muted hover:bg-sand hover:text-brand"
+          onClick={onOpen}
+          aria-label="Show assistant"
+        >
+          <Sparkles className="h-4 w-4 shrink-0" />
+          <span className="text-[11px] font-medium [writing-mode:vertical-rl]">
+            Assistant
+          </span>
+        </button>
+      )}
+    </aside>
   );
 }
 
 export function AiAssistantTrigger({
-  onOpen,
+  open,
+  onToggle,
   className,
 }: {
-  onOpen: () => void;
+  open: boolean;
+  onToggle: () => void;
   className?: string;
 }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={onToggle}
+      aria-pressed={open}
       className={cn(
         "inline-flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted transition hover:bg-sand hover:text-foreground",
+        open && "bg-accent-soft text-brand",
         className
       )}
-      aria-label="Open AI assistant"
+      aria-label={open ? "Collapse assistant" : "Show assistant"}
     >
       <Sparkles className="h-4 w-4 shrink-0 text-brand" />
       Assistant

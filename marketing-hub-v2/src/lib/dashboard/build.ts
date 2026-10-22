@@ -6,6 +6,7 @@ import {
   startOfDay,
 } from "date-fns";
 import { attendanceChecklistProgress } from "@/lib/events/attendance-checklist";
+import { enquiryRoutingGap } from "@/lib/enquiries/routing";
 import { isClosedTaskStatus } from "@/lib/data/collections";
 import { ownerMatchesViewer } from "@/lib/identity/owner-match";
 import type {
@@ -68,11 +69,76 @@ type BuildInput = {
   awards: AwardEntry[];
   enquiries: Pick<
     WebEnquiry,
-    "id" | "customer_name" | "needs_manual_review" | "status" | "updated_at"
+    | "id"
+    | "customer_name"
+    | "needs_manual_review"
+    | "selected_office"
+    | "status"
+    | "updated_at"
   >[];
   emails: Pick<EmailCampaign, "id" | "title" | "status" | "scheduled_at">[];
   budget: BudgetTotals | null;
 };
+
+function pushAwardActions(input: {
+  awards: AwardEntry[];
+  today: Date;
+  seen: Set<string>;
+  actions: DashboardAction[];
+  linkedAwards: Set<string>;
+  personal: boolean;
+  viewer: DashboardViewer;
+}) {
+  const awardHorizon = addDays(input.today, AWARD_HORIZON_DAYS);
+  let research = 0;
+  for (const award of input.awards) {
+    if (
+      award.status === "submitted" ||
+      award.status === "won" ||
+      award.status === "not_won" ||
+      award.status === "shortlisted"
+    ) {
+      continue;
+    }
+    if (
+      input.personal &&
+      !assignedToViewer(award.owner, null, input.viewer)
+    ) {
+      continue;
+    }
+    if (input.linkedAwards.has(award.id)) continue;
+    const due = dayFrom(award.submission_deadline);
+    const verified = award.deadline_verified === true;
+    if (award.status === "watching" && !due) {
+      const key = `award:${award.id}`;
+      if (input.seen.has(key) || research >= 5) continue;
+      research += 1;
+      input.seen.add(key);
+      input.actions.push({
+        key,
+        title: award.title,
+        reason: "Award needs research",
+        when: null,
+        href: recordPath("award", award.id),
+        tone: "attention",
+      });
+      continue;
+    }
+    if (!due || due.getTime() > awardHorizon.getTime()) continue;
+    const key = `award:${award.id}`;
+    if (input.seen.has(key)) continue;
+    input.seen.add(key);
+    const overdue = due.getTime() < input.today.getTime();
+    input.actions.push({
+      key,
+      title: award.title,
+      reason: verified ? "Award deadline" : "Award deadline, date not verified",
+      when: `${overdue ? "Overdue" : "Deadline"} ${formatDay(due)}`,
+      href: recordPath("award", award.id),
+      tone: overdue ? "overdue" : "soon",
+    });
+  }
+}
 
 const TASK_HORIZON_DAYS = 7;
 const CONTENT_HORIZON_DAYS = 14;
@@ -250,48 +316,35 @@ export function buildDashboard(input: BuildInput): DashboardModel {
 
   if (!personal && viewer.isAdmin) {
     const review = input.enquiries.filter(
-      (enquiry) => enquiry.needs_manual_review && enquiry.status !== "done"
+      (enquiry) => enquiryRoutingGap(enquiry) !== null
     );
     for (const enquiry of review.slice(0, 5)) {
       const key = `enquiry:${enquiry.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const gap = enquiryRoutingGap(enquiry);
       actions.push({
         key,
         title: enquiry.customer_name.trim() || "Website enquiry",
-        reason: "Enquiry needs review",
+        reason:
+          gap === "no office"
+            ? "Enquiry has no office"
+            : "Enquiry needs review",
         when: null,
         href: recordPath("enquiry", enquiry.id),
         tone: "attention",
       });
     }
 
-    const awardHorizon = addDays(today, AWARD_HORIZON_DAYS);
-    for (const award of input.awards) {
-      if (
-        award.status === "submitted" ||
-        award.status === "won" ||
-        award.status === "not_won" ||
-        award.status === "shortlisted"
-      ) {
-        continue;
-      }
-      if (linkedAwards.has(award.id)) continue;
-      const due = dayFrom(award.submission_deadline);
-      if (!due || due.getTime() > awardHorizon.getTime()) continue;
-      const key = `award:${award.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const overdue = due.getTime() < today.getTime();
-      actions.push({
-        key,
-        title: award.title,
-        reason: "Award deadline",
-        when: `${overdue ? "Overdue" : "Deadline"} ${formatDay(due)}`,
-        href: recordPath("award", award.id),
-        tone: overdue ? "overdue" : "soon",
-      });
-    }
+    pushAwardActions({
+      awards: input.awards,
+      today,
+      seen,
+      actions,
+      linkedAwards,
+      personal: false,
+      viewer,
+    });
 
     for (const email of input.emails) {
       const scheduled = dayFrom(email.scheduled_at);
@@ -314,33 +367,15 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       });
     }
   } else if (personal) {
-    const awardHorizon = addDays(today, AWARD_HORIZON_DAYS);
-    for (const award of input.awards) {
-      if (
-        award.status === "submitted" ||
-        award.status === "won" ||
-        award.status === "not_won" ||
-        award.status === "shortlisted"
-      ) {
-        continue;
-      }
-      if (!assignedToViewer(award.owner, null, viewer)) continue;
-      if (linkedAwards.has(award.id)) continue;
-      const due = dayFrom(award.submission_deadline);
-      if (!due || due.getTime() > awardHorizon.getTime()) continue;
-      const key = `award:${award.id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const overdue = due.getTime() < today.getTime();
-      actions.push({
-        key,
-        title: award.title,
-        reason: "Award deadline",
-        when: `${overdue ? "Overdue" : "Deadline"} ${formatDay(due)}`,
-        href: recordPath("award", award.id),
-        tone: overdue ? "overdue" : "soon",
-      });
-    }
+    pushAwardActions({
+      awards: input.awards,
+      today,
+      seen,
+      actions,
+      linkedAwards,
+      personal: true,
+      viewer,
+    });
   }
 
   const placed = new Set(actions.map((action) => action.key));

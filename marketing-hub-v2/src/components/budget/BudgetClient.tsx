@@ -10,7 +10,11 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { computeBudgetTotals, type LineSpend } from "@/lib/budget/totals";
+import {
+  budgetThresholds,
+  computeBudgetTotals,
+  type LineSpend,
+} from "@/lib/budget/totals";
 import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import type {
   BudgetGroup,
@@ -277,6 +281,8 @@ type PaymentForm = {
   amount: string;
   status: BudgetPaymentStatus;
   invoice_url: string;
+  event_id: string;
+  theme_id: string;
 };
 
 const emptyPaymentForm: PaymentForm = {
@@ -287,7 +293,11 @@ const emptyPaymentForm: PaymentForm = {
   amount: "",
   status: "paid",
   invoice_url: "",
+  event_id: "",
+  theme_id: "",
 };
+
+export type BudgetLinkOption = { id: string; title: string };
 
 function toLineForm(line: BudgetLine): LineForm {
   return {
@@ -308,6 +318,8 @@ function toPaymentForm(payment: BudgetPayment): PaymentForm {
     amount: String(payment.amount),
     status: payment.status,
     invoice_url: payment.invoice_url,
+    event_id: payment.event_id ?? "",
+    theme_id: payment.theme_id ?? "",
   };
 }
 
@@ -315,10 +327,14 @@ export function BudgetClient({
   lines: initialLines,
   payments: initialPayments,
   meta,
+  events = [],
+  themes = [],
 }: {
   lines: BudgetLine[];
   payments: BudgetPayment[];
   meta: BudgetMeta;
+  events?: BudgetLinkOption[];
+  themes?: BudgetLinkOption[];
 }) {
   const [lines, setLines] = useState(initialLines);
   const [payments, setPayments] = useState(initialPayments);
@@ -347,6 +363,7 @@ export function BudgetClient({
     () => computeBudgetTotals(lines, payments),
     [lines, payments]
   );
+  const thresholdLines = useMemo(() => budgetThresholds(totals), [totals]);
 
   const lineOptions = useMemo(
     () => {
@@ -530,6 +547,8 @@ export function BudgetClient({
       amount: Number(paymentForm.amount),
       status: paymentForm.status,
       invoice_url: paymentForm.invoice_url,
+      event_id: paymentForm.event_id || null,
+      theme_id: paymentForm.theme_id || null,
     };
     const ok = editingPaymentId
       ? await post({
@@ -617,6 +636,29 @@ export function BudgetClient({
           tone={totals.overBudgetCount > 0 ? "warn" : "muted"}
         />
       </div>
+
+      {thresholdLines.length > 0 ? (
+        <ul className="mb-6 space-y-2">
+          {thresholdLines.map((line) => {
+            const name =
+              lines.find((item) => item.id === line.lineId)?.name ??
+              "Budget line";
+            const detail =
+              line.remaining < 0
+                ? `${name} is past the planned amount by ${gbp(Math.abs(line.remaining))}.`
+                : `${name} has ${gbp(line.remaining)} left of ${gbp(line.planned)}.`;
+            return (
+              <li
+                key={line.lineId}
+                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+              >
+                {detail} Paid {gbp(line.paid)}. Committed or pending{" "}
+                {gbp(line.pending)}.
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
 
       <div className="mb-6 inline-flex rounded-xl border border-border bg-sand/60 p-1">
         {TABS.map((item) => (
@@ -958,6 +1000,40 @@ export function BudgetClient({
                         invoice_url: e.target.value,
                       }))
                     }
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="label">Event</span>
+                  <SearchSelect
+                    className="mt-1"
+                    value={paymentForm.event_id}
+                    allowEmpty
+                    emptyLabel="None"
+                    onChange={(value) =>
+                      setPaymentForm((form) => ({ ...form, event_id: value }))
+                    }
+                    options={events.map((event) => ({
+                      value: event.id,
+                      label: event.title,
+                    }))}
+                    placeholder="Optional"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="label">Theme</span>
+                  <SearchSelect
+                    className="mt-1"
+                    value={paymentForm.theme_id}
+                    allowEmpty
+                    emptyLabel="None"
+                    onChange={(value) =>
+                      setPaymentForm((form) => ({ ...form, theme_id: value }))
+                    }
+                    options={themes.map((theme) => ({
+                      value: theme.id,
+                      label: theme.title,
+                    }))}
+                    placeholder="Optional"
                   />
                 </label>
               </div>

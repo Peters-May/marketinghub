@@ -42,6 +42,14 @@ export function isPendingStatus(status: BudgetPaymentStatus) {
   return status === "pending" || status === "committed";
 }
 
+/** Near or past the planned amount. Paid and committed stay in separate buckets. */
+export function budgetThresholds(totals: BudgetTotals) {
+  return Object.values(totals.byLine).filter((line) => {
+    if (line.planned <= 0) return line.remaining < 0;
+    return line.remaining < 0 || line.remaining / line.planned <= 0.1;
+  });
+}
+
 export function spendForLine(
   line: BudgetLine,
   payments: BudgetPayment[]
