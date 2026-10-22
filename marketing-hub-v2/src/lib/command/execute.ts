@@ -1,4 +1,8 @@
 import type { SessionUser } from "@/lib/auth/session";
+import {
+  proposedAttendanceId,
+  splitProposedAttendance,
+} from "@/lib/command/attendance";
 import { describeMatches, matchByTitle } from "@/lib/command/match";
 import type { HubCommand } from "@/lib/command/parse";
 import { normalizeChannels } from "@/lib/data/normalize";
@@ -6,20 +10,24 @@ import {
   createContent,
   createEvent,
   createTask,
+  listContacts,
   listContent,
   listEvents,
   listTasks,
   updateContent,
   updateEvent,
   updateTask,
+  upsertEventAttendanceMany,
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
 import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
+import { loadOwnerDirectory } from "@/lib/identity/owners";
+import type { OwnerDirectoryEntry } from "@/lib/identity/owner-match";
 import {
   pushContentToPlanable,
   shouldPushSocialToPlanable,
 } from "@/lib/planable/sync";
-import type { ContentItem, ContentStatus } from "@/lib/types";
+import type { Contact, ContentItem, ContentStatus } from "@/lib/types";
 
 export type ExecuteResult =
   | {
@@ -41,6 +49,106 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "create_content" ||
     kind === "update_content"
   );
+}
+
+type ResolvedAttendance = {
+  pm_attendance: string;
+  pm_attending: boolean;
+  people: Array<{
+    user_id: string;
+    user_name: string;
+    attendance_status: "attending" | "maybe";
+  }>;
+};
+
+function linkedPerson(
+  name: string,
+  contacts: Contact[],
+  owners: OwnerDirectoryEntry[]
+): { user_id: string; user_name: string } | null {
+  if (/[+]|team\b/i.test(name)) return null;
+  const needle = name.trim().toLowerCase();
+  if (!needle) return null;
+  const people = contacts.filter(
+    (contact) => contact.kind !== "company" && contact.name.trim()
+  );
+  const exact = people.filter(
+    (contact) => contact.name.trim().toLowerCase() === needle
+  );
+  if (exact.length > 1) return null;
+  if (exact.length === 1) {
+    const contact = exact[0];
+    return {
+      user_id: (contact.user_id ?? "").trim() || `contact:${contact.id}`,
+      user_name: contact.name.trim(),
+    };
+  }
+  const singleToken = !/\s/.test(needle);
+  if (!singleToken) {
+    const ownerExact = owners.filter(
+      (owner) => owner.full_name.trim().toLowerCase() === needle
+    );
+    if (ownerExact.length !== 1) return null;
+    return {
+      user_id: ownerExact[0].id,
+      user_name: ownerExact[0].full_name.trim() || name,
+    };
+  }
+  const first = people.filter(
+    (contact) =>
+      (contact.name.trim().toLowerCase().split(/\s+/)[0] ?? "") === needle
+  );
+  if (first.length > 1) return null;
+  if (first.length === 1) {
+    const contact = first[0];
+    return {
+      user_id: (contact.user_id ?? "").trim() || `contact:${contact.id}`,
+      user_name: contact.name.trim(),
+    };
+  }
+  const ownerFirst = owners.filter(
+    (owner) =>
+      (owner.full_name.trim().toLowerCase().split(/\s+/)[0] ?? "") === needle
+  );
+  if (ownerFirst.length !== 1) return null;
+  return {
+    user_id: ownerFirst[0].id,
+    user_name: ownerFirst[0].full_name.trim() || name,
+  };
+}
+
+async function resolveProposedAttendance(
+  raw: string
+): Promise<ResolvedAttendance> {
+  const split = splitProposedAttendance(raw);
+  if (!split.people.length) {
+    return { pm_attendance: split.label, pm_attending: false, people: [] };
+  }
+  const [contacts, owners] = await Promise.all([
+    listContacts(),
+    loadOwnerDirectory(),
+  ]);
+  return {
+    pm_attendance: split.label,
+    pm_attending: split.people.some((person) => person.status === "attending"),
+    people: split.people.map((person) => {
+      const linked = linkedPerson(person.name, contacts, owners);
+      return {
+        user_id: linked?.user_id ?? proposedAttendanceId(person.name),
+        user_name: linked?.user_name ?? person.name,
+        attendance_status: person.status,
+      };
+    }),
+  };
+}
+
+function attendanceSavedNote(resolved: ResolvedAttendance): string {
+  if (resolved.people.length === 1) return " with 1 proposed attendee";
+  if (resolved.people.length > 1) {
+    return ` with ${resolved.people.length} proposed attendees`;
+  }
+  if (/^tbc$/i.test(resolved.pm_attendance)) return ", attendance still TBC";
+  return "";
 }
 
 async function syncContent(item: ContentItem): Promise<{
@@ -145,21 +253,30 @@ export async function executeHubCommand(
   }
 
   if (command.kind === "create_event") {
-    const item = await createEvent({
-      title: command.title,
-      starts_at: command.starts_at,
-      ends_at: null,
-      location: command.location,
-      event_type: command.event_type,
-      division: "",
-      notes: command.notes,
-      link_url: "",
-      ...emptyAttendanceOpsFields(),
-      created_by: user.id,
-    });
+    const attendance = command.attending
+      ? await resolveProposedAttendance(command.attending)
+      : { pm_attendance: "", pm_attending: false, people: [] };
+    const item = await createEvent(
+      {
+        title: command.title,
+        starts_at: command.starts_at,
+        ends_at: command.ends_at,
+        location: command.location,
+        event_type: command.event_type,
+        division: "",
+        notes: command.notes,
+        link_url: "",
+        date_status: command.date_status,
+        pm_attendance: attendance.pm_attendance,
+        ...emptyAttendanceOpsFields(),
+        pm_attending: attendance.pm_attending,
+        created_by: user.id,
+      },
+      attendance.people
+    );
     return {
       ok: true,
-      message: `Added event “${item.title}”.`,
+      message: `Added event “${item.title}”${attendanceSavedNote(attendance)}.`,
       href: command.href,
       area: command.area,
     };
@@ -176,12 +293,26 @@ export async function executeHubCommand(
         message: `Several events match “${command.query}”: ${describeMatches(found.items)}. Use the full title.`,
       };
     }
-    const updated = await updateEvent(found.item.id, command.patch);
+    const attendance = command.attending
+      ? await resolveProposedAttendance(command.attending)
+      : null;
+    const updated = await updateEvent(found.item.id, {
+      ...command.patch,
+      ...(attendance
+        ? {
+            pm_attendance: attendance.pm_attendance,
+            pm_attending: attendance.pm_attending,
+          }
+        : {}),
+    });
     if (!updated) return { ok: false, message: "That event could not be updated." };
+    if (attendance?.people.length) {
+      await upsertEventAttendanceMany(updated.id, attendance.people);
+    }
     const title = command.patch.title || found.item.title;
     return {
       ok: true,
-      message: `Updated event “${title}”.`,
+      message: `Updated event “${title}”${attendance ? attendanceSavedNote(attendance) : ""}.`,
       href: command.href,
       area: command.area,
     };

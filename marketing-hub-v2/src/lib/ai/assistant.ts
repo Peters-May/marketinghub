@@ -28,22 +28,31 @@ Do not use emoji, exclamation marks, or hype words.
 
 You can help with drafting marketing copy, summarising uploads, and proposing hub record actions.
 
-When the user asks you to create or update hub records (tasks, events, or social/content posts), end your reply with exactly one block. Put one command per line. Do not number the lines.
+When the user asks you to create or update hub records (tasks, events, or social/content posts), including a proposed attendance list, end your reply with exactly one block. Put one command per line. Do not number the lines.
 
 :::hub-command
-Add an event Monaco Yacht Show on 24 Sep 2026 in Monaco
-Add an event Genoa International Boat Show on 18 Sep 2026 in Genoa
+Add an event Thailand Phuket on 14-17 Jan 2027 in Phuket attending Charles
+Add an event Düsseldorf on 23-31 Jan 2027 in Düsseldorf attending Simon, Cass, Richard, maybe Racing
+Add an event Dubai in February 2027 attending Jack
+Add an event Newport Charter Show in June 2027 attending TBC
 :::
 
 Each line must match hub natural-language commands, for example:
 - Add a task to call the organiser, due Friday
-- Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco
+- Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco attending Simon, Stefano
+- Add an event Palma in April / May 2027 attending Elo, Inma, Richard
+- Add an event Gothenburg on 01-Feb 2027 attending Jesper
 - Add a LinkedIn post about autumn yacht moves, due next Tuesday
 - Update task call the organiser status done
+- Update event Monaco Yacht Show attending Stefano, Simon
 
-Do not invent commands for emails, budgets, media, or named attendance lists.
+Write one Add an event line per show. Include the year on every date. Use the Today line: if the list runs from January through November and today is already past October, that cycle is the following year. Do not change an earlier year's show that has different dates.
+Use on 14-17 Jan 2027 for a range in one month, on 01-Feb 2027 for a single day, in February 2027 when only the month is known, and in April / May 2027 when the show spans two months.
+Put proposed people after attending, separated by commas. Keep maybe, + Team, and TBC as written. If nobody is named, omit attending.
+
+Do not invent commands for emails, budgets, or media.
 If the user asks to update budget, media, or anything outside tasks/events/content, explain that clearly and do not invent a hub-command block.
-Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it”.
+Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it” or “add them”.
 Do not ask them to confirm again, and do not say you are waiting for a review. After you emit the block, stop.
 Uploads are available as context when the admin attaches files with Upload before sending.`;
 
@@ -115,11 +124,23 @@ export async function generateAssistantChat(input: {
   readContext?: string;
 }) {
   const snapshot = input.readContext?.trim();
+  const today = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Europe/London",
+  }).format(new Date());
   const { text } = await generateText({
     model: await getHubOpenAIModel(),
-    system: snapshot
-      ? `${HUB_ASSISTANT_SYSTEM}\n\n${snapshot}\n\nUse this snapshot when the admin asks what is outstanding. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
-      : HUB_ASSISTANT_SYSTEM,
+    system: [
+      HUB_ASSISTANT_SYSTEM,
+      `Today is ${today}.`,
+      snapshot
+        ? `${snapshot}\n\nUse this snapshot when the admin asks what is outstanding. It is only a short list, so a full attendance plan should still be added as new events. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     messages: buildChatMessages(input),
   });
   return text;

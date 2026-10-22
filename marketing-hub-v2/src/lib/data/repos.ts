@@ -139,7 +139,10 @@ export async function createEvent(
     | keyof EventAttendanceOpsFields
   > &
     Partial<PlannerFields> &
-    Partial<EventAttendanceOpsFields>
+    Partial<EventAttendanceOpsFields>,
+  attendance: Array<
+    Pick<EventAttendance, "user_id" | "user_name" | "attendance_status">
+  > = []
 ) {
   const item: EventItem = {
     ...emptyPlannerFields(),
@@ -150,8 +153,18 @@ export async function createEvent(
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  const attendanceRows: EventAttendance[] = attendance.map((person) => ({
+    id: uid("att"),
+    event_id: item.id,
+    user_id: person.user_id,
+    user_name: person.user_name,
+    attendance_status: person.attendance_status,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+  }));
   await updateStore((s) => {
     s.events.push(item);
+    if (attendanceRows.length) s.event_attendance.push(...attendanceRows);
   });
   return item;
 }
@@ -252,6 +265,40 @@ export async function upsertEventAttendance(input: {
     row = s.event_attendance[idx];
   });
   return row;
+}
+
+export async function upsertEventAttendanceMany(
+  eventId: string,
+  people: Array<
+    Pick<EventAttendance, "user_id" | "user_name" | "attendance_status">
+  >
+) {
+  if (!people.length) return;
+  await updateStore((s) => {
+    for (const person of people) {
+      const idx = s.event_attendance.findIndex(
+        (row) => row.event_id === eventId && row.user_id === person.user_id
+      );
+      if (idx === -1) {
+        s.event_attendance.push({
+          id: uid("att"),
+          event_id: eventId,
+          user_id: person.user_id,
+          user_name: person.user_name,
+          attendance_status: person.attendance_status,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        });
+        continue;
+      }
+      s.event_attendance[idx] = {
+        ...s.event_attendance[idx],
+        user_name: person.user_name || s.event_attendance[idx].user_name,
+        attendance_status: person.attendance_status,
+        updated_at: nowIso(),
+      };
+    }
+  });
 }
 
 export async function deleteEventAttendance(eventId: string, userId: string) {

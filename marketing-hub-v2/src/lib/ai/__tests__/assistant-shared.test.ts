@@ -30,6 +30,8 @@ describe("isHubRunConfirmation", () => {
     expect(isHubRunConfirmation("Yes, sounds good.")).toBe(true);
     expect(isHubRunConfirmation("yes sounds good")).toBe(true);
     expect(isHubRunConfirmation("go ahead")).toBe(true);
+    expect(isHubRunConfirmation("add them")).toBe(true);
+    expect(isHubRunConfirmation("please confirm to proceed")).toBe(true);
   });
 
   it("rejects a new request that merely starts with yes", () => {

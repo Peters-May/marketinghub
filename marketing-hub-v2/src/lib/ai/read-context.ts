@@ -13,13 +13,21 @@ export async function assistantReadContext() {
       const owner = task.owner ? ` (${task.owner})` : "";
       return `- Task: ${task.title}${due}${owner}`;
     });
-  const events = (store.events ?? [])
+    const events = (store.events ?? [])
     .filter((event) => event.starts_at && event.starts_at.slice(0, 10) >= today)
     .sort((a, b) => (a.starts_at ?? "").localeCompare(b.starts_at ?? ""))
-    .slice(0, 8)
+    .slice(0, 20)
     .map((event) => {
-      const going = event.pm_attending ? "Peters & May attending" : "watching";
-      return `- Event: ${event.title} on ${event.starts_at?.slice(0, 10)} (${going})`;
+      const going = event.pm_attendance
+        ? ` attending ${event.pm_attendance}`
+        : event.pm_attending
+          ? "Peters & May attending"
+          : "watching";
+      const end =
+        event.ends_at && event.ends_at.slice(0, 10) !== event.starts_at?.slice(0, 10)
+          ? ` to ${event.ends_at.slice(0, 10)}`
+          : "";
+      return `- Event: ${event.title} on ${event.starts_at?.slice(0, 10)}${end} (${going})`;
     });
   const content = (store.content ?? [])
     .filter((item) => item.status === "draft" || item.status === "review")

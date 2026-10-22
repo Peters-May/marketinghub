@@ -161,4 +161,124 @@ describe("parseHubCommand", () => {
     if (result.ok) return;
     expect(result.examples.length).toBeGreaterThan(0);
   });
+
+  it("adds an event with a date range and proposed attendance", () => {
+    const parsed = command(
+      "Add an event Düsseldorf on 23 - 31 Jan in Düsseldorf attending Simon, Cass, maybe Racing"
+    );
+    expect(parsed.kind).toBe("create_event");
+    if (parsed.kind !== "create_event") return;
+    expect(parsed.title).toBe("Düsseldorf");
+    expect(parsed.starts_at).toBe("2027-01-23");
+    expect(parsed.ends_at).toBe("2027-01-31");
+    expect(parsed.date_status).toBe("confirmed");
+    expect(parsed.location).toBe("Düsseldorf");
+    expect(parsed.attending).toBe("Simon, Cass, maybe Racing");
+    expect(parsed.summary).toContain("23–31 Jan 2027");
+    expect(parsed.summary).toContain("attending Simon, Cass, maybe Racing");
+  });
+
+  it("reads a day written as 01-Feb and a month-only date", () => {
+    const day = command("Add an event Gothenburg on 01-Feb attending Jesper");
+    expect(day.kind).toBe("create_event");
+    if (day.kind !== "create_event") return;
+    expect(day.starts_at).toBe("2027-02-01");
+    expect(day.ends_at).toBeNull();
+    expect(day.attending).toBe("Jesper");
+
+    const month = command("Add an event Dubai in February attending Jack");
+    expect(month.kind).toBe("create_event");
+    if (month.kind !== "create_event") return;
+    expect(month.title).toBe("Dubai");
+    expect(month.starts_at).toBe("2027-02-01");
+    expect(month.ends_at).toBe("2027-02-28");
+    expect(month.date_status).toBe("provisional");
+    expect(month.location).toBe("");
+    expect(month.attending).toBe("Jack");
+  });
+
+  it("reads a two-month span and keeps on inside the title", () => {
+    const span = command(
+      "Add an event Palma in April / May attending Elo, Inma, Richard"
+    );
+    expect(span.kind).toBe("create_event");
+    if (span.kind !== "create_event") return;
+    expect(span.starts_at).toBe("2027-04-01");
+    expect(span.ends_at).toBe("2027-05-31");
+    expect(span.date_status).toBe("provisional");
+    expect(span.attending).toBe("Elo, Inma, Richard");
+
+    const titled = command(
+      "Add an event Istanbul on land (Bosphorus BS) on 21-28 Feb attending Caner + Team, Stefano"
+    );
+    expect(titled.kind).toBe("create_event");
+    if (titled.kind !== "create_event") return;
+    expect(titled.title).toBe("Istanbul on land (Bosphorus BS)");
+    expect(titled.starts_at).toBe("2027-02-21");
+    expect(titled.ends_at).toBe("2027-02-28");
+    expect(titled.attending).toBe("Caner + Team, Stefano");
+  });
+
+  it("updates proposed attendance on an existing event", () => {
+    const parsed = command(
+      "Update event Monaco Yacht Show attending Stefano, Simon"
+    );
+    expect(parsed.kind).toBe("update_event");
+    if (parsed.kind !== "update_event") return;
+    expect(parsed.query).toBe("Monaco Yacht Show");
+    expect(parsed.attending).toBe("Stefano, Simon");
+  });
+
+  it("reads a full proposed attendance list", () => {
+    const block = `
+Add an event Thailand Phuket on 14-17 Jan 2027 in Phuket attending Charles
+Add an event Düsseldorf on 23-31 Jan 2027 in Düsseldorf attending Simon, Cass, Richard, Inge, Sergee, Pascal, Loic, Stefano, Jesper, Luca, Luke, Kristina, maybe Racing
+Add an event Gothenburg on 01-Feb 2027 attending Jesper
+Add an event Helsinki on 6-15 Feb 2027 attending Jesper
+Add an event Miami on 10-14 Feb 2027 attending Pascal, Simon, Chris
+Add an event Istanbul on land (Bosphorus BS) on 21-28 Feb 2027 attending Caner + Team, Stefano
+Add an event ExpoShipping Turkey (Commercial) on 23-26 February 2027 attending Robert
+Add an event Dubai in February 2027 attending Jack
+Add an event Stockholm in March 2027 attending Jesper
+Add an event West Palm Beach on 17-21 March 2027 attending Chris, Kristina
+Add an event Yokohama Japan BS on 18-21 March 2027 attending Charles, Luke
+Add an event Shanghai China Intl BS on 28-30 March 2027
+Add an event Fredericia BS Denmark on 7-9 May 2027 attending Jesper
+Add an event Palma in April / May 2027 attending Elo, Inma, Richard, Kristina
+Add an event Southeast Asia (SEA) Yachting Conference Singapore in April 2027 attending Charles
+Add an event La Grande Motte in April 2027 attending Pascal
+Add an event Singapore Yachting Festival on 22-25 April 2027 attending Charles
+Add an event Annapolis Sail on 23-25 April 2027 attending Pascal
+Add an event Med Yacht Show Nafp. Greece on 8-12 May 2027 attending Stefano
+Add an event British MY Show Swanwick on 20-23 May 2027 attending Richard
+Add an event Sanctuary Cove on 20-23 May 2027 attending Luke, Charles
+Add an event South Coast + Green Tech Ocean Village in May 2027 attending Richard
+Add an event Newport Charter Show in June 2027 attending TBC
+Add an event Polboat Gdynia PL in July 2027 attending TBC
+Add an event Karlshamn SE on 20-22 Aug 2027 attending Jesper
+Add an event Oslo on 2-5 Sept 2027 attending Jesper
+Add an event Cannes on 7-12 Sept 2027 attending Simon, Cass, Richard, Inge, Sergee, Pascal, Loic, Stefano, Charles, Luca, Luke, Kristina, maybe Racing
+Add an event Monaco in Sept 2027 attending Stefano, Simon
+Add an event Genoa in Sept 2027 attending Luca
+Add an event Southampton in Sept 2027 attending Richard + Team
+Add an event La Rochelle in Sept 2027 attending Pascal, Loic
+Add an event FLIBS in October 2027 attending Chris + Team, Kristina
+Add an event Warsaw Poland in October 2027 attending TBC
+Add an event Paris in November 2027 attending Pascal, Loic
+Add an event METS in November 2027 attending FF, Racing, Kristina
+`;
+    const result = parseHubCommands(block, now);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.skipped).toEqual([]);
+    expect(result.commands).toHaveLength(35);
+    const shanghai = result.commands.find(
+      (command) => command.kind === "create_event" && command.title.startsWith("Shanghai")
+    );
+    expect(shanghai?.kind).toBe("create_event");
+    if (shanghai?.kind !== "create_event") return;
+    expect(shanghai.attending).toBe("");
+    expect(shanghai.starts_at).toBe("2027-03-28");
+    expect(shanghai.ends_at).toBe("2027-03-30");
+  });
 });

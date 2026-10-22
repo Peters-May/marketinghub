@@ -6,6 +6,7 @@ export type HubDataArea = "tasks" | "events" | "content";
 export const COMMAND_EXAMPLES = [
   "Add a task to call the organiser, due Friday",
   "Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco",
+  "Add an event Düsseldorf on 23-31 Jan 2027 in Düsseldorf attending Simon, Cass, maybe Racing",
   "Add a LinkedIn post about autumn yacht moves, due next Tuesday",
   "Update task call the organiser status done",
   "Update event Monaco Yacht Show location Port Hercules",
@@ -45,6 +46,11 @@ export type HubCommand = CommandBase &
         kind: "create_event";
         title: string;
         starts_at: string | null;
+        ends_at: string | null;
+        /** confirmed, provisional, or tbc */
+        date_status: string;
+        /** Proposed names, as written. Empty when nobody was named. */
+        attending: string;
         location: string;
         event_type: string;
         notes: string;
@@ -52,8 +58,12 @@ export type HubCommand = CommandBase &
     | {
         kind: "update_event";
         query: string;
+        /** Proposed names, as written. Empty when attendance was not part of the command. */
+        attending: string;
         patch: {
           starts_at?: string | null;
+          ends_at?: string | null;
+          date_status?: string;
           location?: string;
           title?: string;
           notes?: string;
@@ -91,6 +101,8 @@ type Target = "task" | "event" | "content";
 
 type Fields = {
   due?: string;
+  ends?: string;
+  date_status?: "confirmed" | "provisional" | "tbc";
   owner?: string;
   status?: string;
   location?: string;
@@ -99,6 +111,8 @@ type Fields = {
   channel?: string[];
   type?: string;
   title?: string;
+  /** Proposed attendance, kept as written. */
+  attending?: string;
 };
 
 const CHANNELS: Record<string, string> = {
@@ -119,7 +133,7 @@ const TARGET_PATTERN =
   "social media post|social post|to-do|to do|todo|task|event|content|post";
 
 const KEYWORD =
-  "due|deadline|owner|status|location|notes|details|caption|channel|type|title|called|named|on|by|for|in|at|as|to";
+  "due|deadline|owner|status|location|notes|details|caption|channel|type|title|called|named|attending|until|on|by|for|in|at|as|to";
 
 const WEEKDAYS: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
   sunday: 0,
@@ -286,17 +300,119 @@ function dated(
   return value;
 }
 
+function yearForMonth(
+  month: number,
+  yearToken: string | undefined,
+  now: Date
+): number {
+  if (yearToken) return Number(yearToken);
+  const year = now.getFullYear();
+  if (month < now.getMonth()) return year + 1;
+  return year;
+}
+
+function monthBounds(
+  month: number,
+  year: number
+): { start: string; end: string } | null {
+  const start = ymd(year, month, 1);
+  const last = new Date(year, month + 1, 0).getDate();
+  const end = ymd(year, month, last);
+  if (!start || !end) return null;
+  return { start, end };
+}
+
+type TakenWhen = {
+  date: string;
+  end?: string;
+  dateStatus?: "confirmed" | "provisional";
+};
+
+/**
+ * Ranges and month-only phrases. "14-17 Jan", "01-Feb", "April / May", "February".
+ * A single day still goes through parseDatePhrase.
+ */
+function parseWhenPhrase(input: string, now: Date): TakenWhen | null {
+  const text = input
+    .trim()
+    .replace(/[.,;:]+$/g, "")
+    .replace(/^(the|on)\s+/i, "");
+  if (!text) return null;
+
+  const range = text.match(
+    /^(\d{1,2})\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)(?:\s+(\d{4}))?$/i
+  );
+  if (range) {
+    const month = monthIndex(range[3]);
+    if (month == null) return null;
+    const start = dated(Number(range[1]), month, range[4], now);
+    if (!start) return null;
+    const end = ymd(Number(start.slice(0, 4)), month, Number(range[2]));
+    if (!end || end < start) return null;
+    return { date: start, end };
+  }
+
+  const dayMonth = text.match(
+    /^(\d{1,2})\s*[-–—]\s*([a-z]+)(?:\s+(\d{4}))?$/i
+  );
+  if (dayMonth) {
+    const month = monthIndex(dayMonth[2]);
+    if (month == null) return null;
+    const start = dated(Number(dayMonth[1]), month, dayMonth[3], now);
+    if (!start) return null;
+    return { date: start };
+  }
+
+  const span = text.match(
+    /^([a-z]+)\s*(?:\/|to)\s*([a-z]+)(?:\s+(\d{4}))?$/i
+  );
+  if (span) {
+    const startMonth = monthIndex(span[1]);
+    const endMonth = monthIndex(span[2]);
+    if (startMonth == null || endMonth == null) return null;
+    const startYear = yearForMonth(startMonth, span[3], now);
+    const endYear =
+      endMonth < startMonth
+        ? startYear + 1
+        : span[3]
+          ? Number(span[3])
+          : startYear;
+    const start = monthBounds(startMonth, startYear);
+    const end = monthBounds(endMonth, endYear);
+    if (!start || !end) return null;
+    return { date: start.start, end: end.end, dateStatus: "provisional" };
+  }
+
+  const monthOnly = text.match(/^([a-z]+)(?:\s+(\d{4}))?$/i);
+  if (monthOnly) {
+    const month = monthIndex(monthOnly[1]);
+    if (month == null) return null;
+    const bounds = monthBounds(month, yearForMonth(month, monthOnly[2], now));
+    if (!bounds) return null;
+    return {
+      date: bounds.start,
+      end: bounds.end,
+      dateStatus: "provisional",
+    };
+  }
+
+  return null;
+}
+
 function takeDate(
   text: string,
   now: Date
-): { date: string; rest: string } | null {
+): { date: string; end?: string; dateStatus?: "confirmed" | "provisional"; rest: string } | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  const limit = Math.min(5, words.length);
+  const limit = Math.min(6, words.length);
   for (let count = limit; count >= 1; count -= 1) {
     const chunk = words.slice(0, count).join(" ");
-    const date = parseDatePhrase(chunk, now);
-    if (date) {
-      return { date, rest: words.slice(count).join(" ") };
+    const when = parseWhenPhrase(chunk, now) ?? (() => {
+      const date = parseDatePhrase(chunk, now);
+      return date ? { date } : null;
+    })();
+    if (when) {
+      return { ...when, rest: words.slice(count).join(" ") };
     }
   }
   return null;
@@ -425,6 +541,12 @@ function lookAhead(keyword: string, after: string, target: Target, now: Date): L
     return { key: "status" };
   }
   if (key === "location") return rest ? { key: "location" } : { key: null };
+  if (key === "attending") {
+    return target === "event" && rest ? { key: "attending" } : { key: null };
+  }
+  if (key === "until") {
+    return takeDate(rest, now) ? { key: "ends" } : { key: null };
+  }
   if (key === "at" || key === "in") {
     if (/^progress\b/i.test(rest)) return { key: null };
     if (takeDate(rest, now)) return { key: "due" };
@@ -460,11 +582,24 @@ function consumeValue(
   text: string,
   target: Target,
   now: Date
-): { value: string | string[]; rest: string } | { error: string } | null {
-  if (key === "due") {
+):
+  | {
+      value: string | string[];
+      rest: string;
+      end?: string;
+      dateStatus?: "confirmed" | "provisional";
+    }
+  | { error: string }
+  | null {
+  if (key === "due" || key === "ends") {
     const taken = takeDate(text, now);
     if (!taken) return null;
-    return { value: taken.date, rest: taken.rest };
+    return {
+      value: key === "ends" ? taken.end ?? taken.date : taken.date,
+      rest: taken.rest,
+      end: taken.end,
+      dateStatus: taken.dateStatus,
+    };
   }
   if (key === "channel") {
     const taken = takeChannels(text);
@@ -536,6 +671,10 @@ function extractFields(
     if (!consumed) break;
     if ("error" in consumed) return { ok: false, message: consumed.error };
     assignField(fields, look.key, consumed.value);
+    if (look.key === "due") {
+      if (consumed.end) fields.ends = consumed.end;
+      if (consumed.dateStatus) fields.date_status = consumed.dateStatus;
+    }
     rest = consumed.rest;
   }
 
@@ -599,11 +738,23 @@ function taskSummary(
   return `${bits.join(", ")}.`;
 }
 
+function formatSpan(start: string, end?: string) {
+  if (!end || end === start) return formatWhen(start);
+  const [startYear, startMonth, startDay] = start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = end.split("-").map(Number);
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${startDay}–${endDay} ${format(new Date(startYear, startMonth - 1, startDay), "MMM yyyy")}`;
+  }
+  return `${formatWhen(start)}–${formatWhen(end)}`;
+}
+
 function eventSummary(verb: CommandVerb, title: string, fields: Fields): string {
   const bits = [`${verb} event ${quote(title)}`];
-  bits.push(fields.due ? formatWhen(fields.due) : "date still to add");
+  bits.push(fields.due ? formatSpan(fields.due, fields.ends) : "date still to add");
+  if (fields.date_status === "provisional") bits.push("dates provisional");
   if (fields.location) bits.push(fields.location);
   if (fields.type) bits.push(fields.type);
+  if (fields.attending) bits.push(`attending ${fields.attending}`);
   if (fields.notes) bits.push("with notes");
   return `${bits.join(", ")}.`;
 }
@@ -666,6 +817,9 @@ function fromFields(
         kind: "create_event",
         title,
         starts_at: fields.due ?? null,
+        ends_at: fields.ends ?? null,
+        date_status: fields.date_status ?? (fields.due ? "confirmed" : "tbc"),
+        attending: fields.attending ?? "",
         location: fields.location ?? "",
         event_type: fields.type ?? "Event",
         notes: fields.notes ?? "",
@@ -721,6 +875,8 @@ function fromFields(
     fields.status ||
       fields.owner ||
       fields.due ||
+      fields.ends ||
+      fields.attending ||
       fields.location ||
       fields.notes ||
       fields.caption ||
@@ -755,8 +911,11 @@ function fromFields(
       ...baseFor(target, verb),
       kind: "update_event",
       query,
+      attending: fields.attending ?? "",
       patch: {
         ...(fields.due ? { starts_at: fields.due } : {}),
+        ...(fields.ends ? { ends_at: fields.ends } : {}),
+        ...(fields.date_status ? { date_status: fields.date_status } : {}),
         ...(fields.location ? { location: fields.location } : {}),
         ...(fields.title ? { title: fields.title } : {}),
         ...(fields.notes ? { notes: fields.notes } : {}),

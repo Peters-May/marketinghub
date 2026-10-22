@@ -23,7 +23,7 @@ const HUB_COMMAND_FENCE = /:::hub-command\s*\n([\s\S]*?)\n:::/i;
 
 /** Short replies that mean “save the action already proposed”. */
 const RUN_CONFIRMATION =
-  /^(?:(?:yes|yep|yeah|ok|okay)(?:\s+please)?|yes\s+(?:do it|do that|sounds good|go ahead)|do it|do that|sounds good|go ahead|confirm(?:ed)?|please do(?:\s+it)?|proceed|run it|save it|execute(?:\s+it)?)$/i;
+  /^(?:(?:yes|yep|yeah|ok|okay)(?:\s+please)?|yes\s+(?:do it|do that|sounds good|go ahead)|do it|do that|add them|sounds good|go ahead|confirm(?:ed)?(?:\s+to\s+proceed)?|please do(?:\s+it)?|please confirm(?:\s+to\s+proceed)?|proceed|run it|save it|execute(?:\s+it)?)$/i;
 
 export function isAssistantMode(value: unknown): value is AssistantMode {
   return (
