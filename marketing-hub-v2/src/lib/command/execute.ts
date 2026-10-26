@@ -329,7 +329,7 @@ export async function executeHubCommand(
     });
     if (!updated) return { ok: false, message: "That event could not be updated." };
     if (attendance?.people.length) {
-      await upsertEventAttendanceMany(updated.id, attendance.people);
+      await upsertEventAttendanceMany(found.item.id, attendance.people);
     }
     const title = command.patch.title || found.item.title;
     return {
