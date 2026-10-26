@@ -18,6 +18,7 @@ import {
   updateEvent,
   updateTask,
   upsertEventAttendanceMany,
+  markEventsWeAreAttending,
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
 import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
@@ -208,6 +209,20 @@ export async function executeHubCommand(
 ): Promise<ExecuteResult> {
   if (needsAdmin(command.kind) && user.role !== "admin") {
     return { ok: false, message: ADMIN_MESSAGE };
+  }
+
+  if (command.kind === "mark_events_we_are_attending") {
+    const titles = await markEventsWeAreAttending();
+    const message =
+      titles.length === 0
+        ? "We are attending was already checked on every event that has someone attending."
+        : `Checked We are attending on ${titles.length} event${titles.length === 1 ? "" : "s"}.`;
+    return {
+      ok: true,
+      message,
+      href: command.href,
+      area: command.area,
+    };
   }
 
   if (command.kind === "create_task") {

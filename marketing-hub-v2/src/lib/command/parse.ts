@@ -68,7 +68,11 @@ export type HubCommand = CommandBase &
           title?: string;
           notes?: string;
           event_type?: string;
+          pm_attending?: boolean;
         };
+      }
+    | {
+        kind: "mark_events_we_are_attending";
       }
     | {
         kind: "create_content";
@@ -113,6 +117,8 @@ type Fields = {
   title?: string;
   /** Proposed attendance, kept as written. */
   attending?: string;
+  /** Company checkbox, separate from named people. */
+  pm_attending?: boolean;
 };
 
 const CHANNELS: Record<string, string> = {
@@ -652,6 +658,12 @@ function extractFields(
     const look = lookAhead(match[1], after, target, now);
     if ("error" in look) return { ok: false, message: look.error };
     if (look.key) {
+      if (
+        look.key === "attending" &&
+        isCompanyAttendingPhrase(body.slice(0, match.index ?? 0), after)
+      ) {
+        continue;
+      }
       splitAt = match.index ?? 0;
       break;
     }
@@ -699,6 +711,31 @@ function peelTrailingDate(
     if (!date) continue;
     const nextTitle = cleanTitle(words.slice(0, words.length - count).join(" "));
     if (nextTitle) return { title: nextTitle, date };
+  }
+  return null;
+}
+
+function isCompanyAttendingPhrase(before: string, after: string) {
+  const names = after.trim().replace(/^["“”']+|["“”']+$/g, "").trim();
+  return /\bwe\s+are\s*$/i.test(before) && !names;
+}
+
+function peelWeAreAttending(
+  title: string
+): { title: string; pm_attending: boolean } | null {
+  const going = title.match(
+    /^(.*?)(?:\s+to)?\s+["“']?we are attending["”']?$/i
+  );
+  if (going) {
+    const nextTitle = cleanTitle(going[1]);
+    if (nextTitle) return { title: nextTitle, pm_attending: true };
+  }
+  const watching = title.match(
+    /^(.*?)\s+["“']?(?:watching|not attending)["”']?$/i
+  );
+  if (watching) {
+    const nextTitle = cleanTitle(watching[1]);
+    if (nextTitle) return { title: nextTitle, pm_attending: false };
   }
   return null;
 }
@@ -755,6 +792,8 @@ function eventSummary(verb: CommandVerb, title: string, fields: Fields): string 
   if (fields.location) bits.push(fields.location);
   if (fields.type) bits.push(fields.type);
   if (fields.attending) bits.push(`attending ${fields.attending}`);
+  if (fields.pm_attending === true) bits.push("We are attending checked");
+  if (fields.pm_attending === false) bits.push("We are attending unchecked");
   if (fields.notes) bits.push("with notes");
   return `${bits.join(", ")}.`;
 }
@@ -870,6 +909,13 @@ function fromFields(
   if (!query) {
     return fail("Name the record to update. For example: Update task call the organiser status done.");
   }
+  if (target === "event" && fields.pm_attending === undefined) {
+    const company = peelWeAreAttending(query);
+    if (company) {
+      query = company.title;
+      fields.pm_attending = company.pm_attending;
+    }
+  }
 
   const hasChange = Boolean(
     fields.status ||
@@ -877,6 +923,7 @@ function fromFields(
       fields.due ||
       fields.ends ||
       fields.attending ||
+      fields.pm_attending !== undefined ||
       fields.location ||
       fields.notes ||
       fields.caption ||
@@ -920,6 +967,9 @@ function fromFields(
         ...(fields.title ? { title: fields.title } : {}),
         ...(fields.notes ? { notes: fields.notes } : {}),
         ...(fields.type ? { event_type: fields.type } : {}),
+        ...(fields.pm_attending !== undefined
+          ? { pm_attending: fields.pm_attending }
+          : {}),
       },
       summary: eventSummary(verb, fields.title || query, fields),
     };
@@ -988,6 +1038,20 @@ export function parseHubCommand(input: string, now = new Date()): ParseResult {
   }
   if (/^(help|\?|what can (?:you|i) do)$/i.test(text)) {
     return fail("Add or update a task, an event, or a post.");
+  }
+
+  if (
+    /^update\s+events\s+with\s+(?:someone|people|an\s+attendee|attendees)\s+attending(?:\s+we\s+are\s+attending)?$/i.test(
+      text
+    )
+  ) {
+    const command: HubCommand = {
+      ...baseFor("event", "Update"),
+      kind: "mark_events_we_are_attending",
+      summary:
+        "Check We are attending on every event that already has someone attending.",
+    };
+    return { ok: true, command };
   }
 
   const mark = text.match(

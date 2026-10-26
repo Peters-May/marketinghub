@@ -1641,6 +1641,7 @@ export function EventsClient({
         }
         .hub-events-fc .fc-daygrid-event {
           border: none !important;
+          background: transparent !important;
         }
         .hub-events-fc .fc-event-main {
           padding: 0 !important;
@@ -1958,47 +1959,70 @@ export function EventsClient({
                   bg: arg.event.backgroundColor || "#E3E6E9",
                   text: arg.event.textColor || "#1B3A5B",
                 };
+                const typeColor = eventType
+                  ? eventTypeColor(eventType)
+                  : null;
                 const isList = arg.view.type.startsWith("list");
+                const splitBg = typeColor
+                  ? `linear-gradient(90deg, ${color.bg} 50%, ${typeColor.bg} 50%)`
+                  : color.bg;
                 return (
                   <div
                     className={
-                      isList
-                        ? "flex w-full min-w-0 items-center gap-1.5 rounded px-2 py-1.5"
-                        : "flex w-full min-w-0 flex-col gap-0.5 px-1 py-0.5"
+                      typeColor
+                        ? isList
+                          ? "grid w-full min-w-0 grid-cols-2 items-center overflow-hidden rounded"
+                          : "grid w-full min-w-0 grid-cols-2 items-stretch overflow-hidden"
+                        : isList
+                          ? "flex w-full min-w-0 items-center overflow-hidden rounded"
+                          : "flex w-full min-w-0 flex-col overflow-hidden"
                     }
-                    style={
-                      isList
-                        ? {
-                            backgroundColor: color.bg,
-                            color: color.text,
-                          }
-                        : undefined
+                    style={{ background: splitBg }}
+                    title={
+                      eventType
+                        ? `${arg.event.title} · ${normalizeEventTypeLabel(eventType)}`
+                        : arg.event.title
                     }
                   >
-                    <span
-                      className="min-w-0 flex-1 truncate text-[11px] font-semibold leading-tight"
-                      style={{ color: color.text }}
+                    <div
+                      className={
+                        isList
+                          ? "flex min-w-0 items-center gap-1.5 px-2 py-1.5"
+                          : "flex min-w-0 flex-col gap-0.5 px-1 py-0.5"
+                      }
                     >
-                      {arg.event.title}
-                      {eventType ? (
-                        <span className="ml-1 font-medium opacity-80">
-                          {eventType}
-                        </span>
-                      ) : null}
-                    </span>
-                    {showAdminChecks && pmAttending ? (
                       <span
-                        className="shrink-0 text-[10px] font-medium opacity-90"
+                        className="min-w-0 truncate text-[11px] font-semibold leading-tight"
                         style={{ color: color.text }}
                       >
-                        Attending{" "}
-                        {formatAttendanceChecklistCount({
-                          done: checklistDone,
-                          total: checklistTotal,
-                        })}
+                        {arg.event.title}
+                      </span>
+                      {showAdminChecks && pmAttending ? (
+                        <span
+                          className="shrink-0 truncate text-[10px] font-medium opacity-90"
+                          style={{ color: color.text }}
+                        >
+                          Attending{" "}
+                          {formatAttendanceChecklistCount({
+                            done: checklistDone,
+                            total: checklistTotal,
+                          })}
+                        </span>
+                      ) : null}
+                      <AttendeeInitials people={attendees} max={isList ? 5 : 3} />
+                    </div>
+                    {typeColor ? (
+                      <span
+                        className={
+                          isList
+                            ? "min-w-0 truncate px-2 py-1.5 text-[11px] font-medium"
+                            : "min-w-0 self-center truncate px-1 text-[10px] font-medium leading-tight"
+                        }
+                        style={{ color: typeColor.text }}
+                      >
+                        {normalizeEventTypeLabel(eventType)}
                       </span>
                     ) : null}
-                    <AttendeeInitials people={attendees} max={isList ? 5 : 3} />
                   </div>
                 );
               }}

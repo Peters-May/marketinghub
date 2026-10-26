@@ -98,6 +98,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** Company checkbox follows a named attendee. Does not clear the box when people drop off. */
+function checkWeAreAttending(events: EventItem[], eventId: string) {
+  const event = events.find((item) => item.id === eventId);
+  if (!event || event.pm_attending) return;
+  event.pm_attending = true;
+  event.updated_at = nowIso();
+}
+
 /** Backfill Planable sync fields for older hub_store rows. */
 export function withContentPlanableDefaults(
   item: ContentItem
@@ -254,15 +262,18 @@ export async function upsertEventAttendance(input: {
         updated_at: nowIso(),
       };
       s.event_attendance.push(row);
-      return;
+    } else {
+      s.event_attendance[idx] = {
+        ...s.event_attendance[idx],
+        user_name: input.user_name || s.event_attendance[idx].user_name,
+        attendance_status: input.attendance_status,
+        updated_at: nowIso(),
+      };
+      row = s.event_attendance[idx];
     }
-    s.event_attendance[idx] = {
-      ...s.event_attendance[idx],
-      user_name: input.user_name || s.event_attendance[idx].user_name,
-      attendance_status: input.attendance_status,
-      updated_at: nowIso(),
-    };
-    row = s.event_attendance[idx];
+    if (input.attendance_status === "attending") {
+      checkWeAreAttending(s.events, input.event_id);
+    }
   });
   return row;
 }
@@ -298,7 +309,29 @@ export async function upsertEventAttendanceMany(
         updated_at: nowIso(),
       };
     }
+    if (people.some((person) => person.attendance_status === "attending")) {
+      checkWeAreAttending(s.events, eventId);
+    }
   });
+}
+
+/** Check We are attending wherever someone is already marked attending. */
+export async function markEventsWeAreAttending() {
+  const titles: string[] = [];
+  await updateStore((s) => {
+    const going = new Set(
+      s.event_attendance
+        .filter((row) => row.attendance_status === "attending")
+        .map((row) => row.event_id)
+    );
+    for (const event of s.events) {
+      if (!going.has(event.id) || event.pm_attending) continue;
+      event.pm_attending = true;
+      event.updated_at = nowIso();
+      titles.push(event.title);
+    }
+  });
+  return titles;
 }
 
 export async function deleteEventAttendance(eventId: string, userId: string) {

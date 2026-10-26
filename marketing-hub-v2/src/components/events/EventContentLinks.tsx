@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SearchSelect } from "@/components/ui/SearchSelect";
 import type { EventContentLink } from "@/lib/types";
 
 type Named = { id: string; title: string };
@@ -21,7 +22,7 @@ export function EventContentLinks({
   canEdit: boolean;
 }) {
   const [links, setLinks] = useState(initialLinks);
-  const [choice, setChoice] = useState("");
+  const [created, setCreated] = useState<Named[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,20 +33,31 @@ export function EventContentLinks({
       ),
     [links, eventId, contentId]
   );
+  const catalog = useMemo(() => {
+    const base = eventId ? content : events;
+    const seen = new Set(base.map((item) => item.id));
+    return [
+      ...base,
+      ...created.filter((item) => !seen.has(item.id)),
+    ];
+  }, [eventId, content, events, created]);
   const linkedIds = new Set(
     mine.map((link) => (eventId ? link.content_id : link.event_id))
   );
-  const options = (eventId ? content : events).filter(
-    (item) => !linkedIds.has(item.id)
-  );
+  const options = catalog
+    .filter((item) => !linkedIds.has(item.id))
+    .map((item) => ({
+      value: item.id,
+      label: item.title || "Untitled",
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
   const titleFor = (link: EventContentLink) => {
     const id = eventId ? link.content_id : link.event_id;
-    const list = eventId ? content : events;
-    return list.find((item) => item.id === id)?.title || "Linked record";
+    return catalog.find((item) => item.id === id)?.title || "Linked record";
   };
 
-  async function addLink() {
-    if (!choice || saving) return;
+  async function addLink(id: string) {
+    if (!id || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -53,8 +65,8 @@ export function EventContentLinks({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          event_id: eventId ?? choice,
-          content_id: contentId ?? choice,
+          event_id: eventId ?? id,
+          content_id: contentId ?? id,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -63,7 +75,53 @@ export function EventContentLinks({
         return;
       }
       if (data.link) setLinks((prev) => [...prev, data.link as EventContentLink]);
-      setChoice("");
+    } catch {
+      setError("Could not link");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createAndLink(title: string) {
+    const name = title.trim();
+    if (!name || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const createdItem = eventId
+        ? await createContentPiece(name)
+        : await createEvent(name);
+      setCreated((prev) =>
+        prev.some((item) => item.id === createdItem.id)
+          ? prev
+          : [...prev, createdItem]
+      );
+      const res = await fetch("/api/events/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: eventId ?? createdItem.id,
+          content_id: contentId ?? createdItem.id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data.error === "string" ? data.error : "Could not link";
+        setError(message);
+        throw new Error(message);
+      }
+      if (data.link) setLinks((prev) => [...prev, data.link as EventContentLink]);
+    } catch (err) {
+      if (err instanceof Error && err.message) {
+        setError(err.message);
+        throw err;
+      }
+      const message = eventId
+        ? "Could not add the content piece"
+        : "Could not add the event";
+      setError(message);
+      throw new Error(message);
     } finally {
       setSaving(false);
     }
@@ -87,6 +145,8 @@ export function EventContentLinks({
       setSaving(false);
     }
   }
+
+  const noun = eventId ? "content piece" : "event";
 
   return (
     <div className="border-t border-border pt-3">
@@ -113,32 +173,63 @@ export function EventContentLinks({
         </ul>
       )}
       {canEdit ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <select
-            className="field min-w-0 flex-1"
-            value={choice}
-            onChange={(e) => setChoice(e.target.value)}
-          >
-            <option value="">
-              {eventId ? "Add a content piece…" : "Add an event…"}
-            </option>
-            {options.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title || "Untitled"}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={!choice || saving}
-            onClick={() => void addLink()}
-          >
-            Link
-          </button>
+        <div className="mt-2">
+          <SearchSelect
+            value=""
+            disabled={saving}
+            aria-label={eventId ? "Add a content piece" : "Add an event"}
+            placeholder={saving ? "Linking…" : `Add a ${noun}…`}
+            searchPlaceholder={`Search or add a ${noun}…`}
+            noResultsLabel={`No matches — add a new ${noun}`}
+            options={options}
+            allowCreate
+            createLabel={(query) => `Add “${query}” as a new ${noun}`}
+            onCreate={(query) => createAndLink(query)}
+            onChange={(id) => {
+              if (!id) return;
+              void addLink(id);
+            }}
+          />
         </div>
       ) : null}
       {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
     </div>
   );
+}
+
+async function createContentPiece(title: string): Promise<Named> {
+  const res = await fetch("/api/content", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title,
+      content_type: "Editorial",
+      channel: ["Editorial"],
+      status: "idea",
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  const item = data.item as { id?: string; title?: string } | undefined;
+  if (!res.ok || !item?.id) {
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Could not add the content piece"
+    );
+  }
+  return { id: item.id, title: item.title || title };
+}
+
+async function createEvent(title: string): Promise<Named> {
+  const res = await fetch("/api/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, event_type: "Event" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  const event = data.event as { id?: string; title?: string } | undefined;
+  if (!res.ok || !event?.id) {
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Could not add the event"
+    );
+  }
+  return { id: event.id, title: event.title || title };
 }

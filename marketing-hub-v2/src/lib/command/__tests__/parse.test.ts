@@ -229,6 +229,23 @@ describe("parseHubCommand", () => {
     expect(parsed.attending).toBe("Stefano, Simon");
   });
 
+  it("checks We are attending without treating it as a person's name", () => {
+    const quoted = command(
+      'Update event Valencia Boat Show to "we are attending"'
+    );
+    expect(quoted.kind).toBe("update_event");
+    if (quoted.kind !== "update_event") return;
+    expect(quoted.query).toBe("Valencia Boat Show");
+    expect(quoted.patch.pm_attending).toBe(true);
+    expect(quoted.attending).toBe("");
+
+    const bulk = command(
+      "Update events with someone attending we are attending"
+    );
+    expect(bulk.kind).toBe("mark_events_we_are_attending");
+    expect(bulk.summary).toContain("We are attending");
+  });
+
   it("reads a full proposed attendance list", () => {
     const block = `
 Add an event Thailand Phuket on 14-17 Jan 2027 in Phuket attending Charles

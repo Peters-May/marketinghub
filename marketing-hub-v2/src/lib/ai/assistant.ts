@@ -49,6 +49,10 @@ Each line must match hub natural-language commands, for example:
 Write one Add an event line per show. Include the year on every date. Use the Today line: if the list runs from January through November and today is already past October, that cycle is the following year. Do not change an earlier year's show that has different dates.
 Use on 14-17 Jan 2027 for a range in one month, on 01-Feb 2027 for a single day, in February 2027 when only the month is known, and in April / May 2027 when the show spans two months.
 Put proposed people after attending, separated by commas. Keep maybe, + Team, and TBC as written. If nobody is named, omit attending.
+To check the company box on one show, write: Update event Valencia Boat Show we are attending
+To check that box on every event that already has someone attending, in 2026 and 2027, write exactly one line: Update events with someone attending we are attending
+Do not write to "we are attending", and do not update only the first few shows from the snapshot.
+The sample lines above are wording examples. They are not live events. The hub catalogue in this chat lists every event, task, and post. Use that catalogue when comparing or reviewing. Match an update to the exact title in the catalogue. Do not say a listed record is missing.
 
 Do not invent commands for emails, budgets, or media.
 If the user asks to update budget, media, or anything outside tasks/events/content, explain that clearly and do not invent a hub-command block.
@@ -136,7 +140,7 @@ export async function generateAssistantChat(input: {
       HUB_ASSISTANT_SYSTEM,
       `Today is ${today}.`,
       snapshot
-        ? `${snapshot}\n\nUse this snapshot when the admin asks what is outstanding. It is only a short list, so a full attendance plan should still be added as new events. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
+        ? `${snapshot}\n\nThis catalogue is the live hub data for events, tasks, posts, partners, budget lines, and resources. Use it to extract, compare, and choose the exact record to edit. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
         : "",
     ]
       .filter(Boolean)
