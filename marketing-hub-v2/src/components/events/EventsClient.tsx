@@ -1,8 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  format,
+  parseISO,
+} from "date-fns";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -75,6 +80,15 @@ import {
   type EventAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
 import { readPlannerFields } from "@/lib/events/planner";
+import { cn } from "@/lib/utils";
+
+const EVENT_VIEWS = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "calendar", label: "Calendar" },
+  { id: "list", label: "List" },
+] as const;
+
+type EventViewMode = (typeof EVENT_VIEWS)[number]["id"];
 
 const ATTENDANCE_OPTIONS: { value: EventAttendanceStatus; label: string }[] = [
   { value: "attending", label: "Attending" },
@@ -148,9 +162,14 @@ function todayDateKey(): string {
   return format(new Date(), "yyyy-MM-dd");
 }
 
-/** Default list filter: from today with no upper bound. */
+/** Default window ends three months from today, inclusive. */
+function defaultToDateKey(): string {
+  return format(addMonths(new Date(), 3), "yyyy-MM-dd");
+}
+
+/** Default list filter: today through the next three months. */
 function isDefaultUpcomingDateRange(from: string, to: string): boolean {
-  return from === todayDateKey() && !to;
+  return from === todayDateKey() && to === defaultToDateKey();
 }
 
 function matchesNonDateFilters(
@@ -954,6 +973,180 @@ function EventAttendeeManager({
   );
 }
 
+function EventDashboard({
+  upcoming,
+  attending,
+  undated,
+  prepOpen,
+  nextEvents,
+  prep,
+  showPrep,
+  selectedId,
+  onSelect,
+  onOpenCalendar,
+  onOpenList,
+}: {
+  upcoming: number;
+  attending: number;
+  undated: number;
+  prepOpen: number;
+  nextEvents: EventItem[];
+  prep: { event: EventItem; progress: { done: number; total: number } }[];
+  showPrep: boolean;
+  selectedId: string | null;
+  onSelect: (event: EventItem) => void;
+  onOpenCalendar: () => void;
+  onOpenList: () => void;
+}) {
+  const stats: {
+    label: string;
+    value: number;
+    hint: string;
+    onClick: () => void;
+  }[] = [
+    {
+      label: "Upcoming",
+      value: upcoming,
+      hint: "Dated events in this filter",
+      onClick: onOpenCalendar,
+    },
+    {
+      label: "Attending",
+      value: attending,
+      hint: "Peters & May is going",
+      onClick: onOpenList,
+    },
+    {
+      label: "Needs a date",
+      value: undated,
+      hint: "Not on the calendar",
+      onClick: onOpenList,
+    },
+  ];
+  if (showPrep) {
+    stats.push({
+      label: "Prep open",
+      value: prepOpen,
+      hint: "Checklist still to finish",
+      onClick: onOpenList,
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div
+        className={cn(
+          "grid gap-3",
+          showPrep ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"
+        )}
+      >
+        {stats.map((stat) => (
+          <button
+            key={stat.label}
+            type="button"
+            className="rounded-lg border border-border bg-white px-3 py-3 text-left hover:bg-sand"
+            onClick={stat.onClick}
+          >
+            <p className="text-xs text-muted">{stat.label}</p>
+            <p className="mt-1 font-display text-2xl text-brand">{stat.value}</p>
+            <p className="mt-1 text-xs text-muted">{stat.hint}</p>
+          </button>
+        ))}
+      </div>
+
+      <section>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-brand">Next events</h3>
+          <button
+            type="button"
+            className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+            onClick={onOpenCalendar}
+          >
+            Open calendar
+          </button>
+        </div>
+        <ul className="divide-y divide-border">
+          {nextEvents.map((event) => (
+            <li key={event.id}>
+              <button
+                type="button"
+                className={cn(
+                  "flex w-full items-start justify-between gap-3 py-3 text-left hover:bg-sand",
+                  selectedId === event.id && "bg-accent-soft/50"
+                )}
+                onClick={() => onSelect(event)}
+              >
+                <span>
+                  <span className="flex flex-wrap items-center gap-2 font-medium">
+                    <span>{event.title}</span>
+                    {showPrep ? <AttendingBadge event={event} /> : null}
+                  </span>
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <TypeSwatch eventType={event.event_type} />
+                    {event.division ? (
+                      <DivisionSwatch division={event.division} />
+                    ) : null}
+                    {event.location ? <span>{event.location}</span> : null}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted">
+                  {event.starts_at
+                    ? format(new Date(event.starts_at), "d MMM yyyy")
+                    : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+          {nextEvents.length === 0 ? (
+            <li className="py-6 text-sm text-muted">
+              No upcoming events match these filters.
+            </li>
+          ) : null}
+        </ul>
+      </section>
+
+      {showPrep ? (
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-brand">Prep still open</h3>
+            <button
+              type="button"
+              className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+              onClick={onOpenList}
+            >
+              Open list
+            </button>
+          </div>
+          <ul className="divide-y divide-border">
+            {prep.map(({ event, progress }) => (
+              <li key={event.id}>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-sand",
+                    selectedId === event.id && "bg-accent-soft/50"
+                  )}
+                  onClick={() => onSelect(event)}
+                >
+                  <span className="font-medium">{event.title}</span>
+                  <span className="shrink-0 text-xs text-muted">
+                    {formatAttendanceChecklistCount(progress)}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {prep.length === 0 ? (
+              <li className="py-6 text-sm text-muted">
+                No open prep in this filter.
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function EventsClient({
   initialOpenId = null,
   initialEvents,
@@ -1017,13 +1210,13 @@ export function EventsClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EventForm | null>(null);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
+  const [viewMode, setViewMode] = useState<EventViewMode>("dashboard");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [divisionFilter, setDivisionFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState(() => todayDateKey());
-  const [dateTo, setDateTo] = useState("");
+  const [dateTo, setDateTo] = useState(() => defaultToDateKey());
   const [allAttendance, setAllAttendance] =
     useState<EventAttendance[]>(initialAttendance);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
@@ -1314,7 +1507,10 @@ export function EventsClient({
     dateTo,
   ]);
 
-  /** Calendar keeps historic events so past months stay populated. */
+  /**
+   * On the default window, the calendar still shows past months.
+   * Events after the end date stay hidden until the range is widened.
+   */
   const calendarFiltered = useMemo(() => {
     return events.filter((e) => {
       if (
@@ -1329,13 +1525,10 @@ export function EventsClient({
       ) {
         return false;
       }
-      if (
-        !isDefaultUpcomingDateRange(dateFrom, dateTo) &&
-        !matchesDateRange(e, dateFrom, dateTo)
-      ) {
-        return false;
+      if (isDefaultUpcomingDateRange(dateFrom, dateTo)) {
+        return matchesDateRange(e, "", dateTo);
       }
-      return true;
+      return matchesDateRange(e, dateFrom, dateTo);
     });
   }, [
     events,
@@ -1422,6 +1615,36 @@ export function EventsClient({
       }),
     [calendarDated, attendingByEventId, allAttendance]
   );
+
+  const dashboard = useMemo(() => {
+    const attending = filtered.filter((event) => event.pm_attending);
+    const byStart = (a: EventItem, b: EventItem) => {
+      const at = a.starts_at
+        ? new Date(a.starts_at).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      const bt = b.starts_at
+        ? new Date(b.starts_at).getTime()
+        : Number.MAX_SAFE_INTEGER;
+      return at - bt;
+    };
+    const prep = attending
+      .map((event) => ({
+        event,
+        progress: attendanceChecklistProgress(event),
+      }))
+      .filter(
+        ({ progress }) => progress.total > 0 && progress.done < progress.total
+      )
+      .sort((a, b) => byStart(a.event, b.event));
+    return {
+      upcoming: dated.length,
+      attending: attending.length,
+      undated: undated.length,
+      prepOpen: prep.length,
+      prep: prep.slice(0, 6),
+      next: [...dated].sort(byStart).slice(0, 6),
+    };
+  }, [filtered, dated, undated]);
 
   const typeLegend = useMemo(() => {
     const fromData = new Set(
@@ -1661,12 +1884,9 @@ export function EventsClient({
       `}</style>
       <PageHeader
         title="Events"
-        description="Add and edit shows and meetings. Mark whether you're attending, and add who else is going."
+        description="Start on the dashboard, then open the calendar or list. Mark whether you're attending, and add who else is going."
         actions={
           <>
-            <Link href="/app/events/requests" className="btn-secondary">
-              Attendance requests
-            </Link>
             <div className="relative">
               <button
                 type="button"
@@ -1719,16 +1939,6 @@ export function EventsClient({
             </div>
             <button
               type="button"
-              className="btn-secondary"
-              data-tour="events-view-toggle"
-              onClick={() =>
-                setViewMode(viewMode === "calendar" ? "list" : "calendar")
-              }
-            >
-              {viewMode === "calendar" ? "List view" : "Calendar view"}
-            </button>
-            <button
-              type="button"
               className="btn-primary"
               data-tour="events-add"
               onClick={() => setShowForm(true)}
@@ -1738,6 +1948,31 @@ export function EventsClient({
           </>
         }
       />
+
+      <div
+        className="mb-5 inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white p-1"
+        role="tablist"
+        aria-label="Event views"
+        data-tour="events-view-toggle"
+      >
+        {EVENT_VIEWS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === tab.id}
+            className={cn(
+              "rounded-xl px-3.5 py-2 text-sm font-medium transition",
+              viewMode === tab.id
+                ? "bg-brand text-white shadow-sm"
+                : "text-muted hover:bg-sand hover:text-foreground"
+            )}
+            onClick={() => setViewMode(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {syncNotice ? (
         <p
@@ -1760,7 +1995,7 @@ export function EventsClient({
           onFromChange: setDateFrom,
           onToChange: setDateTo,
           clearFrom: todayDateKey(),
-          clearTo: "",
+          clearTo: defaultToDateKey(),
         }}
         selects={[
           {
@@ -1799,6 +2034,8 @@ export function EventsClient({
         ]}
       />
 
+      {viewMode !== "dashboard" ? (
+      <>
       <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted">
         <span className="font-medium text-foreground">Participation</span>
         {(
@@ -1858,6 +2095,8 @@ export function EventsClient({
           </button>
         </div>
       </div>
+      </>
+      ) : null}
 
       {showForm ? (
         <div className="surface-card mb-6 p-5">
@@ -1892,7 +2131,21 @@ export function EventsClient({
           className="hub-events-fc surface-card p-4"
           data-tour="events-calendar"
         >
-          {viewMode === "calendar" ? (
+          {viewMode === "dashboard" ? (
+            <EventDashboard
+              upcoming={dashboard.upcoming}
+              attending={dashboard.attending}
+              undated={dashboard.undated}
+              prepOpen={dashboard.prepOpen}
+              nextEvents={dashboard.next}
+              prep={dashboard.prep}
+              showPrep={showAttendanceOps}
+              selectedId={selected?.id ?? null}
+              onSelect={setSelected}
+              onOpenCalendar={() => setViewMode("calendar")}
+              onOpenList={() => setViewMode("list")}
+            />
+          ) : viewMode === "calendar" ? (
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"
@@ -1989,7 +2242,12 @@ export function EventsClient({
                           ? "flex w-full min-w-0 items-center overflow-hidden rounded"
                           : "flex w-full min-w-0 flex-col overflow-hidden"
                     }
-                    style={{ background: splitBg }}
+                    style={{
+                      background: splitBg,
+                      borderBottom: typeColor
+                        ? `3px solid ${color.bg}`
+                        : undefined,
+                    }}
                     title={
                       eventType
                         ? `${arg.event.title} · ${normalizeEventTypeLabel(eventType)}`
@@ -2334,7 +2592,7 @@ export function EventsClient({
               </div>
             ) : (
               <p className="text-sm text-muted">
-                Select an event on the calendar or from the list below to see
+                Select an event on the dashboard, calendar, or list to see
                 details.
               </p>
             )}

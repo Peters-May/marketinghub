@@ -54,7 +54,7 @@ const EVENTS_DEEP: TourStep[] = [
     id: "events-calendar",
     selector: '[data-tour="events-calendar"]',
     title: "Browse events",
-    body: "Switch between calendar and list. Click any event to open its details on the right.",
+    body: "The dashboard opens first. Use the Calendar and List tabs, then click an event to open its details on the right.",
     href: "/app/events",
     placement: "left",
     prepare: [{ type: "events-list-view" }],
