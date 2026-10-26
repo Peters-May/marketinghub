@@ -9,6 +9,7 @@ import {
   suggestPlannerSlug,
   type PlannerFields,
 } from "@/lib/events/planner";
+import { isPressRelease } from "@/lib/pr/pipeline";
 import { uid } from "@/lib/utils";
 import { normalizeEmailDesign } from "@/lib/email/design";
 import { normalizeTopicOptOuts, topicForAudienceName } from "@/lib/email/preferences";
@@ -124,6 +125,9 @@ export function withContentPlanableDefaults(
     pin_homepage: item.pin_homepage === true,
     in_slider: item.in_slider === true,
     newsroom_name: item.newsroom_name,
+    pr_location: item.pr_location ?? "",
+    pr_boilerplate: item.pr_boilerplate ?? "",
+    pr_contact: item.pr_contact ?? "",
   };
 }
 
@@ -522,6 +526,93 @@ export async function setNewsroomPlacement(
       id,
       updated_at: nowIso(),
     });
+    s.content[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function savePressRelease(input: {
+  id?: string;
+  title: string;
+  caption: string;
+  notes: string;
+  due_date: string | null;
+  asset_url: string;
+  pr_location: string;
+  pr_boilerplate: string;
+  pr_contact: string;
+  status: "draft" | "published";
+  owner: string;
+  newsroom_title: string;
+}): Promise<ContentItem | null> {
+  const stamp = nowIso();
+  if (!input.id) {
+    const item: ContentItem = {
+      id: uid("cnt"),
+      title: input.title,
+      channel: ["PR"],
+      content_type: "PR",
+      owner: input.owner,
+      due_date: input.due_date,
+      deadline_date: null,
+      status: input.status,
+      category: "press release",
+      priority: "",
+      website: "",
+      caption: input.caption,
+      theme_id: null,
+      planable_url: "",
+      planable_post_id: "",
+      planable_group_id: "",
+      planable_page_ids: [],
+      last_synced_at: null,
+      sync_source: "",
+      asset_url: input.asset_url,
+      notes: input.notes,
+      pin_homepage: false,
+      in_slider: false,
+      newsroom_name:
+        input.status === "published" ? input.newsroom_title || undefined : undefined,
+      pr_location: input.pr_location,
+      pr_boilerplate: input.pr_boilerplate,
+      pr_contact: input.pr_contact,
+      created_at: stamp,
+      updated_at: stamp,
+    };
+    await updateStore((s) => {
+      s.content.push(item);
+    });
+    return item;
+  }
+
+  let updated: ContentItem | null = null;
+  await updateStore((s) => {
+    const idx = s.content.findIndex((c) => c.id === input.id);
+    if (idx === -1) return;
+    const existing = withContentPlanableDefaults(s.content[idx]);
+    if (!isPressRelease(existing)) return;
+    const newsroomName =
+      input.status === "published" && !existing.newsroom_name
+        ? input.newsroom_title || undefined
+        : existing.newsroom_name;
+    const next: ContentItem = {
+      ...existing,
+      title: input.title,
+      caption: input.caption,
+      notes: input.notes,
+      due_date: input.due_date,
+      asset_url: input.asset_url,
+      pr_location: input.pr_location,
+      pr_boilerplate: input.pr_boilerplate,
+      pr_contact: input.pr_contact,
+      status: input.status,
+      newsroom_name: newsroomName,
+      category: existing.category || "press release",
+      content_type: existing.content_type || "PR",
+      channel: existing.channel.length > 0 ? existing.channel : ["PR"],
+      updated_at: stamp,
+    };
     s.content[idx] = next;
     updated = next;
   });
@@ -2816,6 +2907,11 @@ export async function listPublishedPressReleases() {
       const db = b.due_date || b.updated_at;
       return new Date(db).getTime() - new Date(da).getTime();
     });
+}
+
+export async function getPublishedPressRelease(id: string) {
+  const rows = await listPublishedPressReleases();
+  return rows.find((row) => row.id === id) ?? null;
 }
 
 export async function getEmailSettings(): Promise<EmailSettings> {

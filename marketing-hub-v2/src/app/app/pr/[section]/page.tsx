@@ -36,7 +36,7 @@ export default async function PrSectionPage({
   searchParams,
 }: {
   params: Promise<{ section: string }>;
-  searchParams: Promise<{ content_id?: string }>;
+  searchParams: Promise<{ content_id?: string; new?: string }>;
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
@@ -87,6 +87,7 @@ export default async function PrSectionPage({
       newsApiConfigured={Boolean(process.env.NEWS_API_KEY?.trim())}
       initialSection={section}
       prefillContentId={prefillContentId}
+      openNewRelease={section === "releases" && qs.new === "1"}
     />
   );
 }

@@ -44,10 +44,10 @@ const CARDS: Card[] = [
     status: "live",
   },
   {
-    href: "/app/pr/releases",
+    href: "/app/pr/releases?new=1",
     title: "Press release creator",
     description:
-      "Share something newsworthy about your brand and get the media attention you deserve.",
+      "Write a release in the editor, then publish it to the newsroom.",
     cta: "Create press release",
     icon: FileText,
     status: "live",
@@ -134,7 +134,7 @@ export function PrHome({
               Open public newsroom
             </Link>
             <Link
-              href="/app/pr/releases"
+              href="/app/pr/releases?new=1"
               className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm text-white"
             >
               <Megaphone className="h-4 w-4" />

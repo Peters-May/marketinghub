@@ -70,14 +70,26 @@ type DraftResult =
       openQuestions: string[];
     };
 
+type PreviewAction = {
+  summary: string;
+  line: string;
+  kind: string;
+  checked: boolean;
+};
+
 type CommandPreview = {
   summary: string;
-  verb: "Add" | "Update";
+  verb: "Add" | "Update" | "Link";
   href: string;
   text: string;
   items: string[];
+  actions: PreviewAction[];
   skipped: string[];
 };
+
+function isLinkPreview(preview: CommandPreview | null) {
+  return Boolean(preview?.actions.some((action) => action.kind === "link_content"));
+}
 
 const MODE_OPTIONS: { id: AssistantMode; label: string }[] = [
   { id: "chat", label: "Chat" },
@@ -231,12 +243,31 @@ export function AiAssistantPanel({
         return;
       }
       if (data.preview) {
+        const rawActions = Array.isArray(data.preview.actions)
+          ? data.preview.actions
+          : [];
+        const actions: PreviewAction[] = rawActions.flatMap((action: unknown) => {
+          if (!action || typeof action !== "object") return [];
+          const row = action as { summary?: unknown; line?: unknown; kind?: unknown };
+          const summary = typeof row.summary === "string" ? row.summary : "";
+          const line = typeof row.line === "string" ? row.line : summary;
+          if (!summary || !line) return [];
+          return [
+            {
+              summary,
+              line,
+              kind: typeof row.kind === "string" ? row.kind : "",
+              checked: true,
+            },
+          ];
+        });
         setCommandPreview({
           summary: data.preview.summary,
           verb: data.preview.verb,
           href: data.preview.href,
           text,
           items: Array.isArray(data.preview.items) ? data.preview.items : [],
+          actions,
           skipped: Array.isArray(data.preview.skipped)
             ? data.preview.skipped
             : [],
@@ -249,10 +280,30 @@ export function AiAssistantPanel({
     }
   }
 
+  function commandTextToSave(text?: string | null) {
+    const preview = commandPreview;
+    const original = (text ?? pendingCommand ?? preview?.text)?.trim() ?? "";
+    if (!preview || !isLinkPreview(preview)) return original;
+    const sameProposal =
+      !text || text === preview.text || text === pendingCommand;
+    if (!sameProposal) return original;
+    const lines = preview.actions
+      .filter((action) => action.kind !== "link_content" || action.checked)
+      .map((action) => action.line);
+    if (!lines.length) return "";
+    return lines.join("\n");
+  }
+
   async function confirmCommand(text?: string | null) {
     if (readOnly) return;
-    const commandText = (text ?? pendingCommand ?? commandPreview?.text)?.trim();
-    if (!commandText || confirmingRef.current) return;
+    const commandText = commandTextToSave(text);
+    if (!commandText) {
+      if (isLinkPreview(commandPreview)) {
+        setCommandNotice({ message: "Tick at least one post to link." });
+      }
+      return;
+    }
+    if (confirmingRef.current) return;
     confirmingRef.current = true;
     setBusy(true);
     setCommandNotice(null);
@@ -661,7 +712,7 @@ export function AiAssistantPanel({
             <p className="text-xs text-muted">
               {readOnly
                 ? "Ask about enquiry statistics, the library, events, or scheduled and published content. This assistant cannot save records."
-                : "Upload a brief or asset, then ask for a draft, a rewrite, or to add a task, event, or social post. Nothing is saved until you confirm."}
+                : "Upload a brief or asset, then ask for a draft, a rewrite, or to add a task, event, or social post. You can also ask to link existing posts to an event. Nothing is saved until you confirm."}
             </p>
           ) : null}
           {messages.map((msg) => (
@@ -680,7 +731,15 @@ export function AiAssistantPanel({
                   <button
                     type="button"
                     className="btn-primary px-2.5 py-1 text-[11px] disabled:opacity-50"
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      (isLinkPreview(commandPreview) &&
+                        (msg.commandText === commandPreview?.text ||
+                          msg.commandText === pendingCommand) &&
+                        !commandPreview?.actions.some(
+                          (action) => action.kind === "link_content" && action.checked
+                        ))
+                    }
                     onClick={() => void confirmCommand(msg.commandText)}
                   >
                     Confirm
@@ -697,7 +756,82 @@ export function AiAssistantPanel({
             {commandPreview && !readOnly ? (
               <div className="mb-3 rounded-xl border border-brand/20 bg-accent-soft/40 px-3 py-2.5 text-xs">
                 <p className="font-medium text-brand">{commandPreview.summary}</p>
-                {commandPreview.items.length > 1 ? (
+                {isLinkPreview(commandPreview) ? (
+                  <div className="mt-2">
+                    <p className="text-muted">Tick the posts to link. Nothing is saved until you confirm.</p>
+                    <div className="mt-1.5 flex gap-2">
+                        <button
+                          type="button"
+                          className="btn-ghost px-1.5 py-0.5 text-[11px]"
+                          onClick={() =>
+                            setCommandPreview((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    actions: current.actions.map((action) =>
+                                      action.kind === "link_content"
+                                        ? { ...action, checked: true }
+                                        : action
+                                    ),
+                                  }
+                                : current
+                            )
+                          }
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-ghost px-1.5 py-0.5 text-[11px]"
+                          onClick={() =>
+                            setCommandPreview((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    actions: current.actions.map((action) =>
+                                      action.kind === "link_content"
+                                        ? { ...action, checked: false }
+                                        : action
+                                    ),
+                                  }
+                                : current
+                            )
+                          }
+                        >
+                          Remove all
+                        </button>
+                      </div>
+                    <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto">
+                      {commandPreview.actions.map((action, index) =>
+                        action.kind === "link_content" ? (
+                          <li key={`${index}-${action.line}`}>
+                            <label className="flex cursor-pointer items-start gap-2 text-foreground">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 rounded border-border"
+                                checked={action.checked}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setCommandPreview((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          actions: current.actions.map((row, rowIndex) =>
+                                            rowIndex === index ? { ...row, checked } : row
+                                          ),
+                                        }
+                                      : current
+                                  );
+                                }}
+                              />
+                              <span>{action.summary}</span>
+                            </label>
+                          </li>
+                        ) : null
+                      )}
+                    </ul>
+                  </div>
+                ) : commandPreview.items.length > 1 ? (
                   <ul className="mt-1 max-h-28 list-disc space-y-0.5 overflow-y-auto pl-4 text-muted">
                     {commandPreview.items.map((item, index) => (
                       <li key={`${index}-${item}`}>{item}</li>
@@ -714,7 +848,13 @@ export function AiAssistantPanel({
                   <button
                     type="button"
                     className="btn-primary px-2.5 py-1 text-xs disabled:opacity-50"
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      (isLinkPreview(commandPreview) &&
+                        !commandPreview.actions.some(
+                          (action) => action.kind === "link_content" && action.checked
+                        ))
+                    }
                     onClick={() => void confirmCommand()}
                   >
                     Confirm

@@ -87,7 +87,9 @@ export default async function NewsroomPage() {
                 News
               </span>
               <h2 className="mt-3 font-display text-2xl leading-tight md:text-3xl">
-                {featured.title}
+                <Link href={`/newsroom/${featured.id}`} className="hover:underline">
+                  {featured.title}
+                </Link>
               </h2>
               {featured.caption ? (
                 <p className="mt-3 text-sm leading-relaxed text-brand/80">
@@ -115,7 +117,11 @@ export default async function NewsroomPage() {
                   key={r.id}
                   className="min-w-[16rem] max-w-xs flex-1 rounded-xl border border-brand/10 p-4"
                 >
-                  <h3 className="font-display text-lg leading-snug">{r.title}</h3>
+                  <h3 className="font-display text-lg leading-snug">
+                    <Link href={`/newsroom/${r.id}`} className="hover:underline">
+                      {r.title}
+                    </Link>
+                  </h3>
                   <p className="mt-2 text-xs text-muted">
                     {(r.due_date || r.updated_at || "").slice(0, 10)}
                   </p>
@@ -143,7 +149,12 @@ export default async function NewsroomPage() {
                     style={{ background: accent }}
                   >
                     <h3 className="font-display text-lg leading-snug">
-                      {r.title}
+                      <Link
+                        href={`/newsroom/${r.id}`}
+                        className="text-white hover:underline"
+                      >
+                        {r.title}
+                      </Link>
                     </h3>
                   </div>
                   <div className="p-4 text-sm text-muted">

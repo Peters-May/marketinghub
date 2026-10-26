@@ -11,7 +11,9 @@ import {
   createEvent,
   createTask,
   listContacts,
+  linkEventContent,
   listContent,
+  listEventContentLinks,
   listEvents,
   listTasks,
   updateContent,
@@ -49,6 +51,7 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "update_task" ||
     kind === "create_content" ||
     kind === "update_content" ||
+    kind === "link_content" ||
     kind === "mark_events_we_are_attending"
   );
 }
@@ -186,7 +189,9 @@ export async function executeHubCommands(
       continue;
     }
     saved.push(result.message);
-    if (!areas.includes(result.area)) areas.push(result.area);
+    for (const area of result.areas ?? [result.area]) {
+      if (!areas.includes(area)) areas.push(area);
+    }
     href = result.href;
   }
   if (!saved.length) {
@@ -195,9 +200,12 @@ export async function executeHubCommands(
   const failNote = failed.length
     ? ` ${failed.length} could not be saved.`
     : "";
+  const linksOnly = commands.every((command) => command.kind === "link_content");
   return {
     ok: true,
-    message: `Saved ${saved.length} records.${failNote}`,
+    message: linksOnly
+      ? `Linked ${saved.length} post${saved.length === 1 ? "" : "s"}.${failNote}`
+      : `Saved ${saved.length} records.${failNote}`,
     href,
     area: areas[0],
     areas,
@@ -337,6 +345,49 @@ export async function executeHubCommand(
       message: `Updated event “${title}”${attendance ? attendanceSavedNote(attendance) : ""}.`,
       href: command.href,
       area: command.area,
+    };
+  }
+
+  if (command.kind === "link_content") {
+    const [events, posts, links] = await Promise.all([
+      listEvents(),
+      listContent(),
+      listEventContentLinks(),
+    ]);
+    const event = matchByTitle(events, command.event_query);
+    if (event.kind === "none") {
+      return { ok: false, message: `No event matches “${command.event_query}”.` };
+    }
+    if (event.kind === "many") {
+      return {
+        ok: false,
+        message: `Several events match “${command.event_query}”: ${describeMatches(event.items)}. Use the full title.`,
+      };
+    }
+    const post = matchByTitle(posts, command.content_query);
+    if (post.kind === "none") {
+      return { ok: false, message: `No post matches “${command.content_query}”.` };
+    }
+    if (post.kind === "many") {
+      return {
+        ok: false,
+        message: `Several posts match “${command.content_query}”: ${describeMatches(post.items)}. Use the full title.`,
+      };
+    }
+    const already = links.some(
+      (link) => link.event_id === event.item.id && link.content_id === post.item.id
+    );
+    if (!already) {
+      await linkEventContent(event.item.id, post.item.id);
+    }
+    return {
+      ok: true,
+      message: already
+        ? `“${post.item.title}” is already linked to “${event.item.title}”.`
+        : `Linked “${post.item.title}” to “${event.item.title}”.`,
+      href: "/app/events",
+      area: "events",
+      areas: ["events", "content"],
     };
   }
 

@@ -51,6 +51,11 @@ export async function POST(request: NextRequest) {
         verb: parsed.commands[0].verb,
         href: parsed.commands[0].href,
         items: parsed.commands.map((command) => command.summary),
+        actions: parsed.commands.map((command) => ({
+          summary: command.summary,
+          line: command.source || command.summary,
+          kind: command.kind,
+        })),
         skipped: parsed.skipped.slice(0, 8),
         skippedCount: parsed.skipped.length,
       },

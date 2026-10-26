@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Link as LinkIcon,
   Heading2,
+  Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { plainTextToEditorHtml } from "@/lib/plain-text";
@@ -235,6 +236,13 @@ export function RichTextEditorImpl({
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
           <Heading2 className="h-3.5 w-3.5" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="Quote"
+          active={editor.isActive("blockquote")}
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        >
+          <Quote className="h-3.5 w-3.5" />
         </ToolbarButton>
         <ToolbarButton
           label="Bullet list"

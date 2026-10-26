@@ -2,6 +2,7 @@ import type {
   BudgetLine,
   ContentItem,
   EventAttendance,
+  EventContentLink,
   EventItem,
   HubTask,
   Sponsorship,
@@ -21,6 +22,7 @@ import { readStore } from "@/lib/store/local";
 type Catalogue = {
   events?: EventItem[];
   event_attendance?: EventAttendance[];
+  event_content?: EventContentLink[];
   tasks?: HubTask[];
   content?: ContentItem[];
   sponsorships?: Sponsorship[];
@@ -100,15 +102,28 @@ export function formatHubCatalogue(store: Catalogue, today?: string) {
     const byDate = (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
     return byDate || a.title.localeCompare(b.title);
   });
-  const contentLines = content.map((item) =>
-    [
+  const contentLines = content.map((item) => {
+    const bits = [
       day(item.due_date) || "no date",
       cell(item.title),
       cell(item.status),
       cell((item.channel ?? []).join(", ")),
       cell(item.owner),
-    ].join(" | ")
-  );
+    ];
+    const caption = (item.caption ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+    if (caption) bits.push(caption);
+    return bits.join(" | ");
+  });
+
+  const eventTitles = new Map(events.map((event) => [event.id, event.title]));
+  const contentTitles = new Map(content.map((item) => [item.id, item.title]));
+  const linkLines = [...(store.event_content ?? [])]
+    .map((link) =>
+      [cell(eventTitles.get(link.event_id)), cell(contentTitles.get(link.content_id))].join(
+        " | "
+      )
+    )
+    .sort((a, b) => a.localeCompare(b));
 
   const partners = [...(store.sponsorships ?? [])].sort((a, b) =>
     a.partner.localeCompare(b.partner)
@@ -145,10 +160,12 @@ export function formatHubCatalogue(store: Catalogue, today?: string) {
     `Events: ${events.length} total, ${yearCount("2026")} in 2026, ${yearCount("2027")} in 2027.`,
     `Contacts are not listed (${(store.contacts ?? []).length} records). Credentials, email bodies, and notes are not listed.`,
     "Edits to events, tasks, and posts still need a hub-command block and confirmation. Do not invent a command for contacts, budget, or media.",
+    'To link a post that already exists, write one line per post: Link post "Exact content title" to event "Exact event title". Skip pairs already listed under Content linked to events. The admin ticks which links to save.',
     "Do not invent records, and do not say a listed record is missing.",
     ...section("Events", eventLines),
     ...section("Tasks", taskLines),
     ...section("Content", contentLines),
+    ...section("Content linked to events", linkLines),
     ...section("Partners", partnerLines),
     ...section("Budget lines", budgetLines),
     ...section("Resources", resourceLines),

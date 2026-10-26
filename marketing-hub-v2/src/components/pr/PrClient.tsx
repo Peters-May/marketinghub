@@ -101,6 +101,7 @@ type Props = {
   newsApiConfigured: boolean;
   initialSection?: PrSection | null;
   prefillContentId?: string | null;
+  openNewRelease?: boolean;
 };
 
 function exportMentionsCsv(
@@ -140,6 +141,7 @@ export function PrClient({
   newsApiConfigured: initialNewsApi,
   initialSection,
   prefillContentId = null,
+  openNewRelease = false,
 }: Props) {
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
@@ -271,6 +273,21 @@ export function PrClient({
   const releases = useMemo(
     () => content.filter(isPressRelease),
     [content]
+  );
+
+  const spokespeople = useMemo(
+    () =>
+      contacts
+        .filter((contact) => contact.is_spokesperson && !isPressContact(contact))
+        .map((contact) => ({
+          id: contact.id,
+          name: contact.name,
+          role: contact.role,
+          organisation: contact.organisation,
+          email: contact.email,
+          phone: contact.phone,
+        })),
+    [contacts]
   );
 
   const selectedList = contactLists.find((l) => l.id === selectedListId) ?? null;
@@ -849,6 +866,9 @@ export function PrClient({
           releases={releases}
           campaigns={campaigns}
           newsroomTitle={newsroom.title}
+          newsroomDescription={newsroom.description}
+          spokespeople={spokespeople}
+          startNew={openNewRelease}
           onRelease={(item) =>
             setContent((prev) => {
               const without = prev.filter((c) => c.id !== item.id);

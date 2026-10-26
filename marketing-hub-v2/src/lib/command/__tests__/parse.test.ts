@@ -98,6 +98,37 @@ describe("parseHubCommand", () => {
     expect(parsed.patch.status).toBe("done");
   });
 
+  it("links a post to an event by exact title", () => {
+    const parsed = command(
+      'Link post "Monaco stand setup" to event "Monaco Yacht Show"'
+    );
+    expect(parsed.kind).toBe("link_content");
+    if (parsed.kind !== "link_content") return;
+    expect(parsed.content_query).toBe("Monaco stand setup");
+    expect(parsed.event_query).toBe("Monaco Yacht Show");
+    expect(parsed.summary).toContain("Monaco stand setup");
+    expect(parsed.source).toContain("Link post");
+  });
+
+  it("keeps each link line when several posts are proposed", () => {
+    const result = parseHubCommands(
+      [
+        'Link post "Stand photo" to event "Monaco Yacht Show"',
+        'Link the social media post "Arrival day" to the event "Monaco Yacht Show"',
+        "Add a task to call the organiser, due Friday",
+      ].join("\n"),
+      now
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.commands.map((item) => item.kind)).toEqual([
+      "link_content",
+      "link_content",
+      "create_task",
+    ]);
+    expect(result.skipped).toEqual([]);
+  });
+
   it("updates an event location", () => {
     const parsed = command(
       "Update event Monaco Yacht Show location Port Hercules"

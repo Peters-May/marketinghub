@@ -4,6 +4,7 @@ import {
   createContent,
   deleteContent,
   listContent,
+  savePressRelease,
   setContentPostShare,
   setNewsroomPlacement,
   updateContent,
@@ -25,6 +26,12 @@ import {
   loadOwnerDirectory,
   matchOwnerUserId,
 } from "@/lib/identity/owners";
+import {
+  plainReleaseField,
+  pressReleaseDate,
+  pressReleaseSaveError,
+} from "@/lib/pr/release-document";
+import { normalizeRichTextStorage } from "@/lib/sanitize";
 
 async function maybePushPlanable(
   item: ContentItem
@@ -57,10 +64,33 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAdmin();
+  const { user, error } = await requireAdmin();
   if (error) return error;
   const body = await request.json();
   const action = body.action as string | undefined;
+
+  if (action === "save_press_release") {
+    const status = body.status === "published" ? "published" : body.status;
+    const title = plainReleaseField(body.title, 240);
+    const saveError = pressReleaseSaveError({ title, status });
+    if (saveError) return jsonError(saveError, 400);
+    const item = await savePressRelease({
+      id: typeof body.id === "string" && body.id.trim() ? body.id.trim() : undefined,
+      title,
+      caption: normalizeRichTextStorage(String(body.caption ?? "")),
+      notes: normalizeRichTextStorage(String(body.notes ?? "")),
+      due_date: pressReleaseDate(body.due_date),
+      asset_url: plainReleaseField(body.asset_url, 2000),
+      pr_location: plainReleaseField(body.pr_location, 80),
+      pr_boilerplate: normalizeRichTextStorage(String(body.pr_boilerplate ?? "")),
+      pr_contact: plainReleaseField(body.pr_contact, 1000),
+      status: status === "published" ? "published" : "draft",
+      owner: user.full_name || user.email,
+      newsroom_title: plainReleaseField(body.newsroom_title, 150),
+    });
+    if (!item) return jsonError("Press release not found", 404);
+    return jsonOk({ item }, { status: body.id ? 200 : 201 });
+  }
 
   if (action === "newsroom_placement") {
     const id = String(body.id ?? "");

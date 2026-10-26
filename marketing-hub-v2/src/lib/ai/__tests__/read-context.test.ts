@@ -95,7 +95,63 @@ describe("formatHubCatalogue", () => {
     expect(text).toContain("Quiet Show");
     expect(text).toContain("no named people");
     expect(text).toContain("Contacts are not listed (3 records)");
+    expect(text).toContain("Content linked to events (0, complete)");
     expect(text).not.toContain("not the full calendar");
+  });
+
+  it("lists post captions and posts already linked to an event", () => {
+    const text = formatHubCatalogue(
+      {
+        events: [
+          event({
+            id: "a",
+            title: "Monaco Yacht Show",
+            starts_at: "2026-09-23",
+            location: "Monaco",
+          }),
+        ],
+        content: [
+          {
+            id: "post-1",
+            title: "Stand photo",
+            channel: ["LinkedIn"],
+            content_type: "Social",
+            owner: "Sophie",
+            due_date: "2026-09-20",
+            deadline_date: null,
+            status: "published",
+            category: "",
+            priority: "",
+            website: "",
+            caption: "On the stand at Monaco Yacht Show this week.",
+            theme_id: null,
+            planable_url: "",
+            planable_post_id: "",
+            planable_group_id: "",
+            planable_page_ids: [],
+            last_synced_at: null,
+            sync_source: "",
+            asset_url: "",
+            notes: "",
+            created_at: "",
+            updated_at: "",
+          },
+        ],
+        event_content: [
+          {
+            id: "link-1",
+            event_id: "a",
+            content_id: "post-1",
+            created_at: "",
+          },
+        ],
+      },
+      "2026-10-26"
+    );
+
+    expect(text).toContain("On the stand at Monaco Yacht Show this week.");
+    expect(text).toContain("Content linked to events (1, complete)");
+    expect(text).toContain("Monaco Yacht Show | Stand photo");
   });
 
   it("keeps the member catalogue to titles and enquiry totals", () => {

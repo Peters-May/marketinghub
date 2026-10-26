@@ -259,6 +259,12 @@ export type ContentItem = {
    * Undefined uses the default newsroom. Empty string means not assigned.
    */
   newsroom_name?: string;
+  /** Dateline city on a press release, e.g. London. */
+  pr_location?: string;
+  /** About-the-company block under a press release. */
+  pr_boilerplate?: string;
+  /** Media contact block under a press release. */
+  pr_contact?: string;
   created_at: string;
   updated_at: string;
 };

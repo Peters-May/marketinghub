@@ -5,6 +5,10 @@ import Link from "next/link";
 import type { ContentItem, EmailCampaign } from "@/lib/types";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
+  ReleaseEditor,
+  type ReleaseSpokesperson,
+} from "@/components/pr/ReleaseEditor";
+import {
   campaignClickRateLabel,
   campaignMetaLine,
   campaignOpenRateLabel,
@@ -30,18 +34,27 @@ export function ReleasesPanel({
   releases,
   campaigns,
   newsroomTitle,
+  newsroomDescription,
+  spokespeople,
+  startNew = false,
   onRelease,
   onCampaign,
 }: {
   releases: ContentItem[];
   campaigns: EmailCampaign[];
   newsroomTitle: string;
+  newsroomDescription: string;
+  spokespeople: ReleaseSpokesperson[];
+  startNew?: boolean;
   onRelease: (item: ContentItem) => void;
   onCampaign: (item: EmailCampaign) => void;
 }) {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
+  const [editing, setEditing] = useState<ContentItem | "new" | null>(
+    startNew ? "new" : null
+  );
 
   const stories = useMemo(() => {
     const rows = showAll
@@ -119,8 +132,37 @@ export function ReleasesPanel({
     }
   }
 
+  if (editing) {
+    const current = editing === "new" ? null : editing;
+    return (
+      <ReleaseEditor
+        item={current}
+        newsroomTitle={newsroomTitle}
+        newsroomDescription={newsroomDescription}
+        spokespeople={spokespeople}
+        onClose={() => setEditing(null)}
+        onSaved={onRelease}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg text-brand">Press release editor</h2>
+          <p className="mt-1 text-sm text-muted">
+            Write the story here, then publish it to the newsroom.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditing("new")}
+          className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+        >
+          New press release
+        </button>
+      </div>
       {error ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}
@@ -191,7 +233,7 @@ export function ReleasesPanel({
 
       <section>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-lg text-brand">Published stories</h2>
+          <h2 className="font-display text-lg text-brand">Releases</h2>
           <button
             type="button"
             className="text-sm text-accent underline"
@@ -202,7 +244,9 @@ export function ReleasesPanel({
         </div>
         <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border bg-white">
           {stories.length === 0 ? (
-            <li className="px-4 py-6 text-sm text-muted">No published stories yet.</li>
+            <li className="px-4 py-6 text-sm text-muted">
+              No press releases yet. Use New press release to write one.
+            </li>
           ) : (
             stories.map((item) => {
               const assigned = item.newsroom_name !== "";
@@ -215,7 +259,15 @@ export function ReleasesPanel({
                     <StatusPill status={item.status} />
                     <span className="text-xs text-muted">{storyTime(item)}</span>
                   </div>
-                  <h3 className="mt-2 font-medium text-brand">{item.title}</h3>
+                  <h3 className="mt-2 font-medium text-brand">
+                    <button
+                      type="button"
+                      className="text-left hover:underline"
+                      onClick={() => setEditing(item)}
+                    >
+                      {item.title}
+                    </button>
+                  </h3>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
                     {assigned ? (
                       <span className="max-w-[12rem] truncate">{room}</span>
@@ -258,13 +310,22 @@ export function ReleasesPanel({
                     {item.owner ? ` by ${item.owner}` : ""}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                    <Link
-                      href={`/newsroom#${item.id}`}
-                      target="_blank"
+                    <button
+                      type="button"
                       className="text-accent underline"
+                      onClick={() => setEditing(item)}
                     >
-                      Preview
-                    </Link>
+                      Edit
+                    </button>
+                    {item.status === "published" ? (
+                      <Link
+                        href={`/newsroom/${item.id}`}
+                        target="_blank"
+                        className="text-accent underline"
+                      >
+                        View on newsroom
+                      </Link>
+                    ) : null}
                     <Link
                       href={`/app/pr/emails?content_id=${encodeURIComponent(item.id)}`}
                       className="text-accent underline"

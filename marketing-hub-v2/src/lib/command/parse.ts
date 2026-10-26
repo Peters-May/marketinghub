@@ -10,15 +10,18 @@ export const COMMAND_EXAMPLES = [
   "Add a LinkedIn post about autumn yacht moves, due next Tuesday",
   "Update task call the organiser status done",
   "Update event Monaco Yacht Show location Port Hercules",
+  'Link post "Monaco stand setup" to event "Monaco Yacht Show"',
 ];
 
-export type CommandVerb = "Add" | "Update";
+export type CommandVerb = "Add" | "Update" | "Link";
 
 type CommandBase = {
   summary: string;
   verb: CommandVerb;
   href: string;
   area: HubDataArea;
+  /** Original line, used when the admin confirms a subset. */
+  source?: string;
 };
 
 export type HubCommand = CommandBase &
@@ -94,6 +97,11 @@ export type HubCommand = CommandBase &
           notes?: string;
           channel?: string[];
         };
+      }
+    | {
+        kind: "link_content";
+        content_query: string;
+        event_query: string;
       }
   );
 
@@ -1061,15 +1069,60 @@ export function parseHubCommands(input: string, now = new Date()): MultiParseRes
     return {
       ok: false,
       message:
-        "None of those lines start with add or update, then task, event, or post.",
+        "None of those lines start with add, update, or link.",
       examples: COMMAND_EXAMPLES,
     };
   }
   return { ok: true, commands, skipped };
 }
 
+function unquoteTitle(value: string) {
+  return value
+    .trim()
+    .replace(/^["“”']+|["“”']+$/g, "")
+    .replace(/[.]+$/g, "")
+    .trim();
+}
+
+/** Link an existing post to an existing event. Returns null when the line is not a link. */
+function parseLinkCommand(text: string): ParseResult | null {
+  const match = text.match(
+    /^link\s+(?:the\s+)?(?:social\s+media\s+post|social\s+post|post|content)\s+(.+?)\s+to\s+(?:the\s+)?event\s+(.+)$/i
+  );
+  if (!match) return null;
+  const contentQuery = unquoteTitle(match[1]);
+  const eventQuery = unquoteTitle(match[2]);
+  if (!contentQuery || !eventQuery) {
+    return fail(
+      'Name the post and the event. For example: Link post "Monaco stand setup" to event "Monaco Yacht Show".'
+    );
+  }
+  const command: HubCommand = {
+    summary: `Link “${contentQuery}” to “${eventQuery}”.`,
+    verb: "Link",
+    href: "/app/events",
+    area: "events",
+    kind: "link_content",
+    content_query: contentQuery,
+    event_query: eventQuery,
+    source: text,
+  };
+  return { ok: true, command };
+}
+
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
+  const linked = parseLinkCommand(text);
+  if (linked) {
+    if (!linked.ok) return linked;
+    return { ok: true, command: { ...linked.command, source: text } };
+  }
+  const parsed = parseHubCommandBody(text, now);
+  if (!parsed.ok) return parsed;
+  return { ok: true, command: { ...parsed.command, source: text } };
+}
+
+function parseHubCommandBody(text: string, now: Date): ParseResult {
   if (!text) {
     return fail("Type what to add or update.");
   }
@@ -1167,6 +1220,6 @@ export function parseHubCommand(input: string, now = new Date()): ParseResult {
   }
 
   return fail(
-    "Start with add or update, then task, event, or post."
+    'Start with add or update, then task, event, or post. To attach a post, write: Link post "Title" to event "Event title".'
   );
 }
