@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useHubView } from "@/lib/hub-view";
 import type { DashboardModel } from "@/lib/dashboard/build";
 
 const money = new Intl.NumberFormat("en-GB", {
@@ -100,8 +101,13 @@ export function HomeDashboard({
   everyone: DashboardModel | null;
   canToggle: boolean;
 }) {
+  const { view } = useHubView();
+  const allowEveryone = canToggle && view === "admin";
   const [scope, setScope] = useState<"mine" | "everyone">("mine");
-  const model = scope === "everyone" && everyone ? everyone : mine;
+  useEffect(() => {
+    if (!allowEveryone && scope === "everyone") setScope("mine");
+  }, [allowEveryone, scope]);
+  const model = scope === "everyone" && allowEveryone && everyone ? everyone : mine;
 
   return (
     <div className="space-y-6">
@@ -113,7 +119,7 @@ export function HomeDashboard({
               Assigned tasks first, then deadlines and preparation still open.
             </p>
           </div>
-          {canToggle && everyone ? (
+          {allowEveryone && everyone ? (
             <div
               className="inline-flex rounded-2xl border border-border bg-white p-1"
               role="tablist"

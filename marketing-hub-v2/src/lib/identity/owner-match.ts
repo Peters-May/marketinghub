@@ -24,7 +24,7 @@ export function matchOwnerUserId(
   return matches[0].id;
 }
 
-/** Dashboard and task filters. First name matches the signed-in person only. */
+/** Dashboard and task filters. First name matches either way when the other side is a single name. */
 export function ownerMatchesViewer(
   owner: string | null | undefined,
   ownerUserId: string | null | undefined,
@@ -32,9 +32,14 @@ export function ownerMatchesViewer(
 ) {
   if (ownerUserId && ownerUserId === viewer.id) return true;
   const name = normaliseOwnerName(owner);
-  if (!name) return false;
   const full = normaliseOwnerName(viewer.fullName);
-  if (full && name === full) return true;
-  const first = full.split(/\s+/)[0] ?? "";
-  return first.length > 1 && name === first;
+  if (!name || !full) return false;
+  if (name === full) return true;
+  const ownerParts = name.split(/\s+/);
+  const viewerParts = full.split(/\s+/);
+  const ownerFirst = ownerParts[0] ?? "";
+  const viewerFirst = viewerParts[0] ?? "";
+  if (ownerFirst.length <= 1 || viewerFirst.length <= 1) return false;
+  if (ownerFirst !== viewerFirst) return false;
+  return ownerParts.length === 1 || viewerParts.length === 1;
 }

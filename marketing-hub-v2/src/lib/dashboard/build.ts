@@ -450,13 +450,19 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       href: recordPath("event", event.id),
       updated_at: event.updated_at,
     })),
-    ...input.tasks.map((task) => ({
-      key: `task:${task.id}`,
-      title: task.title,
-      detail: "Task",
-      href: recordPath("task", task.id),
-      updated_at: task.updated_at,
-    })),
+    ...input.tasks
+      .filter((task) =>
+        personal
+          ? assignedToViewer(task.owner, task.owner_user_id, viewer)
+          : true
+      )
+      .map((task) => ({
+        key: `task:${task.id}`,
+        title: task.title,
+        detail: "Task",
+        href: recordPath("task", task.id),
+        updated_at: task.updated_at,
+      })),
     ...input.awards.map((award) => ({
       key: `award:${award.id}`,
       title: award.title,
@@ -482,7 +488,8 @@ export function buildDashboard(input: BuildInput): DashboardModel {
     6
   );
 
-  const unowned = viewer.isAdmin
+  const unowned =
+    !personal && viewer.isAdmin
     ? takeFresh(
         [
           ...openTasks

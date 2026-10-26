@@ -20,8 +20,8 @@ const LINKED_TO: Record<TaskRelatedType, string> = {
 };
 
 /**
- * Reverse lookup: tasks that link to this content / theme / partner / award / event / asset.
- * Admin-only — members do not see Tasks.
+ * Tasks linked to this content, theme, partner, award, event, or asset.
+ * Member view only lists tasks assigned to the signed-in person.
  */
 export function RelatedTasksPanel({
   relatedType,
@@ -58,6 +58,7 @@ export function RelatedTasksPanel({
         related_type: relatedType,
         related_id: relatedId,
       });
+      if (view !== "admin") qs.set("mine", "1");
       const res = await fetch(`/api/tasks?${qs.toString()}`);
       if (!res.ok) return;
       const data = (await res.json()) as { tasks?: HubTask[] };
@@ -67,10 +68,10 @@ export function RelatedTasksPanel({
     } finally {
       setLoaded(true);
     }
-  }, [relatedType, relatedId]);
+  }, [relatedType, relatedId, view]);
 
   useEffect(() => {
-    if (view !== "admin") return;
+    if (view !== "admin" && view !== "member") return;
     setLoaded(false);
     void refresh();
   }, [refresh, view]);
@@ -105,7 +106,7 @@ export function RelatedTasksPanel({
           title: nextTitle,
           details: "",
           due_date: dueDate || null,
-          owner,
+          ...(view === "admin" ? { owner } : { assign_to_me: true }),
           status: "todo",
           category: "",
           related_type: relatedType,
@@ -134,7 +135,7 @@ export function RelatedTasksPanel({
     }
   };
 
-  if (view !== "admin" || !relatedId) return null;
+  if ((view !== "admin" && view !== "member") || !relatedId) return null;
 
   const linkedPhrase = LINKED_TO[relatedType] ?? "this record";
 
@@ -183,24 +184,26 @@ export function RelatedTasksPanel({
               autoFocus
             />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <label className="label" htmlFor={deadlineId}>
-                Deadline
-              </label>
-              <input
-                id={deadlineId}
-                className="field"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="label" htmlFor={deadlineId}>
+                  Deadline
+                </label>
+                <input
+                  id={deadlineId}
+                  className="field"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
+              {view === "admin" ? (
+                <div>
+                  <label className="label">Assign to</label>
+                  <ContactOwnerSelect value={owner} onChange={setOwner} />
+                </div>
+              ) : null}
             </div>
-            <div>
-              <label className="label">Assign to</label>
-              <ContactOwnerSelect value={owner} onChange={setOwner} />
-            </div>
-          </div>
           <p className="text-[11px] text-muted">
             Linked to {linkedPhrase}.
           </p>
@@ -239,7 +242,7 @@ export function RelatedTasksPanel({
           {tasks.map((task) => (
             <li key={task.id}>
               <Link
-                href="/app/tasks"
+                href={`/app/tasks?open=${encodeURIComponent(task.id)}`}
                 className="block rounded-lg border border-border bg-white px-3 py-2 transition hover:border-brand/30"
               >
                 <div className="flex flex-wrap items-center gap-1.5">

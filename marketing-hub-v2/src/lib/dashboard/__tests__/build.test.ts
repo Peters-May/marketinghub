@@ -132,6 +132,68 @@ describe("buildDashboard", () => {
     expect(model.actions.filter((row) => row.key === "content:c1")).toHaveLength(0);
   });
 
+  it("keeps other people's tasks out of a personal recently updated list", () => {
+    const model = buildDashboard({
+      now,
+      viewer: { id: "user-sophie", fullName: "Sophie Edgerley", isAdmin: false },
+      scope: "mine",
+      tasks: [
+        task({
+          id: "t1",
+          title: "Finish the blog",
+          owner: "Sophie Edgerley",
+          owner_user_id: "user-sophie",
+          due_date: "2026-12-01",
+          updated_at: "2026-10-20T00:00:00.000Z",
+        }),
+        task({
+          id: "t2",
+          title: "Someone else's task",
+          owner: "Alex",
+          updated_at: "2026-10-22T00:00:00.000Z",
+        }),
+      ],
+      content: [],
+      events: [],
+      attendance: [],
+      awards: [],
+      enquiries: [],
+      emails: [],
+      budget: null,
+    });
+
+    expect(model.recentlyUpdated.map((row) => row.title)).toEqual([
+      "Finish the blog",
+    ]);
+    expect(model.actions.map((row) => row.title)).not.toContain(
+      "Someone else's task"
+    );
+    expect(model.unowned).toEqual([]);
+
+    const sharedUnassigned = {
+      now,
+      viewer: { id: "user-sophie", fullName: "Sophie Edgerley", isAdmin: true as const },
+      tasks: [
+        task({
+          id: "t3",
+          title: "Unassigned",
+          owner: "",
+          due_date: "2026-12-01",
+        }),
+      ],
+      content: [],
+      events: [],
+      attendance: [],
+      awards: [],
+      enquiries: [],
+      emails: [],
+      budget: null,
+    };
+    expect(
+      buildDashboard({ ...sharedUnassigned, scope: "mine" }).unowned
+    ).toEqual([]);
+  });
+
   it("shows preparation for events the viewer is attending, and org items only on everyone", () => {
     const shared = {
       now,

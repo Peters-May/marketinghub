@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { format, parseISO, isBefore, startOfDay, addDays } from "date-fns";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { useHubDataRefresh } from "@/lib/command/refresh";
+import { useHubView } from "@/lib/hub-view";
 import { ownerMatchesViewer } from "@/lib/identity/owner-match";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import {
@@ -127,6 +128,14 @@ function statusTone(status: TaskStatus) {
   return "bg-amber-50 text-amber-900 border-amber-200";
 }
 
+function canSeeTask(
+  item: HubTask,
+  viewer: { id: string; fullName: string },
+  seeAll: boolean
+) {
+  return seeAll || ownerMatchesViewer(item.owner, item.owner_user_id, viewer);
+}
+
 function isOverdue(item: HubTask) {
   if (!item.due_date || isClosedTaskStatus(item.status)) return false;
   try {
@@ -149,6 +158,8 @@ export function TasksClient({
   viewer: { id: string; fullName: string; isAdmin: boolean };
   relatedLabels?: Record<string, string>;
 }) {
+  const { view: hubView, ready: hubViewReady } = useHubView();
+  const seeAllTasks = viewer.isAdmin && hubViewReady && hubView === "admin";
   const fieldOptions = useManagedFieldOptions("tasks", fieldOptionsProp);
   const categoryOptions = optionsForField(
     fieldOptions,
@@ -161,10 +172,14 @@ export function TasksClient({
     TASK_STATUSES
   );
   const [items, setItems] = useState(initial);
+  const scoped = useMemo(
+    () => items.filter((item) => canSeeTask(item, viewer, seeAllTasks)),
+    [items, viewer, seeAllTasks]
+  );
   const statusColumns = useMemo(() => {
     const cols = statusOptions.map((o) => ({ id: o.value, label: o.label }));
     const known = new Set(cols.map((c) => c.id));
-    for (const item of items) {
+    for (const item of scoped) {
       const status = item.status?.trim();
       if (status && !known.has(status)) {
         known.add(status);
@@ -172,14 +187,11 @@ export function TasksClient({
       }
     }
     return cols;
-  }, [statusOptions, items]);
+  }, [statusOptions, scoped]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const openedTask = initial.find((item) => item.id === initialOpenId) ?? null;
-  const [editingId, setEditingId] = useState<string | null>(openedTask?.id ?? null);
-  const [edit, setEdit] = useState<EditForm | null>(
-    openedTask ? toEditForm(openedTask) : null
-  );
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -208,13 +220,35 @@ export function TasksClient({
     void refresh();
   });
 
+  const openedFromQuery = useRef(false);
+  useEffect(() => {
+    if (!hubViewReady || openedFromQuery.current || !initialOpenId) return;
+    openedFromQuery.current = true;
+    const task = items.find((item) => item.id === initialOpenId);
+    if (!task || !canSeeTask(task, viewer, seeAllTasks)) return;
+    setEditingId(task.id);
+    setEdit(toEditForm(task));
+  }, [hubViewReady, initialOpenId, items, seeAllTasks, viewer]);
+
+  useEffect(() => {
+    if (!hubViewReady || seeAllTasks || !editingId) return;
+    const task = items.find((item) => item.id === editingId);
+    if (task && ownerMatchesViewer(task.owner, task.owner_user_id, viewer)) return;
+    setEditingId(null);
+    setEdit(null);
+  }, [hubViewReady, seeAllTasks, editingId, items, viewer]);
+
+  useEffect(() => {
+    if (hubViewReady && !seeAllTasks && queue === "all") setQueue("mine");
+  }, [hubViewReady, seeAllTasks, queue]);
+
   const owners = useMemo(() => {
-    const set = new Set(items.map((i) => i.owner.trim()).filter(Boolean));
+    const set = new Set(scoped.map((i) => i.owner.trim()).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [items]);
+  }, [scoped]);
 
   const filtered = useMemo(() => {
-    return items.filter((item) => {
+    return scoped.filter((item) => {
       if (
         !matchesSearch(search, [
           item.title,
@@ -243,15 +277,9 @@ export function TasksClient({
         return false;
       }
       if (queue === "overdue" && !isOverdue(item)) return false;
-      if (
-        !viewer.isAdmin &&
-        !ownerMatchesViewer(item.owner, item.owner_user_id, viewer)
-      ) {
-        return false;
-      }
       return true;
     });
-  }, [items, search, statusFilter, ownerFilter, queue, viewer]);
+  }, [scoped, search, statusFilter, ownerFilter, queue, viewer]);
 
   const calendarEvents = useMemo(
     () =>
@@ -329,6 +357,7 @@ export function TasksClient({
         body: JSON.stringify({
           ...form,
           title: form.title.trim() || "Untitled task",
+          owner: seeAllTasks ? form.owner : viewer.fullName,
           start_date: form.start_date || null,
           due_date: form.due_date || null,
         }),
@@ -370,7 +399,7 @@ export function TasksClient({
             due_date: edit.due_date || null,
             category: edit.category,
             status: edit.status,
-            owner: edit.owner,
+            ...(seeAllTasks ? { owner: edit.owner } : {}),
             related_type: edit.related_type || "",
             related_id: edit.related_id || null,
           },
@@ -553,7 +582,11 @@ export function TasksClient({
     <div>
       <PageHeader
         title="Tasks"
-        description="Marketing to-dos — Kanban, list, calendar, or timeline by From / Deadline."
+        description={
+          seeAllTasks
+            ? "Marketing to-dos — Kanban, list, calendar, or timeline by From / Deadline."
+            : "Your tasks — Kanban, list, calendar, or timeline by From / Deadline."
+        }
         actions={
           <button
             type="button"
@@ -606,7 +639,7 @@ export function TasksClient({
       >
         {(
           [
-            ...(viewer.isAdmin
+            ...(seeAllTasks
               ? [{ id: "all" as const, label: "All tasks" }]
               : []),
             { id: "mine" as const, label: "My tasks" },
@@ -636,7 +669,7 @@ export function TasksClient({
         onSearchChange={setSearch}
         searchPlaceholder="Search tasks…"
         resultCount={filtered.length}
-        totalCount={items.length}
+        totalCount={scoped.length}
         selects={[
           {
             id: "status",
@@ -649,16 +682,20 @@ export function TasksClient({
               ...statusColumns.map((s) => ({ value: s.id, label: s.label })),
             ],
           },
-          {
-            id: "owner",
-            label: "Owner",
-            value: ownerFilter,
-            onChange: setOwnerFilter,
-            options: [
-              { value: "all", label: "All owners" },
-              ...owners.map((o) => ({ value: o, label: o })),
-            ],
-          },
+          ...(seeAllTasks
+            ? [
+                {
+                  id: "owner",
+                  label: "Owner",
+                  value: ownerFilter,
+                  onChange: setOwnerFilter,
+                  options: [
+                    { value: "all", label: "All owners" },
+                    ...owners.map((o) => ({ value: o, label: o })),
+                  ],
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -672,13 +709,15 @@ export function TasksClient({
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
           </div>
-          <div>
-            <label className="label">Assign to</label>
-            <ContactOwnerSelect
-              value={form.owner}
-              onChange={(owner) => setForm({ ...form, owner })}
-            />
-          </div>
+          {seeAllTasks ? (
+            <div>
+              <label className="label">Assign to</label>
+              <ContactOwnerSelect
+                value={form.owner}
+                onChange={(owner) => setForm({ ...form, owner })}
+              />
+            </div>
+          ) : null}
           <div>
             <label className="label">From</label>
             <input
@@ -817,12 +856,14 @@ export function TasksClient({
                   aria-label="Change status"
                   options={selectOptionsWithCurrent(statusOptions, item.status)}
                 />
-                <ContactOwnerSelect
-                  value={item.owner}
-                  onChange={(owner) => void setOwner(item.id, owner)}
-                  className="!w-auto min-w-[9rem] py-1.5 text-xs"
-                  aria-label="Assign person"
-                />
+                {seeAllTasks ? (
+                  <ContactOwnerSelect
+                    value={item.owner}
+                    onChange={(owner) => void setOwner(item.id, owner)}
+                    className="!w-auto min-w-[9rem] py-1.5 text-xs"
+                    aria-label="Assign person"
+                  />
+                ) : null}
                 <button
                   type="button"
                   className="btn-secondary px-2.5 py-1.5 text-xs"
@@ -936,12 +977,14 @@ export function TasksClient({
                             item.status
                           )}
                         />
-                        <ContactOwnerSelect
-                          value={item.owner}
-                          onChange={(owner) => void setOwner(item.id, owner)}
-                          className="w-full py-1.5 text-xs"
-                          aria-label="Assign person"
-                        />
+                        {seeAllTasks ? (
+                          <ContactOwnerSelect
+                            value={item.owner}
+                            onChange={(owner) => void setOwner(item.id, owner)}
+                            className="w-full py-1.5 text-xs"
+                            aria-label="Assign person"
+                          />
+                        ) : null}
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -1172,13 +1215,15 @@ export function TasksClient({
                 options={selectOptionsWithCurrent(categoryOptions, edit.category)}
               />
             </div>
-            <div>
-              <label className="label">Assign to</label>
-              <ContactOwnerSelect
-                value={edit.owner}
-                onChange={(owner) => setEdit({ ...edit, owner })}
-              />
-            </div>
+            {seeAllTasks ? (
+              <div>
+                <label className="label">Assign to</label>
+                <ContactOwnerSelect
+                  value={edit.owner}
+                  onChange={(owner) => setEdit({ ...edit, owner })}
+                />
+              </div>
+            ) : null}
             <div>
               <label className="label">Status</label>
               <SearchSelect

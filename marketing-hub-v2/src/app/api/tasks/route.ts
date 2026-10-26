@@ -7,6 +7,7 @@ import {
   updateTask,
 } from "@/lib/data/repos";
 import { ownerMatchesViewer } from "@/lib/identity/owners";
+import type { HubTask } from "@/lib/types";
 
 function ownsTask(
   task: { owner: string; owner_user_id?: string | null },
@@ -26,9 +27,10 @@ export async function GET(request: NextRequest) {
   const tasks = await listTasks(
     relatedType && relatedId ? { relatedType, relatedId } : undefined
   );
+  const mine = request.nextUrl.searchParams.get("mine") === "1";
   return jsonOk({
     tasks:
-      user.role === "admin"
+      user.role === "admin" && !mine
         ? tasks
         : tasks.filter((task) => ownsTask(task, user)),
   });
@@ -47,7 +49,12 @@ export async function POST(request: NextRequest) {
       if (user.role !== "admin" && !ownsTask(existing, user)) {
         return jsonError("You can only update your own tasks", 403);
       }
-      const updated = await updateTask(body.id, body.patch ?? {});
+      const patch: Partial<HubTask> = { ...(body.patch ?? {}) };
+      if (user.role !== "admin") {
+        delete patch.owner;
+        delete patch.owner_user_id;
+      }
+      const updated = await updateTask(body.id, patch);
       if (!updated) return jsonError("Not found", 404);
       return jsonOk({ item: updated });
     }
@@ -62,6 +69,7 @@ export async function POST(request: NextRequest) {
       return jsonOk({ ok: true });
     }
 
+    const ownOnly = user.role !== "admin" || body.assign_to_me === true;
     const item = await createTask({
       title: body.title ?? "Untitled task",
       details: body.details ?? "",
@@ -69,7 +77,8 @@ export async function POST(request: NextRequest) {
       due_date: body.due_date || null,
       category: body.category ?? "",
       status: body.status ?? "todo",
-      owner: body.owner ?? "",
+      owner: ownOnly ? user.full_name : (body.owner ?? ""),
+      owner_user_id: ownOnly ? user.id : null,
       related_type: body.related_type || "",
       related_id: body.related_id || null,
     });
