@@ -637,12 +637,49 @@ function assignField(
   key: keyof Fields,
   value: string | string[]
 ) {
-  if (key === "channel") {
-    if (Array.isArray(value)) fields.channel = value;
+  if (typeof value !== "string") {
+    if (key === "channel" && Array.isArray(value)) fields.channel = value;
     return;
   }
-  if (typeof value !== "string") return;
-  fields[key] = value;
+  switch (key) {
+    case "due":
+      fields.due = value;
+      break;
+    case "ends":
+      fields.ends = value;
+      break;
+    case "date_status":
+      if (value === "confirmed" || value === "provisional" || value === "tbc") {
+        fields.date_status = value;
+      }
+      break;
+    case "owner":
+      fields.owner = value;
+      break;
+    case "status":
+      fields.status = value;
+      break;
+    case "location":
+      fields.location = value;
+      break;
+    case "notes":
+      fields.notes = value;
+      break;
+    case "caption":
+      fields.caption = value;
+      break;
+    case "type":
+      fields.type = value;
+      break;
+    case "title":
+      fields.title = value;
+      break;
+    case "attending":
+      fields.attending = value;
+      break;
+    default:
+      break;
+  }
 }
 
 function extractFields(
