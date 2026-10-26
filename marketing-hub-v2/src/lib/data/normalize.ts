@@ -1,7 +1,12 @@
 /** Shared clean-up for hub store + Supabase import. */
 
 import { normalizeRichTextStorage } from "@/lib/sanitize";
-import { isCanvaUrl, isPreviewableImageUrl, isVideoUrl } from "@/lib/social/platforms";
+import {
+  isCanvaUrl,
+  isPreviewableImageUrl,
+  isVideoUrl,
+  resolvePreviewPlatforms,
+} from "@/lib/social/platforms";
 
 const PLATFORM_HINTS: { re: RegExp; channel: string }[] = [
   { re: /\binstagram\b|\big\b|#instagram|\breel\b/i, channel: "Instagram" },
@@ -356,9 +361,13 @@ export function normalizeChannels(
   notes = ""
 ): string[] {
   const parts = parseChannels(raw);
-  const normalized = parts
-    .map((part) => normalizeChannel(part, title, notes))
-    .filter(Boolean);
+  const normalized = parts.flatMap((part) => {
+    const named = resolvePreviewPlatforms([part]).filter(
+      (item) => item.key !== "social"
+    );
+    if (named.length) return named.map((item) => item.label);
+    return [normalizeChannel(part, title, notes)];
+  });
   const unique: string[] = [];
   for (const ch of normalized) {
     if (!unique.some((u) => u.toLowerCase() === ch.toLowerCase())) {

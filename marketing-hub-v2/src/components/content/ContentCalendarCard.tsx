@@ -64,23 +64,17 @@ export function ContentCalendarCard({
         compact ? "gap-1 p-1.5" : "gap-1.5 p-2"
       )}
     >
-      <div className="flex items-center justify-between gap-1">
-        <div className="flex min-w-0 items-center gap-1">
-          {social ? (
-            <>
-              {channels.map((ch) => (
-                <PlatformDot key={ch} channel={ch} />
-              ))}
-            </>
-          ) : (
-            <span className="inline-flex h-4 items-center rounded bg-slate-700 px-1 text-[8px] font-bold uppercase tracking-wide text-white">
-              {item.content_type?.slice(0, 3) || "Cnt"}
-            </span>
-          )}
-          <span className="truncate text-[9px] font-medium text-slate-500">
-            {formatChannels(channels) || (social ? "Social" : "Content")}
+      <div className="flex flex-wrap items-center gap-1">
+        {social ? (
+          channels.map((ch) => <PlatformDot key={ch} channel={ch} />)
+        ) : (
+          <span className="inline-flex h-4 items-center rounded bg-slate-700 px-1 text-[8px] font-bold uppercase tracking-wide text-white">
+            {item.content_type?.slice(0, 3) || "Cnt"}
           </span>
-        </div>
+        )}
+        <span className="text-[9px] font-medium leading-snug text-slate-500">
+          {formatChannels(channels) || (social ? "Social" : "Content")}
+        </span>
       </div>
 
       {images.length > 0 || canva ? (

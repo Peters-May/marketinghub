@@ -40,6 +40,52 @@ export function platformKey(raw: string): PlatformKey {
   return "social";
 }
 
+const PLATFORM_SCANS: { key: PlatformKey; re: RegExp }[] = [
+  { key: "instagram", re: /\binstagram\b|\breels?\b/i },
+  { key: "facebook", re: /\bfacebook\b/i },
+  { key: "linkedin", re: /\blinkedin\b/i },
+  { key: "tiktok", re: /\btiktok\b/i },
+  { key: "youtube", re: /\byoutube\b/i },
+  // Standalone X / Twitter only — a bare "x" inside another word must not match.
+  { key: "x", re: /(?:^|[^a-z0-9])(?:x|twitter|tweet)(?:[^a-z0-9]|$)/i },
+];
+
+export type ResolvedPlatform = { key: PlatformKey; label: string };
+
+/** Every network named in the selection, including several in one label. */
+export function resolvePreviewPlatforms(platforms: string[]): ResolvedPlatform[] {
+  const resolved: ResolvedPlatform[] = [];
+  const seen = new Set<string>();
+  const push = (key: PlatformKey, label: string) => {
+    const name = label.trim() || PLATFORM_META[key].label;
+    const id = key === "social" ? `social:${name.toLowerCase()}` : key;
+    if (seen.has(id)) return;
+    seen.add(id);
+    resolved.push({
+      key,
+      label: key === "social" ? name : PLATFORM_META[key].label,
+    });
+  };
+
+  const list = Array.isArray(platforms) ? platforms : [];
+  for (const raw of list) {
+    const parts = String(raw)
+      .split(/[,;|/]|\band\b|\+/i)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    for (const part of parts.length ? parts : [String(raw).trim()].filter(Boolean)) {
+      const hits = PLATFORM_SCANS.filter(({ re }) => re.test(part)).map(({ key }) => key);
+      if (hits.length) {
+        hits.forEach((key) => push(key, PLATFORM_META[key].label));
+        continue;
+      }
+      const key = platformKey(part);
+      push(key, key === "social" ? part : PLATFORM_META[key].label);
+    }
+  }
+  return resolved.length ? resolved : [{ key: "social", label: "Social" }];
+}
+
 export const PLATFORM_META: Record<
   PlatformKey,
   { label: string; bg: string; fg: string; short: string }

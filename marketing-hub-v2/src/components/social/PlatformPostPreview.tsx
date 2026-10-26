@@ -17,7 +17,13 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PLATFORM_META, isCanvaUrl, isVideoUrl, platformKey, type PlatformKey } from "@/lib/social/platforms";
+import {
+  PLATFORM_META,
+  isCanvaUrl,
+  isVideoUrl,
+  resolvePreviewPlatforms,
+  type PlatformKey,
+} from "@/lib/social/platforms";
 import { CanvaPreviewTile } from "@/components/content/CanvaPreviewTile";
 import { RichTextView } from "@/components/ui/RichTextView";
 import { stripHtml } from "@/lib/data/normalize";
@@ -28,34 +34,6 @@ function layoutForPlatform(platform: PlatformKey, count: number): LayoutMode {
   if (count <= 1) return "single";
   if (platform === "instagram" || platform === "tiktok") return "carousel";
   return "collage";
-}
-
-const PLATFORM_SCANS: { key: PlatformKey; re: RegExp }[] = [
-  { key: "instagram", re: /\binstagram\b|\breels?\b/i },
-  { key: "facebook", re: /\bfacebook\b/i },
-  { key: "linkedin", re: /\blinkedin\b/i },
-  { key: "tiktok", re: /\btiktok\b/i },
-  { key: "youtube", re: /\byoutube\b/i },
-  { key: "x", re: /\btwitter\b|\btweet\b|\bx\b/i },
-];
-
-function uniquePlatformKeys(platforms: string[]): PlatformKey[] {
-  const keys: PlatformKey[] = [];
-  const push = (key: PlatformKey) => {
-    if (key !== "social" && !keys.includes(key)) keys.push(key);
-  };
-  for (const raw of platforms) {
-    const parts = raw
-      .split(/[,;|/]/)
-      .map((part) => part.trim())
-      .filter(Boolean);
-    for (const part of parts.length ? parts : [raw]) {
-      const hits = PLATFORM_SCANS.filter(({ re }) => re.test(part)).map(({ key }) => key);
-      if (hits.length) hits.forEach(push);
-      else push(platformKey(part));
-    }
-  }
-  return keys.length ? keys : ["social"];
 }
 
 function MediaThumb({
@@ -622,22 +600,21 @@ const STAGE: Record<PlatformKey, string> = {
   social: "bg-white",
 };
 
-export function PlatformPostPreview({
-  platforms,
+function PlatformStage({
+  platform,
+  label,
   caption,
   captionHtml,
   images,
   canvaUrl,
 }: {
-  platforms: string[];
+  platform: PlatformKey;
+  label: string;
   caption: string;
   captionHtml?: string | null;
   images: string[];
   canvaUrl?: string | null;
 }) {
-  const keys = useMemo(() => uniquePlatformKeys(platforms), [platforms]);
-  const [activeKey, setActiveKey] = useState<PlatformKey>(keys[0] ?? "social");
-  const platform = keys.includes(activeKey) ? activeKey : keys[0] ?? "social";
   const meta = PLATFORM_META[platform];
   const layout = layoutForPlatform(platform, images.length);
   const aspectClass = aspectFor(platform, images.length);
@@ -650,7 +627,6 @@ export function PlatformPostPreview({
     images.length > 0 ? (
       layout === "carousel" ? (
         <CarouselMedia
-          key={`${platform}:${images.join("|")}`}
           images={images}
           aspectClass={aspectClass}
           playback={playback}
@@ -700,54 +676,48 @@ export function PlatformPostPreview({
     );
 
   return (
-    <div>
-      {keys.length > 1 ? (
-        <div
-          className="mb-3 flex flex-wrap gap-1.5"
-          role="tablist"
-          aria-label="Choose a platform preview"
-        >
-          {keys.map((key) => {
-            const m = PLATFORM_META[key];
-            const selected = platform === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[12px] font-medium transition",
-                  selected
-                    ? "border-slate-900 bg-white text-slate-900 shadow-sm"
-                    : "border-transparent bg-white/70 text-slate-500 hover:text-slate-800"
-                )}
-                onClick={() => setActiveKey(key)}
-              >
-                <span
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold"
-                  style={{ backgroundColor: m.bg, color: m.fg }}
-                >
-                  {m.short}
-                </span>
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+    <div className={cn("rounded-2xl p-3", STAGE[platform])}>
+      <p
+        className={cn(
+          "mb-2 text-center text-[11px] font-medium uppercase tracking-[0.14em]",
+          platform === "tiktok" ? "text-white/70" : "text-slate-500"
+        )}
+      >
+        {label || meta.label} preview
+      </p>
+      {frame}
+    </div>
+  );
+}
 
-      <div className={cn("rounded-2xl p-3", STAGE[platform])}>
-        <p
-          className={cn(
-            "mb-2 text-center text-[11px] font-medium uppercase tracking-[0.14em]",
-            platform === "tiktok" ? "text-white/70" : "text-slate-500"
-          )}
-        >
-          {meta.label} preview
-        </p>
-        {frame}
-      </div>
+export function PlatformPostPreview({
+  platforms,
+  caption,
+  captionHtml,
+  images,
+  canvaUrl,
+}: {
+  platforms: string[];
+  caption: string;
+  captionHtml?: string | null;
+  images: string[];
+  canvaUrl?: string | null;
+}) {
+  const resolved = useMemo(() => resolvePreviewPlatforms(platforms), [platforms]);
+
+  return (
+    <div className="space-y-4">
+      {resolved.map((item) => (
+        <PlatformStage
+          key={`${item.key}:${item.label}`}
+          platform={item.key}
+          label={item.label}
+          caption={caption}
+          captionHtml={captionHtml}
+          images={images}
+          canvaUrl={canvaUrl}
+        />
+      ))}
     </div>
   );
 }

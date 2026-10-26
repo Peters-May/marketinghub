@@ -30,6 +30,7 @@ import {
   isPreviewableImageUrl,
   isVideoUrl,
   platformKey,
+  resolvePreviewPlatforms,
 } from "@/lib/social/platforms";
 import { titleFromPlanableMediaUrls, mediaFingerprintFromUrls } from "@/lib/planable/client";
 import { HUB_CALENDAR_CSS } from "@/components/content/ContentCalendarCard";
@@ -72,11 +73,6 @@ type SocialPost = {
 const HUB_STATUS_OPTIONS = CONTENT_STATUS.filter(
   (o) => o.value !== "published"
 );
-
-function normalizePlatform(raw: string | null | undefined): string {
-  const key = platformKey(raw ?? "");
-  return PLATFORM_META[key].label;
-}
 
 type PlanableApiPost = {
   id: string;
@@ -208,7 +204,9 @@ function collapsePlanableForMemberView(raw: PlanableApiPost[]): SocialPost[] {
             : p.pageName
               ? [p.pageName]
               : ["Social"]
-          ).map(normalizePlatform)
+          ).flatMap((name) =>
+            resolvePreviewPlatforms([name]).map((item) => item.label)
+          )
         )
       )
     );
@@ -258,7 +256,9 @@ function platformsFromChannel(
   notes?: string
 ): string[] {
   const normalized = normalizeChannels(channel, title ?? "", notes ?? "");
-  const labels = normalized.map((ch) => normalizePlatform(ch));
+  const labels = normalized.flatMap((ch) =>
+    resolvePreviewPlatforms([ch]).map((item) => item.label)
+  );
   const unique: string[] = [];
   for (const label of labels) {
     if (!unique.includes(label)) unique.push(label);
@@ -377,8 +377,8 @@ function PostCard({
         compact ? "gap-1 p-1.5" : "gap-1.5 p-2"
       )}
     >
-      <div className="flex items-center justify-between gap-1">
-        <div className="flex min-w-0 items-center gap-0.5">
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-0.5">
           {platforms.map((p) => (
             <PlatformBadge key={p} name={p} />
           ))}
@@ -569,7 +569,9 @@ export function SocialClient({
           : p.pageName
             ? [p.pageName]
             : ["Social"]
-        ).map(normalizePlatform);
+        ).flatMap((name) =>
+          resolvePreviewPlatforms([name]).map((item) => item.label)
+        );
         const mediaUrls = (p.mediaUrls?.length
           ? p.mediaUrls
           : p.mediaUrl
