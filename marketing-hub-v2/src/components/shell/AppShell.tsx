@@ -165,6 +165,9 @@ function ShellInner({
           <Link
             key={item.href}
             href={item.href}
+            // Each section loads the full hub document. Viewport prefetch
+            // would run all of those reads at once and time the database out.
+            prefetch={false}
             data-tour={`nav-${navTourId(item.href)}`}
             onClick={() => setOpen(false)}
             className={cn(

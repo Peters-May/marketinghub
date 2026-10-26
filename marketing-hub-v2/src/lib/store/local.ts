@@ -382,10 +382,54 @@ async function writeLocalFile(store: HubStore): Promise<void> {
   }
 }
 
+/** A hung jsonb read must fail before the platform kills the function at 300s. */
+const STORE_READ_TIMEOUT_MS = 90_000;
+
 type RemoteStoreRow = {
   payload: Partial<HubStore>;
   updatedAt: string;
 };
+
+/** Share one document read across the requests hitting this server instance. */
+const REMOTE_READ_TTL_MS = 10_000;
+
+type RemoteReadCache = {
+  row: RemoteStoreRow;
+  fetchedAt: number;
+};
+
+let remoteReadCache: RemoteReadCache | null = null;
+let remoteReadInflight: Promise<RemoteStoreRow | null> | null = null;
+
+function rememberRemoteRead(row: RemoteStoreRow) {
+  remoteReadCache = {
+    row: {
+      payload: structuredClone(row.payload),
+      updatedAt: row.updatedAt,
+    },
+    fetchedAt: Date.now(),
+  };
+}
+
+function timestampValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  return null;
+}
+
+function rowFromPayload(data: {
+  payload?: unknown;
+  updated_at?: unknown;
+}): RemoteStoreRow | null {
+  const updatedAt = timestampValue(data.updated_at);
+  if (!data.payload || typeof data.payload !== "object" || !updatedAt) return null;
+  return {
+    payload: data.payload as Partial<HubStore>,
+    updatedAt,
+  };
+}
 
 class StoreConflictError extends Error {
   constructor() {
@@ -394,33 +438,90 @@ class StoreConflictError extends Error {
   }
 }
 
-async function readRemoteStore(): Promise<RemoteStoreRow | null> {
-  let data: { payload?: unknown; updated_at?: string } | null = null;
-  let error: { message?: string } | null = null;
+const STORE_READ_ERROR = "Hub store could not be read. Nothing was replaced.";
+
+async function readRemoteStoreUncached(): Promise<RemoteStoreRow | null> {
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const supabase = createServiceClient();
+    const rpc = await supabase.rpc("hub_store_read", { p_id: HUB_STORE_ID });
+    const missingFunction = Boolean(
+      rpc.error &&
+        /PGRST202|schema cache|Could not find the function/i.test(
+          rpc.error.message ?? ""
+        )
+    );
+    if (!rpc.error) {
+      if (rpc.data == null) return null;
+      const row = rowFromPayload(
+        rpc.data as { payload?: unknown; updated_at?: unknown }
+      );
+      if (row) return row;
+      throw new Error(STORE_READ_ERROR);
+    }
+    if (!missingFunction) {
+      console.error("[store] remote read failed", rpc.error.message);
+      throw new Error(STORE_READ_ERROR);
+    }
+
     const result = await supabase
       .from("hub_store")
       .select("payload, updated_at")
       .eq("id", HUB_STORE_ID)
+      .abortSignal(AbortSignal.timeout(STORE_READ_TIMEOUT_MS))
       .maybeSingle();
-    data = result.data;
-    error = result.error;
+    if (result.error) {
+      console.error("[store] remote read failed", result.error.message);
+      throw new Error(STORE_READ_ERROR);
+    }
+    if (!result.data) return null;
+    return rowFromPayload(result.data);
   } catch (err) {
+    if (err instanceof Error && err.message === STORE_READ_ERROR) throw err;
     console.error("[store] remote read error", err);
-    throw new Error("Hub store could not be read. Nothing was replaced.");
+    throw new Error(STORE_READ_ERROR);
   }
-  if (error) {
-    console.error("[store] remote read failed", error.message);
-    throw new Error("Hub store could not be read. Nothing was replaced.");
+}
+
+/**
+ * `fresh` skips the short cache and, on failure, does not serve a stale copy.
+ * Saves use that path so a compare-and-swap is never based on an old version.
+ */
+async function readRemoteStore(options?: {
+  fresh?: boolean;
+}): Promise<RemoteStoreRow | null> {
+  const fresh = options?.fresh === true;
+  if (
+    !fresh &&
+    remoteReadCache &&
+    Date.now() - remoteReadCache.fetchedAt < REMOTE_READ_TTL_MS
+  ) {
+    return remoteReadCache.row;
   }
-  if (!data?.payload || typeof data.payload !== "object") return null;
-  if (!data.updated_at) return null;
-  return {
-    payload: data.payload as Partial<HubStore>,
-    updatedAt: String(data.updated_at),
-  };
+
+  if (!remoteReadInflight) {
+    remoteReadInflight = readRemoteStoreUncached()
+      .then((row) => {
+        if (row) rememberRemoteRead(row);
+        return row;
+      })
+      .finally(() => {
+        remoteReadInflight = null;
+      });
+  }
+
+  try {
+    return await remoteReadInflight;
+  } catch (err) {
+    if (!fresh && remoteReadCache) {
+      console.error(
+        "[store] remote read failed; serving last good copy",
+        err instanceof Error ? err.message : err
+      );
+      return remoteReadCache.row;
+    }
+    throw err;
+  }
 }
 
 /** Insert only. A timeout must never become an upsert over the live hub. */
@@ -476,7 +577,16 @@ async function writeRemoteStore(
       console.error("[store] remote CAS write failed", error.message);
       return "error";
     }
-    if (data == null) return "conflict";
+    if (data == null) {
+      remoteReadCache = null;
+      return "conflict";
+    }
+    const updatedAt = timestampValue(data);
+    if (updatedAt) {
+      rememberRemoteRead({ payload: store, updatedAt });
+    } else {
+      remoteReadCache = null;
+    }
     return "ok";
   } catch (err) {
     console.error("[store] remote write error", err);
@@ -490,9 +600,9 @@ type StoreRead = {
   remoteUpdatedAt: string | null;
 };
 
-async function ensureStore(): Promise<StoreRead> {
+async function ensureStore(options?: { fresh?: boolean }): Promise<StoreRead> {
   if (shouldUseDurableSupabaseStore()) {
-    const remote = await readRemoteStore();
+    const remote = await readRemoteStore(options);
     // An existing remote row is the source of truth, even when it looks like
     // the demo seed. A local or /tmp file must not be written over it.
     const local = remote ? null : await readLocalFile();
@@ -504,7 +614,7 @@ async function ensureStore(): Promise<StoreRead> {
       const seed = createSeedStore();
       const inserted = await insertRemoteStoreIfMissing(seed);
       if (inserted === "exists") {
-        const again = await readRemoteStore();
+        const again = await readRemoteStore({ fresh: true });
         if (!again) {
           throw new Error("Hub store could not be read. Nothing was replaced.");
         }
@@ -517,7 +627,7 @@ async function ensureStore(): Promise<StoreRead> {
         throw new Error("Failed to initialize hub store in Supabase");
       }
       await writeLocalFile(seed);
-      const again = await readRemoteStore();
+      const again = await readRemoteStore({ fresh: true });
       return {
         store: seed,
         remoteUpdatedAt: again?.updatedAt ?? null,
@@ -550,7 +660,7 @@ async function ensureStore(): Promise<StoreRead> {
       const result = await writeRemoteStore(merged, remote.updatedAt);
       if (result === "ok") {
         await writeLocalFile(merged);
-        const again = await readRemoteStore();
+        const again = await readRemoteStore({ fresh: true });
         return {
           store: merged,
           remoteUpdatedAt: again?.updatedAt ?? remote.updatedAt,
@@ -558,7 +668,7 @@ async function ensureStore(): Promise<StoreRead> {
       }
       if (result === "conflict") {
         // Latest remote won — return it rather than clobbering.
-        const latest = await readRemoteStore();
+        const latest = await readRemoteStore({ fresh: true });
         if (latest) {
           const latestMerged = withDefaults(latest.payload);
           await writeLocalFile(latestMerged);
@@ -632,7 +742,8 @@ export async function writeStore(
   await writeLocalFile(store);
 }
 
-const MAX_STORE_WRITE_ATTEMPTS = 8;
+/** One attempt can sit on the 120s statement timeout. A longer loop hits the 300s platform kill. */
+const MAX_STORE_WRITE_ATTEMPTS = 2;
 
 /** Serialize store mutations on this process so concurrent writes can't clobber each other. */
 let updateStoreChain: Promise<unknown> = Promise.resolve();
@@ -643,7 +754,7 @@ export async function updateStore(
   const run = async () => {
     let lastError: unknown;
     for (let attempt = 0; attempt < MAX_STORE_WRITE_ATTEMPTS; attempt++) {
-      const { store, remoteUpdatedAt } = await ensureStore();
+      const { store, remoteUpdatedAt } = await ensureStore({ fresh: true });
       const next = mutator(store) ?? store;
       try {
         await writeStore(next, remoteUpdatedAt);

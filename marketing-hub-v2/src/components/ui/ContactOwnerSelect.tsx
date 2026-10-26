@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { contactOwnerOptions } from "@/lib/data/collections";
 import { createPersonContact } from "@/lib/contacts/create-person";
+import {
+  loadContactList,
+  upsertCachedContact,
+} from "@/lib/contacts/load-contacts";
 import type { Contact } from "@/lib/types";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 
@@ -26,18 +30,16 @@ export function ContactOwnerSelect({
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/contacts");
-        if (!res.ok) return;
-        const data = (await res.json()) as { contacts?: Contact[] };
-        if (!cancelled) setContacts(data.contacts ?? []);
-      } catch {
+    void loadContactList()
+      .then((next) => {
+        if (!cancelled) setContacts(next);
+      })
+      .catch(() => {
         /* keep empty list */
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoaded(true);
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
@@ -62,6 +64,7 @@ export function ContactOwnerSelect({
       createLabel={(name) => `Add “${name}” as a contact`}
       onCreate={async (name) => {
         const item = await createPersonContact(name);
+        upsertCachedContact(item);
         setContacts((prev) =>
           prev.some((c) => c.id === item.id) ? prev : [...prev, item]
         );

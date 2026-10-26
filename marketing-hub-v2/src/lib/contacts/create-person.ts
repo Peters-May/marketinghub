@@ -1,3 +1,4 @@
+import { upsertCachedContact } from "@/lib/contacts/load-contacts";
 import type { Contact } from "@/lib/types";
 
 export type CreatePersonContactInput = {
@@ -42,5 +43,6 @@ export async function createPersonContact(
         : "Could not add this person"
     );
   }
+  upsertCachedContact(data.item);
   return data.item;
 }
