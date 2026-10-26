@@ -39,6 +39,10 @@ export async function POST(request: NextRequest) {
 
   const summary = previewSummary(parsed.commands, parsed.skipped.length);
 
+  if (body.confirm === true && user.role !== "admin") {
+    return jsonError("This assistant cannot save records.", 403);
+  }
+
   if (body.confirm !== true) {
     return jsonOk({
       ok: true,

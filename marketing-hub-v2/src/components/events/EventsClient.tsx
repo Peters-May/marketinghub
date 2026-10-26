@@ -975,10 +975,19 @@ export function EventsClient({
   eventContentLinks?: EventContentLink[];
 }) {
   const { view } = useHubView();
-  const canDelete = view === "admin";
   const canManageAttendees = view !== "external";
   const showUndatedQueue = view === "admin";
   const showAdminChecks = view === "admin";
+  const showAttendanceOps = view === "admin" || view === "member";
+
+  function mayDelete(event: { created_by: string | null }) {
+    if (view === "admin") return true;
+    return (
+      view === "member" &&
+      Boolean(currentUserId) &&
+      event.created_by === currentUserId
+    );
+  }
 
   const fieldOptions = useManagedFieldOptions("events", fieldOptionsProp);
   const eventTypeOptions = ensureFieldOption(
@@ -1520,7 +1529,7 @@ export function EventsClient({
             event_series_id: edit.event_series_id,
             planner_slug: edit.planner_slug,
             pm_attendance: edit.pm_attendance,
-            ...(showAdminChecks ? readAttendanceOpsFields(edit) : {}),
+            ...(showAttendanceOps ? readAttendanceOpsFields(edit) : {}),
           },
         }),
       });
@@ -1538,7 +1547,7 @@ export function EventsClient({
     eventId: string,
     patch: Partial<EventAttendanceOpsFields>
   ) {
-    if (!showAdminChecks) return;
+    if (!showAttendanceOps) return;
     setSaving(true);
     try {
       await fetch("/api/events", {
@@ -1562,7 +1571,10 @@ export function EventsClient({
   }
 
   async function removeEvent(id: string) {
-    if (!canDelete) return;
+    const event =
+      events.find((item) => item.id === id) ??
+      (selected?.id === id ? selected : null);
+    if (!event || !mayDelete(event)) return;
     if (!window.confirm("Delete this event?")) return;
     const res = await fetch("/api/events", {
       method: "POST",
@@ -1854,7 +1866,7 @@ export function EventsClient({
             onChange={setForm}
             eventTypeOptions={eventTypeOptions}
             divisionOptions={divisionOptions}
-            showAdminChecks={showAdminChecks}
+            showAdminChecks={showAttendanceOps}
           />
           <div className="mt-4 flex gap-2">
             <button
@@ -1997,7 +2009,7 @@ export function EventsClient({
                       >
                         {arg.event.title}
                       </span>
-                      {showAdminChecks && pmAttending ? (
+                      {showAttendanceOps && pmAttending ? (
                         <span
                           className="shrink-0 truncate text-[10px] font-medium opacity-90"
                           style={{ color: color.text }}
@@ -2042,7 +2054,7 @@ export function EventsClient({
                     <div>
                       <p className="flex flex-wrap items-center gap-2 font-medium">
                         <span>{e.title}</span>
-                        {showAdminChecks ? <AttendingBadge event={e} /> : null}
+                        {showAttendanceOps ? <AttendingBadge event={e} /> : null}
                       </p>
                       <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
                         <TypeSwatch eventType={e.event_type} />
@@ -2076,7 +2088,7 @@ export function EventsClient({
                     <h2 className="font-display text-xl text-brand">
                       {selected.title}
                     </h2>
-                    {showAdminChecks ? (
+                    {showAttendanceOps ? (
                       <AttendingBadge event={selected} />
                     ) : null}
                   </div>
@@ -2182,7 +2194,7 @@ export function EventsClient({
                   </div>
                 </dl>
 
-                {showAdminChecks ? (
+                {showAttendanceOps ? (
                   <div className="mt-4">
                     <AttendanceOpsPanel
                       values={readAttendanceOpsFields(selected)}
@@ -2307,7 +2319,7 @@ export function EventsClient({
                       ) : null}
                     </>
                   ) : null}
-                  {canDelete ? (
+                  {mayDelete(selected) ? (
                     <button
                       type="button"
                       className="btn-ghost text-[var(--danger)]"
@@ -2354,7 +2366,7 @@ export function EventsClient({
                     >
                       <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
                         <span>{e.title}</span>
-                        {showAdminChecks ? <AttendingBadge event={e} /> : null}
+                        {showAttendanceOps ? <AttendingBadge event={e} /> : null}
                       </span>
                       <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
                         <TypeSwatch eventType={e.event_type} />
@@ -2410,7 +2422,7 @@ export function EventsClient({
               >
                 Cancel
               </button>
-              {canDelete ? (
+              {mayDelete(editingEvent) ? (
                 <button
                   type="button"
                   className="btn-ghost text-[var(--danger)]"
@@ -2428,7 +2440,7 @@ export function EventsClient({
             onChange={setEdit}
             eventTypeOptions={eventTypeOptions}
             divisionOptions={divisionOptions}
-            showAdminChecks={showAdminChecks}
+            showAdminChecks={showAttendanceOps}
           />
           {editingId ? (
             <EventAttendeeManager

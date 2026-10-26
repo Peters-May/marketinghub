@@ -140,11 +140,13 @@ export function AiAssistantPanel({
   open,
   onClose,
   onOpen,
+  readOnly = false,
   className,
 }: {
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
+  readOnly?: boolean;
   className?: string;
 }) {
   const router = useRouter();
@@ -248,6 +250,7 @@ export function AiAssistantPanel({
   }
 
   async function confirmCommand(text?: string | null) {
+    if (readOnly) return;
     const commandText = (text ?? pendingCommand ?? commandPreview?.text)?.trim();
     if (!commandText || confirmingRef.current) return;
     confirmingRef.current = true;
@@ -310,7 +313,7 @@ export function AiAssistantPanel({
   async function submitChat() {
     const text = composer.trim();
     if (!text || busy) return;
-    if (pendingCommand && isHubRunConfirmation(text)) {
+    if (!readOnly && pendingCommand && isHubRunConfirmation(text)) {
       setMessages((prev) => [
         ...prev,
         { id: newId(), role: "user", content: text },
@@ -365,7 +368,9 @@ export function AiAssistantPanel({
       }
 
       const raw = typeof data.reply === "string" ? data.reply : "";
-      const { displayText, commandText } = extractHubCommand(raw);
+      const extracted = extractHubCommand(raw);
+      const commandText = readOnly ? null : extracted.commandText;
+      const displayText = readOnly ? extracted.displayText || raw.trim() : extracted.displayText;
       if (!displayText && !commandText) {
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
         setError(
@@ -559,7 +564,15 @@ export function AiAssistantPanel({
           <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-1.5">
-          {MODE_OPTIONS.map((option) => (
+          {(readOnly
+            ? MODE_OPTIONS.filter(
+                (option) =>
+                  option.id === "chat" ||
+                  option.id === "rewrite" ||
+                  option.id === "summarise"
+              )
+            : MODE_OPTIONS
+          ).map((option) => (
             <button
               key={option.id}
               type="button"
@@ -614,7 +627,7 @@ export function AiAssistantPanel({
                 <Copy className="h-3 w-3" />
                 {copied ? "Copied" : "Copy"}
               </button>
-              {draft.kind === "email" ? (
+              {draft.kind === "email" && !readOnly ? (
                 <Link
                   href="/app/email"
                   className="btn-secondary px-2 py-1 text-[11px]"
@@ -622,7 +635,7 @@ export function AiAssistantPanel({
                   Open Email
                 </Link>
               ) : null}
-              {draft.kind === "social" && draft.suggestedCommand ? (
+              {draft.kind === "social" && draft.suggestedCommand && !readOnly ? (
                 <button
                   type="button"
                   className="btn-secondary px-2 py-1 text-[11px]"
@@ -646,8 +659,9 @@ export function AiAssistantPanel({
         <div className="space-y-3">
           {messages.length === 0 && !draft ? (
             <p className="text-xs text-muted">
-              Upload a brief or asset, then ask for a draft, a rewrite, or to add
-              a task, event, or social post. Nothing is saved until you confirm.
+              {readOnly
+                ? "Ask about enquiry statistics, the library, events, or scheduled and published content. This assistant cannot save records."
+                : "Upload a brief or asset, then ask for a draft, a rewrite, or to add a task, event, or social post. Nothing is saved until you confirm."}
             </p>
           ) : null}
           {messages.map((msg) => (
@@ -661,7 +675,7 @@ export function AiAssistantPanel({
               )}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
-              {msg.commandText ? (
+              {msg.commandText && !readOnly ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -680,7 +694,7 @@ export function AiAssistantPanel({
       </div>
           </div>
           <div className="border-t border-border px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {commandPreview ? (
+            {commandPreview && !readOnly ? (
               <div className="mb-3 rounded-xl border border-brand/20 bg-accent-soft/40 px-3 py-2.5 text-xs">
                 <p className="font-medium text-brand">{commandPreview.summary}</p>
                 {commandPreview.items.length > 1 ? (

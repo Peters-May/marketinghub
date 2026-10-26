@@ -43,11 +43,11 @@ export function LibraryHub({
   const isExternal = view === "external";
   const isMember = view === "member";
   const canManage = view === "admin";
-  // Resources overlaps Media Links for now — admin-only until we merge them.
-  const tabs = canManage
+  const showResources = view === "admin" || view === "member";
+  const tabs = showResources
     ? ALL_TABS
-    : ALL_TABS.filter((t) => t.id !== "resources");
-  const activeTab = tab === "resources" && !canManage ? "media" : tab;
+    : ALL_TABS.filter((item) => item.id !== "resources");
+  const activeTab = tab === "resources" && !showResources ? "media" : tab;
 
   if (isExternal) {
     return (
@@ -75,7 +75,7 @@ export function LibraryHub({
         title="Library"
         description={
           isMember
-            ? "Browse and download brand assets and guidelines."
+            ? "Browse and download brand assets, guidelines, and useful links."
             : "Brand assets, guidelines, and useful links — one place for the team."
         }
       />
@@ -109,7 +109,7 @@ export function LibraryHub({
         />
       ) : null}
 
-      {activeTab === "resources" && canManage ? (
+      {activeTab === "resources" && showResources ? (
         <ResourcesClient
           initial={resources}
           hideHeader

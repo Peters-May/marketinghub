@@ -2,6 +2,7 @@ import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { getHubOpenAIModel } from "@/lib/ai/openai";
 import {
+  extractHubCommand,
   type AssistantAttachment,
   type AssistantChatMessage,
 } from "@/lib/ai/assistant-shared";
@@ -59,6 +60,20 @@ If the user asks to update budget, media, or anything outside tasks/events/conte
 Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it” or “add them”.
 Do not ask them to confirm again, and do not say you are waiting for a review. After you emit the block, stop.
 Uploads are available as context when the admin attaches files with Upload before sending.`;
+
+export const MEMBER_ASSISTANT_SYSTEM = `${BRAND_AI_SUMMARY}
+
+You are the Peters & May Marketing Hub assistant for a team member.
+Output British English only. Be concise and practical.
+Never invent clients, quotes, case studies, statistics, office counts, or certifications.
+Leave factsheet placeholders if a figure would otherwise be needed.
+Do not use emoji, exclamation marks, or hype words.
+
+Answer questions about enquiry statistics, the library, scheduled and published content, events, and the member's own tasks.
+Use only the figures and titles in the catalogue. If a figure is not listed, say you do not have it.
+Do not quote enquiry messages, customer names, emails, or phone numbers.
+Do not mention budget, logins, contacts, or unpublished drafts.
+Do not emit a hub-command block. You cannot save or change records. Tell the member to use the page in the hub when they want to add or edit something.`;
 
 function isImageMime(mime: string) {
   return mime.startsWith("image/");
@@ -126,6 +141,7 @@ export async function generateAssistantChat(input: {
   messages: AssistantChatMessage[];
   attachments?: AssistantAttachment[];
   readContext?: string;
+  readOnly?: boolean;
 }) {
   const snapshot = input.readContext?.trim();
   const today = new Intl.DateTimeFormat("en-GB", {
@@ -137,17 +153,24 @@ export async function generateAssistantChat(input: {
   const { text } = await generateText({
     model: await getHubOpenAIModel(),
     system: [
-      HUB_ASSISTANT_SYSTEM,
+      input.readOnly ? MEMBER_ASSISTANT_SYSTEM : HUB_ASSISTANT_SYSTEM,
       `Today is ${today}.`,
       snapshot
-        ? `${snapshot}\n\nThis catalogue is the live hub data for events, tasks, posts, partners, budget lines, and resources. Use it to extract, compare, and choose the exact record to edit. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
+        ? input.readOnly
+          ? `${snapshot}\n\nThis is a read-only catalogue. Answer from it. Do not say a record was saved, and do not propose a hub command.`
+          : `${snapshot}\n\nThis catalogue is the live hub data for events, tasks, posts, partners, budget lines, and resources. Use it to extract, compare, and choose the exact record to edit. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
         : "",
     ]
       .filter(Boolean)
       .join("\n\n"),
     messages: buildChatMessages(input),
   });
-  return text;
+  if (!input.readOnly) return text;
+  const { displayText } = extractHubCommand(text);
+  return (
+    displayText ||
+    "I can answer from the hub, but I cannot save records. Use the page in the hub to add or edit something."
+  );
 }
 
 function friendlyAiError(err: unknown): { message: string; status: number } {

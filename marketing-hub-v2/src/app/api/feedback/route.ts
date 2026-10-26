@@ -3,6 +3,47 @@ import { createServiceClient } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/auth/session";
 import { notifyMarketingAlert } from "@/lib/email/send-marketing-alert";
 
+const FEEDBACK_TYPES = ["bug", "improvement", "idea", "other"] as const;
+const FEEDBACK_PRIORITIES = ["low", "medium", "high"] as const;
+
+function memberFeedbackPatch(patch: Record<string, unknown>) {
+  const safe: Record<string, string | null> = {};
+  if ("title" in patch) {
+    if (typeof patch.title !== "string" || !patch.title.trim()) return null;
+    safe.title = patch.title.trim().slice(0, 200);
+  }
+  if ("description" in patch) {
+    if (patch.description == null) {
+      safe.description = null;
+    } else if (typeof patch.description !== "string") {
+      return null;
+    } else {
+      safe.description = patch.description.trim().slice(0, 8000) || null;
+    }
+  }
+  if ("type" in patch) {
+    if (
+      typeof patch.type !== "string" ||
+      !FEEDBACK_TYPES.includes(patch.type as (typeof FEEDBACK_TYPES)[number])
+    ) {
+      return null;
+    }
+    safe.type = patch.type;
+  }
+  if ("priority" in patch) {
+    if (
+      typeof patch.priority !== "string" ||
+      !FEEDBACK_PRIORITIES.includes(
+        patch.priority as (typeof FEEDBACK_PRIORITIES)[number]
+      )
+    ) {
+      return null;
+    }
+    safe.priority = patch.priority;
+  }
+  return safe;
+}
+
 async function getFeedbackItem(supabase: ReturnType<typeof createServiceClient>, id: string) {
   const { data, error } = await supabase
     .from("feedback")
@@ -44,12 +85,32 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceClient();
 
   if (body.action === "update" && body.id) {
+    const existing = await getFeedbackItem(supabase, body.id);
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    let patch = body.patch ?? {};
     if (user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      if (existing.submitted_by !== user.id) {
+        return NextResponse.json(
+          { error: "You can only edit feedback you submitted" },
+          { status: 403 }
+        );
+      }
+      const safe = memberFeedbackPatch(
+        patch && typeof patch === "object" ? patch : {}
+      );
+      if (!safe || !Object.keys(safe).length) {
+        return NextResponse.json(
+          { error: "Nothing to update" },
+          { status: 400 }
+        );
+      }
+      patch = safe;
     }
     const { error } = await supabase
       .from("feedback")
-      .update(body.patch)
+      .update(patch)
       .eq("id", body.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

@@ -15,8 +15,11 @@ import {
   AI_NOT_CONFIGURED_MESSAGE,
   isHubAiConfigured,
 } from "@/lib/ai/openai";
-import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
-import { assistantReadContext } from "@/lib/ai/read-context";
+import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import {
+  assistantReadContext,
+  memberAssistantReadContext,
+} from "@/lib/ai/read-context";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -61,8 +64,9 @@ function parseMessages(raw: unknown): AssistantChatMessage[] {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await requireAdmin();
-  if (error) return error;
+  const { user, error } = await requireStaff();
+  if (error || !user) return error;
+  const readOnly = user.role !== "admin";
 
   if (!(await isHubAiConfigured())) {
     return jsonError(AI_NOT_CONFIGURED_MESSAGE, 503);
@@ -93,7 +97,13 @@ export async function POST(request: NextRequest) {
       const reply = await generateAssistantChat({
         messages,
         attachments,
-        readContext: await assistantReadContext(),
+        readOnly,
+        readContext: readOnly
+          ? await memberAssistantReadContext({
+              id: user.id,
+              fullName: user.full_name,
+            })
+          : await assistantReadContext(),
       });
       return jsonOk({ mode, reply });
     }

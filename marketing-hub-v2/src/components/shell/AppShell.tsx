@@ -104,7 +104,8 @@ function ShellInner({
   const [assistantOpen, setAssistantOpen] = useState(true);
   const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
   const nav = navForView(view, { canAccessBudget, budgetInMemberNav });
-  const canUseAssistant = accessRole === "admin";
+  const canUseAssistant = accessRole === "admin" || accessRole === "staff";
+  const assistantReadOnly = accessRole !== "admin";
 
   useEffect(() => {
     if (!canUseAssistant) return;
@@ -297,6 +298,7 @@ function ShellInner({
                 open={assistantOpen}
                 onClose={() => setAssistant(false)}
                 onOpen={() => setAssistant(true)}
+                readOnly={assistantReadOnly}
                 className="order-1 md:order-2"
               />
             ) : null}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHubCatalogue } from "@/lib/ai/read-context";
+import { formatHubCatalogue, formatMemberCatalogue } from "@/lib/ai/read-context";
 import type { EventItem } from "@/lib/types";
 
 function event(partial: Partial<EventItem> & Pick<EventItem, "id" | "title">): EventItem {
@@ -96,5 +96,43 @@ describe("formatHubCatalogue", () => {
     expect(text).toContain("no named people");
     expect(text).toContain("Contacts are not listed (3 records)");
     expect(text).not.toContain("not the full calendar");
+  });
+
+  it("keeps the member catalogue to titles and enquiry totals", () => {
+    const text = formatMemberCatalogue({
+      today: "2026-10-26",
+      enquiryLines: ["Web enquiries: 12 total, 2 this week."],
+      events: [
+        event({
+          id: "a",
+          title: "Miami Boat Show",
+          starts_at: "2027-02-10",
+          location: "Miami",
+        }),
+      ],
+      content: [
+        {
+          title: "Autumn yacht moves",
+          status: "scheduled",
+          due_date: "2026-11-01",
+          channel: ["LinkedIn"],
+        },
+        {
+          title: "Hidden draft",
+          status: "draft",
+          due_date: null,
+          channel: ["LinkedIn"],
+        },
+      ],
+      resources: [{ title: "Brand portal", category: "Links" }],
+    });
+
+    expect(text).toContain("Web enquiries: 12 total");
+    expect(text).toContain("Miami Boat Show");
+    expect(text).toContain("Autumn yacht moves");
+    expect(text).toContain("Brand portal");
+    expect(text).not.toContain("Hidden draft");
+    expect(text).not.toContain("Budget");
+    expect(text).toContain("Do not save records");
   });
 });

@@ -48,7 +48,8 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "create_task" ||
     kind === "update_task" ||
     kind === "create_content" ||
-    kind === "update_content"
+    kind === "update_content" ||
+    kind === "mark_events_we_are_attending"
   );
 }
 
@@ -208,6 +209,12 @@ export async function executeHubCommand(
   user: SessionUser
 ): Promise<ExecuteResult> {
   if (needsAdmin(command.kind) && user.role !== "admin") {
+    if (command.kind === "mark_events_we_are_attending") {
+      return {
+        ok: false,
+        message: "Only an admin can check We are attending on every event.",
+      };
+    }
     return { ok: false, message: ADMIN_MESSAGE };
   }
 

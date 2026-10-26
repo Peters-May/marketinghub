@@ -55,6 +55,9 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [adminNoteEdits, setAdminNoteEdits] = useState<Record<string, string>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editSaving, setEditSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/feedback");
@@ -112,6 +115,45 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
       body: JSON.stringify({ action: "delete", id }),
     });
     setItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  async function saveOwnEdit(id: string) {
+    if (!editForm.title.trim()) return;
+    setEditSaving(true);
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        id,
+        patch: {
+          type: editForm.type,
+          title: editForm.title.trim(),
+          description: editForm.description,
+          priority: editForm.priority,
+        },
+      }),
+    });
+    setEditSaving(false);
+    if (!res.ok) return;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              type: editForm.type,
+              title: editForm.title.trim(),
+              description: editForm.description.trim() || null,
+              priority: editForm.priority,
+            }
+          : item
+      )
+    );
+    setEditingId(null);
+  }
+
+  function canEditOwn(item: FeedbackItem) {
+    return !isAdmin && Boolean(currentUserId) && item.submitted_by === currentUserId;
   }
 
   function canDeleteItem(item: FeedbackItem) {
@@ -322,9 +364,132 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
               {/* Expanded */}
               {expanded && (
                 <div className="border-t border-border px-4 pb-4 pt-3 flex flex-col gap-4">
-                  {item.description && (
+                  {item.description && editingId !== item.id && (
                     <p className="text-sm text-foreground/80 whitespace-pre-wrap">{item.description}</p>
                   )}
+
+                  {!isAdmin && canEditOwn(item) ? (
+                    editingId === item.id ? (
+                      <form
+                        className="flex flex-col gap-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void saveOwnEdit(item.id);
+                        }}
+                      >
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="label">Type</label>
+                            <select
+                              className="field"
+                              value={editForm.type}
+                              onChange={(event) =>
+                                setEditForm((current) => ({
+                                  ...current,
+                                  type: event.target.value as FeedbackItem["type"],
+                                }))
+                              }
+                            >
+                              {Object.entries(TYPE_META).map(([key, meta]) => (
+                                <option key={key} value={key}>
+                                  {meta.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <label className="label">Priority</label>
+                            <select
+                              className="field"
+                              value={editForm.priority}
+                              onChange={(event) =>
+                                setEditForm((current) => ({
+                                  ...current,
+                                  priority: event.target.value as FeedbackItem["priority"],
+                                }))
+                              }
+                            >
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="label">Title</label>
+                          <input
+                            className="field"
+                            value={editForm.title}
+                            required
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="label">Description</label>
+                          <textarea
+                            className="field min-h-[100px] resize-y"
+                            value={editForm.description}
+                            onChange={(event) =>
+                              setEditForm((current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="submit" className="btn-primary" disabled={editSaving}>
+                            {editSaving ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => setEditingId(null)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteItem(item.id)}
+                            className="ml-auto btn-ghost text-red-500 hover:text-red-600 flex items-center gap-1 text-xs"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => {
+                            setEditingId(item.id);
+                            setEditForm({
+                              type: item.type,
+                              title: item.title,
+                              description: item.description ?? "",
+                              priority: item.priority,
+                            });
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteItem(item.id)}
+                          className="btn-ghost text-red-500 hover:text-red-600 flex items-center gap-1 text-xs"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )
+                  ) : null}
 
                   {isAdmin && (
                     <div className="flex flex-wrap gap-3 items-center">
@@ -363,18 +528,6 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
                       ) : null}
                     </div>
                   )}
-
-                  {!isAdmin && canDeleteItem(item) ? (
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="btn-ghost text-red-500 hover:text-red-600 flex items-center gap-1 text-xs"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
 
                   {isAdmin && (
                     <div className="flex flex-col gap-1.5">
