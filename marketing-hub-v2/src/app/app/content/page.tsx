@@ -6,8 +6,8 @@ import {
   listEvents,
   listThemes,
 } from "@/lib/data/repos";
-import { isSocialContentItem } from "@/lib/data/normalize";
 import { getSessionUser } from "@/lib/auth/session";
+import { contentVisibleToMember } from "@/lib/social/suggest";
 
 export const dynamic = "force-dynamic";
 
@@ -29,20 +29,11 @@ export default async function ContentPage({
 
   const initialContent = isAdmin
     ? content
-    : content
-        .filter(
-          (c) =>
-            isSocialContentItem(c) &&
-            (c.status === "scheduled" || c.status === "published")
-        )
-        .map((c) => {
-          const copy = { ...c };
-          delete copy.share_token;
-          return copy;
-        });
+    : contentVisibleToMember(content, user?.id ?? "");
 
   return (
     <ContentSocialHub
+      viewerId={user?.id ?? null}
       initialOpenId={searchParams?.open ?? null}
       initialContent={initialContent}
       fieldOptions={fieldOptions}

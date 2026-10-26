@@ -38,6 +38,7 @@ const PLANABLE_CALENDAR_URL =
   "https://app.planable.io/calendar/25GtzkN5qqaTuMfEH";
 
 export function ContentSocialHub({
+  viewerId = null,
   initialOpenId = null,
   initialContent,
   fieldOptions,
@@ -45,6 +46,7 @@ export function ContentSocialHub({
   events = [],
   eventContentLinks = [],
 }: {
+  viewerId?: string | null;
   initialOpenId?: string | null;
   initialContent: ContentItem[];
   fieldOptions?: Record<string, FieldOption[]>;
@@ -61,12 +63,13 @@ export function ContentSocialHub({
       <div>
         <PageHeader
           title="Social calendar"
-          description="Scheduled and published posts only — drafts stay with the marketing team."
+          description="Scheduled and published posts, plus ideas you suggest for the marketing team."
         />
         <SocialClient
           key="member-social"
           hideHeader
           memberView
+          viewerId={viewerId}
           initialOpenId={initialOpenId}
           initialContent={initialContent}
         />

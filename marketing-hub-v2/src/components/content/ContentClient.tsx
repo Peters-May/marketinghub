@@ -198,6 +198,7 @@ function toIdeaPanelPost(item: ContentItem) {
     platforms: channels.length ? channels : [type],
     category: item.category || "",
     status: statusLabel(item.status),
+    owner: item.owner || "",
   };
 }
 

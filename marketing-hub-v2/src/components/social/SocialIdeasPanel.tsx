@@ -22,6 +22,7 @@ export type IdeaPanelPost = {
   platforms: string[];
   category?: string;
   status?: string;
+  owner?: string;
 };
 
 const UNCATEGORISED = "Uncategorised";
@@ -72,6 +73,11 @@ function ParkedIdeaCard({
         {preview ? (
           <div className="min-w-0 flex-1 [&_.hub-cal-card]:border-0 [&_.hub-cal-card]:bg-transparent [&_.hub-cal-card]:p-0 [&_.hub-cal-card]:shadow-none">
             {preview}
+            {post.owner ? (
+              <span className="mt-1 block text-[10px] text-muted">
+                Suggested by {post.owner}
+              </span>
+            ) : null}
           </div>
         ) : (
           <span className="min-w-0">
@@ -79,7 +85,12 @@ function ParkedIdeaCard({
               {post.text || "Untitled"}
             </span>
             <span className="mt-0.5 block text-[10px] text-muted">
-              {[post.status, platformLabel(post), categoryOf(post)]
+              {[
+                post.status,
+                platformLabel(post),
+                categoryOf(post),
+                post.owner ? `Suggested by ${post.owner}` : "",
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </span>

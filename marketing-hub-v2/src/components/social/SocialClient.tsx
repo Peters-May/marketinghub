@@ -40,6 +40,8 @@ import {
 } from "@/components/social/PlatformPostPreview";
 import { PostShareControls } from "@/components/social/PostShareControls";
 import { SocialIdeasPanel } from "@/components/social/SocialIdeasPanel";
+import { MemberIdeasColumn } from "@/components/social/MemberIdeasColumn";
+import { SuggestPostModal } from "@/components/social/SuggestPostModal";
 
 type SocialPost = {
   id: string;
@@ -63,6 +65,7 @@ type SocialPost = {
   planableGroupId?: string | null;
   /** All Planable sibling ids in the same group (member-view dedupe). */
   planableSiblingIds?: string[];
+  owner?: string;
 };
 
 const HUB_STATUS_OPTIONS = CONTENT_STATUS.filter(
@@ -416,6 +419,7 @@ export function SocialClient({
   memberView = false,
   initialOpenId = null,
   initialContent,
+  viewerId = null,
 }: {
   hideHeader?: boolean;
   /** Members: scheduled/published only, read-only calendar. */
@@ -423,9 +427,14 @@ export function SocialClient({
   initialOpenId?: string | null;
   /** SSR content rows — skips duplicate /api/content fetch on first load. */
   initialContent?: ContentItem[];
+  /** Signed-in user. Member ideas are limited to this id. */
+  viewerId?: string | null;
 }) {
   const skipContentFetchRef = useRef(Boolean(initialContent));
   const [posts, setPosts] = useState<SocialPost[]>([]);
+  const [ownIdeas, setOwnIdeas] = useState<ContentItem[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [editingIdea, setEditingIdea] = useState<ContentItem | null>(null);
   const [openUrl, setOpenUrl] = useState("https://app.planable.io");
   const [sourceLabel, setSourceLabel] = useState("Social Posts");
   const [error, setError] = useState<string | null>(null);
@@ -490,6 +499,20 @@ export function SocialClient({
       const planable = await planableRes.json();
       setOpenUrl(planable.openUrl ?? "https://app.planable.io");
 
+      if (memberView) {
+        setOwnIdeas(
+          contentItems.filter(
+            (c) =>
+              isSocialContentItem(c) &&
+              c.status === "idea" &&
+              !c.due_date &&
+              (!viewerId || c.owner_user_id === viewerId)
+          )
+        );
+      } else {
+        setOwnIdeas([]);
+      }
+
       const fromHub: SocialPost[] = contentItems
         .filter((c) => {
           if (!isSocialContentItem(c)) return false;
@@ -524,6 +547,7 @@ export function SocialClient({
             source: "hub" as const,
             shareEnabled: c.share_enabled === true,
             shareToken: c.share_token || "",
+            owner: c.owner || "",
           };
         })
         .sort((a, b) =>
@@ -634,9 +658,10 @@ export function SocialClient({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load social posts");
       setPosts([]);
+      setOwnIdeas([]);
     }
     setLoading(false);
-  }, [memberView, initialContent]);
+  }, [memberView, initialContent, viewerId]);
 
   async function syncFromPlanable() {
     setSyncing(true);
@@ -764,6 +789,7 @@ export function SocialClient({
           platforms: p.platforms,
           category: p.category || "",
           status: p.status,
+          owner: p.owner || "",
         })),
     [posts, ideaMatches]
   );
@@ -1038,14 +1064,25 @@ export function SocialClient({
                 <ExternalLink className="h-4 w-4" />
               </a>
             </div>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setEditingIdea(null);
+                setSuggestOpen(true);
+              }}
+            >
+              Suggest a post
+            </button>
+          )}
         </div>
       ) : (
         <PageHeader
           title="Social Media Calendar"
           description={
             memberView
-              ? "Scheduled and published posts across channels."
+              ? "Scheduled and published posts. Suggest an idea and it stays in Your ideas until marketing schedules it."
               : "Approved Hub posts send one Facebook draft to Planable with the due date — add other platforms there, then schedule and publish."
           }
           actions={
@@ -1069,7 +1106,18 @@ export function SocialClient({
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
-            ) : undefined
+            ) : (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  setEditingIdea(null);
+                  setSuggestOpen(true);
+                }}
+              >
+                Suggest a post
+              </button>
+            )
           }
         />
       )}
@@ -1216,12 +1264,7 @@ export function SocialClient({
             {error ? ` · ${error}` : ""}
           </p>
 
-          <div
-            className={cn(
-              "grid items-start gap-4",
-              !memberView && "lg:grid-cols-[minmax(0,1fr)_18rem]"
-            )}
-          >
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div
             className={cn(
               "hub-fc surface-card min-w-0 overflow-x-auto p-3 md:p-4",
@@ -1369,7 +1412,15 @@ export function SocialClient({
               }}
             />
           </div>
-          {!memberView ? (
+          {memberView ? (
+            <MemberIdeasColumn
+              ideas={ownIdeas}
+              onOpen={(idea) => {
+                setEditingIdea(idea);
+                setSuggestOpen(true);
+              }}
+            />
+          ) : (
             <SocialIdeasPanel
               panelRef={ideasPanelRef}
               parked={parkedIdeas}
@@ -1391,7 +1442,7 @@ export function SocialClient({
                 void parkHubPost(id);
               }}
             />
-          ) : null}
+          )}
           </div>
 
           <div className="surface-card overflow-hidden">
@@ -1651,6 +1702,21 @@ export function SocialClient({
               ) : null}
               </div>
         </RecordDrawer>
+      ) : null}
+      {memberView && suggestOpen ? (
+        <SuggestPostModal
+          key={editingIdea?.id ?? "new"}
+          idea={editingIdea}
+          onClose={() => {
+            setSuggestOpen(false);
+            setEditingIdea(null);
+          }}
+          onSaved={() => {
+            setSuggestOpen(false);
+            setEditingIdea(null);
+            void load();
+          }}
+        />
       ) : null}
     </div>
   );

@@ -14,6 +14,7 @@ import {
   isSocialContentItem,
   normalizeChannels,
 } from "@/lib/data/normalize";
+import { contentVisibleToMember } from "@/lib/social/suggest";
 import {
   pushContentToPlanable,
   removeContentFromPlanable,
@@ -45,27 +46,12 @@ async function maybePushPlanable(
   };
 }
 
-/** Members only see scheduled/published social — not drafts/pipeline. */
-function contentVisibleToMember(items: ContentItem[]): ContentItem[] {
-  return items
-    .filter(
-      (c) =>
-        isSocialContentItem(c) &&
-        (c.status === "scheduled" || c.status === "published")
-    )
-    .map((c) => {
-      const copy = { ...c };
-      delete copy.share_token;
-      return copy;
-    });
-}
-
 export async function GET() {
   const { user, error } = await requireStaff();
   if (error) return error;
   const content = await listContent();
   if (user.role !== "admin") {
-    return jsonOk({ content: contentVisibleToMember(content) });
+    return jsonOk({ content: contentVisibleToMember(content, user.id) });
   }
   return jsonOk({ content });
 }
