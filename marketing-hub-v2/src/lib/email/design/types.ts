@@ -220,4 +220,4 @@ export type SectionPreset =
   | "image-left"
   | "image-right";
 
-export type StarterLayout = "blank" | "newsletter" | "announcement";
+export type StarterLayout = "blank" | "newsletter" | "announcement" | "press_pitch";

@@ -43,6 +43,7 @@ export {
   moveSection,
   newsletterDesign,
   announcementDesign,
+  pressPitchDesign,
   normalizeEmailDesign,
   removeBlock,
   removeColumn,

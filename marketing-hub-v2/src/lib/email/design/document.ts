@@ -433,6 +433,154 @@ export function newsletterDesign(): EmailDesign {
   };
 }
 
+export type PressPitchContent = {
+  releaseType: string;
+  title: string;
+  imageSrc: string;
+  imageAlt: string;
+  storyHtml: string;
+  extraImages: { src: string; alt: string }[];
+  notesHtml: string;
+  articlesHtml: string;
+  boilerplateHtml: string;
+  mediaHtml: string;
+  related: {
+    title: string;
+    imageSrc: string;
+    bodyHtml: string;
+    href: string;
+  }[];
+  contactsHtml: string;
+};
+
+function pitchLabel(text: string) {
+  return createBlock("heading", {
+    text,
+    level: 3,
+    fontSize: 13,
+    color: COLORS.harbourGrey.hex,
+    paddingTop: 18,
+    paddingBottom: 4,
+  });
+}
+
+const PRESS_PITCH_DEFAULTS: PressPitchContent = {
+  releaseType: "Press release",
+  title: "Release headline",
+  imageSrc: "",
+  imageAlt: "",
+  storyHtml:
+    "<p>Write the standfirst here.</p><p>Then the release. Add further pictures in this section.</p>",
+  extraImages: [],
+  notesHtml:
+    "<p>For further information or to arrange an interview, please contact the media team below.</p>",
+  articlesHtml:
+    "<p><a href=\"https://www.petersandmay.com\">Visit the newsroom</a></p><p>Add related newsroom stories here.</p>",
+  boilerplateHtml:
+    "<p>Peters &amp; May is a global specialist in bespoke logistics. The company ships commercial and private vessels, and moves cargo by air, land and sea.</p><p><a href=\"https://www.petersandmay.com\">petersandmay.com</a></p>",
+  mediaHtml: "<p>Add downloadable images and files here.</p>",
+  related: [
+    {
+      title: "Related story",
+      imageSrc: "",
+      bodyHtml: "<p>Short summary of another newsroom story.</p>",
+      href: "https://www.petersandmay.com",
+    },
+  ],
+  contactsHtml:
+    "<p>Name<br>Role, Peters &amp; May<br>email@petersandmay.com<br>Phone</p>",
+};
+
+/** Press pitch laid out like a newsroom release email. */
+export function pressPitchDesign(
+  content?: Partial<PressPitchContent>
+): EmailDesign {
+  const copy = { ...PRESS_PITCH_DEFAULTS, ...content };
+  const related = content?.related ?? PRESS_PITCH_DEFAULTS.related;
+  return {
+    version: 1,
+    styles: defaultEmailStyles(),
+    sections: [
+      createSection("1", {
+        paddingBottom: 4,
+        columns: [
+          column(100, [
+            createBlock("logo", { align: "left", width: 168 }),
+          ]),
+        ],
+      }),
+      createSection("1", {
+        paddingTop: 0,
+        paddingBottom: 8,
+        columns: [
+          column(100, [
+            createBlock("image", {
+              src: copy.imageSrc,
+              alt: copy.imageAlt || copy.title,
+              widthPercent: 100,
+              align: "center",
+            }),
+            createBlock("heading", {
+              text: copy.releaseType,
+              level: 3,
+              fontSize: 13,
+              color: COLORS.pmBlue.hex,
+              paddingTop: 16,
+              paddingBottom: 4,
+            }),
+            createBlock("heading", {
+              text: copy.title,
+              level: 1,
+              fontSize: 28,
+              paddingTop: 0,
+              paddingBottom: 8,
+            }),
+            createBlock("text", { html: copy.storyHtml }),
+            ...copy.extraImages.map((image) =>
+              createBlock("image", {
+                src: image.src,
+                alt: image.alt,
+                widthPercent: 100,
+                align: "center",
+              })
+            ),
+            pitchLabel("Notes for editors"),
+            createBlock("text", { html: copy.notesHtml, fontSize: 15 }),
+            pitchLabel("Related articles"),
+            createBlock("text", { html: copy.articlesHtml, fontSize: 15 }),
+            pitchLabel("About Peters & May"),
+            createBlock("text", { html: copy.boilerplateHtml, fontSize: 15 }),
+            pitchLabel("Related media"),
+            createBlock("text", { html: copy.mediaHtml, fontSize: 15 }),
+            pitchLabel("Related content"),
+            ...(related.length
+              ? related.map((item) =>
+                  createBlock("content_card", {
+                    title: item.title,
+                    imageSrc: item.imageSrc,
+                    bodyHtml: item.bodyHtml,
+                    ctaLabel: "Read the story",
+                    ctaHref: item.href,
+                    paddingTop: 8,
+                    paddingBottom: 8,
+                  })
+                )
+              : [
+                  createBlock("text", {
+                    html: "<p>Add another newsroom story here.</p>",
+                    fontSize: 15,
+                  }),
+                ]),
+            pitchLabel("Contacts"),
+            createBlock("text", { html: copy.contactsHtml, fontSize: 15 }),
+          ]),
+        ],
+      }),
+      footerSection(),
+    ],
+  };
+}
+
 export function announcementDesign(): EmailDesign {
   return {
     version: 1,
@@ -460,6 +608,7 @@ export function announcementDesign(): EmailDesign {
 export function starterDesign(layout: StarterLayout): EmailDesign {
   if (layout === "newsletter") return newsletterDesign();
   if (layout === "announcement") return announcementDesign();
+  if (layout === "press_pitch") return pressPitchDesign();
   return blankDesign();
 }
 

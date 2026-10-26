@@ -18,6 +18,12 @@ const STARTERS: { id: StarterLayout; label: string; description: string }[] = [
     label: "Announcement",
     description: "Centred update with image and call to action.",
   },
+  {
+    id: "press_pitch",
+    label: "Press pitch",
+    description:
+      "Release email: logo, image, story, notes, newsroom links, boilerplate, media and contacts.",
+  },
 ];
 
 export function EmailStarterPicker({

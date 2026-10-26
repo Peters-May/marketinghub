@@ -8,6 +8,12 @@ import {
   ReleaseEditor,
   type ReleaseSpokesperson,
 } from "@/components/pr/ReleaseEditor";
+import { compileEmailDesign } from "@/lib/email/design";
+import { plainTextFromHtml } from "@/lib/plain-text";
+import {
+  PRESS_PITCH_TEMPLATE_ID,
+  pressPitchFromRelease,
+} from "@/lib/pr/pitch-email";
 import {
   campaignClickRateLabel,
   campaignMetaLine,
@@ -109,6 +115,40 @@ export function ReleasesPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the story");
     } finally {
+      setBusyId("");
+    }
+  }
+
+  async function pitchStory(item: ContentItem) {
+    setBusyId(item.id);
+    setError("");
+    try {
+      const design = pressPitchFromRelease(
+        item,
+        releases,
+        window.location.origin
+      );
+      const res = await fetch("/api/email/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: item.title,
+          subject: item.title,
+          preview_text: plainTextFromHtml(item.caption || "").slice(0, 140),
+          from_name: "Peters & May Marketing",
+          from_email: "marketing@petersandmay.com",
+          design,
+          html_body: compileEmailDesign(design),
+          template_id: PRESS_PITCH_TEMPLATE_ID,
+          content_id: item.id,
+          folder: "Press",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not open the pitch");
+      window.location.assign(`/app/email/design/campaign/${data.item.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open the pitch");
       setBusyId("");
     }
   }
@@ -326,12 +366,14 @@ export function ReleasesPanel({
                         View on newsroom
                       </Link>
                     ) : null}
-                    <Link
-                      href={`/app/pr/emails?content_id=${encodeURIComponent(item.id)}`}
-                      className="text-accent underline"
+                    <button
+                      type="button"
+                      className="text-accent underline disabled:opacity-50"
+                      disabled={busyId === item.id}
+                      onClick={() => void pitchStory(item)}
                     >
                       Pitch the story
-                    </Link>
+                    </button>
                   </div>
                 </li>
               );

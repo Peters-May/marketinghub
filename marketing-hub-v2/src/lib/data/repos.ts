@@ -10,6 +10,10 @@ import {
   type PlannerFields,
 } from "@/lib/events/planner";
 import { isPressRelease } from "@/lib/pr/pipeline";
+import {
+  PRESS_PITCH_TEMPLATE_ID,
+  pressPitchTemplateRecord,
+} from "@/lib/pr/pitch-email";
 import { uid } from "@/lib/utils";
 import { normalizeEmailDesign } from "@/lib/email/design";
 import { normalizeTopicOptOuts, topicForAudienceName } from "@/lib/email/preferences";
@@ -3069,7 +3073,25 @@ function normalizeEmailCampaign(
 }
 
 export async function listEmailTemplates() {
-  const store = await readStore();
+  let store = await readStore();
+  if (
+    !(store.email_templates ?? []).some(
+      (template) => template.id === PRESS_PITCH_TEMPLATE_ID
+    )
+  ) {
+    await updateStore((current) => {
+      if (!current.email_templates) current.email_templates = [];
+      if (
+        current.email_templates.some(
+          (template) => template.id === PRESS_PITCH_TEMPLATE_ID
+        )
+      ) {
+        return;
+      }
+      current.email_templates.push(pressPitchTemplateRecord(nowIso()));
+    });
+    store = await readStore();
+  }
   return [...(store.email_templates ?? [])]
     .map(normalizeEmailTemplate)
     .sort((a, b) => a.name.localeCompare(b.name));
