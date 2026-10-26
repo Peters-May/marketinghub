@@ -177,9 +177,11 @@ export async function createEvent(
   return item;
 }
 
-export async function updateEvent(id: string, patch: Partial<EventItem>) {
-  let updated: EventItem | null = null;
-  await updateStore((s) => {
+export async function updateEvent(
+  id: string,
+  patch: Partial<EventItem>
+): Promise<EventItem | null> {
+  const store = await updateStore((s) => {
     const idx = s.events.findIndex((e) => e.id === id);
     if (idx === -1) return;
     const next = {
@@ -198,9 +200,8 @@ export async function updateEvent(id: string, patch: Partial<EventItem>) {
       planner.date_status = "tbc";
     }
     s.events[idx] = { ...next, ...planner };
-    updated = s.events[idx];
   });
-  return updated;
+  return store.events.find((event) => event.id === id) ?? null;
 }
 
 export async function deleteEvent(id: string) {
