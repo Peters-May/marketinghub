@@ -444,7 +444,9 @@ async function readRemoteStoreUncached(): Promise<RemoteStoreRow | null> {
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const supabase = createServiceClient();
-    const rpc = await supabase.rpc("hub_store_read", { p_id: HUB_STORE_ID });
+    const rpc = await supabase
+      .rpc("hub_store_read", { p_id: HUB_STORE_ID })
+      .abortSignal(AbortSignal.timeout(STORE_READ_TIMEOUT_MS));
     const missingFunction = Boolean(
       rpc.error &&
         /PGRST202|schema cache|Could not find the function/i.test(

@@ -7,6 +7,7 @@ import type { AudienceWithCount } from "@/components/email/EmailMarketingHub";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { cn } from "@/lib/utils";
+import { pollWorkflow } from "@/lib/workflow/poll-client";
 
 type FormState = {
   name: string;
@@ -65,8 +66,16 @@ export function EmailAudiencesPanel({
     setNotice("");
     try {
       const res = await fetch("/api/email/audience/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Portal sync failed");
+      const started = await res.json();
+      if (!res.ok) throw new Error(started.error || "Portal sync failed");
+      const data = started.runId
+        ? await pollWorkflow<{
+            skipped?: boolean;
+            reason?: string;
+            lists?: number;
+            error?: string;
+          }>("/api/email/audience/sync", started.runId)
+        : started;
       if (data.skipped) {
         throw new Error(data.reason || "Portal sync is not configured");
       }

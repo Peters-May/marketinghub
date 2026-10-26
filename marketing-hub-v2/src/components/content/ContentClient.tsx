@@ -11,6 +11,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import type { ContentItem, ContentStatus, EventContentLink } from "@/lib/types";
+import { pollWorkflow } from "@/lib/workflow/poll-client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
@@ -488,12 +489,22 @@ export function ContentClient({
     setSyncMessage(null);
     try {
       const res = await fetch("/api/planable/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setSyncMessage(data.error || "Planable sync failed");
+      const started = await res.json();
+      if (!res.ok || started.error) {
+        setSyncMessage(started.error || "Planable sync failed");
       } else {
+        const data = started.runId
+          ? await pollWorkflow<{
+              created?: number;
+              updated?: number;
+              removed?: number;
+              error?: string;
+            }>("/api/planable/sync", started.runId)
+          : started;
         setSyncMessage(
-          `Planable sync: ${data.created ?? 0} new, ${data.updated ?? 0} updated, ${data.removed ?? 0} removed`
+          data.error
+            ? data.error
+            : `Planable sync: ${data.created ?? 0} new, ${data.updated ?? 0} updated, ${data.removed ?? 0} removed`
         );
       }
       await refresh();

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { EmailMarketingHub } from "@/components/email/EmailMarketingHub";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
-import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
+import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import {
   listContent,
   listEmailAudiences,
@@ -17,7 +17,7 @@ import {
 import { buildEmailOverview } from "@/lib/email/overview";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 export default async function EmailPage({
   searchParams,
@@ -35,7 +35,7 @@ export default async function EmailPage({
   }
 
   try {
-    await processDueScheduledCampaigns(1, { resumeInterrupted: false });
+    await queueDueCampaignSends(1, { resumeInterrupted: false });
   } catch (err) {
     console.error("[email] scheduled send", err);
   }

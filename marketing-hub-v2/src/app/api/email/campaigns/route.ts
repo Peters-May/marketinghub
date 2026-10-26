@@ -15,7 +15,7 @@ import {
 } from "@/lib/data/repos";
 import { campaignCloneInput } from "@/lib/email/clone";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
-import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
+import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import { viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
 import type { EmailCampaignStatus } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export async function GET() {
 
   // Fire due scheduled sends (best-effort; does not block listing on failure)
   try {
-    await processDueScheduledCampaigns(3);
+    await queueDueCampaignSends(3);
   } catch (err) {
     console.error("[api/email/campaigns] processDue failed", err);
   }

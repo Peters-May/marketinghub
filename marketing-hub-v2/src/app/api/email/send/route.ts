@@ -1,10 +1,11 @@
-import { waitUntil } from "@vercel/functions";
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
-import { sendEmailCampaign, sendTestEmail } from "@/lib/email/send-campaign";
+import { sendTestEmail } from "@/lib/email/send-campaign";
 import { getEmailCampaign, updateEmailCampaign } from "@/lib/data/repos";
+import { sendCampaignWorkflow } from "@/workflows/email-campaign";
+import { start } from "workflow/api";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const { error, user } = await requireAdmin();
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
     scheduled_at: null,
     last_error: "",
   });
-  waitUntil(sendEmailCampaign(campaignId, { claimed: true }));
-  return jsonOk({ ok: true, background: true });
+  const run = await start(sendCampaignWorkflow, [campaignId, true]);
+  console.log("[email] campaign workflow", campaignId, run.runId);
+  return jsonOk({ ok: true, background: true, runId: run.runId });
 }

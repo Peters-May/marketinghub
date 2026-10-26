@@ -1,21 +1,17 @@
 import { NextRequest } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { jsonError, jsonOk } from "@/lib/api";
-import {
-  addEmailSuppression,
-  appendEmailEvent,
-  bumpEmailCampaignStat,
-  findEmailSuppression,
-  listContacts,
-  updateContact,
-} from "@/lib/data/repos";
+import type { ResendEventJob } from "@/lib/email/apply-resend-event";
 import { readResendEventDetail } from "@/lib/email/resend-event";
-import { notifyPortalCampaignEngagement, notifyPortalSuppression } from "@/lib/sync/portal-marketing";
 import type { EmailEventKind } from "@/lib/types";
+import { resendEventWorkflow } from "@/workflows/resend-event";
+import { start } from "workflow/api";
+
+export const maxDuration = 30;
 
 /**
- * Resend webhook. Opens, clicks and deliveries are stored as rows.
- * The hub document is not rewritten for each event.
+ * Resend webhook. The request is acknowledged immediately.
+ * Opens, clicks and deliveries are stored by a workflow step.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -41,75 +37,23 @@ export async function POST(request: NextRequest) {
   const kind = mapResendType(type);
   if (!kind) return jsonOk({ ok: true, ignored: type });
 
-  const email = extractEmail(data);
-  const messageId = String(
-    data.email_id ?? data.id ?? data.message_id ?? ""
-  );
   const detail = readResendEventDetail(data);
   const campaignId = detail.campaignId;
   if (!campaignId) return jsonOk({ ok: true, skipped: "no campaign_id" });
 
-  await appendEmailEvent({
-    campaign_id: campaignId,
-    email: email || "unknown",
+  const job: ResendEventJob = {
+    type,
     kind,
-    resend_message_id: messageId,
-    meta: type,
+    email: extractEmail(data),
+    messageId: String(data.email_id ?? data.id ?? data.message_id ?? ""),
+    campaignId,
     link: detail.link,
-    user_agent: detail.userAgent,
-    created_at: detail.occurredAt || undefined,
-  });
-
-  if (kind === "opened" || kind === "clicked" || kind === "unsubscribed") {
-    if (email) {
-      const contacts = await listContacts();
-      const contact =
-        contacts.find(
-          (c) => c.email.trim().toLowerCase() === email.toLowerCase()
-        ) ?? null;
-      await notifyPortalCampaignEngagement({
-        email,
-        portalContactId: contact?.portal_contact_id,
-        campaignId,
-        kind,
-        occurredAt: detail.occurredAt || undefined,
-      });
-    }
-  }
-
-  if (kind === "complained" || kind === "bounced") {
-    if (email) {
-      const contacts = await listContacts();
-      const contact =
-        contacts.find(
-          (c) => c.email.trim().toLowerCase() === email.toLowerCase()
-        ) ?? null;
-      const alreadySuppressed = await findEmailSuppression(email);
-      await addEmailSuppression({
-        email,
-        reason: kind === "complained" ? "complaint" : "bounce",
-        contact_id: contact?.id ?? null,
-        campaign_id: campaignId,
-      });
-      if (!alreadySuppressed) {
-        await bumpEmailCampaignStat(
-          campaignId,
-          kind === "complained" ? "complained" : "bounced",
-          1
-        );
-      }
-      if (contact && kind === "complained") {
-        await updateContact(contact.id, { marketing_consent: false });
-      }
-      await notifyPortalSuppression({
-        email,
-        portalContactId: contact?.portal_contact_id,
-        reason: kind === "complained" ? "complaint" : "bounce",
-      });
-    }
-  }
-
-  return jsonOk({ ok: true });
+    userAgent: detail.userAgent,
+    occurredAt: detail.occurredAt,
+  };
+  const run = await start(resendEventWorkflow, [job]);
+  console.log("[email] resend workflow", kind, run.runId);
+  return jsonOk({ ok: true, runId: run.runId });
 }
 
 function mapResendType(type: string): EmailEventKind | null {

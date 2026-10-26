@@ -1,3 +1,5 @@
+import { withWorkflow } from "workflow/next";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Allow larger media uploads (per-file) through App Router route handlers.
@@ -103,4 +105,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

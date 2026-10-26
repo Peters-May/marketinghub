@@ -352,53 +352,22 @@ export function inboundStatusForExisting(
   return mapped;
 }
 
-/** Pull Planable → Hub social ContentItems. */
-export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
+export async function applyPlanableGroups(
+  groups: PostGroup[]
+): Promise<
+  Pick<
+    PlanableSyncResult,
+    "created" | "updated" | "skipped" | "lockedPublished" | "removed"
+  >
+> {
   const config = getPlanableConfig();
-  // Always fresh — Sync from Planable must not serve a 120s cached list.
-  const listed = await listAllPlanablePosts({ cache: "no-store" });
-  if (!listed.configured) {
-    return {
-      configured: false,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      lockedPublished: 0,
-      removed: 0,
-      openUrl: listed.openUrl,
-      error: listed.error,
-    };
-  }
-  if (listed.error && listed.posts.length === 0) {
-    return {
-      configured: true,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      lockedPublished: 0,
-      removed: 0,
-      openUrl: listed.openUrl,
-      error: listed.error,
-    };
-  }
-
   const existing = (await listContent()).map(withContentPlanableDefaults);
-  const groups = groupPlanablePosts(listed.posts);
-  const activePostIds = new Set(
-    listed.posts.filter((p) => !p.archived).map((p) => p.id)
-  );
-  const activeGroupIds = new Set(
-    groups.map((g) => g.groupId).filter(Boolean)
-  );
-  const archivedPostIds = new Set(
-    listed.posts.filter((p) => p.archived).map((p) => p.id)
-  );
+  const now = new Date().toISOString();
   let created = 0;
   let updated = 0;
   let skipped = 0;
   let lockedPublished = 0;
   let removed = 0;
-  const now = new Date().toISOString();
 
   for (const group of groups) {
     const primary =
@@ -599,15 +568,23 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
     if (published) lockedPublished += 1;
   }
 
-  // Remove Hub social rows whose Planable posts were archived or deleted.
+  return { created, updated, skipped, lockedPublished, removed };
+}
+
+export async function deleteStalePlanableItems(input: {
+  ids: string[];
+  archivedPostIds: string[];
+  activePostIds: string[];
+  activeGroupIds: string[];
+}): Promise<number> {
+  const wanted = new Set(input.ids);
+  const archivedPostIds = new Set(input.archivedPostIds);
+  const activePostIds = new Set(input.activePostIds);
+  const activeGroupIds = new Set(input.activeGroupIds);
   const linked = (await listContent())
     .map(withContentPlanableDefaults)
-    .filter(
-      (c) =>
-        isSocialContentItem(c) &&
-        Boolean(c.planable_post_id || c.planable_group_id)
-    );
-
+    .filter((item) => wanted.has(item.id));
+  let removed = 0;
   for (const item of linked) {
     const postId = item.planable_post_id;
     const groupId = item.planable_group_id;
@@ -621,7 +598,6 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
     if (postId && activePostIds.has(postId)) continue;
     if (groupId && activeGroupIds.has(groupId)) continue;
 
-    // Not in this sync page — verify live status (avoid false deletes outside window).
     if (postId) {
       const remote = await getPlanablePost(postId);
       if (
@@ -638,8 +614,11 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
       }
     }
   }
+  console.log("[planable] stale pass", input.ids.length, removed);
+  return removed;
+}
 
-  // Final pass: collapse any remaining Hub rows that still share a Planable id/group.
+export async function collapseDuplicatePlanableContent(): Promise<number> {
   const after = (await listContent()).map(withContentPlanableDefaults);
   const byPost = new Map<string, ContentItem[]>();
   const byGroup = new Map<string, ContentItem[]>();
@@ -657,6 +636,7 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
     }
   }
   const alreadyRemoved = new Set<string>();
+  let removed = 0;
   const collapse = async (rows: ContentItem[]) => {
     if (rows.length < 2) return;
     const keep = [...rows].sort(
@@ -671,8 +651,69 @@ export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
   };
   for (const rows of byPost.values()) await collapse(rows);
   for (const rows of byGroup.values()) {
-    await collapse(rows.filter((r) => !alreadyRemoved.has(r.id)));
+    await collapse(rows.filter((row) => !alreadyRemoved.has(row.id)));
   }
+  console.log("[planable] collapsed duplicates", removed);
+  return removed;
+}
+
+/** Pull Planable → Hub social ContentItems. */
+export async function syncPlanableIntoHub(): Promise<PlanableSyncResult> {
+  // Always fresh — Sync from Planable must not serve a 120s cached list.
+  const listed = await listAllPlanablePosts({ cache: "no-store" });
+  if (!listed.configured) {
+    return {
+      configured: false,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      lockedPublished: 0,
+      removed: 0,
+      openUrl: listed.openUrl,
+      error: listed.error,
+    };
+  }
+  if (listed.error && listed.posts.length === 0) {
+    return {
+      configured: true,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      lockedPublished: 0,
+      removed: 0,
+      openUrl: listed.openUrl,
+      error: listed.error,
+    };
+  }
+
+  const groups = groupPlanablePosts(listed.posts);
+  const activePostIds = listed.posts.filter((p) => !p.archived).map((p) => p.id);
+  const activeGroupIds = groups.map((g) => g.groupId).filter(Boolean);
+  const archivedPostIds = listed.posts.filter((p) => p.archived).map((p) => p.id);
+
+  const applied = await applyPlanableGroups(groups);
+  const created = applied.created;
+  const updated = applied.updated;
+  const skipped = applied.skipped;
+  const lockedPublished = applied.lockedPublished;
+  let removed = applied.removed;
+
+  const linkedIds = (await listContent())
+    .map(withContentPlanableDefaults)
+    .filter(
+      (item) =>
+        isSocialContentItem(item) &&
+        Boolean(item.planable_post_id || item.planable_group_id)
+    )
+    .map((item) => item.id);
+  const sets = { archivedPostIds, activePostIds, activeGroupIds };
+  for (let index = 0; index < linkedIds.length; index += 15) {
+    removed += await deleteStalePlanableItems({
+      ids: linkedIds.slice(index, index + 15),
+      ...sets,
+    });
+  }
+  removed += await collapseDuplicatePlanableContent();
 
   return {
     configured: true,

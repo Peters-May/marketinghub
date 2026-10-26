@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processDueScheduledCampaigns } from "@/lib/email/process-scheduled";
+import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 /** Vercel Cron calls this every 10 minutes. */
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await processDueScheduledCampaigns(1);
+    const result = await queueDueCampaignSends(1);
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Scheduled send failed";

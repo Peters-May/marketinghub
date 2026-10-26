@@ -7,16 +7,13 @@ const SENDING_LOCK_MS = 8 * 60 * 1000;
  * Send campaigns whose scheduled time has passed.
  * A send that stopped halfway is picked up again after the lock expires.
  */
-export async function processDueScheduledCampaigns(
+export async function listDueCampaignIds(
   limit = 1,
   opts?: { resumeInterrupted?: boolean }
-): Promise<{
-  processed: number;
-  ids: string[];
-}> {
+): Promise<string[]> {
   const now = Date.now();
   const resumeInterrupted = opts?.resumeInterrupted !== false;
-  const due = (await listEmailCampaigns())
+  return (await listEmailCampaigns())
     .filter((c) => {
       const scheduledDue =
         Boolean(c.scheduled_at) && new Date(c.scheduled_at as string).getTime() <= now;
@@ -25,12 +22,22 @@ export async function processDueScheduledCampaigns(
       const started = new Date(c.updated_at).getTime();
       return now - started >= SENDING_LOCK_MS;
     })
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((c) => c.id);
+}
 
+export async function processDueScheduledCampaigns(
+  limit = 1,
+  opts?: { resumeInterrupted?: boolean }
+): Promise<{
+  processed: number;
+  ids: string[];
+}> {
+  const due = await listDueCampaignIds(limit, opts);
   const ids: string[] = [];
-  for (const c of due) {
-    const result = await sendEmailCampaign(c.id);
-    if (result.campaign) ids.push(c.id);
+  for (const id of due) {
+    const result = await sendEmailCampaign(id);
+    if (result.campaign) ids.push(id);
   }
   return { processed: ids.length, ids };
 }

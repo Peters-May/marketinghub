@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO, startOfDay } from "date-fns";
+import { pollWorkflow } from "@/lib/workflow/poll-client";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -668,8 +669,21 @@ export function SocialClient({
     setError(null);
     try {
       const res = await fetch("/api/planable/sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) {
+      const started = await res.json();
+      if (!res.ok || started.error) {
+        setError(started.error || "Planable sync failed");
+        setSyncing(false);
+        return;
+      }
+      const data = started.runId
+        ? await pollWorkflow<{
+            created?: number;
+            updated?: number;
+            removed?: number;
+            error?: string;
+          }>("/api/planable/sync", started.runId)
+        : started;
+      if (data.error) {
         setError(data.error || "Planable sync failed");
       } else {
         setSourceLabel(

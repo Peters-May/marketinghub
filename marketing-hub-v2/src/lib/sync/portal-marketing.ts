@@ -257,42 +257,85 @@ async function replacePortalAudience(contactIds: string[]) {
   }
 }
 
-function listDescription(list: PortalSharedList) {
+function listDescription(list: Pick<PortalSharedList, "description" | "topic">) {
   return (
     (list.description ?? "").trim() ||
     `Synced from the Portal. Topic: ${list.topic.replace(/_/g, " ")}.`
   );
 }
 
-async function syncSharedLists(): Promise<number> {
-  const shared = await pullSharedLists();
+export type PortalListStep = {
+  id: string;
+  name: string;
+  description: string | null;
+  topic: string;
+};
+
+/** One Portal list, including the resume skip used by a full sync. */
+export async function syncPortalSharedList(list: PortalListStep): Promise<"synced" | "resumed"> {
   const existing = await listMediaLists();
-  const now = Date.now();
-  for (const list of shared) {
-    const saved = existing.find(
-      (item) =>
-        item.portal_list_id === list.id || item.source === `portal-list:${list.id}`
-    );
-    const resumed =
-      saved != null &&
-      saved.contact_ids.length > 0 &&
-      now - Date.parse(saved.updated_at) < LIST_RESUME_MS;
-    if (resumed) continue;
-    const members = await pullListMembers(list.id);
-    await applyPortalSharedList({
-      portalListId: list.id,
-      name: list.name,
-      description: listDescription(list),
-      members: members.map((row) => ({
-        portalContactId: row.id,
-        email: row.email_normalized,
-        name: row.name ?? "",
-        organisation: row.primary_company ?? "",
-      })),
-    });
+  const saved = existing.find(
+    (item) =>
+      item.portal_list_id === list.id || item.source === `portal-list:${list.id}`
+  );
+  const resumed =
+    saved != null &&
+    saved.contact_ids.length > 0 &&
+    Date.now() - Date.parse(saved.updated_at) < LIST_RESUME_MS;
+  if (resumed) {
+    console.log("[portal-marketing] list resumed", list.id);
+    return "resumed";
   }
-  await clearRetiredPortalLists(shared.map((list) => list.id));
-  return shared.length;
+  const members = await pullListMembers(list.id);
+  await applyPortalSharedList({
+    portalListId: list.id,
+    name: list.name,
+    description: listDescription(list),
+    members: members.map((row) => ({
+      portalContactId: row.id,
+      email: row.email_normalized,
+      name: row.name ?? "",
+      organisation: row.primary_company ?? "",
+    })),
+  });
+  console.log("[portal-marketing] list synced", list.id, members.length);
+  return "synced";
+}
+
+export async function loadPortalSharedLists(): Promise<
+  | { skipped: true; reason: string }
+  | { skipped: false; lists: PortalListStep[] }
+> {
+  if (!portalBaseUrl() || !portalSyncSecret()) {
+    return {
+      skipped: true,
+      reason: "PORTAL_BASE_URL or PORTAL_ENQUIRY_SYNC_SECRET not set",
+    };
+  }
+  const shared = await pullSharedLists();
+  return {
+    skipped: false,
+    lists: shared.map((list) => ({
+      id: list.id,
+      name: list.name,
+      description: list.description,
+      topic: list.topic,
+    })),
+  };
+}
+
+export async function retirePortalSharedLists(activeIds: string[]): Promise<void> {
+  await clearRetiredPortalLists(activeIds);
+}
+
+async function syncSharedLists(): Promise<number> {
+  const loaded = await loadPortalSharedLists();
+  if (loaded.skipped) return 0;
+  for (const list of loaded.lists) {
+    await syncPortalSharedList(list);
+  }
+  await retirePortalSharedLists(loaded.lists.map((list) => list.id));
+  return loaded.lists.length;
 }
 
 export async function syncPortalMarketingAudience(options?: {

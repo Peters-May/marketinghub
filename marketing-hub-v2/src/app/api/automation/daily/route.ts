@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runDailyAutomation } from "@/lib/automation/run";
+import { dailyAutomationWorkflow } from "@/workflows/daily-automation";
+import { start } from "workflow/api";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,8 +13,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const result = await runDailyAutomation();
-    return NextResponse.json(result);
+    const run = await start(dailyAutomationWorkflow);
+    console.log("[automation] daily workflow", run.runId);
+    return NextResponse.json({ started: true, runId: run.runId });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Automation failed";
     console.error("[automation/daily]", message);

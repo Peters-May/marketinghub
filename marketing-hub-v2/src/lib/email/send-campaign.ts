@@ -45,37 +45,55 @@ export type SendCampaignResult = {
   error?: string;
 };
 
+export type CampaignBatchResult = {
+  sent: number;
+  failed: number;
+  errors: string[];
+  remaining: number;
+  /** A whole batch was rejected. Stop rather than walking the rest of the list. */
+  stopped: boolean;
+};
+
 /**
- * Resolve recipients and send via Resend. Soft-fails if API key missing.
- * Updates campaign status and per-recipient "sent" events.
+ * Resolve recipients and mark the campaign as sending.
+ * Returns a finished result when there is nothing to send.
  */
-export async function sendEmailCampaign(
+export async function prepareCampaignSend(
   campaignId: string,
-  opts?: { claimed?: boolean }
-): Promise<SendCampaignResult> {
+  opts?: { claimed?: boolean; skipPortalSync?: boolean }
+): Promise<{ ready: true; alreadySent: number } | { ready: false; result: SendCampaignResult }> {
   const campaign = await getEmailCampaign(campaignId);
   if (!campaign) {
-    return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
+    return {
+      ready: false,
+      result: { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" },
+    };
   }
   if (campaign.status === "sending" && !opts?.claimed) {
     const started = new Date(campaign.updated_at).getTime();
     if (Date.now() - started < SENDING_LOCK_MS) {
       return {
-        ok: false,
-        campaign,
-        sent: 0,
-        failed: 0,
-        error: "Campaign is already sending",
+        ready: false,
+        result: {
+          ok: false,
+          campaign,
+          sent: 0,
+          failed: 0,
+          error: "Campaign is already sending",
+        },
       };
     }
   }
   if (campaign.status === "sent") {
     return {
-      ok: false,
-      campaign,
-      sent: 0,
-      failed: 0,
-      error: "Campaign already sent",
+      ready: false,
+      result: {
+        ok: false,
+        campaign,
+        sent: 0,
+        failed: 0,
+        error: "Campaign already sent",
+      },
     };
   }
 
@@ -86,18 +104,23 @@ export async function sendEmailCampaign(
       last_error: "RESEND_API_KEY not configured",
     });
     return {
-      ok: false,
-      campaign: updated,
-      sent: 0,
-      failed: 0,
-      error: "Email not configured (RESEND_API_KEY)",
+      ready: false,
+      result: {
+        ok: false,
+        campaign: updated,
+        sent: 0,
+        failed: 0,
+        error: "Email not configured (RESEND_API_KEY)",
+      },
     };
   }
 
-  try {
-    await syncPortalMarketingAudience({ includeLists: false });
-  } catch (err) {
-    console.error("[send-campaign] portal audience", err);
+  if (!opts?.skipPortalSync) {
+    try {
+      await syncPortalMarketingAudience({ includeLists: false });
+    } catch (err) {
+      console.error("[send-campaign] portal audience", err);
+    }
   }
 
   const recipients = await resolveEmailRecipients({
@@ -114,11 +137,14 @@ export async function sendEmailCampaign(
         "No consented recipients (marketing opt-in required; check audience and suppressions)",
     });
     return {
-      ok: false,
-      campaign: updated,
-      sent: 0,
-      failed: 0,
-      error: "No recipients",
+      ready: false,
+      result: {
+        ok: false,
+        campaign: updated,
+        sent: 0,
+        failed: 0,
+        error: "No recipients",
+      },
     };
   }
 
@@ -131,10 +157,53 @@ export async function sendEmailCampaign(
     },
   });
 
-  // Re-read in case we were already mid-send from scheduler
+  const alreadySent = new Set(
+    (await listEmailEvents(campaignId))
+      .filter((event) => event.kind === "sent")
+      .map((event) => event.email.trim().toLowerCase())
+  );
+  const pending = recipients.filter(
+    (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
+  );
+  console.log("[email] prepared", campaignId, pending.length, "pending");
+  return { ready: true, alreadySent: recipients.length - pending.length };
+}
+
+/** Send the next batch of people who do not yet have a sent event. */
+export async function deliverNextCampaignBatch(
+  campaignId: string
+): Promise<CampaignBatchResult> {
   const latest = await getEmailCampaign(campaignId);
   if (!latest) {
-    return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
+    return { sent: 0, failed: 0, errors: ["Not found"], remaining: 0, stopped: true };
+  }
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    return {
+      sent: 0,
+      failed: 0,
+      errors: ["Email not configured (RESEND_API_KEY)"],
+      remaining: 0,
+      stopped: true,
+    };
+  }
+
+  const recipients = await resolveEmailRecipients({
+    audienceId: latest.audience_id,
+    excludeAudienceId: latest.exclude_audience_id,
+    listIds: latest.list_ids,
+    recipientIds: latest.recipient_ids,
+  });
+  const alreadySent = new Set(
+    (await listEmailEvents(campaignId))
+      .filter((event) => event.kind === "sent")
+      .map((event) => event.email.trim().toLowerCase())
+  );
+  const pending = recipients.filter(
+    (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
+  );
+  if (pending.length === 0) {
+    return { sent: 0, failed: 0, errors: [], remaining: 0, stopped: false };
   }
 
   const resend = new Resend(apiKey);
@@ -159,104 +228,123 @@ export async function sendEmailCampaign(
     footerLinks,
   });
   const htmlBase = appendUtmToEmailHtml(
-    ensureViewInBrowserLink(ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")),
+    ensureViewInBrowserLink(
+      ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")
+    ),
     { campaign: latest.title || latest.id }
   );
-  const alreadySent = new Set(
-    (await listEmailEvents(campaignId))
-      .filter((event) => event.kind === "sent")
-      .map((event) => event.email.trim().toLowerCase())
-  );
+
+  const chunk = pending.slice(0, BATCH_SIZE);
+  const prepared = chunk.map((contact) => {
+    const email = contact.email.trim();
+    const identity = { email, campaignId, contactId: contact.id };
+    const unsub = unsubscribeUrlFor(identity);
+    const prefs = preferencesUrlFor(identity);
+    const browser = viewInBrowserUrlFor(identity);
+    return {
+      contact,
+      email,
+      payload: {
+        from,
+        to: email,
+        subject: applyEmailMerge(latest.subject || latest.title, {
+          contact,
+          unsubscribeUrl: unsub,
+          preferencesUrl: prefs,
+          viewInBrowserUrl: browser,
+        }),
+        html: applyEmailMerge(htmlBase, {
+          contact,
+          unsubscribeUrl: unsub,
+          preferencesUrl: prefs,
+          viewInBrowserUrl: browser,
+        }),
+        tags: [
+          { name: "campaign_id", value: campaignId.slice(0, 50) },
+          { name: "hub", value: "marketing" },
+        ],
+      },
+    };
+  });
+
+  let ids: Array<string | null> = prepared.map(() => null);
+  let chunkError = "";
+  try {
+    const result = await resend.batch.send(
+      prepared.map((item) => item.payload),
+      { batchValidation: "permissive" }
+    );
+    if (result.error) {
+      chunkError = result.error.message;
+    } else {
+      ids = batchMessageIds(result.data, prepared.length);
+    }
+  } catch (err) {
+    chunkError = err instanceof Error ? err.message : "send failed";
+  }
+
+  const recorded: Parameters<typeof appendEmailEvents>[0] = [];
+  const portalNotices: Promise<void>[] = [];
+  const errors: string[] = [];
   let sent = 0;
   let failed = 0;
-  const errors: string[] = [];
-  const pending = recipients.filter(
-    (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
-  );
-  sent += recipients.length - pending.length;
-
-  for (let index = 0; index < pending.length; index += BATCH_SIZE) {
-    const chunk = pending.slice(index, index + BATCH_SIZE);
-    const prepared = chunk.map((contact) => {
-      const email = contact.email.trim();
-      const identity = { email, campaignId, contactId: contact.id };
-      const unsub = unsubscribeUrlFor(identity);
-      const prefs = preferencesUrlFor(identity);
-      const browser = viewInBrowserUrlFor(identity);
-      return {
-        contact,
-        email,
-        payload: {
-          from,
-          to: email,
-          subject: applyEmailMerge(latest.subject || latest.title, {
-            contact,
-            unsubscribeUrl: unsub,
-            preferencesUrl: prefs,
-            viewInBrowserUrl: browser,
-          }),
-          html: applyEmailMerge(htmlBase, {
-            contact,
-            unsubscribeUrl: unsub,
-            preferencesUrl: prefs,
-            viewInBrowserUrl: browser,
-          }),
-          tags: [
-            { name: "campaign_id", value: campaignId.slice(0, 50) },
-            { name: "hub", value: "marketing" },
-          ],
-        },
-      };
-    });
-
-    let ids: Array<string | null> = prepared.map(() => null);
-    let chunkError = "";
-    try {
-      const result = await resend.batch.send(
-        prepared.map((item) => item.payload),
-        { batchValidation: "permissive" }
-      );
-      if (result.error) {
-        chunkError = result.error.message;
-      } else {
-        ids = batchMessageIds(result.data, prepared.length);
-      }
-    } catch (err) {
-      chunkError = err instanceof Error ? err.message : "send failed";
+  const sentAt = new Date().toISOString();
+  prepared.forEach((item, itemIndex) => {
+    const messageId = ids[itemIndex];
+    if (!messageId) {
+      failed += 1;
+      errors.push(`${item.email}: ${chunkError || "Not accepted"}`);
+      return;
     }
-
-    const recorded: Parameters<typeof appendEmailEvents>[0] = [];
-    const sentAt = new Date().toISOString();
-    prepared.forEach((item, itemIndex) => {
-      const messageId = ids[itemIndex];
-      if (!messageId) {
-        failed += 1;
-        errors.push(`${item.email}: ${chunkError || "Not accepted"}`);
-        return;
-      }
-      sent += 1;
-      recorded.push({
-        campaign_id: campaignId,
-        contact_id: item.contact.id,
-        email: item.email,
-        kind: "sent",
-        resend_message_id: messageId,
-        created_at: sentAt,
-      });
-      void notifyPortalCampaignSend({
+    sent += 1;
+    recorded.push({
+      campaign_id: campaignId,
+      contact_id: item.contact.id,
+      email: item.email,
+      kind: "sent",
+      resend_message_id: messageId,
+      created_at: sentAt,
+    });
+    portalNotices.push(
+      notifyPortalCampaignSend({
         contact: item.contact,
         campaignId,
         campaignTitle: latest.title || latest.subject || "Marketing email",
         sentAt,
-      });
-    });
+      })
+    );
+  });
 
-    if (recorded.length === 0) break;
-    await appendEmailEvents(recorded);
-    console.log("[email] recorded", sent, "of", recipients.length);
-    if (index + BATCH_SIZE < pending.length) await sleep(BATCH_PAUSE_MS);
+  if (recorded.length === 0) {
+    console.log("[email] batch rejected", campaignId, chunkError);
+    return {
+      sent: 0,
+      failed,
+      errors,
+      remaining: pending.length - chunk.length,
+      stopped: true,
+    };
   }
 
+  await appendEmailEvents(recorded);
+  await Promise.all(portalNotices);
+  const remaining = pending.length - chunk.length;
+  console.log("[email] recorded batch", sent, "remaining", remaining);
+  return { sent, failed, errors, remaining, stopped: false };
+}
+
+export async function finishCampaignSend(
+  campaignId: string,
+  errors: string[] = []
+): Promise<SendCampaignResult> {
+  const latest = await getEmailCampaign(campaignId);
+  if (!latest) {
+    return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
+  }
+  const sent = (await listEmailEvents(campaignId)).filter(
+    (event) => event.kind === "sent"
+  ).length;
+  const failed = Math.max(0, (latest.stats.recipients || 0) - sent);
   const finalStatus = sent > 0 ? "sent" : "failed";
   const updated = await updateEmailCampaign(campaignId, {
     status: finalStatus,
@@ -264,10 +352,9 @@ export async function sendEmailCampaign(
     last_error: errors.slice(0, 5).join("; "),
     stats: {
       ...latest.stats,
-      recipients: recipients.length,
+      recipients: latest.stats.recipients,
     },
   });
-
   return {
     ok: sent > 0,
     campaign: updated,
@@ -275,6 +362,29 @@ export async function sendEmailCampaign(
     failed,
     error: sent === 0 ? errors[0] || "All sends failed" : undefined,
   };
+}
+
+/**
+ * Resolve recipients and send via Resend. Soft-fails if API key missing.
+ * Updates campaign status and per-recipient "sent" events.
+ * HTTP routes start `sendCampaignWorkflow` instead, so a large audience
+ * is not bound to one function timeout.
+ */
+export async function sendEmailCampaign(
+  campaignId: string,
+  opts?: { claimed?: boolean }
+): Promise<SendCampaignResult> {
+  const prepared = await prepareCampaignSend(campaignId, opts);
+  if (!prepared.ready) return prepared.result;
+
+  const errors: string[] = [];
+  while (true) {
+    const batch = await deliverNextCampaignBatch(campaignId);
+    errors.push(...batch.errors);
+    if (batch.stopped || batch.remaining <= 0) break;
+    await sleep(BATCH_PAUSE_MS);
+  }
+  return finishCampaignSend(campaignId, errors);
 }
 
 /** One copy to the signed-in sender. Does not change the campaign. */
