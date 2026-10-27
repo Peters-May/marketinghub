@@ -1,7 +1,7 @@
 import { addDays, format, nextDay, startOfDay } from "date-fns";
 import type { ContentStatus } from "@/lib/types";
 
-export type HubDataArea = "tasks" | "events" | "content";
+export type HubDataArea = "tasks" | "events" | "content" | "email";
 
 export const COMMAND_EXAMPLES = [
   "Add a task to call the organiser, due Friday",
@@ -102,6 +102,11 @@ export type HubCommand = CommandBase &
         kind: "link_content";
         content_query: string;
         event_query: string;
+      }
+    | {
+        kind: "create_marketing_list";
+        country: string;
+        name: string;
       }
   );
 
@@ -1111,8 +1116,38 @@ function parseLinkCommand(text: string): ParseResult | null {
   return { ok: true, command };
 }
 
+function parseMarketingListCommand(text: string): HubCommand | null {
+  const patterns = [
+    /^(?:add|create|new)\s+(?:a\s+)?marketing\s+list\s+for\s+(?:the\s+)?(.+)$/i,
+    /^(?:add|create|new)\s+(?:a\s+)?client\s+list\s+(?:for|of)\s+(?:all\s+)?marketing\s+contacts\s+(?:based\s+)?(?:in|for)\s+(?:the\s+)?(.+)$/i,
+    /^(?:add|create|new)\s+(?:a\s+)?list\s+of\s+(?:all\s+)?marketing\s+contacts\s+(?:based\s+)?(?:in|for)\s+(?:the\s+)?(.+)$/i,
+  ];
+  const match = patterns.map((pattern) => text.match(pattern)).find(Boolean);
+  if (!match) return null;
+  let rest = match[1].trim();
+  let name = "";
+  const called = rest.match(/^(.*?)\s+(?:called|named)\s+(.+)$/i);
+  if (called) {
+    rest = called[1].trim();
+    name = called[2].trim().replace(/^["“”']+|["“”']+$/g, "");
+  }
+  const country = rest.replace(/\s+/g, " ").trim();
+  if (country.length < 2 || country.length > 80) return null;
+  return {
+    kind: "create_marketing_list",
+    country,
+    name: (name || `${country} marketing contacts`).slice(0, 120),
+    summary: `Add a marketing list for ${country}`,
+    verb: "Add",
+    href: "/app/email",
+    area: "email",
+  };
+}
+
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
+  const marketing = parseMarketingListCommand(text);
+  if (marketing) return { ok: true, command: { ...marketing, source: text } };
   const linked = parseLinkCommand(text);
   if (linked) {
     if (!linked.ok) return linked;

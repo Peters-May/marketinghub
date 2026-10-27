@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Monitor, Redo2, Smartphone, Sparkles, Undo2 } from "lucide-react";
@@ -38,6 +39,10 @@ import {
 import type { FooterLinkSettings } from "@/lib/email/footer-links";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
 import { EmailInspector } from "@/components/email/builder/EmailInspector";
+import {
+  EmailVariableSelect,
+  insertTokenAtSelection,
+} from "@/components/email/builder/EmailVariableSelect";
 import { EmailPalette } from "@/components/email/builder/EmailPalette";
 import type { DesignerDrag } from "@/components/email/builder/drag";
 import { cn } from "@/lib/utils";
@@ -158,6 +163,8 @@ export function EmailDesigner({
   const [name, setName] = useState(initialName);
   const [subject, setSubject] = useState(initialSubject);
   const [previewText, setPreviewText] = useState(initialPreview);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLInputElement>(null);
   const [brief, setBrief] = useState(initialBrief);
   const [fromName, setFromName] = useState(initialFromName);
   const [fromEmail, setFromEmail] = useState(initialFromEmail);
@@ -198,10 +205,6 @@ export function EmailDesigner({
   );
 
   useEffect(() => {
-    setAudienceOptions(audiences);
-  }, [audiences]);
-
-  useEffect(() => {
     let cancelled = false;
     void fetch("/api/email/settings")
       .then((res) => res.json())
@@ -220,10 +223,36 @@ export function EmailDesigner({
   useEffect(() => {
     if (kind !== "campaign" || readOnly) return;
     let cancelled = false;
+    function loadAudiences() {
+      void fetch("/api/email/audiences")
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled || !Array.isArray(data.audiences)) return;
+          setAudienceOptions(
+            data.audiences.map((row: { id: string; name: string }) => ({
+              id: row.id,
+              name: row.name,
+            }))
+          );
+        })
+        .catch(() => {
+          /* keep the audiences already loaded */
+        });
+    }
+    loadAudiences();
+    window.addEventListener("focus", loadAudiences);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", loadAudiences);
+    };
+  }, [kind, readOnly]);
+
+  useHubDataRefresh("email", () => {
+    if (kind !== "campaign" || readOnly) return;
     void fetch("/api/email/audiences")
-      .then((res) => res.json())
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (cancelled || !Array.isArray(data.audiences)) return;
+        if (!data || !Array.isArray(data.audiences)) return;
         setAudienceOptions(
           data.audiences.map((row: { id: string; name: string }) => ({
             id: row.id,
@@ -232,12 +261,9 @@ export function EmailDesigner({
         );
       })
       .catch(() => {
-        /* keep SSR list */
+        /* keep the audiences already loaded */
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [kind, readOnly]);
+  });
 
   useEffect(() => {
     if (kind !== "campaign" || !audienceId) {
@@ -450,7 +476,10 @@ export function EmailDesigner({
     setError("");
     setSavedNote("");
     const design = history.designRef.current;
-    const html_body = compileEmailDesign(design, { footerLinks });
+    const html_body = compileEmailDesign(design, {
+      footerLinks,
+      previewText,
+    });
     const patch =
       kind === "template"
         ? {
@@ -694,6 +723,34 @@ export function EmailDesigner({
     setSavedNote("AI draft added — review before sending");
   }
 
+  function placeCaret(
+    input: HTMLInputElement | null,
+    caret: number
+  ) {
+    requestAnimationFrame(() => {
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
+  function insertIntoField(
+    value: string,
+    token: string,
+    input: HTMLInputElement | null,
+    apply: (next: string) => void
+  ) {
+    const { next, caret } = insertTokenAtSelection(
+      value,
+      token,
+      input?.selectionStart,
+      input?.selectionEnd
+    );
+    apply(next);
+    markDirty();
+    placeCaret(input, caret);
+  }
+
   function insertMergeToken(token: string) {
     if (!block) return;
     if (block.type === "text") {
@@ -789,6 +846,7 @@ export function EmailDesigner({
           subject,
           html_body: compileEmailDesign(history.designRef.current, {
             footerLinks,
+            previewText,
           }),
           campaign_id: id,
         }),
@@ -866,7 +924,10 @@ export function EmailDesigner({
     }
   }
 
-  const compiled = compileEmailDesign(history.design, { footerLinks });
+  const compiled = compileEmailDesign(history.design, {
+    footerLinks,
+    previewText,
+  });
   const frameWidth = device === "mobile" ? 375 : history.design.styles.contentWidth;
   const audienceName =
     audienceOptions.find((audience) => audience.id === audienceId)?.name ?? "";
@@ -1136,6 +1197,7 @@ export function EmailDesigner({
             <span className="text-muted">Subject line</span>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                ref={subjectRef}
                 className="input min-w-[12rem] flex-1"
                 value={subject}
                 disabled={readOnly}
@@ -1144,6 +1206,13 @@ export function EmailDesigner({
                   markDirty();
                 }}
               />
+              {!readOnly ? (
+                <EmailVariableSelect
+                  onInsert={(token) =>
+                    insertIntoField(subject, token, subjectRef.current, setSubject)
+                  }
+                />
+              ) : null}
               {!readOnly ? (
                 <button
                   type="button"
@@ -1184,6 +1253,7 @@ export function EmailDesigner({
             <span className="text-muted">Preview text</span>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                ref={previewRef}
                 className="input min-w-[12rem] flex-1"
                 value={previewText}
                 disabled={readOnly}
@@ -1192,6 +1262,18 @@ export function EmailDesigner({
                   markDirty();
                 }}
               />
+              {!readOnly ? (
+                <EmailVariableSelect
+                  onInsert={(token) =>
+                    insertIntoField(
+                      previewText,
+                      token,
+                      previewRef.current,
+                      setPreviewText
+                    )
+                  }
+                />
+              ) : null}
               {!readOnly ? (
                 <button
                   type="button"

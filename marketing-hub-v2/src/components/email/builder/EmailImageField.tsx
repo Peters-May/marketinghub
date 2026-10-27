@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, Folder } from "lucide-react";
 import { groupAssetImages } from "@/lib/email/asset-images";
+import { EmailImageCrop } from "@/components/email/builder/EmailImageCrop";
 import { cn } from "@/lib/utils";
 
 type GalleryImage = {
@@ -24,6 +25,7 @@ export function EmailImageField({
   const [assets, setAssets] = useState<GalleryImage[]>([]);
   const [assetsNote, setAssetsNote] = useState("Loading the asset gallery…");
   const [uploading, setUploading] = useState(false);
+  const [cropping, setCropping] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -81,14 +83,26 @@ export function EmailImageField({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm text-muted">Image</span>
-        <button
-          type="button"
-          className="btn-secondary px-2 py-1 text-xs"
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          {uploading ? "Uploading…" : "Upload new"}
-        </button>
+        <span className="flex gap-1">
+          {src ? (
+            <button
+              type="button"
+              className="btn-secondary px-2 py-1 text-xs"
+              disabled={uploading}
+              onClick={() => setCropping(true)}
+            >
+              Crop
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn-secondary px-2 py-1 text-xs"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? "Uploading…" : "Upload new"}
+          </button>
+        </span>
         <input
           ref={inputRef}
           type="file"
@@ -102,6 +116,16 @@ export function EmailImageField({
         />
       </div>
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
+      {cropping && src ? (
+        <EmailImageCrop
+          src={src}
+          onClose={() => setCropping(false)}
+          onApply={(file) => {
+            setCropping(false);
+            void upload(file);
+          }}
+        />
+      ) : null}
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

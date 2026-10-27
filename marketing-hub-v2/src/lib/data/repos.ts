@@ -2615,17 +2615,60 @@ export async function applyPortalSharedList(input: {
 export async function clearRetiredPortalLists(activeIds: string[]) {
   const active = new Set(activeIds);
   await updateStore((s) => {
-    if (!s.media_lists) return;
-    const now = nowIso();
-    for (let i = 0; i < s.media_lists.length; i++) {
-      const list = s.media_lists[i];
+    const retiredListIds = new Set<string>();
+    for (const list of s.media_lists ?? []) {
       if (!list.portal_list_id || active.has(list.portal_list_id)) continue;
-      if ((list.contact_ids ?? []).length === 0) continue;
-      s.media_lists[i] = normalizeMediaList({
-        ...normalizeMediaList(list),
-        contact_ids: [],
-        updated_at: now,
-      });
+      retiredListIds.add(list.id);
+    }
+    const removedAudienceIds = new Set<string>();
+    for (const audience of s.email_audiences ?? []) {
+      if (!audience.portal_list_id || active.has(audience.portal_list_id)) continue;
+      removedAudienceIds.add(audience.id);
+    }
+    if (retiredListIds.size === 0 && removedAudienceIds.size === 0) return;
+
+    s.media_lists = (s.media_lists ?? []).filter(
+      (list) => !retiredListIds.has(list.id)
+    );
+    s.email_audiences = (s.email_audiences ?? []).flatMap((audience) => {
+      const listIds = (audience.list_ids ?? []).filter(
+        (id) => !retiredListIds.has(id)
+      );
+      if (removedAudienceIds.has(audience.id)) return [];
+      if (listIds.length === (audience.list_ids ?? []).length) return [audience];
+      return [{ ...audience, list_ids: listIds, updated_at: nowIso() }];
+    });
+
+    for (const campaign of s.email_campaigns ?? []) {
+      const status = campaign.status;
+      const editable = status === "draft" || status === "scheduled" || !status;
+      if (
+        editable &&
+        campaign.audience_id &&
+        removedAudienceIds.has(campaign.audience_id)
+      ) {
+        campaign.audience_id = null;
+      }
+      if (
+        campaign.exclude_audience_id &&
+        removedAudienceIds.has(campaign.exclude_audience_id)
+      ) {
+        campaign.exclude_audience_id = null;
+      }
+      if (Array.isArray(campaign.list_ids)) {
+        campaign.list_ids = campaign.list_ids.filter(
+          (id) => !retiredListIds.has(id)
+        );
+      }
+    }
+
+    for (const pitch of s.pr_pitches ?? []) {
+      if (Array.isArray(pitch.list_ids)) {
+        pitch.list_ids = pitch.list_ids.filter((id) => !retiredListIds.has(id));
+      }
+      if (pitch.media_list_id && retiredListIds.has(pitch.media_list_id)) {
+        pitch.media_list_id = pitch.list_ids?.[0] ?? null;
+      }
     }
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import { EmailCampaignsPanel } from "@/components/email/EmailCampaignsPanel";
@@ -49,6 +50,19 @@ export function EmailMarketingHub({
   const [audiences, setAudiences] = useState(initialAudiences);
   const [lists, setLists] = useState(initialLists);
   const countLabel = `${initialCampaigns.length} marketing email${initialCampaigns.length === 1 ? "" : "s"}`;
+
+  useHubDataRefresh("email", () => {
+    void fetch("/api/email/audiences")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        if (Array.isArray(data.audiences)) setAudiences(data.audiences);
+        if (Array.isArray(data.lists)) setLists(data.lists);
+      })
+      .catch(() => {
+        /* keep the lists already on screen */
+      });
+  });
 
   return (
     <div>

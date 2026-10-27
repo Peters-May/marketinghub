@@ -214,6 +214,7 @@ export async function deliverNextCampaignBatch(
   const compiled = compileEmailDesign(design, {
     topic: topic ?? "all",
     footerLinks,
+    previewText: latest.preview_text,
   });
   const htmlBase = appendUtmToEmailHtml(
     ensureViewInBrowserLink(

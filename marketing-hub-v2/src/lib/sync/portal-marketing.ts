@@ -257,6 +257,38 @@ async function replacePortalAudience(contactIds: string[]) {
   }
 }
 
+/** A resumed sync still has to appear under Email → Audiences. */
+async function ensurePortalAudience(list: PortalListStep, mediaListId: string) {
+  const description = listDescription(list);
+  const audiences = await listEmailAudiences();
+  const audience = audiences.find((item) => item.portal_list_id === list.id);
+  if (!audience) {
+    await createEmailAudience({
+      name: list.name,
+      description,
+      list_ids: [mediaListId],
+      contact_ids: [],
+      filter: { tags: [], country: "" },
+      exclude_unsubscribed: true,
+      portal_list_id: list.id,
+    });
+    return;
+  }
+  const listIds = audience.list_ids.includes(mediaListId)
+    ? audience.list_ids
+    : [...audience.list_ids, mediaListId];
+  if (audience.name === list.name && listIds.length === audience.list_ids.length) {
+    return;
+  }
+  await updateEmailAudience(audience.id, {
+    name: list.name,
+    description,
+    list_ids: listIds,
+    exclude_unsubscribed: true,
+    portal_list_id: list.id,
+  });
+}
+
 function listDescription(list: Pick<PortalSharedList, "description" | "topic">) {
   return (
     (list.description ?? "").trim() ||
@@ -282,7 +314,8 @@ export async function syncPortalSharedList(list: PortalListStep): Promise<"synce
     saved != null &&
     saved.contact_ids.length > 0 &&
     Date.now() - Date.parse(saved.updated_at) < LIST_RESUME_MS;
-  if (resumed) {
+  if (resumed && saved) {
+    await ensurePortalAudience(list, saved.id);
     console.log("[portal-marketing] list resumed", list.id);
     return "resumed";
   }
@@ -300,6 +333,46 @@ export async function syncPortalSharedList(list: PortalListStep): Promise<"synce
   });
   console.log("[portal-marketing] list synced", list.id, members.length);
   return "synced";
+}
+
+/** Create a country marketing list in the portal, then copy it into Email. */
+export async function createPortalCountryMarketingList(input: {
+  name: string;
+  country: string;
+}): Promise<
+  | { ok: true; name: string; total: number | null; already: boolean }
+  | { ok: false; error: string }
+> {
+  const result = await portalFetch("/api/marketing/lists", {
+    method: "POST",
+    body: JSON.stringify({ name: input.name, country: input.country }),
+  });
+  if (result.ok && result.skipped) {
+    return { ok: false, error: "The portal link is not configured." };
+  }
+  if (!result.ok) return { ok: false, error: result.error };
+  const body = (result.body ?? {}) as {
+    id?: string;
+    name?: string;
+    description?: string | null;
+    total?: number | null;
+    already?: boolean;
+  };
+  if (!body.id || !body.name) {
+    return { ok: false, error: "The portal did not return the list." };
+  }
+  await syncPortalSharedList({
+    id: body.id,
+    name: body.name,
+    description: body.description ?? null,
+    topic: "general_marketing",
+  });
+  return {
+    ok: true,
+    name: body.name,
+    total: typeof body.total === "number" ? body.total : null,
+    already: body.already === true,
+  };
 }
 
 export async function loadPortalSharedLists(): Promise<

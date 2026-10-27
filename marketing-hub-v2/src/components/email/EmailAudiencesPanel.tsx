@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, RefreshCw } from "lucide-react";
 import type { AudienceListOption } from "@/lib/email/audience-list";
 import type { AudienceWithCount } from "@/components/email/EmailMarketingHub";
@@ -59,6 +59,24 @@ export function EmailAudiencesPanel({
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [listQuery, setListQuery] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/email/audiences")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (Array.isArray(data.audiences)) setAudiences(data.audiences);
+        if (Array.isArray(data.lists)) setLists(data.lists);
+      })
+      .catch(() => {
+        /* keep the lists already on screen */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [setAudiences, setLists]);
 
   async function syncPortalLists() {
     setSyncing(true);
@@ -301,7 +319,23 @@ export function EmailAudiencesPanel({
                   No lists yet. Create one under PR or Data.
                 </p>
               ) : (
-                lists.map((l) => (
+                <>
+                  <input
+                    className="input w-full"
+                    value={listQuery}
+                    placeholder="Find a list"
+                    onChange={(event) => setListQuery(event.target.value)}
+                  />
+                  {lists
+                    .filter((l) => {
+                      const query = listQuery.trim().toLowerCase();
+                      if (!query) return true;
+                      return (
+                        form.list_ids.includes(l.id) ||
+                        l.name.toLowerCase().includes(query)
+                      );
+                    })
+                    .map((l) => (
                   <label
                     key={l.id}
                     className="flex items-center gap-2 text-sm"
@@ -316,7 +350,8 @@ export function EmailAudiencesPanel({
                       ({l.list_kind} · {l.contact_count})
                     </span>
                   </label>
-                ))
+                    ))}
+                </>
               )}
             </div>
           </fieldset>

@@ -17,6 +17,8 @@ export type CompileEmailOptions = {
   topic?: SectionShowFor | null;
   /** Hub Email → Settings footer links (overrides design styles when set). */
   footerLinks?: FooterLinkSettings | null;
+  /** Inbox snippet. Merge tokens such as {{first_name}} are left for send time. */
+  previewText?: string;
 };
 
 function escapeHtml(value: string): string {
@@ -367,6 +369,14 @@ function renderSection(section: EmailSection, design: EmailDesign): string {
   return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr${rowAttr}>${cells}</tr></table></td></tr>`;
 }
 
+/** Hidden inbox snippet. Contact variables stay as {{tokens}} until send. */
+function hiddenPreheader(previewText: string): string {
+  const text = previewText.trim();
+  if (!text) return "";
+  const spacer = "&nbsp;&zwnj;".repeat(12);
+  return `<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${escapeHtml(text)}${spacer}</div>`;
+}
+
 export function compileEmailDesign(
   design: EmailDesign,
   options?: CompileEmailOptions
@@ -387,6 +397,7 @@ export function compileEmailDesign(
     .filter((section) => sectionVisibleForTopic(section, options?.topic))
     .map((section) => renderSection(section, working))
     .join("");
+  const preheader = hiddenPreheader(options?.previewText ?? "");
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -401,7 +412,7 @@ export function compileEmailDesign(
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${escapeAttr(working.styles.pageBackground)};">
+<body style="margin:0;padding:0;background:${escapeAttr(working.styles.pageBackground)};">${preheader}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${escapeAttr(working.styles.pageBackground)};">
 <tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" class="em-container" width="${width}" cellpadding="0" cellspacing="0" style="width:${width}px;max-width:${width}px;background:${escapeAttr(working.styles.contentBackground)};">

@@ -44,6 +44,16 @@ describe("applyEmailMerge", () => {
     ).toBe("For A <B> & Co");
   });
 
+  it("fills first name, last name and a greeting from the contact name", () => {
+    expect(
+      applyEmailMerge(
+        "Hi {{first_name}} {{last_name}} — {{greeting}}",
+        { contact: { ...contact, name: "Alex Example" } },
+        { format: "text" }
+      )
+    ).toBe("Hi Alex Example — Dear Alex");
+  });
+
   it("keeps link tokens usable in href", () => {
     const html = applyEmailMerge('<a href="{{unsubscribe_url}}">x</a>', {
       contact,

@@ -32,6 +32,7 @@ import {
   shouldPushSocialToPlanable,
 } from "@/lib/planable/sync";
 import type { Contact, ContentItem, ContentStatus } from "@/lib/types";
+import { createPortalCountryMarketingList } from "@/lib/sync/portal-marketing";
 
 export type ExecuteResult =
   | {
@@ -53,7 +54,8 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "create_content" ||
     kind === "update_content" ||
     kind === "link_content" ||
-    kind === "mark_events_we_are_attending"
+    kind === "mark_events_we_are_attending" ||
+    kind === "create_marketing_list"
   );
 }
 
@@ -253,6 +255,23 @@ export async function executeHubCommand(
     return {
       ok: true,
       message,
+      href: command.href,
+      area: command.area,
+    };
+  }
+
+  if (command.kind === "create_marketing_list") {
+    const created = await createPortalCountryMarketingList({
+      name: command.name,
+      country: command.country,
+    });
+    if (!created.ok) return { ok: false, message: created.error };
+    const count = created.total == null ? "" : ` ${created.total} people.`;
+    return {
+      ok: true,
+      message: created.already
+        ? `${created.name} is already a list.`
+        : `Added ${created.name}.${count} It is ready in Email.`,
       href: command.href,
       area: command.area,
     };

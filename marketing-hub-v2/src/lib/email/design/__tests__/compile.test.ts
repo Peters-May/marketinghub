@@ -37,6 +37,18 @@ describe("email design compiler", () => {
     expect(html).toContain("League Spartan, Arial, sans-serif");
   });
 
+  it("hides preview text, including a name variable, above the email", () => {
+    const html = compileEmailDesign(newsletterDesign(), {
+      previewText: "Hello {{first_name}}",
+    });
+    const hiddenAt = html.indexOf("Hello {{first_name}}");
+    const cardAt = html.indexOf('class="em-container"');
+    expect(hiddenAt).toBeGreaterThan(-1);
+    expect(hiddenAt).toBeLessThan(cardAt);
+    expect(html).toContain("display:none");
+    expect(html).toContain("mso-hide:all");
+  });
+
   it("keeps an existing HTML template as one block and does not double the unsubscribe link", () => {
     const design = designFromLegacyHtml(LEGACY);
     expect(design.sections).toHaveLength(1);

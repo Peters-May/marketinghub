@@ -190,6 +190,21 @@ describe("parseHubCommand", () => {
     ]);
   });
 
+  it("reads a country marketing list", () => {
+    const parsed = command("Add a marketing list for the USA");
+    expect(parsed.kind).toBe("create_marketing_list");
+    if (parsed.kind !== "create_marketing_list") return;
+    expect(parsed.country).toBe("USA");
+    expect(parsed.name).toBe("USA marketing contacts");
+    const named = command(
+      'Create a client list for all marketing contacts based in France called "French yards"'
+    );
+    expect(named.kind).toBe("create_marketing_list");
+    if (named.kind !== "create_marketing_list") return;
+    expect(named.country).toBe("France");
+    expect(named.name).toBe("French yards");
+  });
+
   it("asks for a clearer instruction", () => {
     const result = parseHubCommand("hello there", now);
     expect(result.ok).toBe(false);

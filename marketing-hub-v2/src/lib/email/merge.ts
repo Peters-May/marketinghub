@@ -16,6 +16,37 @@ export type MergeOptions = {
   format?: "html" | "text";
 };
 
+export type EmailMergeField = {
+  token: string;
+  label: string;
+  /** Link tokens belong in the body. Subject and preview use contact fields. */
+  kind: "contact" | "link";
+};
+
+/** Variables a marketer can drop into a subject, preview, or text block. */
+export const EMAIL_MERGE_FIELDS: readonly EmailMergeField[] = [
+  { token: "{{first_name}}", label: "First name", kind: "contact" },
+  { token: "{{last_name}}", label: "Last name", kind: "contact" },
+  { token: "{{name}}", label: "Full name", kind: "contact" },
+  { token: "{{greeting}}", label: "Greeting", kind: "contact" },
+  { token: "{{organisation}}", label: "Organisation", kind: "contact" },
+  { token: "{{role}}", label: "Role", kind: "contact" },
+  { token: "{{email}}", label: "Email", kind: "contact" },
+  { token: "{{outlet}}", label: "Outlet", kind: "contact" },
+  { token: "{{country}}", label: "Country", kind: "contact" },
+  { token: "{{unsubscribe_url}}", label: "Unsubscribe link", kind: "link" },
+  { token: "{{preferences_url}}", label: "Preferences link", kind: "link" },
+  { token: "{{view_in_browser_url}}", label: "View in browser link", kind: "link" },
+];
+
+export function splitContactName(full: string): { first: string; last: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean);
+  return {
+    first: parts[0] ?? "",
+    last: parts.slice(1).join(" "),
+  };
+}
+
 /** Replace {{token}} merge fields in subject/body HTML. */
 export function applyEmailMerge(
   template: string,
@@ -24,10 +55,12 @@ export function applyEmailMerge(
 ): string {
   const html = opts?.format !== "text";
   const c = ctx.contact;
-  const first = (c?.name ?? "").trim().split(/\s+/)[0] ?? "";
+  const { first, last } = splitContactName(c?.name ?? "");
   const map: Record<string, string> = {
     name: c?.name ?? "",
     first_name: first,
+    last_name: last,
+    greeting: first ? `Dear ${first}` : "Dear colleague",
     organisation: c?.organisation ?? "",
     organization: c?.organisation ?? "",
     role: c?.role ?? "",

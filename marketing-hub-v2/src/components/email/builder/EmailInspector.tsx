@@ -17,20 +17,8 @@ import {
 } from "@/lib/email/design";
 import { EMAIL_PREFERENCE_TOPICS } from "@/lib/email/preferences";
 import { EmailImageField } from "@/components/email/builder/EmailImageField";
+import { EmailVariableSelect } from "@/components/email/builder/EmailVariableSelect";
 import { cn } from "@/lib/utils";
-
-const MERGE_TOKENS = [
-  { token: "{{first_name}}", label: "First name" },
-  { token: "{{name}}", label: "Name" },
-  { token: "{{organisation}}", label: "Organisation" },
-  { token: "{{role}}", label: "Role" },
-  { token: "{{email}}", label: "Email" },
-  { token: "{{outlet}}", label: "Outlet" },
-  { token: "{{country}}", label: "Country" },
-  { token: "{{unsubscribe_url}}", label: "Unsubscribe URL" },
-  { token: "{{preferences_url}}", label: "Preferences URL" },
-  { token: "{{view_in_browser_url}}", label: "View in browser URL" },
-] as const;
 
 const PRESETS: { id: SectionPreset; label: string }[] = [
   { id: "1", label: "1 column" },
@@ -571,7 +559,9 @@ function BlockFields({
             value={block.color}
             onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
           />
-          <MergeInsert
+          <EmailVariableSelect
+            includeLinks
+            label="Variable"
             onInsert={(token) =>
               onInsertMerge
                 ? onInsertMerge(token)
@@ -597,7 +587,9 @@ function BlockFields({
             value={block.color}
             onChange={(color) => onBlock({ color } as Partial<EmailBlock>)}
           />
-          <MergeInsert
+          <EmailVariableSelect
+            includeLinks
+            label="Variable"
             onInsert={(token) =>
               onInsertMerge
                 ? onInsertMerge(token)
@@ -978,24 +970,3 @@ function RewriteControls({
   );
 }
 
-function MergeInsert({ onInsert }: { onInsert: (token: string) => void }) {
-  return (
-    <label className="block text-sm">
-      <span className="text-muted">Personalise</span>
-      <select
-        className="input mt-1 w-full"
-        value=""
-        onChange={(event) => {
-          if (event.target.value) onInsert(event.target.value);
-        }}
-      >
-        <option value="">Choose…</option>
-        {MERGE_TOKENS.map((item) => (
-          <option key={item.token} value={item.token}>
-            {item.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}

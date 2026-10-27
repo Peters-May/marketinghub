@@ -60,8 +60,14 @@ To check that box on every event that already has someone attending, in 2026 and
 Do not write to "we are attending", and do not update only the first few shows from the snapshot.
 The sample lines above are wording examples. They are not live events. The hub catalogue in this chat lists every event, task, and post. Use that catalogue when comparing or reviewing. Match an update to the exact title in the catalogue. Do not say a listed record is missing.
 
+When the user asks for a client list of marketing contacts in a country, end with one line and do not say you cannot create lists:
+:::hub-command
+Add a marketing list for the USA
+:::
+Use the country they named. The list is people in that country who can receive general marketing. It is saved on the portal and then shown in Email.
+
 Do not invent commands for emails, budgets, or media.
-Linking an existing post to an event is allowed. If the user asks to update budget, media, or anything outside tasks, events, content, and those links, explain that clearly and do not invent a hub-command block.
+Linking an existing post to an event is allowed. If the user asks to update budget, media, or anything outside tasks, events, content, marketing lists, and those links, explain that clearly and do not invent a hub-command block.
 Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it” or “add them”.
 Do not ask them to confirm again, and do not say you are waiting for a review. After you emit the block, stop.
 Uploads are available as context when the admin attaches files with Upload before sending.`;
