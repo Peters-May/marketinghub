@@ -690,26 +690,88 @@ function PlatformStage({
   );
 }
 
+function platformId(item: { key: PlatformKey; label: string }) {
+  return `${item.key}:${item.label}`;
+}
+
 export function PlatformPostPreview({
   platforms,
   caption,
   captionHtml,
   images,
   canvaUrl,
+  mode = "stack",
 }: {
   platforms: string[];
   caption: string;
   captionHtml?: string | null;
   images: string[];
   canvaUrl?: string | null;
+  /** stack lists every platform. switch shows one, with an icon toggle. */
+  mode?: "stack" | "switch";
 }) {
   const resolved = useMemo(() => resolvePreviewPlatforms(platforms), [platforms]);
+  const [activeId, setActiveId] = useState(() =>
+    resolved[0] ? platformId(resolved[0]) : "social:Social"
+  );
+  const active =
+    resolved.find((item) => platformId(item) === activeId) ?? resolved[0];
+
+  if (mode === "switch") {
+    return (
+      <div className="space-y-3">
+        {resolved.length > 1 ? (
+          <div
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+            role="tablist"
+            aria-label="Platform preview"
+          >
+            {resolved.map((item) => {
+              const meta = PLATFORM_META[item.key];
+              const selected = active ? platformId(active) === platformId(item) : false;
+              return (
+                <button
+                  key={platformId(item)}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-label={item.label}
+                  title={item.label}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold transition",
+                    selected
+                      ? "ring-2 ring-slate-800 ring-offset-2"
+                      : "opacity-45 hover:opacity-100"
+                  )}
+                  style={{ backgroundColor: meta.bg, color: meta.fg }}
+                  onClick={() => setActiveId(platformId(item))}
+                >
+                  {meta.short}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        {active ? (
+          <PlatformStage
+            key={platformId(active)}
+            platform={active.key}
+            label={active.label}
+            caption={caption}
+            captionHtml={captionHtml}
+            images={images}
+            canvaUrl={canvaUrl}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       {resolved.map((item) => (
         <PlatformStage
-          key={`${item.key}:${item.label}`}
+          key={platformId(item)}
           platform={item.key}
           label={item.label}
           caption={caption}

@@ -14,7 +14,8 @@ import {
   updateEmailCampaign,
 } from "@/lib/data/repos";
 import { campaignCloneInput } from "@/lib/email/clone";
-import { isPitchTabCampaign } from "@/lib/email/category";
+import { isPitchCampaign, isPitchTabCampaign } from "@/lib/email/category";
+import { isEmailAudienceList } from "@/lib/pr/contact-lists";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import { viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
@@ -44,9 +45,7 @@ export async function GET() {
     campaigns,
     templates,
     audiences,
-    lists: lists.filter(
-      (l) => l.list_kind === "marketing" || l.list_kind === "mixed"
-    ),
+    lists: lists.filter(isEmailAudienceList),
     themes,
     content: content.filter(
       (c) =>
@@ -145,12 +144,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "preview_recipients") {
+    const existing = body.id
+      ? await getEmailCampaign(String(body.id))
+      : null;
     const count = (
       await resolveEmailRecipients({
         audienceId: body.audience_id,
         excludeAudienceId: body.exclude_audience_id,
         listIds: body.list_ids,
         recipientIds: body.recipient_ids,
+        purpose: existing && isPitchCampaign(existing) ? "pitch" : "marketing",
       })
     ).length;
     return jsonOk({ count });

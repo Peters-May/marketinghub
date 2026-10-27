@@ -14,7 +14,11 @@ import {
   PRESS_PITCH_TEMPLATE_ID,
   pressPitchFromRelease,
 } from "@/lib/pr/pitch-email";
-import { isPublicReleasePage, releaseStatusLabel } from "@/lib/pr/release-document";
+import {
+  isFiledOnNewsroom,
+  isPublicReleasePage,
+  releaseStatusLabel,
+} from "@/lib/pr/release-document";
 import { formatCreatedAgo, formatLondonStamp } from "@/lib/email/display";
 
 function storyTime(item: ContentItem): string {
@@ -170,8 +174,8 @@ export function ReleasesPanel({
             </li>
           ) : (
             stories.map((item) => {
-              const assigned = item.newsroom_name !== "";
-              const room = item.newsroom_name || newsroomTitle;
+              const assigned = isFiledOnNewsroom(item);
+              const room = assigned ? item.newsroom_name : newsroomTitle;
               const pinned = item.pin_homepage === true;
               const sliding = item.in_slider === true;
               return (
@@ -247,7 +251,7 @@ export function ReleasesPanel({
                         target="_blank"
                         className="text-accent underline"
                       >
-                        {item.newsroom_name === "" ? "View release" : "View on newsroom"}
+                        {assigned ? "View on newsroom" : "View release"}
                       </Link>
                     ) : (
                       <Link

@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/repos";
 import { NewsroomHeader } from "@/components/pr/NewsroomHeader";
 import { COLORS } from "@/lib/brand/tokens";
+import { primaryImageUrl } from "@/lib/data/normalize";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { isPressContact } from "@/lib/pr/pitch-eml";
 
@@ -44,6 +45,8 @@ export default async function NewsroomPage() {
     .filter((c) => c.email || c.phone);
 
   const accent = settings.theme_color || COLORS.pmBlue.hex;
+  const featuredImage =
+    primaryImageUrl(featured?.asset_url) || settings.background_url || "";
 
   return (
     <div className="min-h-screen bg-white text-brand">
@@ -63,23 +66,19 @@ export default async function NewsroomPage() {
       />
 
       {featured ? (
-        <section
-          id={featured.id}
-          className="relative overflow-hidden"
+        <Link
+          href={`/newsroom/${featured.id}`}
+          className="relative block overflow-hidden"
           style={{
-            background: settings.background_url
+            background: featuredImage
               ? undefined
               : `linear-gradient(135deg, ${COLORS.deepNavy.hex}, ${COLORS.ensignNavy.hex})`,
-            backgroundImage: settings.background_url
-              ? `url(${settings.background_url})`
-              : undefined,
+            backgroundImage: featuredImage ? `url(${featuredImage})` : undefined,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
-          {settings.background_url ? (
-            <div className="absolute inset-0 bg-brand/25" />
-          ) : null}
+          {featuredImage ? <div className="absolute inset-0 bg-brand/25" /> : null}
           <div className="relative mx-auto max-w-5xl px-6 py-16 md:py-24">
             <div className="max-w-xl rounded-xl bg-white p-6 shadow-lg md:p-8">
               <span
@@ -89,9 +88,7 @@ export default async function NewsroomPage() {
                 News
               </span>
               <h2 className="mt-3 font-display text-2xl leading-tight md:text-3xl">
-                <Link href={`/newsroom/${featured.id}`} className="hover:underline">
-                  {featured.title}
-                </Link>
+                {featured.title}
               </h2>
               {featured.caption ? (
                 <p className="mt-3 text-sm leading-relaxed text-brand/80">
@@ -104,9 +101,10 @@ export default async function NewsroomPage() {
                 {(featured.due_date || featured.updated_at || "").slice(0, 10)}
                 {featured.owner ? ` · ${featured.owner}` : ""}
               </p>
+              <p className="mt-4 text-sm font-medium text-accent">Read the release</p>
             </div>
           </div>
-        </section>
+        </Link>
       ) : null}
 
       <main className="mx-auto max-w-5xl px-6 py-12">
@@ -115,18 +113,16 @@ export default async function NewsroomPage() {
             <h2 className="font-display text-2xl">Highlights</h2>
             <ul className="mt-4 flex gap-4 overflow-x-auto pb-2">
               {slider.map((r) => (
-                <li
-                  key={r.id}
-                  className="min-w-[16rem] max-w-xs flex-1 rounded-xl border border-brand/10 p-4"
-                >
-                  <h3 className="font-display text-lg leading-snug">
-                    <Link href={`/newsroom/${r.id}`} className="hover:underline">
-                      {r.title}
-                    </Link>
-                  </h3>
-                  <p className="mt-2 text-xs text-muted">
-                    {(r.due_date || r.updated_at || "").slice(0, 10)}
-                  </p>
+                <li key={r.id} className="min-w-[16rem] max-w-xs flex-1">
+                  <Link
+                    href={`/newsroom/${r.id}`}
+                    className="block h-full rounded-xl border border-brand/10 p-4 hover:border-accent"
+                  >
+                    <h3 className="font-display text-lg leading-snug">{r.title}</h3>
+                    <p className="mt-2 text-xs text-muted">
+                      {(r.due_date || r.updated_at || "").slice(0, 10)}
+                    </p>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -140,30 +136,36 @@ export default async function NewsroomPage() {
             </p>
           ) : (
             <ul className="mt-6 grid gap-6 sm:grid-cols-2">
-              {(featured ? rest : releases).map((r) => (
-                <li
-                  key={r.id}
-                  id={r.id}
-                  className="overflow-hidden rounded-xl border border-brand/10 bg-mist/40"
-                >
-                  <div
-                    className="px-4 py-8 text-white"
-                    style={{ background: accent }}
-                  >
-                    <h3 className="font-display text-lg leading-snug">
-                      <Link
-                        href={`/newsroom/${r.id}`}
-                        className="text-white hover:underline"
-                      >
-                        {r.title}
-                      </Link>
-                    </h3>
-                  </div>
-                  <div className="p-4 text-sm text-muted">
-                    {(r.due_date || r.updated_at || "").slice(0, 10)}
-                  </div>
-                </li>
-              ))}
+              {(featured ? rest : releases).map((r) => {
+                const image = primaryImageUrl(r.asset_url);
+                return (
+                  <li key={r.id}>
+                    <Link
+                      href={`/newsroom/${r.id}`}
+                      className="block overflow-hidden rounded-xl border border-brand/10 bg-mist/40 hover:border-accent"
+                    >
+                      {image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={image}
+                          alt=""
+                          className="aspect-[16/9] w-full object-cover"
+                        />
+                      ) : (
+                        <div className="px-4 py-8" style={{ background: accent }} />
+                      )}
+                      <div className="p-4">
+                        <h3 className="font-display text-lg leading-snug text-brand">
+                          {r.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-muted">
+                          {(r.due_date || r.updated_at || "").slice(0, 10)}
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

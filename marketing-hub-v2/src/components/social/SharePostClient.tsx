@@ -61,6 +61,7 @@ export function SharePostClient({
               {when ? <p className="mt-1 text-xs text-muted">{when}</p> : null}
             </div>
             <PlatformPostPreview
+              mode="switch"
               platforms={preview.platforms.length ? preview.platforms : ["Social"]}
               caption={preview.caption}
               captionHtml={preview.captionHtml}

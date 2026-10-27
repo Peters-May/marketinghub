@@ -21,6 +21,8 @@ import {
   unsubscribeUrlFor,
   viewInBrowserUrlFor,
 } from "@/lib/email/unsubscribe-token";
+import { isPitchCampaign } from "@/lib/email/category";
+import { emptyRecipientError } from "@/lib/email/recipient-rules";
 import { appendUtmToEmailHtml } from "@/lib/email/utm";
 import {
   notifyPortalCampaignSend,
@@ -123,18 +125,19 @@ export async function prepareCampaignSend(
     }
   }
 
+  const purpose = isPitchCampaign(campaign) ? "pitch" : "marketing";
   const recipients = await resolveEmailRecipients({
     audienceId: campaign.audience_id,
     excludeAudienceId: campaign.exclude_audience_id,
     listIds: campaign.list_ids,
     recipientIds: campaign.recipient_ids,
+    purpose,
   });
 
   if (recipients.length === 0) {
     const updated = await updateEmailCampaign(campaignId, {
       status: "failed",
-      last_error:
-        "No consented recipients (marketing opt-in required; check audience and suppressions)",
+      last_error: emptyRecipientError(purpose),
     });
     return {
       ready: false,
@@ -193,6 +196,7 @@ export async function deliverNextCampaignBatch(
     excludeAudienceId: latest.exclude_audience_id,
     listIds: latest.list_ids,
     recipientIds: latest.recipient_ids,
+    purpose: isPitchCampaign(latest) ? "pitch" : "marketing",
   });
   const alreadySent = new Set(
     (await listEmailEvents(campaignId))

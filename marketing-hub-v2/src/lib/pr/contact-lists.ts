@@ -14,6 +14,17 @@ export function isPortalMediaList(list: {
   );
 }
 
+/** Lists the email audience picker can attach, including press lists for pitches. */
+export function isEmailAudienceList(list: {
+  list_kind?: string | null;
+}): boolean {
+  return (
+    list.list_kind === "press" ||
+    list.list_kind === "marketing" ||
+    list.list_kind === "mixed"
+  );
+}
+
 /** Press lists built from Hub contacts. */
 export function isHubContactList(list: MediaList): boolean {
   if (isPortalMediaList(list)) return false;

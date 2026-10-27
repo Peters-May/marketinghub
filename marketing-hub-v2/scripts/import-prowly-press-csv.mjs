@@ -148,9 +148,31 @@ function mapRow(row, now) {
     tags: [GROUP_TAG, SOURCE_TAG],
     notes: buildNotes(row),
     user_id: null,
+    is_press: true,
+    is_spokesperson: false,
+    beat: clean(row.topics).slice(0, 200),
+    outlet,
+    country: clean(row.country),
+    preferred_topics: clean(row.topics),
+    last_contacted_at: null,
+    marketing_consent: null,
     created_at: now,
     updated_at: now,
   };
+}
+
+function blankIdentity(row) {
+  const name = [
+    clean(row.name),
+    clean(row.first_name),
+    clean(row.last_name),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return `${name}|${clean(row.outlet).toLowerCase()}`;
 }
 
 const args = process.argv.slice(2);
@@ -165,7 +187,10 @@ const key = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !key) throw new Error("Missing Supabase env in .env.local");
 
 const text = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
-const delimiter = text.includes(";") ? ";" : ",";
+const headerLine = text.split(/\r?\n/, 1)[0] ?? "";
+const semicolons = (headerLine.match(/;/g) || []).length;
+const commas = (headerLine.match(/,/g) || []).length;
+const delimiter = semicolons > commas ? ";" : ",";
 const rows = parseDelimited(text, delimiter);
 if (rows.length < 2) throw new Error("CSV has no data rows");
 
@@ -197,11 +222,17 @@ if (!storeRow?.payload) throw new Error("hub_store default row missing");
 const payload = structuredClone(storeRow.payload);
 const contacts = Array.isArray(payload.contacts) ? payload.contacts : [];
 const byEmail = new Map();
+const blankKeys = new Set();
 for (const c of contacts) {
   const e = String(c.email ?? "")
     .trim()
     .toLowerCase();
-  if (e) byEmail.set(e, c);
+  if (e) {
+    byEmail.set(e, c);
+    continue;
+  }
+  const key = `${String(c.name ?? "").trim().toLowerCase()}|${String(c.outlet ?? c.organisation ?? "").trim().toLowerCase()}`;
+  if (key !== "|") blankKeys.add(key);
 }
 
 const now = new Date().toISOString();
@@ -229,6 +260,14 @@ for (const row of mapped) {
     continue;
   }
 
+  if (!email) {
+    const key = blankIdentity(row);
+    if (key === "|" || blankKeys.has(key)) {
+      skippedDup++;
+      continue;
+    }
+  }
+
   if (email && byEmail.has(email)) {
     const existing = byEmail.get(email);
     const tags = Array.isArray(existing.tags) ? [...existing.tags] : [];
@@ -238,6 +277,29 @@ for (const row of mapped) {
         tags.push(t);
         changed = true;
       }
+    }
+    if (existing.is_press !== true) {
+      existing.is_press = true;
+      changed = true;
+    }
+    const outlet = clean(row.outlet);
+    const country = clean(row.country);
+    const topics = clean(row.topics);
+    if (!existing.outlet && outlet) {
+      existing.outlet = outlet;
+      changed = true;
+    }
+    if (!existing.country && country) {
+      existing.country = country;
+      changed = true;
+    }
+    if (!existing.beat && topics) {
+      existing.beat = topics.slice(0, 200);
+      changed = true;
+    }
+    if (!existing.preferred_topics && topics) {
+      existing.preferred_topics = topics;
+      changed = true;
     }
     if (changed) {
       existing.tags = tags;
@@ -250,6 +312,7 @@ for (const row of mapped) {
   }
 
   const contact = mapRow(row, now);
+  if (!email) blankKeys.add(blankIdentity(row));
   contacts.push(contact);
   if (contact.email) byEmail.set(contact.email.toLowerCase(), contact);
   additions.push({

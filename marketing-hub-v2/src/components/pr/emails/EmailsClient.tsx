@@ -13,9 +13,10 @@ import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { cn } from "@/lib/utils";
 import {
   applyPitchMerge,
-  buildEml,
   downloadEmlBlob,
   downloadTextFile,
+  pitchEmlFiles,
+  pitchExportContacts,
   insertNewsroomLink,
   insertReleaseBlock,
   mailtoHref,
@@ -61,6 +62,8 @@ type Props = {
   onListsChanged?: () => void;
   /** Older Outlook exports. New pitches are email campaigns, not created here. */
   legacy?: boolean;
+  /** Addresses on the email suppression list. */
+  suppressedEmails?: string[];
 };
 
 export function EmailsClient({
@@ -70,6 +73,7 @@ export function EmailsClient({
   initialContent,
   prefillContentId,
   legacy = false,
+  suppressedEmails = [],
 }: Props) {
   const [pitches, setPitches] = useState(initialPitches);
   const [lists, setLists] = useState(initialLists);
@@ -165,9 +169,12 @@ export function EmailsClient({
       const list = lists.find((l) => l.id === lid);
       list?.contact_ids.forEach((id) => ids.add(id));
     }
-    return Array.from(ids)
-      .map((id) => contactById.get(id))
-      .filter((c): c is Contact => Boolean(c));
+    return pitchExportContacts(
+      Array.from(ids)
+        .map((id) => contactById.get(id))
+        .filter((c): c is Contact => Boolean(c)),
+      suppressedEmails
+    );
   }
 
   const filtered = useMemo(() => {
@@ -262,7 +269,7 @@ export function EmailsClient({
     }
   }
 
-  async function exportOutlook(mode: "bcc" | "each") {
+  async function exportOutlook() {
     const pitch =
       selected ||
       pitchesOnly.find((p) => p.id === selectedId) ||
@@ -309,36 +316,22 @@ export function EmailsClient({
 
     const recipients = resolveRecipients(current);
     if (!recipients.length) {
-      setMessage("Add a list with contacts first.");
+      setMessage(
+        "Add a list with contacts who are not on the suppression list."
+      );
       return;
     }
 
-    const from = `${current.from_name} <${current.from_email}>`;
-    if (mode === "bcc") {
-      const first = recipients[0];
-      downloadEmlBlob(
-        current.title,
-        buildEml({
-          from,
-          to: [],
-          bcc: recipients.map((c) => c.email).filter(Boolean),
-          subject: applyPitchMerge(current.subject, first),
-          body: applyPitchMerge(current.body, first),
-        })
-      );
-    } else {
-      for (const c of recipients) {
-        if (!c.email) continue;
-        downloadEmlBlob(
-          `${current.title}-${c.name}`,
-          buildEml({
-            from,
-            to: [c.email],
-            subject: applyPitchMerge(current.subject, c),
-            body: applyPitchMerge(current.body, c),
-          })
-        );
-      }
+    const files = pitchEmlFiles({
+      title: current.title,
+      subject: current.subject,
+      body: current.body,
+      fromName: current.from_name,
+      fromEmail: current.from_email,
+      recipients,
+    });
+    for (const file of files) {
+      downloadEmlBlob(file.filename, file.eml);
     }
 
     await fetch("/api/pr/pitches", {
@@ -347,7 +340,11 @@ export function EmailsClient({
       body: JSON.stringify({ action: "mark_exported", id }),
     });
     await refresh();
-    setMessage("Downloaded .eml for Outlook.");
+    setMessage(
+      files.length === 1
+        ? "Downloaded one .eml."
+        : `Downloaded ${files.length} .eml files, one for each contact.`
+    );
   }
 
   async function exportRecipientCsv() {
@@ -365,7 +362,9 @@ export function EmailsClient({
     };
     const recipients = resolveRecipients(draft);
     if (!recipients.length) {
-      setMessage("Add a list with contacts first.");
+      setMessage(
+        "Add a list with contacts who are not on the suppression list."
+      );
       return;
     }
     const csv = recipientsToCsv(recipients);
@@ -664,8 +663,9 @@ export function EmailsClient({
         {step === "export" ? (
           <div className="surface-card space-y-4 p-5">
             <p className="text-sm text-muted">
-              Hub does not send blasts. Download a .eml and open it in Outlook to
-              send. CSV is optional for records.
+              Hub does not send blasts. Download one .eml per contact and open
+              it in Outlook. Each file uses that person's name. People on the
+              suppression list are left out. CSV is optional for records.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -679,18 +679,10 @@ export function EmailsClient({
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void exportOutlook("bcc")}
+                onClick={() => void exportOutlook()}
                 className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
               >
-                Download .eml (BCC)
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void exportOutlook("each")}
-                className="rounded-lg border border-brand/20 px-3 py-2 text-sm"
-              >
-                One .eml each
+                Download one .eml each
               </button>
               <button
                 type="button"
@@ -753,9 +745,9 @@ export function EmailsClient({
               <button
                 type="button"
                 className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                onClick={() => void exportOutlook("bcc")}
+                onClick={() => void exportOutlook()}
               >
-                Download .eml
+                Download one .eml each
               </button>
               <button
                 type="button"

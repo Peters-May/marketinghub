@@ -391,7 +391,7 @@ export function ReleaseEditor({
               mark();
             }}
             rows={4}
-            placeholder={"Name\nRole\nemail@petersandmay.com\nPhone"}
+            placeholder={"Media enquiries\nPeters & May\nmarketing@petersandmay.com"}
             className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
           />
         </div>

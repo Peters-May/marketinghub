@@ -1,3 +1,8 @@
+import {
+  MEDIA_DESK_HTML,
+  RELEASE_FILES_HTML,
+  companyBoilerplateHtml,
+} from "@/lib/brand/factsheet";
 import { COLORS } from "@/lib/brand/tokens";
 import { uid } from "@/lib/utils";
 import type {
@@ -477,31 +482,29 @@ const PRESS_PITCH_DEFAULTS: PressPitchContent = {
   imageSrc: "",
   imageAlt: "",
   storyHtml:
-    "<p>Write the standfirst here.</p><p>Then the release. Add further pictures in this section.</p>",
+    "<p>A note for the newsdesk follows.</p>",
   extraImages: [],
   notesHtml:
     "<p>For further information or to arrange an interview, please contact the media team below.</p>",
   articlesHtml:
-    "<p><a href=\"https://www.petersandmay.com\">Visit the newsroom</a></p><p>Add related newsroom stories here.</p>",
-  boilerplateHtml:
-    "<p>Peters &amp; May is a global specialist in bespoke logistics. The company ships commercial and private vessels, and moves cargo by air, land and sea.</p><p><a href=\"https://www.petersandmay.com\">petersandmay.com</a></p>",
-  mediaHtml: "<p>Add downloadable images and files here.</p>",
+    "<p><a href=\"https://www.petersandmay.com\">petersandmay.com</a></p>",
+  boilerplateHtml: companyBoilerplateHtml(),
+  mediaHtml: RELEASE_FILES_HTML,
   related: [
     {
       title: "Related story",
       imageSrc: "",
-      bodyHtml: "<p>Short summary of another newsroom story.</p>",
+      bodyHtml: "<p>Another story from the newsroom.</p>",
       href: "https://www.petersandmay.com",
     },
   ],
-  contactsHtml:
-    "<p>Name<br>Role, Peters &amp; May<br>email@petersandmay.com<br>Phone</p>",
+  contactsHtml: MEDIA_DESK_HTML,
   embeddedTitle: "Release headline",
   embeddedSummaryHtml: "<p>The release summary.</p>",
   embeddedImageSrc: "",
   embeddedImageAlt: "",
   embeddedHref: "https://www.petersandmay.com",
-  attachmentHtml: "<p>Add press release files here.</p>",
+  attachmentHtml: RELEASE_FILES_HTML,
   videos: [],
 };
 
@@ -581,7 +584,7 @@ export function pressPitchDesign(
                 )
               : [
                   createBlock("text", {
-                    html: "<p>Add another newsroom story here.</p>",
+                    html: "<p>Further stories are on the newsroom.</p>",
                     fontSize: 15,
                   }),
                 ]),

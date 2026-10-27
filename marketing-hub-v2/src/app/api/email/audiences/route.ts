@@ -1,39 +1,31 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import {
+  countAudienceRecipients,
   createEmailAudience,
   deleteEmailAudience,
-  listContacts,
   listEmailAudiences,
   listMediaLists,
   resolveEmailRecipients,
   updateEmailAudience,
 } from "@/lib/data/repos";
+import { isMarketingList, toAudienceListOption } from "@/lib/email/audience-list";
 
 export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
-  const [audiences, lists, contacts] = await Promise.all([
+  const [audiences, lists] = await Promise.all([
     listEmailAudiences(),
     listMediaLists(),
-    listContacts(),
   ]);
-
-  const withCounts = await Promise.all(
-    audiences.map(async (a) => {
-      const recipients = await resolveEmailRecipients({
-        audienceId: a.id,
-      });
-      return { ...a, recipient_count: recipients.length };
-    })
-  );
+  const counts = await countAudienceRecipients(audiences.map((audience) => audience.id));
 
   return jsonOk({
-    audiences: withCounts,
-    lists: lists.filter(
-      (l) => l.list_kind === "marketing" || l.list_kind === "mixed"
-    ),
-    contacts,
+    audiences: audiences.map((audience) => ({
+      ...audience,
+      recipient_count: counts.get(audience.id) ?? 0,
+    })),
+    lists: lists.filter(isMarketingList).map(toAudienceListOption),
   });
 }
 

@@ -22,7 +22,12 @@ import {
 import { uid } from "@/lib/utils";
 import { emailCampaignCategory } from "@/lib/email/category";
 import { normalizeEmailDesign } from "@/lib/email/design";
-import { normalizeTopicOptOuts, topicForAudienceName } from "@/lib/email/preferences";
+import { normalizeTopicOptOuts } from "@/lib/email/preferences";
+import {
+  buildRecipientIndex,
+  countEmailRecipients,
+  matchEmailRecipients,
+} from "@/lib/email/recipients";
 import {
   HUB_ACCESS_ROLE_ORDER,
   normalizeHubAccessRole,
@@ -394,6 +399,15 @@ export async function unlinkEventContent(id: string) {
 export async function listContent() {
   const store = await readStore();
   return store.content.map(withContentPlanableDefaults);
+}
+
+/** Titles only. The email list does not need release bodies. */
+export async function listContentTitles() {
+  const store = await readStore();
+  return (store.content ?? []).map((item) => ({
+    id: item.id,
+    title: item.title ?? "",
+  }));
 }
 
 function isMissingShareRpc(error: { code?: string; message?: string }): boolean {
@@ -3533,8 +3547,9 @@ export async function bumpEmailCampaignStat(
 }
 
 /**
- * Resolve consented marketing recipients for a campaign / audience.
- * Requires marketing_consent === true and a usable email; respects suppressions.
+ * Resolve recipients for a campaign or audience.
+ * Marketing sends require marketing_consent. Pitch sends use press and mixed lists
+ * and still honour the suppression list.
  */
 export async function resolveEmailRecipients(opts: {
   audienceId?: string | null;
@@ -3542,94 +3557,20 @@ export async function resolveEmailRecipients(opts: {
   listIds?: string[];
   recipientIds?: string[];
   excludeUnsubscribed?: boolean;
+  purpose?: "marketing" | "pitch";
 }): Promise<Contact[]> {
-  const store = await readStore();
-  const contacts = store.contacts ?? [];
-  const lists = store.media_lists ?? [];
-  const suppressions = new Set(
-    (store.email_suppressions ?? []).map((s) => s.email.trim().toLowerCase())
-  );
+  const index = buildRecipientIndex(await readStore());
+  return matchEmailRecipients(index, opts);
+}
 
-  const idSet = new Set<string>();
-  for (const id of opts.recipientIds ?? []) idSet.add(id);
-
-  let excludeUnsubscribed = opts.excludeUnsubscribed !== false;
-  let filter: EmailAudienceFilter = { tags: [], country: "" };
-  let audienceTopic: ReturnType<typeof topicForAudienceName> = null;
-
-  if (opts.audienceId) {
-    const audience = (store.email_audiences ?? []).find(
-      (a) => a.id === opts.audienceId
-    );
-    if (audience) {
-      excludeUnsubscribed = audience.exclude_unsubscribed !== false;
-      filter = normalizeAudienceFilter(audience.filter);
-      audienceTopic = topicForAudienceName(audience.name);
-      for (const id of audience.contact_ids ?? []) idSet.add(id);
-      for (const listId of audience.list_ids ?? []) {
-        const list = lists.find((l) => l.id === listId);
-        if (list) for (const cid of list.contact_ids ?? []) idSet.add(cid);
-      }
-    }
+/** Recipient totals for every audience, from one contact index. */
+export async function countAudienceRecipients(
+  audienceIds: string[]
+): Promise<Map<string, number>> {
+  const index = buildRecipientIndex(await readStore());
+  const counts = new Map<string, number>();
+  for (const id of audienceIds) {
+    counts.set(id, countEmailRecipients(index, { audienceId: id }));
   }
-
-  for (const listId of opts.listIds ?? []) {
-    const list = lists.find((l) => l.id === listId);
-    if (list) for (const cid of list.contact_ids ?? []) idSet.add(cid);
-  }
-
-  const excludeEmails = new Set<string>();
-  if (opts.excludeAudienceId) {
-    const excludeAudience = (store.email_audiences ?? []).find(
-      (a) => a.id === opts.excludeAudienceId
-    );
-    if (excludeAudience) {
-      const excludeIds = new Set<string>([
-        ...(excludeAudience.contact_ids ?? []),
-      ]);
-      for (const listId of excludeAudience.list_ids ?? []) {
-        const list = lists.find((l) => l.id === listId);
-        if (list) for (const cid of list.contact_ids ?? []) excludeIds.add(cid);
-      }
-      for (const id of excludeIds) {
-        const contact = contacts.find((row) => row.id === id);
-        const email = (contact?.email ?? "").trim().toLowerCase();
-        if (email) excludeEmails.add(email);
-      }
-    }
-  }
-
-  const out: Contact[] = [];
-  for (const id of idSet) {
-    const c = contacts.find((x) => x.id === id);
-    if (!c) continue;
-    const email = (c.email ?? "").trim().toLowerCase();
-    if (!email || !email.includes("@")) continue;
-    if (c.marketing_consent !== true) continue;
-    if (excludeUnsubscribed && suppressions.has(email)) continue;
-    if (excludeEmails.has(email)) continue;
-    if (
-      audienceTopic &&
-      normalizeTopicOptOuts(c.email_topic_opt_outs).includes(audienceTopic)
-    ) {
-      continue;
-    }
-    if (filter.country.trim()) {
-      if (
-        (c.country ?? "").trim().toLowerCase() !==
-        filter.country.trim().toLowerCase()
-      ) {
-        continue;
-      }
-    }
-    if (filter.tags.length) {
-      const tags = (c.tags ?? []).map((t) => t.toLowerCase());
-      const ok = filter.tags.every((t) =>
-        tags.includes(t.trim().toLowerCase())
-      );
-      if (!ok) continue;
-    }
-    out.push(c);
-  }
-  return out;
+  return counts;
 }

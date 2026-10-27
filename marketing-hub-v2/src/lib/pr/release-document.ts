@@ -75,8 +75,17 @@ type ReleaseVisibility = Pick<
   "status" | "newsroom_name" | "due_date" | "content_type" | "category" | "channel"
 >;
 
+/** Filed only when a newsroom name is set. Missing and blank stay off the index. */
+export function isFiledOnNewsroom(item: {
+  newsroom_name?: string | null;
+}): boolean {
+  return (
+    typeof item.newsroom_name === "string" && item.newsroom_name.trim() !== ""
+  );
+}
+
 function onNewsroom(item: ReleaseVisibility): boolean {
-  return item.newsroom_name !== "";
+  return isFiledOnNewsroom(item);
 }
 
 function liveStatus(item: ReleaseVisibility, now: Date): boolean {

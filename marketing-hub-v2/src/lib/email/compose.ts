@@ -3,6 +3,8 @@ export {
   applyPitchMerge,
   buildEml,
   downloadEmlBlob,
+  pitchEmlFiles,
+  pitchExportContacts,
   mailtoHref,
   isPressContact,
   hasMarketingConsent,

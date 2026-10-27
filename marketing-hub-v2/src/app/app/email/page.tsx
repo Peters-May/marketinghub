@@ -4,17 +4,19 @@ import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
 import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import {
-  listContent,
+  countAudienceRecipients,
+  listContentTitles,
   listEmailAudiences,
   listEmailCampaigns,
   listEmailTemplates,
   listMediaLists,
-  resolveEmailRecipients,
 } from "@/lib/data/repos";
+import { isMarketingList, toAudienceListOption } from "@/lib/email/audience-list";
 import {
   isMarketingInboxCampaign,
   isPitchTabCampaign,
 } from "@/lib/email/category";
+import type { EmailCampaign, EmailTemplate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -40,26 +42,25 @@ export default async function EmailPage({
     console.error("[email] scheduled send", err);
   }
 
-  const [campaigns, templates, audiences, lists, content] = await Promise.all([
+  const [campaigns, templates, audiences, lists, contentTitles] = await Promise.all([
     listEmailCampaigns(),
     listEmailTemplates(),
     listEmailAudiences(),
     listMediaLists(),
-    listContent(),
+    listContentTitles(),
   ]);
-  const marketingCampaigns = campaigns.filter(isMarketingInboxCampaign);
-  const pitchCampaigns = campaigns.filter(isPitchTabCampaign);
-
-  const audiencesWithCounts = await Promise.all(
-    audiences.map(async (a) => {
-      const recipients = await resolveEmailRecipients({ audienceId: a.id });
-      return { ...a, recipient_count: recipients.length };
-    })
-  );
-
-  const marketingLists = lists.filter(
-    (l) => l.list_kind === "marketing" || l.list_kind === "mixed"
-  );
+  const marketingCampaigns = campaigns
+    .filter(isMarketingInboxCampaign)
+    .map(withoutEmailDocument);
+  const pitchCampaigns = campaigns
+    .filter(isPitchTabCampaign)
+    .map(withoutEmailDocument);
+  const counts = await countAudienceRecipients(audiences.map((audience) => audience.id));
+  const audiencesWithCounts = audiences.map((audience) => ({
+    ...audience,
+    recipient_count: counts.get(audience.id) ?? 0,
+  }));
+  const marketingLists = lists.filter(isMarketingList).map(toAudienceListOption);
 
   const tab =
     searchParams?.tab === "pitches"
@@ -74,11 +75,17 @@ export default async function EmailPage({
     <EmailMarketingHub
       initialCampaigns={marketingCampaigns}
       pitchCampaigns={pitchCampaigns}
-      content={content}
-      initialTemplates={templates}
+      initialTemplates={templates.map(withoutEmailDocument)}
       initialAudiences={audiencesWithCounts}
       initialLists={marketingLists}
+      contentTitles={contentTitles}
       initialTab={tab}
     />
   );
+}
+
+/** The list only needs names and stats. Designs stay on the editor page. */
+function withoutEmailDocument<T extends EmailCampaign | EmailTemplate>(item: T): T {
+  if (!item.html_body && !item.design) return item;
+  return { ...item, html_body: "", design: null };
 }

@@ -250,6 +250,7 @@ export function EmailDesigner({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "preview_recipients",
+        id,
         audience_id: audienceId,
         exclude_audience_id: excludeAudienceId || null,
       }),
@@ -266,7 +267,7 @@ export function EmailDesigner({
     return () => {
       cancelled = true;
     };
-  }, [audienceId, excludeAudienceId, kind]);
+  }, [audienceId, excludeAudienceId, id, kind]);
 
   const markDirty = useCallback(() => {
     dirtyRef.current = true;

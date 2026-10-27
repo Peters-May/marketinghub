@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, RefreshCw } from "lucide-react";
-import type { MediaList } from "@/lib/types";
+import type { AudienceListOption } from "@/lib/email/audience-list";
 import type { AudienceWithCount } from "@/components/email/EmailMarketingHub";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
@@ -48,8 +48,8 @@ export function EmailAudiencesPanel({
 }: {
   audiences: AudienceWithCount[];
   setAudiences: React.Dispatch<React.SetStateAction<AudienceWithCount[]>>;
-  lists: MediaList[];
-  setLists: React.Dispatch<React.SetStateAction<MediaList[]>>;
+  lists: AudienceListOption[];
+  setLists: React.Dispatch<React.SetStateAction<AudienceListOption[]>>;
 }) {
   const [selected, setSelected] = useState<AudienceWithCount | null>(null);
   const [open, setOpen] = useState(false);
@@ -291,11 +291,14 @@ export function EmailAudiencesPanel({
           </label>
 
           <fieldset>
-            <legend className="text-sm text-muted">Marketing lists</legend>
+            <legend className="text-sm text-muted">Lists</legend>
+            <p className="mt-1 text-xs text-muted">
+              Press and mixed lists can be used for pitches. Marketing sends still need an opt-in.
+            </p>
             <div className="mt-2 space-y-1">
               {lists.length === 0 ? (
                 <p className="text-xs text-muted">
-                  No marketing lists yet — create one under Data or PR lists.
+                  No lists yet. Create one under PR or Data.
                 </p>
               ) : (
                 lists.map((l) => (
@@ -310,7 +313,7 @@ export function EmailAudiencesPanel({
                     />
                     {l.name}
                     <span className="text-xs text-muted">
-                      ({l.contact_ids?.length ?? 0} contacts)
+                      ({l.list_kind} · {l.contact_count})
                     </span>
                   </label>
                 ))

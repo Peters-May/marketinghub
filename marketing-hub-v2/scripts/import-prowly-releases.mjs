@@ -4,9 +4,11 @@
  * Usage:
  *   node scripts/import-prowly-releases.mjs
  *   node scripts/import-prowly-releases.mjs --apply
+ *   node scripts/import-prowly-releases.mjs --apply --overwrite
  *
- * Dry-run prints what would be saved. --apply writes hub_store press releases
- * and uploads images into the media gallery (Gallery / Press releases).
+ * Dry-run prints what would be saved. --apply creates releases that are not
+ * already in the hub. --overwrite updates a matching release and leaves its
+ * status unchanged. Images go into the media gallery (Gallery / Press releases).
  */
 import fs from "fs";
 import path from "path";
@@ -14,6 +16,7 @@ import crypto from "crypto";
 import { createRequire } from "module";
 import { createClient } from "@supabase/supabase-js";
 import { fileURLToPath } from "url";
+import { COMPANY_BOILERPLATE } from "../src/lib/brand/factsheet.mjs";
 
 const require = createRequire(
   new URL("../node_modules/isomorphic-dompurify/package.json", import.meta.url)
@@ -25,14 +28,7 @@ const ROOT = path.join(__dirname, "..");
 const HUB_STORE_ID = "default";
 const ORIGIN = "https://petersandmay.prowly.com";
 const GALLERY_FOLDER = "Press releases";
-const BOILERPLATE =
-  "Peters & May is a global specialist in bespoke logistics, providing yacht transport, freight forwarding, commercial marine transport and project cargo solutions by sea, road and air.";
-const MEDIA_CONTACT = [
-  "Sophie Edgerley",
-  "Marketing Manager, Peters & May",
-  "marketing@petersandmay.com",
-  "07747 840429",
-].join("\n");
+const BOILERPLATE = COMPANY_BOILERPLATE;
 
 function loadEnv(filePath) {
   const out = {};
@@ -179,7 +175,7 @@ function parseContacts(doc) {
 }
 
 function formatContacts(contacts) {
-  if (!contacts.length) return MEDIA_CONTACT;
+  if (!contacts.length) return "";
   return contacts
     .map((contact) =>
       [contact.name, contact.role, contact.email, contact.phone]
@@ -258,7 +254,7 @@ function parseRelease(html, pageUrl) {
     )?.getAttribute("src") || meta(doc, "og:image");
 
   const contacts = parseContacts(doc);
-  const owner = contacts[0]?.name || "Sophie Edgerley";
+  const owner = contacts[0]?.name || "";
 
   const tags = [
     ...new Set(
@@ -510,6 +506,7 @@ function toContentItem(release, urls, newsroomTitle, now) {
 }
 
 const apply = process.argv.includes("--apply");
+const overwrite = process.argv.includes("--overwrite");
 const env = { ...loadEnv(path.join(ROOT, ".env.local")), ...process.env };
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -553,7 +550,9 @@ console.log(
 );
 
 if (!apply) {
-  console.log("\nDry run only. Re-run with --apply to save.");
+  console.log(
+    "\nDry run only. Re-run with --apply to create new releases. Pass --overwrite to update matches without changing status."
+  );
   process.exit(0);
 }
 
@@ -632,9 +631,18 @@ function findExistingRelease(rows, release) {
 let added = 0;
 let updated = 0;
 let removedDuplicates = 0;
+let skipped = 0;
 const gallery = [];
 
 for (const release of releases) {
+  const prowlyId = `cnt_prowly_${release.prowlyId}`;
+  const existingBefore = findExistingRelease(content, release);
+  const duplicateBefore = content.findIndex((row) => row.id === prowlyId);
+  if ((existingBefore || duplicateBefore !== -1) && !overwrite) {
+    skipped += 1;
+    continue;
+  }
+
   const hero = await hosted(release.hero, release.prowlyId);
   const images = new Map();
   for (const block of release.blocks) {
@@ -663,9 +671,9 @@ for (const release of releases) {
       asset_url: item.asset_url,
       notes: item.notes,
       pr_boilerplate: item.pr_boilerplate,
-      pr_contact: item.pr_contact,
+      pr_contact: item.pr_contact || existing.pr_contact,
       pr_document: item.pr_document,
-      status: "published",
+      status: existing.status,
       updated_at: now,
     };
     updated += 1;
@@ -680,6 +688,8 @@ for (const release of releases) {
     content[duplicateIndex] = {
       ...content[duplicateIndex],
       ...item,
+      status: content[duplicateIndex].status || item.status,
+      pr_contact: item.pr_contact || content[duplicateIndex].pr_contact,
       created_at: content[duplicateIndex].created_at || item.created_at,
     };
     updated += 1;
@@ -777,6 +787,7 @@ console.log(
     {
       added,
       updated,
+      skipped,
       removedDuplicates,
       galleryAdded,
       totalContent: content.length,

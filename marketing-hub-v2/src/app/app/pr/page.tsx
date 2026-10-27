@@ -1,15 +1,15 @@
 import { redirect } from "next/navigation";
 import {
-  getNewsroomSettings,
   listContacts,
   listContent,
+  listEmailCampaigns,
   listMediaLists,
   listPrCoverage,
   listPrMonitorMentions,
   listPrPitches,
 } from "@/lib/data/repos";
 import { isPressContact } from "@/lib/pr/pitch-eml";
-import { buildPrPipeline } from "@/lib/pr/pipeline";
+import { buildPrPipeline, isPressRelease } from "@/lib/pr/pipeline";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { PrHome } from "@/components/pr/PrHome";
 import { getSessionUser } from "@/lib/auth/session";
@@ -24,7 +24,7 @@ export default async function PrHomePage() {
     redirect("/app");
   }
 
-  const [contacts, lists, pitches, coverage, content, mentions] =
+  const [contacts, lists, pitches, coverage, content, mentions, campaigns] =
     await Promise.all([
       listContacts(),
       listMediaLists(),
@@ -32,25 +32,16 @@ export default async function PrHomePage() {
       listPrCoverage(),
       listContent(),
       listPrMonitorMentions(),
-      getNewsroomSettings(),
+      listEmailCampaigns(),
     ]);
 
-  const releases = content.filter((c) => {
-    if (c.status !== "published") return false;
-    const type = (c.content_type || "").toLowerCase();
-    const cat = (c.category || "").toLowerCase();
-    const channels = (c.channel || []).map((x) => x.toLowerCase());
-    return (
-      type === "pr" ||
-      type === "press" ||
-      cat === "press release" ||
-      channels.includes("pr")
-    );
-  });
+  const releases = content.filter(
+    (item) => item.status === "published" && isPressRelease(item)
+  );
 
   return (
     <PrHome
-      pipeline={buildPrPipeline({ content, pitches, coverage })}
+      pipeline={buildPrPipeline({ content, pitches, coverage, campaigns })}
       stats={{
         pressContacts: contacts.filter(isPressContact).length,
         lists: lists.filter(isContactSegment).length,

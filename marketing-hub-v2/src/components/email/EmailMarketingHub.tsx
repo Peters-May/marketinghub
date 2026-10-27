@@ -8,7 +8,8 @@ import { EmailAudiencesPanel } from "@/components/email/EmailAudiencesPanel";
 import { EmailTemplatesPanel } from "@/components/email/EmailTemplatesPanel";
 import { EmailReportsPanel } from "@/components/email/EmailReportsPanel";
 import { EmailSettingsPanel } from "@/components/email/EmailSettingsPanel";
-import type { ContentItem, EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
+import type { AudienceListOption } from "@/lib/email/audience-list";
+import type { EmailAudience, EmailCampaign, EmailTemplate } from "@/lib/types";
 import { isPitchTabCampaign } from "@/lib/email/category";
 import { PitchesPanel } from "@/components/pr/PitchesPanel";
 
@@ -31,15 +32,15 @@ export function EmailMarketingHub({
   initialLists,
   initialTab,
   pitchCampaigns = [],
-  content = [],
+  contentTitles = [],
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
   initialAudiences: AudienceWithCount[];
-  initialLists: MediaList[];
+  initialLists: AudienceListOption[];
   initialTab?: Tab;
   pitchCampaigns?: EmailCampaign[];
-  content?: ContentItem[];
+  contentTitles?: { id: string; title: string }[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "emails");
   const [pitchRows, setPitchRows] = useState(pitchCampaigns);
@@ -93,7 +94,7 @@ export function EmailMarketingHub({
       {tab === "pitches" ? (
         <PitchesPanel
           campaigns={pitchRows}
-          content={content}
+          content={contentTitles}
           match={isPitchTabCampaign}
           onCampaign={(item: EmailCampaign) =>
             setPitchRows((prev) => [item, ...prev.filter((c) => c.id !== item.id)])

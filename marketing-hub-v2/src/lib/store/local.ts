@@ -148,10 +148,29 @@ function migrateSponsorships(
   }));
 }
 
+function contactAlreadyNormal(item: HubStore["contacts"][number]) {
+  return (
+    (item.kind === "person" || item.kind === "company") &&
+    typeof item.website === "string" &&
+    typeof item.services === "string" &&
+    (item.user_id === null || typeof item.user_id === "string") &&
+    typeof item.is_press === "boolean" &&
+    typeof item.is_spokesperson === "boolean" &&
+    typeof item.beat === "string" &&
+    typeof item.outlet === "string" &&
+    typeof item.country === "string" &&
+    typeof item.preferred_topics === "string" &&
+    (item.last_contacted_at === null || typeof item.last_contacted_at === "string") &&
+    (item.marketing_consent === null || typeof item.marketing_consent === "boolean") &&
+    (item.portal_contact_id === null || typeof item.portal_contact_id === "string")
+  );
+}
+
 function migrateContacts(
   items: HubStore["contacts"] | undefined
 ): HubStore["contacts"] | undefined {
   if (!items) return items;
+  if (items.every(contactAlreadyNormal)) return items;
   return items.map((item) => ({
     ...item,
     kind: item.kind === "company" ? "company" : "person",

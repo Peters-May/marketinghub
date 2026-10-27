@@ -72,4 +72,20 @@ describe("PlatformPostPreview", () => {
     expect(html).toContain("Instagram preview");
     expect(html).toContain("Facebook preview");
   });
+
+  it("shows one platform at a time when switched", () => {
+    const html = renderToStaticMarkup(
+      createElement(PlatformPostPreview, {
+        mode: "switch",
+        platforms: ["LinkedIn", "Instagram", "Facebook"],
+        caption: "Yard update",
+        images: [],
+      })
+    );
+    expect(html).toContain('aria-label="Platform preview"');
+    expect(html).toContain('aria-label="Instagram"');
+    expect(html).toContain("LinkedIn preview");
+    expect(html).not.toContain("Instagram preview");
+    expect(html).not.toContain("Facebook preview");
+  });
 });

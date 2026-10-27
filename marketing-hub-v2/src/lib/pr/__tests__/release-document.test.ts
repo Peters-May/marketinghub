@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatReleaseDate,
+  isFiledOnNewsroom,
   isNewsroomIndexRelease,
   isPublicReleasePage,
   plainReleaseField,
@@ -96,8 +97,19 @@ describe("press release visibility", () => {
     expect(isPublicReleasePage(item, today)).toBe(true);
   });
 
-  it("publishes onto the newsroom index", () => {
+  it("keeps a published release with no newsroom name off the index", () => {
     const item = story({ status: "published", newsroom_name: undefined });
+    expect(isFiledOnNewsroom(item)).toBe(false);
+    expect(isNewsroomIndexRelease(item, today)).toBe(false);
+    expect(isPublicReleasePage(item, today)).toBe(true);
+  });
+
+  it("lists a published release that is filed on a newsroom", () => {
+    const item = story({
+      status: "published",
+      newsroom_name: "Peters & May News",
+    });
+    expect(isFiledOnNewsroom(item)).toBe(true);
     expect(isNewsroomIndexRelease(item, today)).toBe(true);
     expect(isPublicReleasePage(item, today)).toBe(true);
   });

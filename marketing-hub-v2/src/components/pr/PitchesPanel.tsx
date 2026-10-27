@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { ContentItem, EmailCampaign } from "@/lib/types";
+import type { EmailCampaign } from "@/lib/types";
 import { CreateEmailDialog } from "@/components/email/CreateEmailDialog";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { isPitchTabCampaign } from "@/lib/email/category";
@@ -29,7 +29,7 @@ export function PitchesPanel({
   onCampaign,
 }: {
   campaigns: EmailCampaign[];
-  content: ContentItem[];
+  content: { id: string; title: string }[];
   /** Pitches, including imported press sends. */
   match?: (campaign: EmailCampaign) => boolean;
   onCampaign?: (item: EmailCampaign) => void;

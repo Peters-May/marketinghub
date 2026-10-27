@@ -99,6 +99,45 @@ export function buildEml(input: EmlBuildInput): string {
   return lines.join("\r\n");
 }
 
+/** Drop blank addresses and anyone on the suppression list. */
+export function pitchExportContacts(
+  contacts: Contact[],
+  suppressedEmails: Iterable<string> = []
+): Contact[] {
+  const blocked = new Set(
+    [...suppressedEmails].map((email) => email.trim().toLowerCase()).filter(Boolean)
+  );
+  return contacts.filter((contact) => {
+    const email = (contact.email ?? "").trim().toLowerCase();
+    if (!email || !email.includes("@")) return false;
+    if (blocked.has(email)) return false;
+    return true;
+  });
+}
+
+/** One .eml per contact, each merged to that person. */
+export function pitchEmlFiles(input: {
+  title: string;
+  subject: string;
+  body: string;
+  fromName: string;
+  fromEmail: string;
+  recipients: Contact[];
+}): { filename: string; eml: string }[] {
+  const from = `${input.fromName} <${input.fromEmail}>`;
+  return input.recipients
+    .filter((contact) => contact.email?.trim())
+    .map((contact) => ({
+      filename: `${input.title}-${contact.name || contact.email}`,
+      eml: buildEml({
+        from,
+        to: [contact.email.trim()],
+        subject: applyPitchMerge(input.subject, contact),
+        body: applyPitchMerge(input.body, contact),
+      }),
+    }));
+}
+
 export function downloadEmlBlob(filename: string, eml: string) {
   const blob = new Blob([eml], { type: "message/rfc822" });
   const url = URL.createObjectURL(blob);

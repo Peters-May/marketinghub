@@ -1,3 +1,4 @@
+import { COMPANY_BOILERPLATE, MEDIA_DESK_HTML, RELEASE_FILES_HTML } from "@/lib/brand/factsheet";
 import type { ContentItem } from "@/lib/types";
 import { compileEmailDesign, pressPitchDesign } from "@/lib/email/design";
 import { imageAssetUrls, parseAssetUrls } from "@/lib/data/normalize";
@@ -11,8 +12,7 @@ import { seedReleaseDocument } from "@/lib/pr/release-blocks";
 
 export const PRESS_PITCH_TEMPLATE_ID = "etpl_press_pitch";
 
-const DEFAULT_BOILER =
-  "Peters & May is a global specialist in bespoke logistics. The company ships commercial and private vessels, and moves cargo by air, land and sea.";
+const DEFAULT_BOILER = COMPANY_BOILERPLATE;
 
 function esc(value: string): string {
   return value
@@ -85,7 +85,7 @@ export function pressPitchFromRelease(
   const summary = plainTextFromHtml(release.caption || "");
   const story = summary
     ? `<p>${esc(summary)}</p>`
-    : "<p>A short note for the newsdesk. The release is attached below.</p>";
+    : "<p>The release is on the newsroom.</p>";
   const live = isPublicReleasePage(release);
   const releaseHref = absoluteUrl(
     origin,
@@ -130,7 +130,7 @@ export function pressPitchFromRelease(
             `<p><a href="${esc(url)}">${esc(fileLabel(url))}</a></p>`
         )
         .join("")
-    : "<p>Add downloadable images and files here.</p>";
+    : RELEASE_FILES_HTML;
   const contact = (release.pr_contact || "").trim();
 
   return pressPitchDesign({
@@ -158,11 +158,11 @@ export function pressPitchFromRelease(
     }),
     contactsHtml: contact
       ? `<p>${esc(contact).replace(/\n/g, "<br>")}</p>`
-      : "<p>Name<br>Role, Peters &amp; May<br>email@petersandmay.com</p>",
+      : MEDIA_DESK_HTML,
     embeddedTitle: release.title || "Release headline",
     embeddedSummaryHtml: summary
       ? `<p>${esc(summary)}</p>`
-      : "<p>Summary to follow.</p>",
+      : "<p>The release is on the newsroom.</p>",
     embeddedImageSrc: images[0] || "",
     embeddedImageAlt: release.title,
     embeddedHref: releaseHref,

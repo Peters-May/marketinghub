@@ -103,6 +103,7 @@ type Props = {
   initialMentions: PrMonitorMention[];
   initialNewsroom: NewsroomSettings;
   newsApiConfigured: boolean;
+  suppressedEmails?: string[];
   initialSection?: PrSection | null;
   prefillContentId?: string | null;
   openNewRelease?: boolean;
@@ -143,6 +144,7 @@ export function PrClient({
   initialMentions,
   initialNewsroom,
   newsApiConfigured: initialNewsApi,
+  suppressedEmails = [],
   initialSection,
   prefillContentId = null,
   openNewRelease = false,
@@ -907,6 +909,7 @@ export function PrClient({
               initialContacts={contacts}
               initialContent={content}
               prefillContentId={prefillContentId}
+              suppressedEmails={suppressedEmails}
               onListsChanged={() => void refreshAll()}
             />
           ) : null}
