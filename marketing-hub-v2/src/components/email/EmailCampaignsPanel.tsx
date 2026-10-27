@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import type { EmailCampaign } from "@/lib/types";
+import { isPitchCampaign } from "@/lib/email/category";
 import {
   compileEmailDesign,
   starterDesign,
@@ -68,6 +69,7 @@ export function EmailCampaignsPanel({
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...items]
+      .filter((c) => !isPitchCampaign(c))
       .filter((c) => matchesFilter(c.status, filter))
       .filter((c) => {
         if (!q) return true;
@@ -153,6 +155,7 @@ export function EmailCampaignsPanel({
         open={starterOpen}
         title="Create email"
         busy={creating}
+        layouts={["blank", "newsletter", "announcement"]}
         onClose={() => setStarterOpen(false)}
         onPick={(layout) => void createEmail(layout)}
       />

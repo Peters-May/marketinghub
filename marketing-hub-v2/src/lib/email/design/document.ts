@@ -451,6 +451,13 @@ export type PressPitchContent = {
     href: string;
   }[];
   contactsHtml: string;
+  embeddedTitle: string;
+  embeddedSummaryHtml: string;
+  embeddedImageSrc: string;
+  embeddedImageAlt: string;
+  embeddedHref: string;
+  attachmentHtml: string;
+  videos: { thumbnailSrc: string; videoUrl: string; alt: string }[];
 };
 
 function pitchLabel(text: string) {
@@ -489,6 +496,13 @@ const PRESS_PITCH_DEFAULTS: PressPitchContent = {
   ],
   contactsHtml:
     "<p>Name<br>Role, Peters &amp; May<br>email@petersandmay.com<br>Phone</p>",
+  embeddedTitle: "Release headline",
+  embeddedSummaryHtml: "<p>The release summary.</p>",
+  embeddedImageSrc: "",
+  embeddedImageAlt: "",
+  embeddedHref: "https://www.petersandmay.com",
+  attachmentHtml: "<p>Add press release files here.</p>",
+  videos: [],
 };
 
 /** Press pitch laid out like a newsroom release email. */
@@ -573,6 +587,41 @@ export function pressPitchDesign(
                 ]),
             pitchLabel("Contacts"),
             createBlock("text", { html: copy.contactsHtml, fontSize: 15 }),
+            pitchLabel("Press release"),
+            createBlock("image", {
+              src: copy.embeddedImageSrc,
+              alt: copy.embeddedImageAlt || copy.embeddedTitle,
+              widthPercent: 100,
+              align: "center",
+            }),
+            createBlock("heading", {
+              text: copy.embeddedTitle,
+              level: 2,
+              fontSize: 22,
+              paddingTop: 8,
+              paddingBottom: 4,
+            }),
+            createBlock("text", { html: copy.embeddedSummaryHtml, fontSize: 15 }),
+            createBlock("button", {
+              label: "Read the release",
+              href: copy.embeddedHref,
+              align: "left",
+            }),
+            ...copy.videos.map((video) =>
+              createBlock("video", {
+                thumbnailSrc: video.thumbnailSrc,
+                videoUrl: video.videoUrl,
+                alt: video.alt || "Watch video",
+                widthPercent: 100,
+                align: "center",
+              })
+            ),
+            ...(copy.attachmentHtml
+              ? [
+                  pitchLabel("Attachments"),
+                  createBlock("text", { html: copy.attachmentHtml, fontSize: 15 }),
+                ]
+              : []),
           ]),
         ],
       }),

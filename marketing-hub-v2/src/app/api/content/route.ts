@@ -27,10 +27,16 @@ import {
   matchOwnerUserId,
 } from "@/lib/identity/owners";
 import {
+  isReleaseEditorStatus,
   plainReleaseField,
   pressReleaseDate,
   pressReleaseSaveError,
 } from "@/lib/pr/release-document";
+import {
+  renderBlocksHtml,
+  sanitizePressReleaseDocument,
+  seedReleaseDocument,
+} from "@/lib/pr/release-blocks";
 import { normalizeRichTextStorage } from "@/lib/sanitize";
 
 async function maybePushPlanable(
@@ -70,23 +76,38 @@ export async function POST(request: NextRequest) {
   const action = body.action as string | undefined;
 
   if (action === "save_press_release") {
-    const status = body.status === "published" ? "published" : body.status;
     const title = plainReleaseField(body.title, 240);
-    const saveError = pressReleaseSaveError({ title, status });
-    if (saveError) return jsonError(saveError, 400);
+    const dueDate = pressReleaseDate(body.due_date);
+    const status = isReleaseEditorStatus(body.status) ? body.status : body.status;
+    const saveError = pressReleaseSaveError({ title, status, due_date: dueDate });
+    if (saveError || !isReleaseEditorStatus(status)) {
+      return jsonError(saveError || "Choose draft, ready, scheduled, or published.", 400);
+    }
+    const hasDocument =
+      body.pr_document && typeof body.pr_document === "object";
+    const document = hasDocument
+      ? sanitizePressReleaseDocument(body.pr_document)
+      : seedReleaseDocument(undefined, String(body.notes ?? ""));
+    const notes = hasDocument
+      ? renderBlocksHtml(document.blocks)
+      : normalizeRichTextStorage(String(body.notes ?? ""));
     const item = await savePressRelease({
       id: typeof body.id === "string" && body.id.trim() ? body.id.trim() : undefined,
       title,
       caption: normalizeRichTextStorage(String(body.caption ?? "")),
-      notes: normalizeRichTextStorage(String(body.notes ?? "")),
-      due_date: pressReleaseDate(body.due_date),
+      notes,
+      due_date: dueDate,
       asset_url: plainReleaseField(body.asset_url, 2000),
       pr_location: plainReleaseField(body.pr_location, 80),
       pr_boilerplate: normalizeRichTextStorage(String(body.pr_boilerplate ?? "")),
       pr_contact: plainReleaseField(body.pr_contact, 1000),
-      status: status === "published" ? "published" : "draft",
+      pr_document: document,
+      status,
       owner: user.full_name || user.email,
       newsroom_title: plainReleaseField(body.newsroom_title, 150),
+      placement: body.placement === "standalone" ? "standalone" : "newsroom",
+      pin_homepage: body.pin_homepage === true,
+      in_slider: body.in_slider === true,
     });
     if (!item) return jsonError("Press release not found", 404);
     return jsonOk({ item }, { status: body.id ? 200 : 201 });

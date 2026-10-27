@@ -30,6 +30,7 @@ export function campaignCloneInput(
     theme_id: existing.theme_id,
     content_id: existing.content_id,
     folder: existing.folder,
+    category: existing.category,
     follow_up_of: null,
     adj_open_rate: null,
     adj_click_rate: null,

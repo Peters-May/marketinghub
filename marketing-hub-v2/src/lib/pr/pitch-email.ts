@@ -6,7 +6,8 @@ import {
   looksLikeHtml,
   plainTextFromHtml,
 } from "@/lib/plain-text";
-import { formatReleaseDate } from "@/lib/pr/release-document";
+import { formatReleaseDate, isPublicReleasePage } from "@/lib/pr/release-document";
+import { seedReleaseDocument } from "@/lib/pr/release-blocks";
 
 export const PRESS_PITCH_TEMPLATE_ID = "etpl_press_pitch";
 
@@ -80,11 +81,34 @@ export function pressPitchFromRelease(
     })
     .slice(0, 3);
   const newsroom = absoluteUrl(origin, "/newsroom");
-  const lead = plainTextFromHtml(release.caption || "");
-  const story = [
-    lead ? `<p>${esc(lead)}</p>` : "",
-    isRichTextEmpty(release.notes) ? "" : richBlock(release.notes, ""),
-  ]
+  const document = seedReleaseDocument(release.pr_document, release.notes);
+  const summary = plainTextFromHtml(release.caption || "");
+  const story = summary
+    ? `<p>${esc(summary)}</p>`
+    : "<p>A short note for the newsdesk. The release is attached below.</p>";
+  const live = isPublicReleasePage(release);
+  const releaseHref = absoluteUrl(
+    origin,
+    live ? `/newsroom/${release.id}` : `/newsroom/preview/${release.id}`
+  );
+  const videos = document.blocks.flatMap((block) => {
+    if (block.type !== "full_video" || !block.src) return [];
+    const videoUrl = absoluteUrl(origin, block.src);
+    if (!videoUrl) return [];
+    return [
+      {
+        thumbnailSrc: absoluteUrl(origin, block.poster) || images[0] || "",
+        videoUrl,
+        alt: release.title,
+      },
+    ];
+  });
+  const attachmentHtml = document.attachments
+    .map((file) => {
+      const href = absoluteUrl(origin, file.url);
+      if (!href) return "";
+      return `<p><a href="${esc(href)}">${esc(file.name || fileLabel(file.url))}</a></p>`;
+    })
     .filter(Boolean)
     .join("");
   const category = (release.category || "").trim();
@@ -114,7 +138,7 @@ export function pressPitchFromRelease(
     title: release.title || "Release headline",
     imageSrc: images[0] || "",
     imageAlt: release.title,
-    storyHtml: story || "<p>Write the release here.</p>",
+    storyHtml: story,
     extraImages: images.slice(1).map((src) => ({ src, alt: release.title })),
     articlesHtml: articles,
     boilerplateHtml: richBlock(release.pr_boilerplate || "", DEFAULT_BOILER),
@@ -135,5 +159,14 @@ export function pressPitchFromRelease(
     contactsHtml: contact
       ? `<p>${esc(contact).replace(/\n/g, "<br>")}</p>`
       : "<p>Name<br>Role, Peters &amp; May<br>email@petersandmay.com</p>",
+    embeddedTitle: release.title || "Release headline",
+    embeddedSummaryHtml: summary
+      ? `<p>${esc(summary)}</p>`
+      : "<p>Summary to follow.</p>",
+    embeddedImageSrc: images[0] || "",
+    embeddedImageAlt: release.title,
+    embeddedHref: releaseHref,
+    attachmentHtml,
+    videos,
   });
 }

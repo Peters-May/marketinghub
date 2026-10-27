@@ -21,6 +21,7 @@ import { mentionsToCsv } from "@/lib/pr/mentions-csv";
 import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
+import { PitchesPanel } from "@/components/pr/PitchesPanel";
 import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
 
 export type PrSection =
@@ -519,7 +520,7 @@ export function PrClient({
     <div>
       <PageHeader
         title="PR"
-        description="Press contacts, media lists, releases, Outlook pitches, coverage, and monitoring."
+        description="Press contacts, media lists, releases, pitches, coverage, and monitoring."
         actions={
           <>
             <Link
@@ -890,14 +891,20 @@ export function PrClient({
       ) : null}
 
       {tab === "pitches" ? (
-        <EmailsClient
-          initialPitches={pitches}
-          initialLists={lists}
-          initialContacts={contacts}
-          initialContent={content}
-          prefillContentId={prefillContentId}
-          onListsChanged={() => void refreshAll()}
-        />
+        <div className="space-y-10">
+          <PitchesPanel campaigns={campaigns} content={content} />
+          {pitches.length > 0 ? (
+            <EmailsClient
+              legacy
+              initialPitches={pitches}
+              initialLists={lists}
+              initialContacts={contacts}
+              initialContent={content}
+              prefillContentId={prefillContentId}
+              onListsChanged={() => void refreshAll()}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {tab === "coverage" ? (

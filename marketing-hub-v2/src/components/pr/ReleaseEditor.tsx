@@ -6,20 +6,33 @@ import { ArrowLeft } from "lucide-react";
 import type { ContentItem } from "@/lib/types";
 import { AssetUploadField } from "@/components/content/AssetUploadField";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
-import { ReleaseArticle } from "@/components/pr/ReleaseArticle";
+import {
+  ReleaseBlockEditor,
+  type ReleaseSpokesperson,
+} from "@/components/pr/ReleaseBlockEditor";
+import { ReleaseSettings } from "@/components/pr/ReleaseSettings";
+import { parseAssetUrls } from "@/lib/data/normalize";
 import { plainTextFromHtml } from "@/lib/plain-text";
+import {
+  editorStatusFromContent,
+  isPublicReleasePage,
+  pressReleaseSaveError,
+  RELEASE_EDITOR_STATUSES,
+  releaseStatusLabel,
+  type ReleaseEditorStatus,
+} from "@/lib/pr/release-document";
+import { seedReleaseDocument } from "@/lib/pr/release-blocks";
+import type { ReleaseAttachment } from "@/lib/types";
 
-export type ReleaseSpokesperson = {
-  id: string;
-  name: string;
-  role: string;
-  organisation: string;
-  email: string;
-  phone: string;
-};
+export type { ReleaseSpokesperson };
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function fileName(url: string): string {
+  const path = url.split("?")[0] ?? url;
+  return decodeURIComponent(path.split("/").pop() || "File") || "File";
 }
 
 export function ReleaseEditor({
@@ -39,29 +52,54 @@ export function ReleaseEditor({
 }) {
   const [savedId, setSavedId] = useState(item?.id ?? "");
   const [title, setTitle] = useState(item?.title ?? "");
-  const [subtitle, setSubtitle] = useState(() =>
-    plainTextFromHtml(item?.caption ?? "")
-  );
+  const [subtitle, setSubtitle] = useState(() => plainTextFromHtml(item?.caption ?? ""));
   const [location, setLocation] = useState(item?.pr_location ?? "");
   const [date, setDate] = useState(item?.due_date?.slice(0, 10) || todayIso());
-  const [body, setBody] = useState(item?.notes ?? "");
   const [image, setImage] = useState(item?.asset_url ?? "");
   const [boilerplate, setBoilerplate] = useState(
     item?.pr_boilerplate || (item ? "" : newsroomDescription)
   );
   const [contact, setContact] = useState(item?.pr_contact ?? "");
-  const [status, setStatus] = useState<"draft" | "published">(
-    item?.status === "published" ? "published" : "draft"
+  const [document, setDocument] = useState(() =>
+    seedReleaseDocument(item?.pr_document, item?.notes ?? "")
   );
+  const [status, setStatus] = useState<ReleaseEditorStatus>(
+    editorStatusFromContent(item?.status)
+  );
+  const [placement, setPlacement] = useState<"newsroom" | "standalone">(
+    item?.newsroom_name === "" ? "standalone" : "newsroom"
+  );
+  const [pinHomepage, setPinHomepage] = useState(item?.pin_homepage === true);
+  const [inSlider, setInSlider] = useState(item?.in_slider === true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [showPreview, setShowPreview] = useState(true);
+  const [clean, setClean] = useState(true);
 
-  async function save(nextStatus: "draft" | "published") {
-    if (!title.trim()) {
-      setError("Add a headline before saving.");
-      return;
+  function mark() {
+    setClean(false);
+  }
+
+  function setAttachments(joined: string) {
+    const urls = parseAssetUrls(joined);
+    const attachments: ReleaseAttachment[] = urls.map((url) => {
+      const existing = document.attachments.find((file) => file.url === url);
+      return existing ?? { url, name: fileName(url) };
+    });
+    setDocument({ ...document, attachments });
+    mark();
+  }
+
+  async function save(nextStatus: ReleaseEditorStatus): Promise<ContentItem | null> {
+    const saveError = pressReleaseSaveError({
+      title,
+      status: nextStatus,
+      due_date: date || null,
+    });
+    if (saveError) {
+      setError(saveError);
+      return null;
     }
     setBusy(true);
     setError("");
@@ -75,31 +113,57 @@ export function ReleaseEditor({
           id: savedId || undefined,
           title,
           caption: subtitle,
-          notes: body,
+          notes: "",
           due_date: date || null,
           asset_url: image,
           pr_location: location,
           pr_boilerplate: boilerplate,
           pr_contact: contact,
+          pr_document: document,
           status: nextStatus,
           newsroom_title: newsroomTitle,
+          placement,
+          pin_homepage: pinHomepage,
+          in_slider: inSlider,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save the release");
       setSavedId(data.item.id);
-      setStatus(data.item.status === "published" ? "published" : "draft");
+      setStatus(editorStatusFromContent(data.item.status));
+      if (data.item.pr_document) setDocument(data.item.pr_document);
       onSaved(data.item);
+      setClean(true);
       setNotice(
-        nextStatus === "published"
-          ? "Published to the newsroom."
-          : "Draft saved."
+        data.item.status === "published"
+          ? placement === "newsroom"
+            ? "Published to the newsroom."
+            : "Published as a standalone release."
+          : "Saved."
       );
+      return data.item as ContentItem;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the release");
+      return null;
     } finally {
       setBusy(false);
     }
+  }
+
+  function leave() {
+    if (!clean && !window.confirm("Leave without saving this release?")) return;
+    onClose();
+  }
+
+  async function preview() {
+    const saved = await save(status);
+    if (!saved) return;
+    window.open(`/newsroom/preview/${saved.id}`, "_blank", "noopener");
+  }
+
+  async function saveAndExit() {
+    const saved = await save(status);
+    if (saved) onClose();
   }
 
   function applySpokesperson(id: string) {
@@ -112,14 +176,24 @@ export function ReleaseEditor({
       person.phone,
     ].filter(Boolean);
     setContact(lines.join("\n"));
+    mark();
   }
+
+  const live = isPublicReleasePage({
+    status,
+    newsroom_name: placement === "standalone" ? "" : newsroomTitle,
+    due_date: date || null,
+    content_type: "PR",
+    category: "press release",
+    channel: ["PR"],
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
-          onClick={onClose}
+          onClick={leave}
           className="inline-flex items-center gap-1.5 text-sm text-brand"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -129,36 +203,50 @@ export function ReleaseEditor({
           <button
             type="button"
             className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand"
-            onClick={() => setShowPreview((open) => !open)}
+            onClick={() => setSettingsOpen(true)}
           >
-            {showPreview ? "Hide preview" : "Show preview"}
+            Settings
           </button>
-          {status === "published" ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void save("draft")}
-              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand disabled:opacity-50"
+          <label className="text-sm">
+            <span className="sr-only">Status</span>
+            <select
+              className="rounded-lg border border-brand/20 px-3 py-2"
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value as ReleaseEditorStatus);
+                mark();
+              }}
             >
-              Move to draft
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void save("draft")}
-              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand disabled:opacity-50"
-            >
-              Save draft
-            </button>
-          )}
+              {RELEASE_EDITOR_STATUSES.map((itemStatus) => (
+                <option key={itemStatus} value={itemStatus}>
+                  {releaseStatusLabel(itemStatus)}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             disabled={busy}
-            onClick={() => void save("published")}
+            onClick={() => void preview()}
+            className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand disabled:opacity-50"
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save(status)}
+            className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void saveAndExit()}
             className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
           >
-            {status === "published" ? "Update release" : "Publish"}
+            Save and exit
           </button>
         </div>
       </div>
@@ -171,7 +259,7 @@ export function ReleaseEditor({
       {notice ? (
         <p className="rounded-lg border border-brand/15 bg-mist px-3 py-2 text-sm text-brand">
           {notice}
-          {status === "published" && savedId ? (
+          {savedId && live ? (
             <>
               {" "}
               <Link
@@ -179,132 +267,205 @@ export function ReleaseEditor({
                 target="_blank"
                 className="text-accent underline"
               >
-                View on the newsroom
+                {placement === "newsroom" ? "View on the newsroom" : "View the release"}
               </Link>
             </>
           ) : null}
         </p>
       ) : null}
 
-      <div className={showPreview ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}>
-        <div className="rounded-xl border border-border bg-white px-5 py-6 shadow-sm md:px-8 md:py-8">
-          <label className="block">
-            <span className="text-xs uppercase tracking-wide text-muted">Headline</span>
+      <div className="rounded-xl border border-border bg-white px-5 py-6 shadow-sm md:px-8 md:py-8">
+        <label className="block">
+          <span className="text-xs uppercase tracking-wide text-muted">Headline</span>
+          <input
+            value={title}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              mark();
+            }}
+            placeholder="Write the headline"
+            className="mt-1 w-full border-0 bg-transparent font-display text-3xl leading-tight text-brand outline-none placeholder:text-brand/25"
+          />
+        </label>
+        <label className="mt-4 block">
+          <span className="text-xs uppercase tracking-wide text-muted">Summary</span>
+          <textarea
+            value={subtitle}
+            onChange={(event) => {
+              setSubtitle(event.target.value);
+              mark();
+            }}
+            rows={2}
+            placeholder="One or two lines that summarise the story"
+            className="mt-1 w-full resize-none border-0 bg-transparent text-lg leading-relaxed text-brand/80 outline-none placeholder:text-brand/25"
+          />
+        </label>
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-y border-brand/10 py-3">
+          <label className="text-sm">
+            <span className="text-xs uppercase tracking-wide text-muted">Location</span>
             <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Write the headline"
-              className="mt-1 w-full border-0 bg-transparent font-display text-3xl leading-tight text-brand outline-none placeholder:text-brand/25"
+              value={location}
+              onChange={(event) => {
+                setLocation(event.target.value);
+                mark();
+              }}
+              placeholder="London"
+              className="mt-1 block w-40 rounded-md border border-brand/15 px-3 py-2 uppercase"
             />
           </label>
-          <label className="mt-4 block">
-            <span className="text-xs uppercase tracking-wide text-muted">Subtitle</span>
-            <textarea
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              rows={2}
-              placeholder="One or two lines that summarise the story"
-              className="mt-1 w-full resize-none border-0 bg-transparent text-lg leading-relaxed text-brand/80 outline-none placeholder:text-brand/25"
+          <label className="text-sm">
+            <span className="text-xs uppercase tracking-wide text-muted">Date</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => {
+                setDate(event.target.value);
+                mark();
+              }}
+              className="mt-1 block rounded-md border border-brand/15 px-3 py-2"
             />
           </label>
-          <div className="mt-4 flex flex-wrap items-end gap-3 border-y border-brand/10 py-3">
-            <label className="text-sm">
-              <span className="text-xs uppercase tracking-wide text-muted">Location</span>
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="London"
-                className="mt-1 block w-40 rounded-md border border-brand/15 px-3 py-2 uppercase"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="text-xs uppercase tracking-wide text-muted">Date</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 block rounded-md border border-brand/15 px-3 py-2"
-              />
-            </label>
-          </div>
-
-          <div className="mt-6">
-            <AssetUploadField
-              label="Image"
-              hint="Shown under the headline on the newsroom."
-              value={image}
-              onChange={setImage}
-            />
-          </div>
-
-          <div className="mt-6">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted">Story</p>
-            <RichTextEditor
-              value={body}
-              onChange={setBody}
-              placeholder="Write the release. Use quote for a spokesperson line."
-              minHeight="280px"
-            />
-          </div>
-
-          <div className="mt-8">
-            <p className="mb-2 text-xs uppercase tracking-wide text-muted">
-              About Peters &amp; May
-            </p>
-            <RichTextEditor
-              value={boilerplate}
-              onChange={setBoilerplate}
-              placeholder="Short company boilerplate for the foot of the release."
-              minHeight="120px"
-            />
-          </div>
-
-          <div className="mt-8">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-wide text-muted">Media contact</p>
-              {spokespeople.length > 0 ? (
-                <select
-                  className="rounded-md border border-brand/15 px-2 py-1 text-sm"
-                  defaultValue=""
-                  onChange={(e) => applySpokesperson(e.target.value)}
-                >
-                  <option value="">Add a spokesperson…</option>
-                  {spokespeople.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-            <textarea
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-              rows={4}
-              placeholder={"Name\nRole\nemail@petersandmay.com\nPhone"}
-              className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-            />
-          </div>
         </div>
 
-        {showPreview ? (
-          <aside className="rounded-xl border border-border bg-mist/50 p-5">
-            <p className="text-xs uppercase tracking-wide text-muted">Preview</p>
-            <div className="mt-4 rounded-xl bg-white p-5">
-              <ReleaseArticle
-                title={title}
-                subtitle={subtitle}
-                location={location}
-                date={date || null}
-                body={body}
-                imageUrl={image}
-                boilerplate={boilerplate}
-                contact={contact}
-              />
-            </div>
-          </aside>
-        ) : null}
+        <div className="mt-6">
+          <AssetUploadField
+            label="Feature image"
+            hint="Shown under the headline on the newsroom and used when the story is shared."
+            value={image}
+            onChange={(url) => {
+              setImage(url);
+              mark();
+            }}
+          />
+        </div>
+
+        <div className="mt-8">
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted">Story</p>
+          <ReleaseBlockEditor
+            blocks={document.blocks}
+            spokespeople={spokespeople}
+            onChange={(blocks) => {
+              setDocument({ ...document, blocks });
+              mark();
+            }}
+          />
+        </div>
+
+        <div className="mt-8">
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted">
+            About Peters &amp; May
+          </p>
+          <RichTextEditor
+            value={boilerplate}
+            onChange={(value) => {
+              setBoilerplate(value);
+              mark();
+            }}
+            placeholder="Short company boilerplate for the foot of the release."
+            minHeight="120px"
+          />
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-wide text-muted">Media contact</p>
+            {spokespeople.length > 0 ? (
+              <select
+                className="rounded-md border border-brand/15 px-2 py-1 text-sm"
+                defaultValue=""
+                onChange={(event) => applySpokesperson(event.target.value)}
+              >
+                <option value="">Add a spokesperson…</option>
+                {spokespeople.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+          <textarea
+            value={contact}
+            onChange={(event) => {
+              setContact(event.target.value);
+              mark();
+            }}
+            rows={4}
+            placeholder={"Name\nRole\nemail@petersandmay.com\nPhone"}
+            className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="mt-8 border-t border-brand/10 pt-6">
+          <p className="mb-2 text-xs uppercase tracking-wide text-muted">Attachments</p>
+          <AssetUploadField
+            multiple
+            label="Files"
+            hint="Shown at the bottom of the release and in the pitch email."
+            value={document.attachments.map((file) => file.url).join("\n")}
+            onChange={setAttachments}
+          />
+          {document.attachments.length ? (
+            <ul className="mt-3 space-y-2">
+              {document.attachments.map((file) => (
+                <li key={file.url}>
+                  <input
+                    className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                    value={file.name}
+                    onChange={(event) => {
+                      setDocument({
+                        ...document,
+                        attachments: document.attachments.map((row) =>
+                          row.url === file.url ? { ...row, name: event.target.value } : row
+                        ),
+                      });
+                      mark();
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       </div>
+
+      <ReleaseSettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        document={document}
+        onDocument={(next) => {
+          setDocument(next);
+          mark();
+        }}
+        image={image}
+        onImage={(url) => {
+          setImage(url);
+          mark();
+        }}
+        title={title}
+        subtitle={subtitle}
+        placement={placement}
+        onPlacement={(value) => {
+          setPlacement(value);
+          mark();
+        }}
+        newsroomTitle={newsroomTitle}
+        pinHomepage={pinHomepage}
+        inSlider={inSlider}
+        onPin={(value) => {
+          setPinHomepage(value);
+          mark();
+        }}
+        onSlider={(value) => {
+          setInSlider(value);
+          mark();
+        }}
+        status={status}
+        onStatus={(value) => {
+          setStatus(value);
+          mark();
+        }}
+      />
     </div>
   );
 }

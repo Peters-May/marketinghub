@@ -1065,6 +1065,14 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
       f("hubspot_url", { label: "HubSpot URL", type: "url" }),
       f("theme_id", { label: "Theme ID" }),
       f("content_id", { label: "Content ID" }),
+      f("category", {
+        type: "select",
+        label: "Category",
+        options: [
+          { value: "marketing", label: "Marketing" },
+          { value: "pitch", label: "Pitch" },
+        ],
+      }),
       f("scheduled_at", { type: "datetime", label: "Scheduled at" }),
       f("sent_at", { type: "datetime", label: "Sent at" }),
       f("last_error", { label: "Last error" }),

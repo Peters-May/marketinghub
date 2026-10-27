@@ -115,6 +115,7 @@ function email(input: {
     theme_id: null,
     content_id: input.contentId,
     folder: input.folder,
+    category: "marketing",
     follow_up_of: null,
     adj_open_rate: hasRates ? input.openRate! : input.status === "draft" ? 0 : null,
     adj_click_rate: hasRates ? input.clickRate! : input.status === "draft" ? 0 : null,

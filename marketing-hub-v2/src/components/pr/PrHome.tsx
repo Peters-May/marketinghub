@@ -65,7 +65,7 @@ const CARDS: Card[] = [
     href: "/app/pr/emails",
     title: "Email pitches",
     description:
-      "Draft press pitches with media lists, then send via Outlook.",
+      "Draft press pitches in the email editor. They are listed here, separate from marketing emails.",
     cta: "Open pitches",
     icon: Mail,
     status: "live",

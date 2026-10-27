@@ -32,6 +32,7 @@ describe("campaignCloneInput", () => {
       theme_id: null,
       content_id: null,
       folder: "Yacht",
+      category: "pitch",
       follow_up_of: "ecamp_old",
       adj_open_rate: 12,
       adj_click_rate: 3,
@@ -61,6 +62,7 @@ describe("campaignCloneInput", () => {
     expect(copy.sent_at).toBeNull();
     expect(copy.scheduled_at).toBeNull();
     expect(copy.follow_up_of).toBeNull();
+    expect(copy.category).toBe("pitch");
     expect(copy.last_error).toBe("");
     expect(copy.created_by).toBe("b@petersandmay.com");
   });

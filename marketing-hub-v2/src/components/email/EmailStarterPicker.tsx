@@ -30,16 +30,22 @@ export function EmailStarterPicker({
   open,
   title,
   busy,
+  layouts,
   onClose,
   onPick,
 }: {
   open: boolean;
   title: string;
   busy?: boolean;
+  /** Limit the choices. Email creation omits the press pitch layout. */
+  layouts?: StarterLayout[];
   onClose: () => void;
   onPick: (layout: StarterLayout) => void;
 }) {
   if (!open) return null;
+  const choices = layouts
+    ? STARTERS.filter((item) => layouts.includes(item.id))
+    : STARTERS;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 md:left-sidebar">
       <div
@@ -53,7 +59,7 @@ export function EmailStarterPicker({
         </h2>
         <p className="mt-1 text-sm text-muted">Choose a starting layout.</p>
         <ul className="mt-4 space-y-2">
-          {STARTERS.map((item) => (
+          {choices.map((item) => (
             <li key={item.id}>
               <button
                 type="button"

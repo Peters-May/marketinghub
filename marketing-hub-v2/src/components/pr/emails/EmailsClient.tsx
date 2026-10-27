@@ -59,6 +59,8 @@ type Props = {
   /** Prefill from a press release deep-link. */
   prefillContentId?: string | null;
   onListsChanged?: () => void;
+  /** Older Outlook exports. New pitches are email campaigns, not created here. */
+  legacy?: boolean;
 };
 
 export function EmailsClient({
@@ -67,6 +69,7 @@ export function EmailsClient({
   initialContacts,
   initialContent,
   prefillContentId,
+  legacy = false,
 }: Props) {
   const [pitches, setPitches] = useState(initialPitches);
   const [lists, setLists] = useState(initialLists);
@@ -809,21 +812,27 @@ export function EmailsClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl text-brand">Email pitches</h2>
+          <h2 className="font-display text-xl text-brand">
+            {legacy ? "Earlier Outlook drafts" : "Email pitches"}
+          </h2>
           <p className="text-sm text-muted">
-            Draft a press pitch, then download .eml and send from Outlook. Hub
-            never blast-sends.
+            {legacy
+              ? "These drafts were exported for Outlook. New pitches are created above and edited in the email editor."
+              : "Draft a press pitch, then download .eml and send from Outlook. Hub never blast-sends."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => startNew()}
-          className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-        >
-          New pitch
-        </button>
+        {legacy ? null : (
+          <button
+            type="button"
+            onClick={() => startNew()}
+            className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
+          >
+            New pitch
+          </button>
+        )}
       </div>
 
+      {legacy ? null : (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Drafts", value: stats.drafts },
@@ -837,6 +846,7 @@ export function EmailsClient({
           </div>
         ))}
       </div>
+      )}
 
       <FilterBar
         search={search}
@@ -867,9 +877,14 @@ export function EmailsClient({
 
       {filtered.length === 0 ? (
         <EmptyState
-          title="No pitches yet"
-          description="Create a pitch, then download .eml for Outlook."
+          title={legacy ? "No earlier Outlook drafts" : "No pitches yet"}
+          description={
+            legacy
+              ? "Older Outlook exports will appear here."
+              : "Create a pitch, then download .eml for Outlook."
+          }
           action={
+            legacy ? undefined : (
             <button
               type="button"
               className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
@@ -877,6 +892,7 @@ export function EmailsClient({
             >
               New pitch
             </button>
+            )
           }
         />
       ) : (

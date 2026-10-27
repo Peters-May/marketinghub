@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
       theme_id: existing.theme_id,
       content_id: existing.content_id,
       folder: existing.folder,
+      category: existing.category,
       follow_up_of: existing.id,
       adj_open_rate: null,
       adj_click_rate: null,
@@ -189,6 +190,10 @@ export async function POST(request: NextRequest) {
     theme_id: body.theme_id || null,
     content_id: body.content_id || null,
     folder: typeof body.folder === "string" ? body.folder : "",
+    category:
+      body.category === "pitch" || body.category === "marketing"
+        ? body.category
+        : undefined,
     follow_up_of: null,
     adj_open_rate: null,
     adj_click_rate: null,

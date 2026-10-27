@@ -207,6 +207,66 @@ export type ContentStatus =
   | "published"
   | "cancelled";
 
+export type ReleasePerson = {
+  name: string;
+  role: string;
+  organisation: string;
+  email: string;
+  phone: string;
+};
+
+export type ReleaseBlock =
+  | { id: string; type: "text"; html: string }
+  | { id: string; type: "header"; text: string }
+  | { id: string; type: "subheader"; text: string }
+  | { id: string; type: "lead"; html: string }
+  | { id: string; type: "ul"; items: string[] }
+  | { id: string; type: "ol"; items: string[] }
+  | { id: string; type: "quote"; text: string; attribution: string }
+  | { id: string; type: "annotation"; html: string }
+  | { id: string; type: "table"; rows: string[][] }
+  | { id: string; type: "divider" }
+  | { id: string; type: "image"; src: string; alt: string; caption: string }
+  | { id: string; type: "gallery"; images: { src: string; alt: string }[] }
+  | { id: string; type: "full_image"; src: string; alt: string; caption: string }
+  | { id: string; type: "full_video"; src: string; poster: string }
+  | { id: string; type: "button"; label: string; href: string }
+  | { id: string; type: "authors"; people: ReleasePerson[] }
+  | { id: string; type: "spokespeople"; people: ReleasePerson[] };
+
+export type ReleaseBlockType = ReleaseBlock["type"];
+
+export type ReleaseAttachment = {
+  name: string;
+  url: string;
+};
+
+export type ReleaseSeo = {
+  canonical: string;
+  keywords: string;
+  noindex: boolean;
+  nofollow: boolean;
+  noarchive: boolean;
+  nosnippet: boolean;
+  notranslate: boolean;
+  noimageindex: boolean;
+  redirect_url: string;
+  redirect_enabled: boolean;
+};
+
+/** Block body and publishing options for a press release. */
+export type PressReleaseDocument = {
+  blocks: ReleaseBlock[];
+  show_date: boolean;
+  tags: string[];
+  show_tags: boolean;
+  journalist_toolbox: boolean;
+  attachments: ReleaseAttachment[];
+  share_title: string;
+  share_description: string;
+  seo: ReleaseSeo;
+};
+
 export type ContentItem = {
   id: string;
   title: string;
@@ -265,6 +325,8 @@ export type ContentItem = {
   pr_boilerplate?: string;
   /** Media contact block under a press release. */
   pr_contact?: string;
+  /** Block body, tags, sharing, and SEO for a press release. */
+  pr_document?: PressReleaseDocument;
   created_at: string;
   updated_at: string;
 };
@@ -1021,6 +1083,9 @@ export type HubStoredFieldDef = {
 
 export type HubFieldExtras = Partial<Record<string, HubStoredFieldDef[]>>;
 
+/** Marketing send, or a press pitch edited in the same designer. */
+export type EmailCampaignCategory = "marketing" | "pitch";
+
 /** Email marketing campaign lifecycle (Resend send). */
 export type EmailCampaignStatus =
   | "draft"
@@ -1101,6 +1166,8 @@ export type EmailCampaign = {
   event_id?: string | null;
   /** Folder such as Commercial or Forwarding. */
   folder: string;
+  /** Marketing emails stay in Email. Pitches are listed under PR. */
+  category: EmailCampaignCategory;
   /** Parent campaign when this draft is a follow-up. */
   follow_up_of: string | null;
   /**

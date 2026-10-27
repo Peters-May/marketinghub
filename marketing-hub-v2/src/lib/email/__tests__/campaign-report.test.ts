@@ -25,6 +25,7 @@ function campaign(patch: Partial<EmailCampaign> = {}): EmailCampaign {
     theme_id: null,
     content_id: null,
     folder: "",
+    category: "marketing",
     follow_up_of: null,
     adj_open_rate: 45,
     adj_click_rate: 8,

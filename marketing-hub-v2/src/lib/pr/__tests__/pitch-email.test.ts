@@ -38,7 +38,44 @@ describe("press pitch email", () => {
   it("keeps the newsroom release sections in order", () => {
     const html = compileEmailDesign(
       pressPitchFromRelease(
-        release({ id: "cnt_main", title: "Fleet arrives in Newport" }),
+        release({
+          id: "cnt_main",
+          title: "Fleet arrives in Newport",
+          pr_document: {
+            blocks: [
+              {
+                id: "vid",
+                type: "full_video",
+                src: "https://cdn.example.com/arrival.mp4",
+                poster: "",
+              },
+            ],
+            show_date: true,
+            tags: [],
+            show_tags: false,
+            journalist_toolbox: false,
+            attachments: [
+              {
+                name: "fleet-notes.pdf",
+                url: "https://cdn.example.com/fleet-notes.pdf",
+              },
+            ],
+            share_title: "",
+            share_description: "",
+            seo: {
+              canonical: "",
+              keywords: "",
+              noindex: false,
+              nofollow: false,
+              noarchive: false,
+              nosnippet: false,
+              notranslate: false,
+              noimageindex: false,
+              redirect_url: "",
+              redirect_enabled: false,
+            },
+          },
+        }),
         [
           release({
             id: "cnt_other",
@@ -60,6 +97,10 @@ describe("press pitch email", () => {
       "Earlier sponsorship story",
       "Contacts",
       "sophie@petersandmay.com",
+      "Press release",
+      "https://hub.example.com/newsroom/cnt_main",
+      "Read the release",
+      "fleet-notes.pdf",
     ];
     let from = 0;
     for (const label of labels) {
@@ -69,5 +110,7 @@ describe("press pitch email", () => {
     }
     expect(html).toContain("https://hub.example.com/newsroom/cnt_other");
     expect(html).toContain("https://cdn.example.com/fleet.jpg");
+    expect(html).toContain("https://cdn.example.com/arrival.mp4");
+    expect(html).not.toContain("The yachts left Palma");
   });
 });

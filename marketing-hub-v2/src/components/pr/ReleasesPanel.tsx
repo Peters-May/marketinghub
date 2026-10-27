@@ -8,12 +8,14 @@ import {
   ReleaseEditor,
   type ReleaseSpokesperson,
 } from "@/components/pr/ReleaseEditor";
+import { isPitchCampaign } from "@/lib/email/category";
 import { compileEmailDesign } from "@/lib/email/design";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import {
   PRESS_PITCH_TEMPLATE_ID,
   pressPitchFromRelease,
 } from "@/lib/pr/pitch-email";
+import { isPublicReleasePage, releaseStatusLabel } from "@/lib/pr/release-document";
 import {
   campaignClickRateLabel,
   campaignMetaLine,
@@ -80,6 +82,7 @@ export function ReleasesPanel({
       c.folder === "Forwarding" ||
       c.id.startsWith("ecamp_rel_");
     return campaigns
+      .filter((c) => !isPitchCampaign(c))
       .filter(
         (c) =>
           linked(c) ||
@@ -142,6 +145,7 @@ export function ReleasesPanel({
           template_id: PRESS_PITCH_TEMPLATE_ID,
           content_id: item.id,
           folder: "Press",
+          category: "pitch",
         }),
       });
       const data = await res.json();
@@ -296,7 +300,10 @@ export function ReleasesPanel({
               return (
                 <li key={item.id} className="px-4 py-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusPill status={item.status} />
+                    <StatusPill
+                      status={item.status}
+                      label={releaseStatusLabel(item.status)}
+                    />
                     <span className="text-xs text-muted">{storyTime(item)}</span>
                   </div>
                   <h3 className="mt-2 font-medium text-brand">
@@ -357,15 +364,23 @@ export function ReleasesPanel({
                     >
                       Edit
                     </button>
-                    {item.status === "published" ? (
+                    {isPublicReleasePage(item) ? (
                       <Link
                         href={`/newsroom/${item.id}`}
                         target="_blank"
                         className="text-accent underline"
                       >
-                        View on newsroom
+                        {item.newsroom_name === "" ? "View release" : "View on newsroom"}
                       </Link>
-                    ) : null}
+                    ) : (
+                      <Link
+                        href={`/newsroom/preview/${item.id}`}
+                        target="_blank"
+                        className="text-accent underline"
+                      >
+                        Preview
+                      </Link>
+                    )}
                     <button
                       type="button"
                       className="text-accent underline disabled:opacity-50"

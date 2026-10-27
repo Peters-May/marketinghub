@@ -22,11 +22,13 @@ export function EmailCampaignSummary({
   audienceName,
   report,
   sentCount = 0,
+  backHref = "/app/email",
 }: {
   campaign: EmailCampaign;
   audienceName: string;
   report: CampaignReport;
   sentCount?: number;
+  backHref?: string;
 }) {
   const sentLabel = campaign.sent_at
     ? `${formatLondonStamp(campaign.sent_at)} London`
@@ -50,7 +52,7 @@ export function EmailCampaignSummary({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/app/email" className="btn-secondary px-3 py-1.5 text-sm">
+        <Link href={backHref} className="btn-secondary px-3 py-1.5 text-sm">
           Back
         </Link>
         <CopyEmailButton

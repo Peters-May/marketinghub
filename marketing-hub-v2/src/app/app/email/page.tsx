@@ -14,6 +14,7 @@ import {
   listThemes,
   resolveEmailRecipients,
 } from "@/lib/data/repos";
+import { isPitchCampaign } from "@/lib/email/category";
 import { buildEmailOverview } from "@/lib/email/overview";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +52,11 @@ export default async function EmailPage({
       listEvents(),
       listEventContentLinks(),
     ]);
+  const marketingCampaigns = campaigns.filter(
+    (campaign) => !isPitchCampaign(campaign)
+  );
   const overview = buildEmailOverview({
-    campaigns,
+    campaigns: marketingCampaigns,
     themes,
     content,
     events,
@@ -79,7 +83,7 @@ export default async function EmailPage({
 
   return (
     <EmailMarketingHub
-      initialCampaigns={campaigns}
+      initialCampaigns={marketingCampaigns}
       initialTemplates={templates}
       initialAudiences={audiencesWithCounts}
       initialLists={marketingLists}

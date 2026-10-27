@@ -11,10 +11,16 @@ import {
 } from "@/lib/events/planner";
 import { isPressRelease } from "@/lib/pr/pipeline";
 import {
+  isNewsroomIndexRelease,
+  isPublicReleasePage,
+  type ReleaseEditorStatus,
+} from "@/lib/pr/release-document";
+import {
   PRESS_PITCH_TEMPLATE_ID,
   pressPitchTemplateRecord,
 } from "@/lib/pr/pitch-email";
 import { uid } from "@/lib/utils";
+import { emailCampaignCategory } from "@/lib/email/category";
 import { normalizeEmailDesign } from "@/lib/email/design";
 import { normalizeTopicOptOuts, topicForAudienceName } from "@/lib/email/preferences";
 import {
@@ -56,6 +62,7 @@ import type {
   MerchOrder,
   PaidCampaign,
   PlatformCredential,
+  PressReleaseDocument,
   QuarterlyTheme,
   ReportLink,
   ResourceLink,
@@ -546,11 +553,20 @@ export async function savePressRelease(input: {
   pr_location: string;
   pr_boilerplate: string;
   pr_contact: string;
-  status: "draft" | "published";
+  pr_document: PressReleaseDocument;
+  status: ReleaseEditorStatus;
   owner: string;
   newsroom_title: string;
+  placement: "newsroom" | "standalone";
+  pin_homepage: boolean;
+  in_slider: boolean;
 }): Promise<ContentItem | null> {
   const stamp = nowIso();
+  const onNewsroom = input.placement !== "standalone";
+  const newsroomName = onNewsroom ? input.newsroom_title || undefined : "";
+  const pin = onNewsroom && input.pin_homepage;
+  const slider = onNewsroom && input.in_slider;
+
   if (!input.id) {
     const item: ContentItem = {
       id: uid("cnt"),
@@ -574,17 +590,20 @@ export async function savePressRelease(input: {
       sync_source: "",
       asset_url: input.asset_url,
       notes: input.notes,
-      pin_homepage: false,
-      in_slider: false,
-      newsroom_name:
-        input.status === "published" ? input.newsroom_title || undefined : undefined,
+      pin_homepage: pin,
+      in_slider: slider,
+      newsroom_name: newsroomName,
       pr_location: input.pr_location,
       pr_boilerplate: input.pr_boilerplate,
       pr_contact: input.pr_contact,
+      pr_document: input.pr_document,
       created_at: stamp,
       updated_at: stamp,
     };
     await updateStore((s) => {
+      if (pin) {
+        s.content = s.content.map((row) => ({ ...row, pin_homepage: false }));
+      }
       s.content.push(item);
     });
     return item;
@@ -596,10 +615,11 @@ export async function savePressRelease(input: {
     if (idx === -1) return;
     const existing = withContentPlanableDefaults(s.content[idx]);
     if (!isPressRelease(existing)) return;
-    const newsroomName =
-      input.status === "published" && !existing.newsroom_name
-        ? input.newsroom_title || undefined
-        : existing.newsroom_name;
+    if (pin) {
+      s.content = s.content.map((row) =>
+        row.id === input.id ? row : { ...row, pin_homepage: false }
+      );
+    }
     const next: ContentItem = {
       ...existing,
       title: input.title,
@@ -610,14 +630,19 @@ export async function savePressRelease(input: {
       pr_location: input.pr_location,
       pr_boilerplate: input.pr_boilerplate,
       pr_contact: input.pr_contact,
+      pr_document: input.pr_document,
       status: input.status,
+      pin_homepage: pin,
+      in_slider: slider,
       newsroom_name: newsroomName,
       category: existing.category || "press release",
       content_type: existing.content_type || "PR",
       channel: existing.channel.length > 0 ? existing.channel : ["PR"],
       updated_at: stamp,
     };
-    s.content[idx] = next;
+    const nextIdx = s.content.findIndex((c) => c.id === input.id);
+    if (nextIdx === -1) return;
+    s.content[nextIdx] = next;
     updated = next;
   });
   return updated;
@@ -2888,24 +2913,13 @@ export async function deletePrMonitorMention(id: string) {
   });
 }
 
-/** Published PR / press-release content for the public newsroom. */
+/** Published or due scheduled releases filed on a newsroom. */
 export async function listPublishedPressReleases() {
   const store = await readStore();
+  const now = new Date();
   return store.content
     .map(withContentPlanableDefaults)
-    .filter((c) => {
-      if (c.status !== "published") return false;
-      const type = (c.content_type || "").toLowerCase();
-      const cat = (c.category || "").toLowerCase();
-      const channels = (c.channel || []).map((x) => x.toLowerCase());
-      return (
-        type === "pr" ||
-        type === "press" ||
-        cat === "press release" ||
-        channels.includes("pr")
-      );
-    })
-    .filter((c) => c.newsroom_name !== "")
+    .filter((c) => isNewsroomIndexRelease(c, now))
     .sort((a, b) => {
       const da = a.due_date || a.updated_at;
       const db = b.due_date || b.updated_at;
@@ -2913,9 +2927,24 @@ export async function listPublishedPressReleases() {
     });
 }
 
+/** Public story page, including a published standalone release. */
 export async function getPublishedPressRelease(id: string) {
-  const rows = await listPublishedPressReleases();
-  return rows.find((row) => row.id === id) ?? null;
+  const store = await readStore();
+  const item = store.content
+    .map(withContentPlanableDefaults)
+    .find((row) => row.id === id);
+  if (!item || !isPublicReleasePage(item)) return null;
+  return item;
+}
+
+/** Any press release, including drafts, for the staff preview. */
+export async function getPressRelease(id: string) {
+  const store = await readStore();
+  const item = store.content
+    .map(withContentPlanableDefaults)
+    .find((row) => row.id === id);
+  if (!item || !isPressRelease(item)) return null;
+  return item;
 }
 
 export async function getEmailSettings(): Promise<EmailSettings> {
@@ -3053,6 +3082,7 @@ function normalizeEmailCampaign(
     theme_id: c.theme_id ?? null,
     content_id: c.content_id ?? null,
     folder: c.folder ?? "",
+    category: emailCampaignCategory(c),
     follow_up_of: c.follow_up_of ?? null,
     adj_open_rate:
       c.adj_open_rate == null || Number.isNaN(Number(c.adj_open_rate))
@@ -3259,12 +3289,14 @@ export async function createEmailCampaign(
     | "follow_up_of"
     | "adj_open_rate"
     | "adj_click_rate"
+    | "category"
   > & {
     stats?: EmailCampaignStats;
     folder?: string;
     follow_up_of?: string | null;
     adj_open_rate?: number | null;
     adj_click_rate?: number | null;
+    category?: EmailCampaign["category"];
   }
 ) {
   const item = normalizeEmailCampaign({
