@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hub-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "-e",
+        "process.chdir('marketing-hub-v2');process.argv=[process.argv[0],'next','dev','-p','3011'];require(require('path').resolve('node_modules/next/dist/bin/next'))"
+      ],
+      "port": 3011,
+      "env": {
+        "AUTH_BYPASS": "true",
+        "NEXT_PUBLIC_AUTH_BYPASS": "true",
+        "SUPABASE_SERVICE_ROLE_KEY": "",
+        "RESEND_API_KEY": "",
+        "VERCEL": "",
+        "VERCEL_ENV": "development",
+        "VERCEL_TARGET_ENV": "development",
+        "NEXT_PUBLIC_VERCEL_ENV": "development"
+      }
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import {
   Heading2,
   Quote,
 } from "lucide-react";
+import { EmailVariableSelect } from "@/components/email/builder/EmailVariableSelect";
 import { cn } from "@/lib/utils";
 import { plainTextToEditorHtml } from "@/lib/plain-text";
 import { normalizeRichTextStorage } from "@/lib/sanitize";
@@ -273,6 +274,20 @@ export function RichTextEditorImpl({
         >
           <LinkIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
+        {variant === "email" ? (
+          <span
+            className="ml-1"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <EmailVariableSelect
+              includeLinks
+              className="h-7 w-[8.5rem] bg-white py-0"
+              onInsert={(token) => {
+                editor.chain().focus().insertContent(token).run();
+              }}
+            />
+          </span>
+        ) : null}
       </div>
       <div className="max-w-full overflow-x-hidden overflow-y-auto" style={{ minHeight }}>
         <EditorContent editor={editor} className="max-w-full" />

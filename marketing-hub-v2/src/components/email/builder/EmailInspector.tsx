@@ -642,6 +642,14 @@ function BlockFields({
               }
             />
           </label>
+          <EmailVariableSelect
+            label="Variable"
+            onInsert={(token) =>
+              onBlock({
+                text: `${block.text}${block.text ? " " : ""}${token}`,
+              } as Partial<EmailBlock>)
+            }
+          />
           <TextInput
             label="Attribution"
             value={block.attribution}
@@ -757,6 +765,14 @@ function BlockFields({
             label="Label"
             value={block.label}
             onChange={(label) => onBlock({ label } as Partial<EmailBlock>)}
+          />
+          <EmailVariableSelect
+            label="Variable"
+            onInsert={(token) =>
+              onBlock({
+                label: `${block.label}${block.label ? " " : ""}${token}`,
+              } as Partial<EmailBlock>)
+            }
           />
           <TextInput
             label="Link"
