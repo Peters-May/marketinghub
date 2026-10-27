@@ -47,6 +47,14 @@ export function splitContactName(full: string): { first: string; last: string } 
   };
 }
 
+/** {{first_name|subscriber}} when a blank contact field should show other words. */
+export function withMergeFallback(token: string, fallback: string): string {
+  const standIn = fallback.replace(/[{}|<>]/g, "").replace(/\s+/g, " ").trim();
+  const match = /^\{\{\s*([a-zA-Z0-9_]+)\s*\}\}$/.exec(token);
+  if (!standIn || !match) return token;
+  return `{{${match[1]}|${standIn}}}`;
+}
+
 /** Replace {{token}} merge fields in subject/body HTML. */
 export function applyEmailMerge(
   template: string,
@@ -57,27 +65,37 @@ export function applyEmailMerge(
   const c = ctx.contact;
   const { first, last } = splitContactName(c?.name ?? "");
   const map: Record<string, string> = {
-    name: c?.name ?? "",
+    name: (c?.name ?? "").trim(),
     first_name: first,
     last_name: last,
-    greeting: first ? `Dear ${first}` : "Dear colleague",
-    organisation: c?.organisation ?? "",
-    organization: c?.organisation ?? "",
-    role: c?.role ?? "",
-    email: c?.email ?? "",
-    outlet: c?.outlet ?? "",
-    country: c?.country ?? "",
+    organisation: (c?.organisation ?? "").trim(),
+    organization: (c?.organisation ?? "").trim(),
+    role: (c?.role ?? "").trim(),
+    email: (c?.email ?? "").trim(),
+    outlet: (c?.outlet ?? "").trim(),
+    country: (c?.country ?? "").trim(),
     unsubscribe_url: ctx.unsubscribeUrl ?? "#",
     preferences_url:
       ctx.preferencesUrl ?? ctx.unsubscribeUrl ?? "#",
     view_in_browser_url: ctx.viewInBrowserUrl ?? "#",
   };
 
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
-    const k = key.toLowerCase();
-    const value = map[k] ?? "";
-    return html ? escapeMergeValue(value) : value;
-  });
+  return template.replace(
+    /\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|\s*([^{}|]*))?\s*\}\}/g,
+    (_, key: string, fallback?: string) => {
+      const k = key.toLowerCase();
+      const standIn = (fallback ?? "").trim();
+      const value =
+        k === "greeting"
+          ? first
+            ? `Dear ${first}`
+            : standIn
+              ? `Dear ${standIn}`
+              : "Dear colleague"
+          : map[k] || standIn;
+      return html ? escapeMergeValue(value) : value;
+    }
+  );
 }
 
 export function ensureUnsubscribeFooter(

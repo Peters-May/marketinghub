@@ -54,6 +54,30 @@ describe("applyEmailMerge", () => {
     ).toBe("Hi Alex Example — Dear Alex");
   });
 
+  it("uses the fallback when the contact has no first name", () => {
+    expect(
+      applyEmailMerge(
+        "Dear {{first_name|subscriber}}",
+        { contact: { ...contact, name: "" } },
+        { format: "text" }
+      )
+    ).toBe("Dear subscriber");
+    expect(
+      applyEmailMerge(
+        "{{greeting|subscriber}}",
+        { contact: { ...contact, name: "  " } },
+        { format: "text" }
+      )
+    ).toBe("Dear subscriber");
+    expect(
+      applyEmailMerge(
+        "{{greeting|subscriber}}",
+        { contact: { ...contact, name: "Alex Example" } },
+        { format: "text" }
+      )
+    ).toBe("Dear Alex");
+  });
+
   it("keeps link tokens usable in href", () => {
     const html = applyEmailMerge('<a href="{{unsubscribe_url}}">x</a>', {
       contact,

@@ -281,7 +281,7 @@ export function RichTextEditorImpl({
           >
             <EmailVariableSelect
               includeLinks
-              className="h-7 w-[8.5rem] bg-white py-0"
+              className="h-7 bg-white py-0"
               onInsert={(token) => {
                 editor.chain().focus().insertContent(token).run();
               }}
