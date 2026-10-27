@@ -664,7 +664,7 @@ export function EmailsClient({
           <div className="surface-card space-y-4 p-5">
             <p className="text-sm text-muted">
               Hub does not send blasts. Download one .eml per contact and open
-              it in Outlook. Each file uses that person's name. People on the
+              it in Outlook. Each file uses that person&apos;s name. People on the
               suppression list are left out. CSV is optional for records.
             </p>
             <div className="flex flex-wrap gap-2">
