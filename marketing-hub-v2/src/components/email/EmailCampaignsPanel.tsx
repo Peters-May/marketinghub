@@ -4,14 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
 import type { EmailCampaign } from "@/lib/types";
-import { isPitchCampaign } from "@/lib/email/category";
-import {
-  compileEmailDesign,
-  starterDesign,
-  type StarterLayout,
-} from "@/lib/email/design";
+import { isMarketingInboxCampaign } from "@/lib/email/category";
 import { CopyEmailButton } from "@/components/email/CopyEmailButton";
-import { EmailStarterPicker } from "@/components/email/EmailStarterPicker";
+import { CreateEmailDialog } from "@/components/email/CreateEmailDialog";
 import { EmptyState } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/utils";
 import {
@@ -56,8 +51,7 @@ export function EmailCampaignsPanel({
   const router = useRouter();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [starterOpen, setStarterOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [items, setItems] = useState(campaigns);
@@ -69,7 +63,7 @@ export function EmailCampaignsPanel({
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...items]
-      .filter((c) => !isPitchCampaign(c))
+      .filter((c) => isMarketingInboxCampaign(c))
       .filter((c) => matchesFilter(c.status, filter))
       .filter((c) => {
         if (!q) return true;
@@ -83,32 +77,6 @@ export function EmailCampaignsPanel({
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
   }, [items, filter, query]);
-
-  async function createEmail(layout: StarterLayout) {
-    setCreating(true);
-    setError("");
-    const design = starterDesign(layout);
-    try {
-      const res = await fetch("/api/email/campaigns", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "Untitled email",
-          subject: "",
-          preview_text: "",
-          design,
-          html_body: compileEmailDesign(design),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not create the email");
-      router.push(`/app/email/design/campaign/${data.item.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the email");
-      setCreating(false);
-      setStarterOpen(false);
-    }
-  }
 
   async function removeDraft(campaign: EmailCampaign) {
     if (!canDeleteUnsentDraft(campaign) || deletingId) return;
@@ -143,22 +111,14 @@ export function EmailCampaignsPanel({
         <button
           type="button"
           className="btn-primary inline-flex items-center gap-1.5"
-          disabled={creating}
-          onClick={() => setStarterOpen(true)}
+          onClick={() => setCreateOpen(true)}
         >
           <Plus className="h-4 w-4" />
-          {creating ? "Creating…" : "Create email"}
+          Create email
         </button>
       </div>
 
-      <EmailStarterPicker
-        open={starterOpen}
-        title="Create email"
-        busy={creating}
-        layouts={["blank", "newsletter", "announcement"]}
-        onClose={() => setStarterOpen(false)}
-        onPick={(layout) => void createEmail(layout)}
-      />
+      <CreateEmailDialog open={createOpen} onClose={() => setCreateOpen(false)} />
 
       {error ? (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

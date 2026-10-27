@@ -14,6 +14,7 @@ import {
   updateEmailCampaign,
 } from "@/lib/data/repos";
 import { campaignCloneInput } from "@/lib/email/clone";
+import { isPitchTabCampaign } from "@/lib/email/category";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import { viewInBrowserUrlFor } from "@/lib/email/unsubscribe-token";
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
       theme_id: existing.theme_id,
       content_id: existing.content_id,
       folder: existing.folder,
-      category: existing.category,
+      category: isPitchTabCampaign(existing) ? "pitch" : existing.category,
       follow_up_of: existing.id,
       adj_open_rate: null,
       adj_click_rate: null,

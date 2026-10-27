@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { EmailDesigner } from "@/components/email/builder/EmailDesigner";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
-import { isPitchCampaign } from "@/lib/email/category";
+import { emailCampaignHome } from "@/lib/email/category";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { getEmailCampaign, getEmailTemplate, listEmailAudiences } from "@/lib/data/repos";
 
@@ -53,7 +53,7 @@ export default async function EmailDesignPage({
       kind="campaign"
       id={campaign.id}
       readOnly={false}
-      backHref={isPitchCampaign(campaign) ? "/app/pr/emails" : "/app/email"}
+      backHref={emailCampaignHome(campaign)}
       initialName={campaign.title}
       initialSubject={campaign.subject}
       initialPreview={campaign.preview_text}

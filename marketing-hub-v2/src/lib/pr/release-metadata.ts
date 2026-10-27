@@ -19,7 +19,7 @@ export function releasePageMetadata(
     .map((keyword) => keyword.trim())
     .filter(Boolean);
   return {
-    title: `${title} | Peters & May Newsroom`,
+    title: { absolute: `${title} | Peters & May Newsroom` },
     description,
     keywords,
     robots: options?.preview

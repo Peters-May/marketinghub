@@ -18,10 +18,13 @@ import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { mentionsToCsv } from "@/lib/pr/mentions-csv";
+import { mentionMatchNote } from "@/lib/pr/mention-match";
+import { HighlightedKeywords } from "@/components/pr/HighlightedKeywords";
 import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
 import { PitchesPanel } from "@/components/pr/PitchesPanel";
+import { isPitchTabCampaign } from "@/lib/email/category";
 import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
 
 export type PrSection =
@@ -865,7 +868,6 @@ export function PrClient({
       {tab === "releases" ? (
         <ReleasesPanel
           releases={releases}
-          campaigns={campaigns}
           newsroomTitle={newsroom.title}
           newsroomDescription={newsroom.description}
           spokespeople={spokespeople}
@@ -884,15 +886,19 @@ export function PrClient({
               return [item, ...without];
             })
           }
-          onCampaign={(item) =>
-            setCampaigns((prev) => [item, ...prev.filter((c) => c.id !== item.id)])
-          }
         />
       ) : null}
 
       {tab === "pitches" ? (
         <div className="space-y-10">
-          <PitchesPanel campaigns={campaigns} content={content} />
+          <PitchesPanel
+            campaigns={campaigns}
+            content={content}
+            match={isPitchTabCampaign}
+            onCampaign={(item) =>
+              setCampaigns((prev) => [item, ...prev.filter((c) => c.id !== item.id)])
+            }
+          />
           {pitches.length > 0 ? (
             <EmailsClient
               legacy
@@ -1048,7 +1054,12 @@ export function PrClient({
           </div>
           <div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-display text-lg text-brand">Inbox</h2>
+              <div>
+                <h2 className="font-display text-lg text-brand">Inbox</h2>
+                <p className="text-xs text-muted">
+                  Highlighted text is the keyword that brought the article in.
+                </p>
+              </div>
               <button
                 type="button"
                 disabled={mentions.length === 0}
@@ -1064,13 +1075,26 @@ export function PrClient({
               ) : (
                 mentions
                   .filter((m) => m.status === "new")
-                  .map((m) => (
+                  .map((m) => {
+                    const keywords =
+                      queries.find((q) => q.id === m.query_id)?.keywords ?? "";
+                    const matchNote = mentionMatchNote(
+                      keywords,
+                      m.title,
+                      m.snippet
+                    );
+                    return (
                     <li
                       key={m.id}
                       className="surface-card flex flex-wrap items-start justify-between gap-3 p-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-brand">{m.title}</div>
+                        <div className="font-medium text-brand">
+                          <HighlightedKeywords
+                            text={m.title}
+                            keywords={keywords}
+                          />
+                        </div>
                         <div className="text-xs text-muted">
                           {m.outlet}
                           {m.published_at
@@ -1078,7 +1102,15 @@ export function PrClient({
                             : ""}
                         </div>
                         {m.snippet ? (
-                          <p className="mt-1 text-sm text-muted">{m.snippet}</p>
+                          <p className="mt-1 text-sm text-muted">
+                            <HighlightedKeywords
+                              text={m.snippet}
+                              keywords={keywords}
+                            />
+                          </p>
+                        ) : null}
+                        {matchNote ? (
+                          <p className="mt-1 text-xs text-brand">{matchNote}</p>
                         ) : null}
                         {m.url ? (
                           <a
@@ -1108,7 +1140,8 @@ export function PrClient({
                         </button>
                       </div>
                     </li>
-                  ))
+                    );
+                  })
               )}
             </ul>
           </div>

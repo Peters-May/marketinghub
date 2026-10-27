@@ -8,16 +8,17 @@ import { EmailAudiencesPanel } from "@/components/email/EmailAudiencesPanel";
 import { EmailTemplatesPanel } from "@/components/email/EmailTemplatesPanel";
 import { EmailReportsPanel } from "@/components/email/EmailReportsPanel";
 import { EmailSettingsPanel } from "@/components/email/EmailSettingsPanel";
-import type { EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
-import { EmailOverview } from "@/components/email/EmailOverview";
-import type { EmailOverviewRow } from "@/lib/email/overview";
+import type { ContentItem, EmailAudience, EmailCampaign, EmailTemplate, MediaList } from "@/lib/types";
+import { isPitchTabCampaign } from "@/lib/email/category";
+import { PitchesPanel } from "@/components/pr/PitchesPanel";
 
 export type AudienceWithCount = EmailAudience & { recipient_count: number };
 
-type Tab = "emails" | "templates" | "analyse" | "settings";
+type Tab = "emails" | "pitches" | "templates" | "analyse" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "emails", label: "Emails" },
+  { id: "pitches", label: "Pitches" },
   { id: "templates", label: "Templates" },
   { id: "analyse", label: "Analyse" },
   { id: "settings", label: "Settings" },
@@ -29,16 +30,19 @@ export function EmailMarketingHub({
   initialAudiences,
   initialLists,
   initialTab,
-  overview = [],
+  pitchCampaigns = [],
+  content = [],
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
   initialAudiences: AudienceWithCount[];
   initialLists: MediaList[];
   initialTab?: Tab;
-  overview?: EmailOverviewRow[];
+  pitchCampaigns?: EmailCampaign[];
+  content?: ContentItem[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? "emails");
+  const [pitchRows, setPitchRows] = useState(pitchCampaigns);
   const [audiencesOpen, setAudiencesOpen] = useState(false);
   const [templates, setTemplates] = useState(initialTemplates);
   const [audiences, setAudiences] = useState(initialAudiences);
@@ -48,8 +52,6 @@ export function EmailMarketingHub({
   return (
     <div>
       <PageHeader title="Email" description={countLabel} />
-
-      {tab === "emails" ? <EmailOverview rows={overview} /> : null}
 
       <SegmentFilter
         label="Email section"
@@ -85,6 +87,17 @@ export function EmailMarketingHub({
         <EmailCampaignsPanel
           campaigns={initialCampaigns}
           onOpenAudiences={() => setAudiencesOpen(true)}
+        />
+      ) : null}
+
+      {tab === "pitches" ? (
+        <PitchesPanel
+          campaigns={pitchRows}
+          content={content}
+          match={isPitchTabCampaign}
+          onCampaign={(item: EmailCampaign) =>
+            setPitchRows((prev) => [item, ...prev.filter((c) => c.id !== item.id)])
+          }
         />
       ) : null}
 

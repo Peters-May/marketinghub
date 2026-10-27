@@ -26,3 +26,40 @@ export function isPitchCampaign(campaign: {
 }): boolean {
   return emailCampaignCategory(campaign) === "pitch";
 }
+
+/** Imported press sends from the release library, not marketing newsletters. */
+export function isReleaseLibraryCampaign(campaign: { id?: string | null }): boolean {
+  return (campaign.id ?? "").startsWith("ecamp_rel_");
+}
+
+/** Email → Pitches. Real pitches, plus imported press sends. */
+export function isPitchTabCampaign(campaign: {
+  id?: string | null;
+  category?: string | null;
+  folder?: string | null;
+  template_id?: string | null;
+}): boolean {
+  return isPitchCampaign(campaign) || isReleaseLibraryCampaign(campaign);
+}
+
+/** Email → Emails. Newsletters and announcements only. */
+export function isMarketingInboxCampaign(campaign: {
+  id?: string | null;
+  category?: string | null;
+  folder?: string | null;
+  template_id?: string | null;
+}): boolean {
+  return !isPitchTabCampaign(campaign);
+}
+
+/** Where Back should land after editing or viewing a campaign. */
+export function emailCampaignHome(campaign: {
+  id?: string | null;
+  category?: string | null;
+  folder?: string | null;
+  template_id?: string | null;
+}): string {
+  if (isPitchCampaign(campaign)) return "/app/pr/emails";
+  if (isReleaseLibraryCampaign(campaign)) return "/app/email?tab=pitches";
+  return "/app/email";
+}

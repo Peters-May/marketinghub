@@ -1279,6 +1279,8 @@ export type NewsroomSettings = {
   theme_color: string;
   /** Logo URL for public newsroom header. */
   logo_url: string;
+  /** Browser icon for the public newsroom. */
+  favicon_url: string;
   /** Hero / background image URL. */
   background_url: string;
   /**

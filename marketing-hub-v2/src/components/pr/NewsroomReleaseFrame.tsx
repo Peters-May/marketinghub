@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ContentItem, NewsroomSettings } from "@/lib/types";
 import { ReleaseArticle } from "@/components/pr/ReleaseArticle";
+import { NewsroomHeader } from "@/components/pr/NewsroomHeader";
 import { seedReleaseDocument } from "@/lib/pr/release-blocks";
 
 export function NewsroomReleaseFrame({
@@ -20,21 +21,14 @@ export function NewsroomReleaseFrame({
           Preview. This page is not on the public newsroom.
         </p>
       ) : null}
-      <header className="border-b border-brand/10">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              Peters &amp; May
-            </p>
-            <Link href="/newsroom" className="font-display text-2xl tracking-tight">
-              {settings.title}
-            </Link>
-          </div>
+      <NewsroomHeader
+        settings={settings}
+        trailing={
           <Link href="/newsroom" className="text-sm text-muted hover:text-brand">
             All news
           </Link>
-        </div>
-      </header>
+        }
+      />
       <main className="mx-auto max-w-5xl px-6 py-12">
         <ReleaseArticle
           title={release.title}

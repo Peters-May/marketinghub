@@ -31,6 +31,8 @@ export function EmailStarterPicker({
   title,
   busy,
   layouts,
+  error,
+  closeLabel = "Cancel",
   onClose,
   onPick,
 }: {
@@ -39,6 +41,8 @@ export function EmailStarterPicker({
   busy?: boolean;
   /** Limit the choices. Email creation omits the press pitch layout. */
   layouts?: StarterLayout[];
+  error?: string;
+  closeLabel?: string;
   onClose: () => void;
   onPick: (layout: StarterLayout) => void;
 }) {
@@ -73,6 +77,11 @@ export function EmailStarterPicker({
             </li>
           ))}
         </ul>
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -80,7 +89,7 @@ export function EmailStarterPicker({
             disabled={busy}
             onClick={onClose}
           >
-            Cancel
+            {closeLabel}
           </button>
         </div>
       </div>

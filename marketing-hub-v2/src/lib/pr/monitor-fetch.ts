@@ -1,8 +1,14 @@
+import {
+  splitKeywordTerms,
+  textContainsKeywordPhrase,
+} from "@/lib/pr/mention-match";
+
 /**
  * Fetch news mentions for a monitoring query.
  * Uses NewsAPI when NEWS_API_KEY is set; otherwise returns an empty set
  * (staff can still log coverage manually).
  */
+
 export type MonitorFetchResult = {
   title: string;
   url: string;
@@ -13,10 +19,23 @@ export type MonitorFetchResult = {
 };
 
 function splitTerms(raw: string): string[] {
-  return raw
-    .split(/[,;\n]+/)
-    .map((t) => t.trim())
-    .filter(Boolean);
+  return splitKeywordTerms(raw);
+}
+
+/** Quoted phrases for NewsAPI. Ampersands are also searched as "and" and as adjacent words. */
+export function newsApiKeywordQuery(keywords: string): string {
+  const clauses = splitTerms(keywords).flatMap((phrase) => {
+    const clean = phrase.replace(/"/g, "").replace(/\s+/g, " ").trim();
+    if (!clean) return [];
+    const forms = new Set<string>([
+      clean,
+      clean.replace(/\s*&\s*/g, " and ").replace(/\s+/g, " ").trim(),
+      clean.replace(/\s*&\s*/g, " ").replace(/\s+/g, " ").trim(),
+      clean.replace(/\s+and\s+/gi, " & ").replace(/\s+/g, " ").trim(),
+    ]);
+    return [...forms].filter(Boolean).map((form) => `"${form}"`);
+  });
+  return [...new Set(clauses)].join(" OR ");
 }
 
 export async function fetchMentionsForQuery(input: {
@@ -33,7 +52,7 @@ export async function fetchMentionsForQuery(input: {
     return [];
   }
 
-  const q = keywords.map((k) => `"${k.replace(/"/g, "")}"`).join(" OR ");
+  const q = newsApiKeywordQuery(input.keywords);
   const url = new URL("https://newsapi.org/v2/everything");
   url.searchParams.set("q", q);
   url.searchParams.set("language", "en");
@@ -57,6 +76,7 @@ export async function fetchMentionsForQuery(input: {
       title?: string;
       url?: string;
       description?: string;
+      content?: string;
       publishedAt?: string;
       source?: { name?: string };
     }[];
@@ -67,14 +87,16 @@ export async function fetchMentionsForQuery(input: {
     const title = (article.title || "").trim();
     const link = (article.url || "").trim();
     if (!title || !link) continue;
-    const hay = `${title} ${article.description || ""}`.toLowerCase();
-    if (exclusions.some((ex) => hay.includes(ex))) continue;
+    const description = (article.description || "").trim();
+    const hay = `${title} ${description} ${article.content || ""}`;
+    if (exclusions.some((ex) => hay.toLowerCase().includes(ex))) continue;
+    if (!textContainsKeywordPhrase(hay, input.keywords)) continue;
     out.push({
       title,
       url: link,
       outlet: article.source?.name?.trim() || "",
       published_at: article.publishedAt || null,
-      snippet: (article.description || "").trim(),
+      snippet: description,
       external_id: `newsapi:${Buffer.from(link, "utf8")
         .toString("base64url")
         .slice(0, 48)}`,

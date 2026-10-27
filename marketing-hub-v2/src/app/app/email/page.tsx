@@ -8,14 +8,13 @@ import {
   listEmailAudiences,
   listEmailCampaigns,
   listEmailTemplates,
-  listEventContentLinks,
-  listEvents,
   listMediaLists,
-  listThemes,
   resolveEmailRecipients,
 } from "@/lib/data/repos";
-import { isPitchCampaign } from "@/lib/email/category";
-import { buildEmailOverview } from "@/lib/email/overview";
+import {
+  isMarketingInboxCampaign,
+  isPitchTabCampaign,
+} from "@/lib/email/category";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -41,27 +40,15 @@ export default async function EmailPage({
     console.error("[email] scheduled send", err);
   }
 
-  const [campaigns, templates, audiences, lists, themes, content, events, links] =
-    await Promise.all([
-      listEmailCampaigns(),
-      listEmailTemplates(),
-      listEmailAudiences(),
-      listMediaLists(),
-      listThemes(),
-      listContent(),
-      listEvents(),
-      listEventContentLinks(),
-    ]);
-  const marketingCampaigns = campaigns.filter(
-    (campaign) => !isPitchCampaign(campaign)
-  );
-  const overview = buildEmailOverview({
-    campaigns: marketingCampaigns,
-    themes,
-    content,
-    events,
-    links,
-  });
+  const [campaigns, templates, audiences, lists, content] = await Promise.all([
+    listEmailCampaigns(),
+    listEmailTemplates(),
+    listEmailAudiences(),
+    listMediaLists(),
+    listContent(),
+  ]);
+  const marketingCampaigns = campaigns.filter(isMarketingInboxCampaign);
+  const pitchCampaigns = campaigns.filter(isPitchTabCampaign);
 
   const audiencesWithCounts = await Promise.all(
     audiences.map(async (a) => {
@@ -75,20 +62,23 @@ export default async function EmailPage({
   );
 
   const tab =
-    searchParams?.tab === "templates"
-      ? "templates"
-      : searchParams?.tab === "analyse"
-        ? "analyse"
-        : undefined;
+    searchParams?.tab === "pitches"
+      ? "pitches"
+      : searchParams?.tab === "templates"
+        ? "templates"
+        : searchParams?.tab === "analyse"
+          ? "analyse"
+          : undefined;
 
   return (
     <EmailMarketingHub
       initialCampaigns={marketingCampaigns}
+      pitchCampaigns={pitchCampaigns}
+      content={content}
       initialTemplates={templates}
       initialAudiences={audiencesWithCounts}
       initialLists={marketingLists}
       initialTab={tab}
-      overview={overview}
     />
   );
 }

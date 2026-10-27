@@ -5,6 +5,7 @@ import {
   listContacts,
   listPublishedPressReleases,
 } from "@/lib/data/repos";
+import { NewsroomHeader } from "@/components/pr/NewsroomHeader";
 import { COLORS } from "@/lib/brand/tokens";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { isPressContact } from "@/lib/pr/pitch-eml";
@@ -13,13 +14,17 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getNewsroomSettings();
+  const title = settings.seo_title || settings.title;
   return {
-    title: settings.seo_title || settings.title,
+    title: { absolute: title },
     description: settings.seo_description,
     keywords: settings.seo_keywords
       .split(",")
       .map((k) => k.trim())
       .filter(Boolean),
+    icons: settings.favicon_url
+      ? { icon: settings.favicon_url, apple: settings.favicon_url }
+      : undefined,
   };
 }
 
@@ -42,16 +47,10 @@ export default async function NewsroomPage() {
 
   return (
     <div className="min-h-screen bg-white text-brand">
-      <header className="border-b border-brand/10">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-5">
-          <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-muted">
-              Peters &amp; May
-            </p>
-            <h1 className="font-display text-2xl tracking-tight md:text-3xl">
-              {settings.title}
-            </h1>
-          </div>
+      <NewsroomHeader
+        settings={settings}
+        heading
+        trailing={
           <nav className="flex items-center gap-4 text-sm">
             <a href="#news" className="text-muted hover:text-brand">
               News
@@ -60,8 +59,8 @@ export default async function NewsroomPage() {
               Media kit
             </Link>
           </nav>
-        </div>
-      </header>
+        }
+      />
 
       {featured ? (
         <section
@@ -78,7 +77,10 @@ export default async function NewsroomPage() {
             backgroundPosition: "center",
           }}
         >
-          <div className="mx-auto max-w-5xl px-6 py-16 md:py-24">
+          {settings.background_url ? (
+            <div className="absolute inset-0 bg-brand/25" />
+          ) : null}
+          <div className="relative mx-auto max-w-5xl px-6 py-16 md:py-24">
             <div className="max-w-xl rounded-xl bg-white p-6 shadow-lg md:p-8">
               <span
                 className="inline-block rounded px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-white"
@@ -173,7 +175,20 @@ export default async function NewsroomPage() {
           </p>
           {settings.description ? (
             <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-              {settings.description}
+              {settings.description.includes("www.petersandmay.com") ? (
+                <>
+                  {settings.description.split("www.petersandmay.com")[0]}
+                  <a
+                    href="https://www.petersandmay.com"
+                    className="text-accent underline"
+                  >
+                    www.petersandmay.com
+                  </a>
+                  {settings.description.split("www.petersandmay.com")[1]}
+                </>
+              ) : (
+                settings.description
+              )}
             </p>
           ) : null}
         </section>
@@ -215,7 +230,13 @@ export default async function NewsroomPage() {
       </main>
 
       <footer className="border-t border-brand/10 py-8 text-center text-xs text-muted">
-        Peters &amp; May — Group Marketing ·{" "}
+        <a
+          href="https://www.petersandmay.com"
+          className="text-accent underline"
+        >
+          www.petersandmay.com
+        </a>
+        <span> · </span>
         <Link href="/login" className="underline">
           Staff login
         </Link>
