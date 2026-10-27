@@ -37,10 +37,10 @@ export function EmailInboxBar({
       onClick={(event) => event.stopPropagation()}
     >
       <p className="text-sm font-medium text-brand">
-        {previewMerge(subject) || "No subject"}
+        {previewMerge(subject, { format: "text" }) || "No subject"}
       </p>
       <p className="text-xs text-muted">
-        {previewMerge(previewText) || "No preview text"}
+        {previewMerge(previewText, { format: "text" }) || "No preview text"}
       </p>
     </div>
   );

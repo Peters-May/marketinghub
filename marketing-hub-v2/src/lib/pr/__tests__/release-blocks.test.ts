@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  attachmentNameFromUrl,
   renderBlocksHtml,
+  safeRedirectUrl,
+  safeReleaseUrl,
   sanitizePressReleaseDocument,
   seedReleaseDocument,
 } from "@/lib/pr/release-blocks";
@@ -61,5 +64,25 @@ describe("press release blocks", () => {
       { id: "keep", type: "header", text: "Already written" },
     ]);
     expect(kept.show_date).toBe(false);
+  });
+
+  it("keeps a stray percent sign from crashing the release", () => {
+    expect(() => attachmentNameFromUrl("https://cdn.example.com/100%done.pdf")).not.toThrow();
+    expect(attachmentNameFromUrl("https://cdn.example.com/100%done.pdf")).toBe(
+      "100%done.pdf"
+    );
+    const document = sanitizePressReleaseDocument({
+      attachments: [{ url: "https://cdn.example.com/100%done.pdf", name: "" }],
+      seo: { redirect_url: "https://evil.example/\t/phish", redirect_enabled: true },
+    });
+    expect(document.attachments[0]?.name).toBe("100%done.pdf");
+    expect(document.seo.redirect_url).toBe("");
+  });
+
+  it("rejects a tabbed path and an off-site redirect", () => {
+    expect(safeReleaseUrl("/\t/https://evil.example")).toBe("");
+    expect(safeReleaseUrl("/newsroom/story")).toBe("/newsroom/story");
+    expect(safeRedirectUrl("https://evil.example/phish")).toBe("");
+    expect(safeRedirectUrl("/newsroom/other")).toBe("/newsroom/other");
   });
 });

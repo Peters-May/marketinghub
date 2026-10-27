@@ -166,3 +166,42 @@ describe("matchEmailRecipients", () => {
     ).toEqual([]);
   });
 });
+
+describe("suppressions", () => {
+  const contacts = [
+    contact({ id: "ok", email: "ok@example.com" }),
+    contact({ id: "bounced", email: "bounced@example.com" }),
+    contact({ id: "complained", email: "spam@example.com" }),
+    contact({ id: "unsubscribed", email: "left@example.com" }),
+  ];
+  const store = {
+    contacts,
+    media_lists: [],
+    email_audiences: [
+      audience({
+        id: "all-in",
+        name: "Everyone",
+        contact_ids: ["ok", "bounced", "complained", "unsubscribed"],
+        exclude_unsubscribed: false,
+      }),
+    ],
+    email_suppressions: [
+      { email: "Bounced@example.com", reason: "bounce" },
+      { email: "spam@example.com", reason: "complaint" },
+      { email: "left@example.com", reason: "unsubscribe" },
+    ],
+  };
+  const index = buildRecipientIndex(store);
+
+  it("never mails bounces or complaints, even when the audience keeps unsubscribes", () => {
+    const ids = matchEmailRecipients(index, { audienceId: "all-in" }).map((row) => row.id);
+    expect(ids).toEqual(["ok", "unsubscribed"]);
+  });
+
+  it("still drops everything suppressed for a normal audience", () => {
+    const ids = matchEmailRecipients(index, {
+      recipientIds: ["ok", "bounced", "complained", "unsubscribed"],
+    }).map((row) => row.id);
+    expect(ids).toEqual(["ok"]);
+  });
+});

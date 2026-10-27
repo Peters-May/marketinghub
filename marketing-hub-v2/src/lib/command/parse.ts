@@ -832,7 +832,8 @@ function formatSpan(start: string, end?: string) {
 
 function eventSummary(verb: CommandVerb, title: string, fields: Fields): string {
   const bits = [`${verb} event ${quote(title)}`];
-  bits.push(fields.due ? formatSpan(fields.due, fields.ends) : "date still to add");
+  if (fields.due) bits.push(formatSpan(fields.due, fields.ends));
+  else if (verb === "Add") bits.push("date still to add");
   if (fields.date_status === "provisional") bits.push("dates provisional");
   if (fields.location) bits.push(fields.location);
   if (fields.type) bits.push(fields.type);

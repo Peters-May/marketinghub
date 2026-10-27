@@ -113,4 +113,17 @@ describe("press pitch email", () => {
     expect(html).toContain("https://cdn.example.com/arrival.mp4");
     expect(html).not.toContain("The yachts left Palma");
   });
+
+  it("does not link a draft in related stories", () => {
+    const html = compileEmailDesign(
+      pressPitchFromRelease(
+        release({ id: "cnt_live", title: "Live story" }),
+        [release({ id: "cnt_draft", title: "Secret draft", status: "draft" })],
+        "https://hub.example.com"
+      )
+    );
+    expect(html).not.toContain("Secret draft");
+    expect(html).not.toContain("/newsroom/cnt_draft");
+    expect(html).not.toContain("/newsroom/preview/");
+  });
 });

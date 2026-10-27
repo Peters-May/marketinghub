@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
 import { sendTestEmail } from "@/lib/email/send-campaign";
-import { getEmailCampaign, updateEmailCampaign } from "@/lib/data/repos";
+import { claimEmailCampaignSend, getEmailCampaign } from "@/lib/data/repos";
 import { sendCampaignWorkflow } from "@/workflows/email-campaign";
 import { start } from "workflow/api";
 
@@ -39,12 +39,13 @@ export async function POST(request: NextRequest) {
     return jsonOk({ ok: true, background: true });
   }
 
-  await updateEmailCampaign(campaignId, {
-    status: "sending",
-    scheduled_at: null,
-    last_error: "",
+  // Atomic, so a double-click or a racing cron run can't start two sends.
+  const claim = await claimEmailCampaignSend(campaignId, {
+    from: ["draft", "scheduled", "failed", "cancelled", "sending"],
+    clearSchedule: true,
   });
-  const run = await start(sendCampaignWorkflow, [campaignId, true]);
+  if (!claim) return jsonOk({ ok: true, background: true });
+  const run = await start(sendCampaignWorkflow, [campaignId, claim]);
   console.log("[email] campaign workflow", campaignId, run.runId);
   return jsonOk({ ok: true, background: true, runId: run.runId });
 }

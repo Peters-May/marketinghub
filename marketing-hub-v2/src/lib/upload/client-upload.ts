@@ -158,19 +158,38 @@ export async function uploadAssetDirect(
 
   const intent = (await intentRes.json()) as {
     signedUrl?: string;
-    publicUrl?: string;
+    path?: string;
     name?: string;
     error?: string;
   };
 
-  if (!intent.signedUrl || !intent.publicUrl) {
+  if (!intent.signedUrl || !intent.path) {
     throw new Error(intent.error || `Could not start upload for ${file.name}`);
   }
 
   await putFileWithProgress(intent.signedUrl, file, opts?.onProgress);
 
+  const confirmRes = await fetch("/api/content/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "confirm", path: intent.path }),
+  });
+  if (!confirmRes.ok) {
+    throw new Error(
+      await readErrorMessage(
+        confirmRes,
+        `Could not store ${file.name}`,
+        maxBytes
+      )
+    );
+  }
+  const confirmed = (await confirmRes.json()) as { publicUrl?: string };
+  if (!confirmed.publicUrl) {
+    throw new Error(`Could not store ${file.name}`);
+  }
+
   return {
-    url: intent.publicUrl,
+    url: confirmed.publicUrl,
     name: intent.name || file.name,
     storage: "supabase",
   };

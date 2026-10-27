@@ -93,20 +93,38 @@ export function emptyReleaseDocument(): PressReleaseDocument {
   };
 }
 
-/** http(s) or a same-site path. Drops javascript and other schemes. */
+/** http(s) or a same-site path. Drops javascript, control characters, and other schemes. */
 export function safeReleaseUrl(value: unknown): string {
   const raw = String(value ?? "").trim();
   if (!raw || raw.length > 2000) return "";
-  if (raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\")) {
+  if (/[\u0000-\u001F\u007F]/.test(raw) || raw.includes("\\")) return "";
+  if (raw.startsWith("/") && !raw.startsWith("//")) {
     return raw;
   }
   try {
     const url = new URL(raw);
-    if (url.protocol === "http:" || url.protocol === "https:") return raw;
+    if (url.username || url.password) return "";
+    if (url.protocol === "http:" || url.protocol === "https:") return url.href;
   } catch {
     return "";
   }
   return "";
+}
+
+/** Newsroom redirects stay on this site. */
+export function safeRedirectUrl(value: unknown): string {
+  const raw = safeReleaseUrl(value);
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "";
+  return raw;
+}
+
+export function attachmentNameFromUrl(url: string): string {
+  const path = url.split("?")[0]?.split("/").pop() || "File";
+  try {
+    return decodeURIComponent(path) || "File";
+  } catch {
+    return path || "File";
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -259,7 +277,7 @@ function sanitizeSeo(value: unknown): ReleaseSeo {
     nosnippet: flag("nosnippet"),
     notranslate: flag("notranslate"),
     noimageindex: flag("noimageindex"),
-    redirect_url: safeReleaseUrl(row.redirect_url),
+    redirect_url: safeRedirectUrl(row.redirect_url),
     redirect_enabled: row.redirect_enabled === true,
   };
 }
@@ -272,7 +290,7 @@ function sanitizeAttachments(value: unknown): ReleaseAttachment[] {
     if (!row) continue;
     const url = safeReleaseUrl(row.url);
     if (!url) continue;
-    const fallback = decodeURIComponent(url.split("?")[0]?.split("/").pop() || "File");
+    const fallback = attachmentNameFromUrl(url);
     files.push({
       url,
       name: plainReleaseField(row.name, 160) || fallback || "File",

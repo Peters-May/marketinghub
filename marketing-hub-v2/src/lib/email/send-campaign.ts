@@ -1,10 +1,13 @@
 import { Resend } from "resend";
 import {
   appendEmailEvents,
+  claimEmailCampaignSend,
   getEmailCampaign,
   getEmailSettings,
+  holdEmailCampaignSend,
   listEmailAudiences,
-  listEmailEvents,
+  listSentEmailAddresses,
+  releaseEmailCampaignSend,
   resolveEmailRecipients,
   updateEmailCampaign,
 } from "@/lib/data/repos";
@@ -22,6 +25,7 @@ import {
   viewInBrowserUrlFor,
 } from "@/lib/email/unsubscribe-token";
 import { isPitchCampaign } from "@/lib/email/category";
+import { batchIdempotencyKey } from "@/lib/email/send-lock";
 import { emptyRecipientError } from "@/lib/email/recipient-rules";
 import { appendUtmToEmailHtml } from "@/lib/email/utm";
 import {
@@ -32,8 +36,7 @@ import type { Contact, EmailCampaign } from "@/lib/types";
 
 const BATCH_SIZE = 40;
 const BATCH_PAUSE_MS = 250;
-/** Ignore a second start while a send is still in progress. */
-const SENDING_LOCK_MS = 8 * 60 * 1000;
+const LOST_CLAIM_ERROR = "Send was cancelled or taken over by another run";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -62,8 +65,21 @@ export type CampaignBatchResult = {
  */
 export async function prepareCampaignSend(
   campaignId: string,
-  opts?: { claimed?: boolean; skipPortalSync?: boolean }
+  claim: string,
+  opts?: { skipPortalSync?: boolean }
 ): Promise<{ ready: true; alreadySent: number } | { ready: false; result: SendCampaignResult }> {
+  if (!(await holdEmailCampaignSend(campaignId, claim))) {
+    return {
+      ready: false,
+      result: {
+        ok: false,
+        campaign: await getEmailCampaign(campaignId),
+        sent: 0,
+        failed: 0,
+        error: LOST_CLAIM_ERROR,
+      },
+    };
+  }
   const campaign = await getEmailCampaign(campaignId);
   if (!campaign) {
     return {
@@ -71,37 +87,10 @@ export async function prepareCampaignSend(
       result: { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" },
     };
   }
-  if (campaign.status === "sending" && !opts?.claimed) {
-    const started = new Date(campaign.updated_at).getTime();
-    if (Date.now() - started < SENDING_LOCK_MS) {
-      return {
-        ready: false,
-        result: {
-          ok: false,
-          campaign,
-          sent: 0,
-          failed: 0,
-          error: "Campaign is already sending",
-        },
-      };
-    }
-  }
-  if (campaign.status === "sent") {
-    return {
-      ready: false,
-      result: {
-        ok: false,
-        campaign,
-        sent: 0,
-        failed: 0,
-        error: "Campaign already sent",
-      },
-    };
-  }
 
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
-    const updated = await updateEmailCampaign(campaignId, {
+    const updated = await releaseEmailCampaignSend(campaignId, claim, {
       status: "failed",
       last_error: "RESEND_API_KEY not configured",
     });
@@ -135,7 +124,7 @@ export async function prepareCampaignSend(
   });
 
   if (recipients.length === 0) {
-    const updated = await updateEmailCampaign(campaignId, {
+    const updated = await releaseEmailCampaignSend(campaignId, claim, {
       status: "failed",
       last_error: emptyRecipientError(purpose),
     });
@@ -152,19 +141,13 @@ export async function prepareCampaignSend(
   }
 
   await updateEmailCampaign(campaignId, {
-    status: "sending",
-    last_error: "",
     stats: {
       ...campaign.stats,
       recipients: recipients.length,
     },
   });
 
-  const alreadySent = new Set(
-    (await listEmailEvents(campaignId))
-      .filter((event) => event.kind === "sent")
-      .map((event) => event.email.trim().toLowerCase())
-  );
+  const alreadySent = await listSentEmailAddresses(campaignId);
   const pending = recipients.filter(
     (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
   );
@@ -174,8 +157,13 @@ export async function prepareCampaignSend(
 
 /** Send the next batch of people who do not yet have a sent event. */
 export async function deliverNextCampaignBatch(
-  campaignId: string
+  campaignId: string,
+  claim: string
 ): Promise<CampaignBatchResult> {
+  // Checked every batch so a cancel, or a newer run, stops this one.
+  if (!(await holdEmailCampaignSend(campaignId, claim))) {
+    return { sent: 0, failed: 0, errors: [LOST_CLAIM_ERROR], remaining: 0, stopped: true };
+  }
   const latest = await getEmailCampaign(campaignId);
   if (!latest) {
     return { sent: 0, failed: 0, errors: ["Not found"], remaining: 0, stopped: true };
@@ -198,11 +186,7 @@ export async function deliverNextCampaignBatch(
     recipientIds: latest.recipient_ids,
     purpose: isPitchCampaign(latest) ? "pitch" : "marketing",
   });
-  const alreadySent = new Set(
-    (await listEmailEvents(campaignId))
-      .filter((event) => event.kind === "sent")
-      .map((event) => event.email.trim().toLowerCase())
-  );
+  const alreadySent = await listSentEmailAddresses(campaignId);
   const pending = recipients.filter(
     (contact) => !alreadySent.has(contact.email.trim().toLowerCase())
   );
@@ -251,12 +235,16 @@ export async function deliverNextCampaignBatch(
       payload: {
         from,
         to: email,
-        subject: applyEmailMerge(latest.subject || latest.title, {
-          contact,
-          unsubscribeUrl: unsub,
-          preferencesUrl: prefs,
-          viewInBrowserUrl: browser,
-        }),
+        subject: applyEmailMerge(
+          latest.subject || latest.title,
+          {
+            contact,
+            unsubscribeUrl: unsub,
+            preferencesUrl: prefs,
+            viewInBrowserUrl: browser,
+          },
+          { format: "text" }
+        ),
         html: applyEmailMerge(htmlBase, {
           contact,
           unsubscribeUrl: unsub,
@@ -276,7 +264,16 @@ export async function deliverNextCampaignBatch(
   try {
     const result = await resend.batch.send(
       prepared.map((item) => item.payload),
-      { batchValidation: "permissive" }
+      {
+        batchValidation: "permissive",
+        // A retried step re-sends the same chunk. Resend then returns the
+        // first response instead of mailing these people again.
+        idempotencyKey: batchIdempotencyKey(
+          campaignId,
+          claim,
+          prepared.map((item) => item.email)
+        ),
+      }
     );
     if (result.error) {
       chunkError = result.error.message;
@@ -339,18 +336,18 @@ export async function deliverNextCampaignBatch(
 
 export async function finishCampaignSend(
   campaignId: string,
+  claim: string,
   errors: string[] = []
 ): Promise<SendCampaignResult> {
   const latest = await getEmailCampaign(campaignId);
   if (!latest) {
     return { ok: false, campaign: null, sent: 0, failed: 0, error: "Not found" };
   }
-  const sent = (await listEmailEvents(campaignId)).filter(
-    (event) => event.kind === "sent"
-  ).length;
+  const sent = (await listSentEmailAddresses(campaignId)).size;
   const failed = Math.max(0, (latest.stats.recipients || 0) - sent);
   const finalStatus = sent > 0 ? "sent" : "failed";
-  const updated = await updateEmailCampaign(campaignId, {
+  // Leaves a cancelled campaign, or one a newer run owns, as it is.
+  const updated = await releaseEmailCampaignSend(campaignId, claim, {
     status: finalStatus,
     sent_at: sent > 0 ? new Date().toISOString() : null,
     last_error: errors.slice(0, 5).join("; "),
@@ -359,6 +356,15 @@ export async function finishCampaignSend(
       recipients: latest.stats.recipients,
     },
   });
+  if (!updated) {
+    return {
+      ok: false,
+      campaign: await getEmailCampaign(campaignId),
+      sent,
+      failed,
+      error: LOST_CLAIM_ERROR,
+    };
+  }
   return {
     ok: sent > 0,
     campaign: updated,
@@ -376,19 +382,35 @@ export async function finishCampaignSend(
  */
 export async function sendEmailCampaign(
   campaignId: string,
-  opts?: { claimed?: boolean }
+  opts?: { manual?: boolean }
 ): Promise<SendCampaignResult> {
-  const prepared = await prepareCampaignSend(campaignId, opts);
+  // Manual runs (scripts) claim like the Send button. Others only take due or stalled sends.
+  const claim = await claimEmailCampaignSend(
+    campaignId,
+    opts?.manual
+      ? { from: ["draft", "scheduled", "failed", "cancelled", "sending"], clearSchedule: true }
+      : { from: ["scheduled", "sending"], dueOnly: true }
+  );
+  if (!claim) {
+    return {
+      ok: false,
+      campaign: await getEmailCampaign(campaignId),
+      sent: 0,
+      failed: 0,
+      error: "Campaign is already sending",
+    };
+  }
+  const prepared = await prepareCampaignSend(campaignId, claim);
   if (!prepared.ready) return prepared.result;
 
   const errors: string[] = [];
   while (true) {
-    const batch = await deliverNextCampaignBatch(campaignId);
+    const batch = await deliverNextCampaignBatch(campaignId, claim);
     errors.push(...batch.errors);
     if (batch.stopped || batch.remaining <= 0) break;
     await sleep(BATCH_PAUSE_MS);
   }
-  return finishCampaignSend(campaignId, errors);
+  return finishCampaignSend(campaignId, claim, errors);
 }
 
 /** One copy to the signed-in sender. Does not change the campaign. */
@@ -439,12 +461,16 @@ export async function sendTestEmail(input: {
       viewInBrowserUrl: browser,
     }
   );
-  const subject = applyEmailMerge(input.subject || "Test email", {
-    contact,
-    unsubscribeUrl: unsub,
-    preferencesUrl: prefs,
-    viewInBrowserUrl: browser,
-  });
+  const subject = applyEmailMerge(
+    input.subject || "Test email",
+    {
+      contact,
+      unsubscribeUrl: unsub,
+      preferencesUrl: prefs,
+      viewInBrowserUrl: browser,
+    },
+    { format: "text" }
+  );
 
   try {
     const resend = new Resend(apiKey);

@@ -139,6 +139,31 @@ export type EventBooking = {
   updated_at: string;
 };
 
+export type EventCostCategory =
+  | "travel"
+  | "accommodation"
+  | "marketing_materials"
+  | "other";
+
+export type EventCostCurrency = "GBP" | "EUR" | "USD" | "AUD";
+
+/** One line on an event's working costs sheet. Not the annual budget. */
+export type EventCostLine = {
+  id: string;
+  event_id: string;
+  category: EventCostCategory;
+  description: string;
+  /** Null until the amount is known. */
+  amount: number | null;
+  currency: EventCostCurrency;
+  staff_user_id: string | null;
+  /** Name at the time the line was saved. */
+  staff_name: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AttendanceRequestStatus = "draft" | "open" | "closed";
 export type AttendanceRequestLineStatus = "requested" | "approved" | "declined";
 
@@ -1179,6 +1204,10 @@ export type EmailCampaign = {
   adj_click_rate: number | null;
   scheduled_at: string | null;
   sent_at: string | null;
+  /** Id of the runner that owns an in-progress send. */
+  send_claim?: string;
+  /** Refreshed by the runner while it sends. Drives the stale-send lock. */
+  send_heartbeat_at?: string | null;
   stats: EmailCampaignStats;
   last_error: string;
   created_by: string;
@@ -1307,6 +1336,7 @@ export type HubStore = {
   event_content: EventContentLink[];
   event_offices: EventOffice[];
   event_bookings: EventBooking[];
+  event_cost_lines: EventCostLine[];
   event_attendance_requests: EventAttendanceRequest[];
   event_attendance_request_lines: EventAttendanceRequestLine[];
   profile_offices: ProfileOffice[];

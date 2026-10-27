@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDialog } from "@/components/pr/useDialog";
 import { X } from "lucide-react";
 import { AssetUploadField } from "@/components/content/AssetUploadField";
 import { primaryImageUrl } from "@/lib/data/normalize";
@@ -90,6 +91,7 @@ export function ReleaseSettings({
 }) {
   const [tab, setTab] = useState<Tab>("Configuration");
   const [tag, setTag] = useState("");
+  const dialogRef = useDialog(open, onClose);
   if (!open) return null;
 
   const shareTitle = document.share_title || title || "Untitled";
@@ -106,9 +108,17 @@ export function ReleaseSettings({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 md:left-sidebar">
-      <div className="my-8 w-full max-w-3xl rounded-2xl bg-white shadow-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="release-settings-title"
+        className="my-8 w-full max-w-3xl rounded-2xl bg-white shadow-xl"
+      >
         <div className="flex items-center justify-between border-b border-brand/10 px-5 py-4">
-          <h2 className="font-display text-xl text-brand">Press release settings</h2>
+          <h2 id="release-settings-title" className="font-display text-xl text-brand">
+            Press release settings
+          </h2>
           <button type="button" aria-label="Close settings" onClick={onClose}>
             <X className="h-5 w-5" />
           </button>
@@ -341,6 +351,7 @@ export function ReleaseSettings({
               {document.seo.redirect_enabled ? (
                 <input
                   className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                  aria-label="Redirect URL"
                   value={document.seo.redirect_url}
                   placeholder="https://"
                   onChange={(event) =>

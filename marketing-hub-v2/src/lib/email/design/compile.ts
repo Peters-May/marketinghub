@@ -10,6 +10,7 @@ import type {
   SectionShowFor,
 } from "@/lib/email/design/types";
 import { extractEmailBody, OFFICE_FOOTER } from "@/lib/email/design/document";
+import { cssNumber, cssValue } from "@/lib/email/css-value";
 
 export type CompileEmailOptions = {
   /** When set, sections with a matching showFor (or "all") are kept. */
@@ -33,11 +34,15 @@ function escapeAttr(value: string): string {
 const GALLERY_PATH =
   /^\/api\/email\/gallery\/file\/[A-Za-z0-9][A-Za-z0-9._-]{0,180}$/;
 
-/** Allow http(s), mailto, and merge tokens. */
+/** Merge tokens that are filled with a link we build. Contact fields are not links. */
+const URL_MERGE_TOKENS = new Set(["unsubscribe_url", "preferences_url", "view_in_browser_url"]);
+
+/** Allow http(s), mailto, and the link merge tokens. */
 export function safeEmailUrl(url: string): string {
-  const trimmed = url.trim();
+  const trimmed = String(url ?? "").trim();
   if (!trimmed) return "";
-  if (/^\{\{\s*[a-zA-Z0-9_]+\s*\}\}$/.test(trimmed)) return trimmed;
+  const token = /^\{\{\s*([a-zA-Z0-9_]+)\s*\}\}$/.exec(trimmed);
+  if (token) return URL_MERGE_TOKENS.has(token[1].toLowerCase()) ? trimmed : "";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^mailto:/i.test(trimmed)) return trimmed;
   return "";
@@ -84,7 +89,10 @@ export function sanitizeRichEmailHtml(html: string): string {
   const withoutDanger = html
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "");
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    // A tag with no closing ">" would otherwise survive and be closed by
+    // the markup we wrap around it, e.g. a trailing `<img src=x onerror=…`.
+    .replace(/<[a-z!/][^>]*$/i, "");
   return withoutDanger.replace(/<\/?([a-z0-9]+)([^>]*)>/gi, (full, tag, attrs) => {
     const name = String(tag).toLowerCase();
     if (!RICH_TAGS.has(name)) return "";
@@ -112,12 +120,80 @@ function emailRichHtml(html: string): string {
 export function sanitizeHtmlBlock(html: string): string {
   return extractEmailBody(html)
     .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<object[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed\b[^>]*>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/javascript:/gi, "");
+    .replace(/<(script|iframe|object|noscript|template|form)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<\/?(script|iframe|object|embed|base|meta|link|form|noscript|template)\b[^>]*>/gi, "")
+    .replace(/<[a-z!/][^>]*$/i, "")
+    // Attributes can follow a quote or a slash with no space: <img src=x/onerror=…>.
+    .replace(/([\s"'/])(on[a-z]+|srcdoc|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "$1")
+    .replace(/(java|vb)script\s*:/gi, "")
+    .replace(/data\s*:\s*text\/html/gi, "");
+}
+
+/** Design keys written into markup as numbers (px, %, levels). */
+const NUMERIC_STYLE_KEYS = new Set([
+  "fontSize",
+  "width",
+  "widthPercent",
+  "thickness",
+  "height",
+  "radius",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "paddingX",
+  "paddingY",
+  "borderWidth",
+  "contentWidth",
+  "buttonRadius",
+  "columnGap",
+]);
+
+/** Design keys written into style="…" as text. */
+const TEXT_STYLE_KEYS = new Set([
+  "fontFamily",
+  "headingFontFamily",
+  "linkColor",
+  "textColor",
+  "pageBackground",
+  "contentBackground",
+  "buttonBackground",
+  "buttonColor",
+  "background",
+  "color",
+  "borderColor",
+  "accentColor",
+]);
+
+const ALIGNMENTS = new Set(["left", "center", "right"]);
+
+function cleanStyleFields<T extends object>(value: T): T {
+  const out = { ...value } as Record<string, unknown>;
+  for (const [key, field] of Object.entries(out)) {
+    if (field === undefined || field === null) continue;
+    if (NUMERIC_STYLE_KEYS.has(key)) out[key] = cssNumber(field);
+    else if (TEXT_STYLE_KEYS.has(key)) out[key] = cssValue(field);
+    else if (key === "align" && !ALIGNMENTS.has(String(field))) out[key] = "left";
+  }
+  return out as T;
+}
+
+/**
+ * Design JSON is saved from the browser, so a colour, font or width can
+ * hold anything. Clean every value that is written into markup unescaped.
+ */
+function safeDesignForCompile(design: EmailDesign): EmailDesign {
+  return {
+    ...design,
+    styles: cleanStyleFields(design.styles),
+    sections: design.sections.map((section) => ({
+      ...cleanStyleFields(section),
+      columns: section.columns.map((column) => ({
+        ...cleanStyleFields(column),
+        blocks: column.blocks.map((block) => cleanStyleFields(block)),
+      })),
+    })),
+  };
 }
 
 function paddingStyle(block: EmailBlock): string {
@@ -305,8 +381,8 @@ export function compileEmailDesign(
         preferencesLabel: footerLinks.preferencesLabel,
       }
     : design.styles;
-  const working: EmailDesign = { ...design, styles };
-  const width = styles.contentWidth;
+  const working: EmailDesign = safeDesignForCompile({ ...design, styles });
+  const width = working.styles.contentWidth;
   const sections = working.sections
     .filter((section) => sectionVisibleForTopic(section, options?.topic))
     .map((section) => renderSection(section, working))
@@ -325,10 +401,10 @@ export function compileEmailDesign(
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${escapeAttr(styles.pageBackground)};">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${escapeAttr(styles.pageBackground)};">
+<body style="margin:0;padding:0;background:${escapeAttr(working.styles.pageBackground)};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${escapeAttr(working.styles.pageBackground)};">
 <tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" class="em-container" width="${width}" cellpadding="0" cellspacing="0" style="width:${width}px;max-width:${width}px;background:${escapeAttr(styles.contentBackground)};">
+<table role="presentation" class="em-container" width="${width}" cellpadding="0" cellspacing="0" style="width:${width}px;max-width:${width}px;background:${escapeAttr(working.styles.contentBackground)};">
 ${sections}
 </table>
 </td></tr>
@@ -342,7 +418,7 @@ ${sections}
       showPreferences: linkSettings.showPreferences,
       unsubscribeLabel: linkSettings.unsubscribeLabel,
       preferencesLabel: linkSettings.preferencesLabel,
-      linkColor: styles.linkColor,
+      linkColor: working.styles.linkColor,
     })
   );
 }

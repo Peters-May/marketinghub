@@ -89,10 +89,16 @@ export async function POST(request: NextRequest) {
         news_api_configured: Boolean(process.env.NEWS_API_KEY?.trim()),
       });
     } catch (e) {
-      return jsonError(
-        e instanceof Error ? e.message : "Monitoring fetch failed",
-        502
-      );
+      console.error("[api/pr/monitor] fetch failed", e);
+      const raw = e instanceof Error ? e.message : "";
+      const safe =
+        raw &&
+        !/pgrst|jwt|violates|duplicate key|relation |schema |supabase|password/i.test(
+          raw
+        )
+          ? raw
+          : "Monitoring fetch failed";
+      return jsonError(safe, 502);
     }
   }
 

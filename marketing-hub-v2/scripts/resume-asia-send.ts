@@ -35,7 +35,7 @@ if (existsSync(envPath)) {
 async function main() {
   console.log("resuming");
   const { sendEmailCampaign } = await import("@/lib/email/send-campaign");
-  const result = await sendEmailCampaign("ecamp_asia_americas", { claimed: true });
+  const result = await sendEmailCampaign("ecamp_asia_americas", { manual: true });
   console.log(
     JSON.stringify({
       ok: result.ok,

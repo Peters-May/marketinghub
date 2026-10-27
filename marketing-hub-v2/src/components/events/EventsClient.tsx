@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -8,6 +8,7 @@ import {
   format,
   parseISO,
 } from "date-fns";
+import { Receipt } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -19,6 +20,7 @@ import type {
   EventContentLink,
   EventItem,
 } from "@/lib/types";
+import { EventCostsModal } from "@/components/events/EventCostsModal";
 import { EventPlanning } from "@/components/events/EventPlanning";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { participationColor, participationOf } from "@/lib/events/participation";
@@ -70,6 +72,7 @@ import { LinkedSailings } from "@/components/events/LinkedSailings";
 import {
   ATTENDANCE_CHECKLIST_KEYS,
   ATTENDANCE_CHECKLIST_LABELS,
+  applyAttendanceOpsUpdate,
   attendanceChecklistMark,
   attendanceChecklistProgress,
   emptyAttendanceOpsFields,
@@ -77,6 +80,7 @@ import {
   hotelChecklistVisible,
   patchAttendanceChecklist,
   readAttendanceOpsFields,
+  type AttendanceOpsUpdate,
   type EventAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
 import { readPlannerFields } from "@/lib/events/planner";
@@ -89,6 +93,21 @@ const EVENT_VIEWS = [
 ] as const;
 
 type EventViewMode = (typeof EVENT_VIEWS)[number]["id"];
+
+/** Brief pause so a run of ticks becomes one save, without waiting on the hub store. */
+const ATTENDANCE_OPS_SAVE_MS = 160;
+
+async function postAttendanceOps(
+  eventId: string,
+  patch: Partial<EventAttendanceOpsFields>
+) {
+  const res = await fetch("/api/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "update", id: eventId, patch }),
+  });
+  return res.ok;
+}
 
 const ATTENDANCE_OPTIONS: { value: EventAttendanceStatus; label: string }[] = [
   { value: "attending", label: "Attending" },
@@ -355,7 +374,7 @@ function AttendanceOpsPanel({
   disabled = false,
 }: {
   values: EventAttendanceOpsFields;
-  onChange: (patch: Partial<EventAttendanceOpsFields>) => void;
+  onChange: (update: AttendanceOpsUpdate) => void;
   disabled?: boolean;
 }) {
   const progress = attendanceChecklistProgress(values);
@@ -403,15 +422,16 @@ function AttendanceOpsPanel({
                       className="rounded border-border"
                       disabled={disabled}
                       checked={mark === "done"}
-                      onChange={(e) =>
-                        onChange(
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        onChange((current) =>
                           patchAttendanceChecklist(
-                            values,
+                            current,
                             key,
-                            e.target.checked ? "done" : "open"
+                            checked ? "done" : "open"
                           )
-                        )
-                      }
+                        );
+                      }}
                     />
                     {ATTENDANCE_CHECKLIST_LABELS[key]}
                   </label>
@@ -430,11 +450,13 @@ function AttendanceOpsPanel({
                         : "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted ring-1 ring-transparent hover:text-foreground hover:ring-border"
                     }
                     onClick={() =>
-                      onChange(
+                      onChange((current) =>
                         patchAttendanceChecklist(
-                          values,
+                          current,
                           key,
-                          mark === "na" ? "open" : "na"
+                          attendanceChecklistMark(current, key) === "na"
+                            ? "open"
+                            : "na"
                         )
                       )
                     }
@@ -638,7 +660,15 @@ function EventFields({
         <div className="md:col-span-2">
           <AttendanceOpsPanel
             values={readAttendanceOpsFields(form)}
-            onChange={(patch) => onChange({ ...form, ...patch })}
+            onChange={(update) =>
+              onChange({
+                ...form,
+                ...applyAttendanceOpsUpdate(
+                  readAttendanceOpsFields(form),
+                  update
+                ).fields,
+              })
+            }
           />
         </div>
       ) : null}
@@ -1149,6 +1179,7 @@ function EventDashboard({
 
 export function EventsClient({
   initialOpenId = null,
+  initialCostsOpen = false,
   initialEvents,
   initialAttendance = [],
   currentUserId,
@@ -1158,6 +1189,8 @@ export function EventsClient({
   eventContentLinks = [],
 }: {
   initialOpenId?: string | null;
+  /** From ?costs=1 — opens the costs sheet on the event from ?open=. */
+  initialCostsOpen?: boolean;
   initialEvents: EventItem[];
   initialAttendance?: EventAttendance[];
   currentUserId: string | null;
@@ -1205,11 +1238,62 @@ export function EventsClient({
   const [detailTab, setDetailTab] = useState<"overview" | "people" | "travel">(
     "overview"
   );
+  const [costsOpen, setCostsOpen] = useState(
+    () =>
+      initialCostsOpen &&
+      initialEvents.some((event) => event.id === initialOpenId)
+  );
+  const [costCount, setCostCount] = useState<number | null>(null);
+  const selectedId = selected?.id ?? null;
+
+  useEffect(() => {
+    setCostCount(null);
+    if (!selectedId || !showAttendanceOps) return;
+    let cancelled = false;
+    void fetch(
+      `/api/events/costs?eventId=${encodeURIComponent(selectedId)}&summary=1`
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setCostCount((data.lines ?? []).length);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, showAttendanceOps]);
+
+  useEffect(() => {
+    if (!initialCostsOpen) return;
+    // Drop ?costs=1 so a refresh doesn't reopen the sheet.
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("costs")) return;
+    url.searchParams.delete("costs");
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [initialCostsOpen]);
+
+  const onCostLinesChange = useCallback(
+    (lines: { id: string }[]) => setCostCount(lines.length),
+    []
+  );
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<EventForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EventForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const attendanceOpsPending = useRef(
+    new Map<
+      string,
+      {
+        fields: EventAttendanceOpsFields;
+        patch: Partial<EventAttendanceOpsFields>;
+        version: number;
+      }
+    >()
+  );
+  const attendanceOpsSaving = useRef(false);
+  const attendanceOpsTimer = useRef<number | null>(null);
+  const flushAttendanceOpsRef = useRef<() => Promise<void>>(async () => {});
   const [viewMode, setViewMode] = useState<EventViewMode>("dashboard");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -1228,7 +1312,13 @@ export function EventsClient({
   const refresh = useCallback(async () => {
     const res = await fetch("/api/events");
     const data = await res.json();
-    setEvents(data.events ?? []);
+    const list = (data.events ?? []) as EventItem[];
+    setEvents(
+      list.map((event) => {
+        const pending = attendanceOpsPending.current.get(event.id);
+        return pending ? { ...event, ...pending.fields } : event;
+      })
+    );
     if (Array.isArray(data.attendance)) {
       setAllAttendance(data.attendance);
     }
@@ -1262,14 +1352,41 @@ export function EventsClient({
     };
   }, [canManageAttendees]);
 
-  // Keep selected in sync after refresh/edit
+  // Keep selected in sync after refresh/edit. Pending ticks win over a slower reload.
   useEffect(() => {
     if (!selected) return;
     const next = events.find((e) => e.id === selected.id) ?? null;
-    setSelected(next);
+    if (!next) {
+      setSelected(null);
+      return;
+    }
+    const pending = attendanceOpsPending.current.get(next.id);
+    setSelected(pending ? { ...next, ...pending.fields } : next);
     // Only re-sync when the list or selected id changes, not on every selected object update.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selected intentionally omitted
   }, [events, selected?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (attendanceOpsTimer.current !== null) {
+        window.clearTimeout(attendanceOpsTimer.current);
+        attendanceOpsTimer.current = null;
+      }
+      if (attendanceOpsSaving.current) return;
+      for (const [eventId, entry] of attendanceOpsPending.current) {
+        void fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            id: eventId,
+            patch: entry.patch,
+          }),
+          keepalive: true,
+        });
+      }
+    };
+  }, []);
 
   const attendance = useMemo(
     () =>
@@ -1665,6 +1782,48 @@ export function EventsClient({
     window.setTimeout(() => setSyncNotice(null), 3500);
   }, []);
 
+  const flushAttendanceOps = useCallback(async () => {
+    if (attendanceOpsSaving.current) return;
+    attendanceOpsSaving.current = true;
+    try {
+      for (;;) {
+        const jobs = [...attendanceOpsPending.current.entries()];
+        if (jobs.length === 0) break;
+        let failed = false;
+        for (const [eventId, entry] of jobs) {
+          let ok = false;
+          try {
+            ok = await postAttendanceOps(eventId, entry.patch);
+          } catch {
+            ok = false;
+          }
+          if (!ok) {
+            try {
+              ok = await postAttendanceOps(eventId, entry.patch);
+            } catch {
+              ok = false;
+            }
+          }
+          if (!ok) {
+            failed = true;
+            break;
+          }
+          const current = attendanceOpsPending.current.get(eventId);
+          if (current?.version === entry.version) {
+            attendanceOpsPending.current.delete(eventId);
+          }
+        }
+        if (failed) {
+          flashSyncNotice("Couldn't save the checklist.");
+          break;
+        }
+      }
+    } finally {
+      attendanceOpsSaving.current = false;
+    }
+  }, [flashSyncNotice]);
+  flushAttendanceOpsRef.current = flushAttendanceOps;
+
   const handleDownloadFilteredIcs = useCallback(() => {
     setSyncMenuOpen(false);
     const count = downloadCalendarIcs(filtered, "marketing-events.ics");
@@ -1766,31 +1925,36 @@ export function EventsClient({
     }
   }
 
-  async function patchEventAdminChecks(
-    eventId: string,
-    patch: Partial<EventAttendanceOpsFields>
-  ) {
+  function patchEventAdminChecks(eventId: string, update: AttendanceOpsUpdate) {
     if (!showAttendanceOps) return;
-    setSaving(true);
-    try {
-      await fetch("/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "update",
-          id: eventId,
-          patch,
-        }),
-      });
-      setEvents((prev) =>
-        prev.map((e) => (e.id === eventId ? { ...e, ...patch } : e))
-      );
-      setSelected((prev) =>
-        prev?.id === eventId ? { ...prev, ...patch } : prev
-      );
-    } finally {
-      setSaving(false);
+    const pending = attendanceOpsPending.current.get(eventId);
+    const base = pending
+      ? pending.fields
+      : readAttendanceOpsFields(
+          events.find((event) => event.id === eventId) ??
+            (selected?.id === eventId ? selected : undefined)
+        );
+    const next = applyAttendanceOpsUpdate(base, update, pending?.patch ?? {});
+    attendanceOpsPending.current.set(eventId, {
+      fields: next.fields,
+      patch: next.patch,
+      version: (pending?.version ?? 0) + 1,
+    });
+    setSelected((current) =>
+      current?.id === eventId ? { ...current, ...next.fields } : current
+    );
+    setEvents((prev) =>
+      prev.map((event) =>
+        event.id === eventId ? { ...event, ...next.fields } : event
+      )
+    );
+    if (attendanceOpsTimer.current !== null) {
+      window.clearTimeout(attendanceOpsTimer.current);
     }
+    attendanceOpsTimer.current = window.setTimeout(() => {
+      attendanceOpsTimer.current = null;
+      void flushAttendanceOpsRef.current();
+    }, ATTENDANCE_OPS_SAVE_MS);
   }
 
   async function removeEvent(id: string) {
@@ -2338,6 +2502,15 @@ export function EventsClient({
         </div>
 
         <aside className="flex flex-col gap-4" data-tour="events-detail">
+          {costsOpen && selected && showAttendanceOps ? (
+            <EventCostsModal
+              key={selected.id}
+              eventId={selected.id}
+              eventTitle={selected.title}
+              onClose={() => setCostsOpen(false)}
+              onLinesChange={onCostLinesChange}
+            />
+          ) : null}
           <div className="surface-card p-5">
             {selected ? (
               <div className="space-y-3">
@@ -2347,7 +2520,20 @@ export function EventsClient({
                       {selected.title}
                     </h2>
                     {showAttendanceOps ? (
-                      <AttendingBadge event={selected} />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AttendingBadge event={selected} />
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1 text-xs text-foreground transition hover:bg-sand"
+                          onClick={() => setCostsOpen(true)}
+                        >
+                          <Receipt className="h-3.5 w-3.5" aria-hidden />
+                          Costs
+                          {costCount ? (
+                            <span className="text-muted">· {costCount}</span>
+                          ) : null}
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                   <button
@@ -2456,9 +2642,8 @@ export function EventsClient({
                   <div className="mt-4">
                     <AttendanceOpsPanel
                       values={readAttendanceOpsFields(selected)}
-                      disabled={saving}
-                      onChange={(patch) =>
-                        void patchEventAdminChecks(selected.id, patch)
+                      onChange={(update) =>
+                        patchEventAdminChecks(selected.id, update)
                       }
                     />
                   </div>

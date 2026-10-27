@@ -8,7 +8,7 @@ import {
   plainTextFromHtml,
 } from "@/lib/plain-text";
 import { formatReleaseDate, isPublicReleasePage } from "@/lib/pr/release-document";
-import { seedReleaseDocument } from "@/lib/pr/release-blocks";
+import { attachmentNameFromUrl, seedReleaseDocument } from "@/lib/pr/release-blocks";
 
 export const PRESS_PITCH_TEMPLATE_ID = "etpl_press_pitch";
 
@@ -33,9 +33,7 @@ function absoluteUrl(origin: string, url: string): string {
 }
 
 function fileLabel(url: string): string {
-  const path = url.split("?")[0] ?? url;
-  const name = decodeURIComponent(path.split("/").pop() || "File");
-  return name || "File";
+  return attachmentNameFromUrl(url);
 }
 
 function richBlock(value: string, fallback: string): string {
@@ -74,11 +72,7 @@ export function pressPitchFromRelease(
     .map((url) => absoluteUrl(origin, url))
     .filter(Boolean);
   const related = others
-    .filter((item) => item.id !== release.id)
-    .sort((a, b) => {
-      const rank = (item: ContentItem) => (item.status === "published" ? 0 : 1);
-      return rank(a) - rank(b);
-    })
+    .filter((item) => item.id !== release.id && isPublicReleasePage(item))
     .slice(0, 3);
   const newsroom = absoluteUrl(origin, "/newsroom");
   const document = seedReleaseDocument(release.pr_document, release.notes);
@@ -87,10 +81,9 @@ export function pressPitchFromRelease(
     ? `<p>${esc(summary)}</p>`
     : "<p>The release is on the newsroom.</p>";
   const live = isPublicReleasePage(release);
-  const releaseHref = absoluteUrl(
-    origin,
-    live ? `/newsroom/${release.id}` : `/newsroom/preview/${release.id}`
-  );
+  const releaseHref = live
+    ? absoluteUrl(origin, `/newsroom/${release.id}`)
+    : absoluteUrl(origin, "/newsroom");
   const videos = document.blocks.flatMap((block) => {
     if (block.type !== "full_video" || !block.src) return [];
     const videoUrl = absoluteUrl(origin, block.src);

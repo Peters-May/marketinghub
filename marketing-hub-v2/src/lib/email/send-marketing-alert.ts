@@ -19,7 +19,7 @@ function appOrigin() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

@@ -17,9 +17,14 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
 
-  if (secret) {
-    const valid = verifyResendSignature(request, rawBody, secret);
-    if (!valid) return jsonError("Invalid signature", 401);
+  // Without a secret anyone could post fake bounces and complaints, which
+  // suppress contacts and push opt-outs to the Portal. Fail closed.
+  if (!secret) {
+    console.error("[resend-webhook] RESEND_WEBHOOK_SECRET is not set; rejecting event");
+    return jsonError("Webhook not configured", 503);
+  }
+  if (!verifyResendSignature(request, rawBody, secret)) {
+    return jsonError("Invalid signature", 401);
   }
 
   let payload: {

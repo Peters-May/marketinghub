@@ -5,7 +5,7 @@ import {
   mentionMatchNote,
   textContainsKeywordPhrase,
 } from "@/lib/pr/mention-match";
-import { newsApiKeywordQuery } from "@/lib/pr/monitor-fetch";
+import { newsApiExternalId, newsApiKeywordQuery } from "@/lib/pr/monitor-fetch";
 
 const keywords = "Peters & May, Peters and May";
 
@@ -26,6 +26,18 @@ describe("analyseMentionText", () => {
         keywords
       )
     ).toBe(true);
+  });
+
+  it("keeps a NewsAPI hit that wrote the name without an ampersand", () => {
+    expect(
+      textContainsKeywordPhrase("Peters May moved the yacht from Genoa.", keywords)
+    ).toBe(true);
+  });
+
+  it("does not treat a longer name as the brand", () => {
+    expect(
+      textContainsKeywordPhrase("Peters & Mayfair opened a shop.", keywords)
+    ).toBe(false);
   });
 
   it("does not treat Peters plus the verb may as the brand", () => {
@@ -76,6 +88,13 @@ describe("mentionMatchNote", () => {
         "Peters may not be the next Foreign Minister."
       )
     ).toMatch(/does not appear together/);
+  });
+
+  it("keeps two articles on the same site", () => {
+    const first = newsApiExternalId("https://www.tradewindsnews.com/story-one");
+    const second = newsApiExternalId("https://www.tradewindsnews.com/story-two");
+    expect(first).not.toBe(second);
+    expect(first.startsWith("newsapi:")).toBe(true);
   });
 
   it("searches the brand name with and without the ampersand", () => {

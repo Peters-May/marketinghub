@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  mergeAttendanceLabel,
+  splitProposedAttendance,
+} from "@/lib/command/attendance";
 import { parseHubCommand, parseHubCommands } from "@/lib/command/parse";
 
 const now = new Date(2026, 9, 1, 12, 0, 0);
@@ -258,6 +262,24 @@ describe("parseHubCommand", () => {
     if (parsed.kind !== "update_event") return;
     expect(parsed.query).toBe("Monaco Yacht Show");
     expect(parsed.attending).toBe("Stefano, Simon");
+    expect(parsed.summary).toBe(
+      'Update event "Monaco Yacht Show", attending Stefano, Simon.'
+    );
+  });
+
+  it("splits people joined with and", () => {
+    const parsed = command(
+      "Update event Metstrade attending Ana Navarro and Giulia Fichera"
+    );
+    expect(parsed.kind).toBe("update_event");
+    if (parsed.kind !== "update_event") return;
+    expect(parsed.attending).toBe("Ana Navarro and Giulia Fichera");
+    expect(
+      splitProposedAttendance(parsed.attending).people.map((person) => person.name)
+    ).toEqual(["Ana Navarro", "Giulia Fichera"]);
+    expect(
+      mergeAttendanceLabel("Nicky, Paul Everley", parsed.attending)
+    ).toBe("Nicky, Paul Everley, Ana Navarro, Giulia Fichera");
   });
 
   it("checks We are attending without treating it as a person's name", () => {

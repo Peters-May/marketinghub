@@ -1,3 +1,4 @@
+import { claimEmailCampaignSend } from "@/lib/data/repos";
 import { listDueCampaignIds } from "@/lib/email/process-scheduled";
 import { sendCampaignWorkflow } from "@/workflows/email-campaign";
 import { start } from "workflow/api";
@@ -10,9 +11,16 @@ export async function queueDueCampaignSends(
   const ids = await listDueCampaignIds(limit, opts);
   const runIds: string[] = [];
   for (const id of ids) {
-    const run = await start(sendCampaignWorkflow, [id, false]);
+    // Page loads, the campaigns API and the cron all call this. Only the
+    // caller that wins the claim starts a run.
+    const claim = await claimEmailCampaignSend(id, {
+      from: opts?.resumeInterrupted === false ? ["scheduled"] : ["scheduled", "sending"],
+      dueOnly: true,
+    });
+    if (!claim) continue;
+    const run = await start(sendCampaignWorkflow, [id, claim]);
     runIds.push(run.runId);
     console.log("[workflow] queued campaign", id, run.runId);
   }
-  return { processed: ids.length, ids, runIds };
+  return { processed: runIds.length, ids, runIds };
 }

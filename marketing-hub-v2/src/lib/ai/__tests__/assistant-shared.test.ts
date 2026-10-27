@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ensureNamedAttendanceCommand,
   extractHubCommand,
   isAssistantMode,
   isHubRunConfirmation,
+  parseAddAttendeesRequest,
 } from "@/lib/ai/assistant-shared";
 
 describe("extractHubCommand", () => {
@@ -40,6 +42,50 @@ describe("isHubRunConfirmation", () => {
     );
     expect(isHubRunConfirmation("Add an event Monaco in September")).toBe(
       false
+    );
+  });
+});
+
+describe("named attendance requests", () => {
+  it("reads people added with and", () => {
+    expect(
+      parseAddAttendeesRequest(
+        "Add Ana Navarro and Giulia Fichera as attending Metstrade"
+      )
+    ).toEqual({
+      event: "Metstrade",
+      people: "Ana Navarro, Giulia Fichera",
+    });
+  });
+
+  it("replaces a We are attending command with the named people", () => {
+    const reply = ensureNamedAttendanceCommand(
+      "add Ana Navarro, Giulia Fichera as attending metstrade",
+      `We are attending was already checked.\n\n:::hub-command\nUpdate events with someone attending we are attending\n:::`
+    );
+    const extracted = extractHubCommand(reply);
+    expect(extracted.commandText).toBe(
+      "Update event metstrade attending Ana Navarro, Giulia Fichera"
+    );
+    expect(extracted.displayText).not.toMatch(/we are attending/i);
+  });
+
+  it("keeps a command that already adds those people", () => {
+    const reply = `Add them to Metstrade.\n\n:::hub-command\nUpdate event Metstrade attending Ana Navarro, Giulia Fichera\n:::`;
+    expect(
+      ensureNamedAttendanceCommand(
+        "Add Ana Navarro and Giulia Fichera as attending Metstrade",
+        reply
+      )
+    ).toBe(reply);
+  });
+
+  it("reads a fence with two colons", () => {
+    const result = extractHubCommand(
+      "Add them.\n\n::hub-command\nUpdate event Metstrade attending Ana Navarro, Giulia Fichera\n::"
+    );
+    expect(result.commandText).toBe(
+      "Update event Metstrade attending Ana Navarro, Giulia Fichera"
     );
   });
 });

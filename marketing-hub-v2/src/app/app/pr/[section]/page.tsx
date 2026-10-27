@@ -28,8 +28,6 @@ const SECTIONS = new Set<PrSection>([
   "monitor",
   "monitoring",
   "newsroom",
-  "reporting",
-  "statistics",
 ]);
 
 export default async function PrSectionPage({
@@ -46,6 +44,9 @@ export default async function PrSectionPage({
   }
 
   const { section: raw } = await params;
+  if (raw === "reporting" || raw === "statistics") {
+    redirect("/app/pr/releases");
+  }
   const section = raw as PrSection;
   if (!SECTIONS.has(section)) notFound();
 

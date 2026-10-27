@@ -1,8 +1,11 @@
 import type { PrMonitorMention, PrMonitorQuery } from "@/lib/types";
 
 function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(value) ? `'${value}` : value;
+  if (/[",\n\r]/.test(safe) || safe !== value) {
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+  return safe;
 }
 
 /** Spreadsheet export of monitoring mentions, including the query name. */

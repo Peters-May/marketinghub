@@ -1,3 +1,4 @@
+import { cssValue } from "@/lib/email/css-value";
 import type { Contact } from "@/lib/types";
 
 export type MergeContext = {
@@ -7,11 +8,21 @@ export type MergeContext = {
   viewInBrowserUrl?: string;
 };
 
+export type MergeOptions = {
+  /**
+   * "html" (default) escapes contact values so a name such as
+   * `<img onerror=…>` stays text. Use "text" for subject lines.
+   */
+  format?: "html" | "text";
+};
+
 /** Replace {{token}} merge fields in subject/body HTML. */
 export function applyEmailMerge(
   template: string,
-  ctx: MergeContext
+  ctx: MergeContext,
+  opts?: MergeOptions
 ): string {
+  const html = opts?.format !== "text";
   const c = ctx.contact;
   const first = (c?.name ?? "").trim().split(/\s+/)[0] ?? "";
   const map: Record<string, string> = {
@@ -31,7 +42,8 @@ export function applyEmailMerge(
 
   return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
     const k = key.toLowerCase();
-    return map[k] ?? "";
+    const value = map[k] ?? "";
+    return html ? escapeMergeValue(value) : value;
   });
 }
 
@@ -55,7 +67,7 @@ export function ensureUnsubscribeFooter(
   const showUnsubscribe = opts?.showUnsubscribe !== false;
   const showPreferences = opts?.showPreferences === true;
   if (!showUnsubscribe && !showPreferences) return html;
-  const color = opts?.linkColor || "#007DC5";
+  const color = cssValue(opts?.linkColor, "#007DC5");
   const unsubLabel = opts?.unsubscribeLabel?.trim() || "Unsubscribe";
   const prefsLabel = opts?.preferencesLabel?.trim() || "Manage preferences";
   const parts: string[] = [];
@@ -81,6 +93,15 @@ export function ensureUnsubscribeFooter(
     return html.replace(/<\/body>/i, `${footer}</body>`);
   }
   return `${html}${footer}`;
+}
+
+function escapeMergeValue(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function escapeFooterLabel(value: string): string {

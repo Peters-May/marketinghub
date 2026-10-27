@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type {
   Contact,
   ContentItem,
@@ -37,9 +38,7 @@ export type PrSection =
   | "coverage"
   | "monitor"
   | "monitoring"
-  | "newsroom"
-  | "reporting"
-  | "statistics";
+  | "newsroom";
 
 type TabId =
   | "contacts"
@@ -48,9 +47,7 @@ type TabId =
   | "pitches"
   | "coverage"
   | "monitor"
-  | "newsroom"
-  | "reporting"
-  | "statistics";
+  | "newsroom";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "contacts", label: "Press contacts" },
@@ -60,9 +57,17 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "coverage", label: "Coverage" },
   { id: "monitor", label: "Monitoring" },
   { id: "newsroom", label: "Newsroom" },
-  { id: "reporting", label: "Reporting" },
-  { id: "statistics", label: "Statistics" },
 ];
+
+const TAB_PATH: Record<TabId, string> = {
+  contacts: "/app/pr/contacts",
+  lists: "/app/pr/lists",
+  releases: "/app/pr/releases",
+  pitches: "/app/pr/pitches",
+  coverage: "/app/pr/coverage",
+  monitor: "/app/pr/monitoring",
+  newsroom: "/app/pr/newsroom",
+};
 
 function sectionToTab(section?: PrSection | null): TabId {
   switch (section) {
@@ -83,10 +88,6 @@ function sectionToTab(section?: PrSection | null): TabId {
       return "monitor";
     case "newsroom":
       return "newsroom";
-    case "reporting":
-      return "reporting";
-    case "statistics":
-      return "statistics";
     default:
       return "contacts";
   }
@@ -149,6 +150,7 @@ export function PrClient({
   prefillContentId = null,
   openNewRelease = false,
 }: Props) {
+  const router = useRouter();
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
 
@@ -177,6 +179,18 @@ export function PrClient({
     seo_description: initialNewsroom.seo_description,
     theme_color: initialNewsroom.theme_color,
   });
+  const newsroomDirty = useRef(false);
+  const listsRef = useRef(lists);
+  const memberDraft = useRef(new Map<string, string[]>());
+  const memberChain = useRef(Promise.resolve());
+  listsRef.current = lists;
+
+  function touchNewsroom(
+    updater: (current: typeof newsroomForm) => typeof newsroomForm
+  ) {
+    newsroomDirty.current = true;
+    setNewsroomForm(updater);
+  }
 
   const [contactForm, setContactForm] = useState({
     name: "",
@@ -214,41 +228,62 @@ export function PrClient({
   });
 
   const refreshAll = useCallback(async () => {
-    const [c, l, p, cov, cont, mon, nr] = await Promise.all([
-      fetch("/api/contacts").then((r) => r.json()),
-      fetch("/api/pr/media-lists").then((r) => r.json()),
-      fetch("/api/pr/pitches").then((r) => r.json()),
-      fetch("/api/pr/coverage").then((r) => r.json()),
-      fetch("/api/content").then((r) => r.json()),
-      fetch("/api/pr/monitor").then((r) => r.json()),
-      fetch("/api/pr/newsroom").then((r) => r.json()),
-    ]);
-    setContacts(c.contacts ?? []);
-    setLists(l.media_lists ?? []);
-    setPitches(p.pitches ?? []);
-    setCoverage(cov.coverage ?? []);
-    setContent(cont.content ?? cont.items ?? []);
-    setQueries(mon.queries ?? []);
-    setMentions(mon.mentions ?? []);
-    setNewsApiConfigured(Boolean(mon.news_api_configured));
-    if (nr.settings) {
-      setNewsroom(nr.settings);
-      setNewsroomForm({
-        title: nr.settings.title,
-        language: nr.settings.language,
-        homepage_greetings: nr.settings.homepage_greetings,
-        description: nr.settings.description,
-        seo_title: nr.settings.seo_title,
-        seo_keywords: nr.settings.seo_keywords,
-        seo_description: nr.settings.seo_description,
-        theme_color: nr.settings.theme_color,
-      });
+    try {
+      const responses = await Promise.all([
+        fetch("/api/contacts"),
+        fetch("/api/pr/media-lists"),
+        fetch("/api/pr/pitches"),
+        fetch("/api/pr/coverage"),
+        fetch("/api/content"),
+        fetch("/api/pr/monitor"),
+        fetch("/api/pr/newsroom"),
+      ]);
+      if (responses.some((res) => !res.ok)) {
+        throw new Error("Could not refresh");
+      }
+      const [c, l, p, cov, cont, mon, nr] = await Promise.all(
+        responses.map((res) => res.json())
+      );
+      if (!Array.isArray(c.contacts) || !Array.isArray(l.media_lists)) {
+        throw new Error("Could not refresh");
+      }
+      setContacts(c.contacts);
+      setLists(l.media_lists);
+      listsRef.current = l.media_lists;
+      memberDraft.current.clear();
+      setPitches(p.pitches ?? []);
+      setCoverage(cov.coverage ?? []);
+      setContent(cont.content ?? cont.items ?? []);
+      setQueries(Array.isArray(mon.queries) ? mon.queries : []);
+      setMentions(Array.isArray(mon.mentions) ? mon.mentions : []);
+      setNewsApiConfigured(Boolean(mon.news_api_configured));
+      if (nr.settings) {
+        setNewsroom(nr.settings);
+        if (!newsroomDirty.current) {
+          setNewsroomForm({
+            title: nr.settings.title,
+            language: nr.settings.language,
+            homepage_greetings: nr.settings.homepage_greetings,
+            description: nr.settings.description,
+            seo_title: nr.settings.seo_title,
+            seo_keywords: nr.settings.seo_keywords,
+            seo_description: nr.settings.seo_description,
+            theme_color: nr.settings.theme_color,
+          });
+        }
+      }
+    } catch {
+      setMessage("Could not refresh. The lists on screen are unchanged.");
     }
   }, []);
 
   useEffect(() => {
     void refreshAll();
   }, [refreshAll]);
+
+  useEffect(() => {
+    setTab(sectionToTab(initialSection));
+  }, [initialSection]);
 
   const contactLists = useMemo(
     () => lists.filter(isContactSegment),
@@ -280,6 +315,21 @@ export function PrClient({
     () => content.filter(isPressRelease),
     [content]
   );
+
+  const publishedReleaseCount = useMemo(
+    () => releases.filter((item) => item.status === "published").length,
+    [releases]
+  );
+
+  function openTab(next: TabId) {
+    setTab(next);
+    setSearch("");
+    setMessage("");
+    const href = TAB_PATH[next];
+    if (window.location.pathname !== href) {
+      router.push(href);
+    }
+  }
 
   const spokespeople = useMemo(
     () =>
@@ -393,34 +443,50 @@ export function PrClient({
       if (!res.ok) throw new Error("Could not create list");
       setListForm({ name: "", description: "" });
       await refreshAll();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not create list");
     } finally {
       setBusy(false);
     }
   }
 
   async function toggleListMember(listId: string, contactId: string) {
-    const list = lists.find((l) => l.id === listId);
+    const list = listsRef.current.find((l) => l.id === listId);
     if (!list) return;
-    const has = list.contact_ids.includes(contactId);
-    const contact_ids = has
-      ? list.contact_ids.filter((id) => id !== contactId)
-      : [...list.contact_ids, contactId];
-    await fetch("/api/pr/media-lists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "update",
-        id: listId,
-        patch: { contact_ids },
-      }),
+    const base = memberDraft.current.get(listId) ?? list.contact_ids;
+    const contact_ids = base.includes(contactId)
+      ? base.filter((id) => id !== contactId)
+      : [...base, contactId];
+    memberDraft.current.set(listId, contact_ids);
+    const nextLists = listsRef.current.map((row) =>
+      row.id === listId ? { ...row, contact_ids } : row
+    );
+    listsRef.current = nextLists;
+    setLists(nextLists);
+    memberChain.current = memberChain.current.then(async () => {
+      const ids = memberDraft.current.get(listId);
+      if (!ids) return;
+      const res = await fetch("/api/pr/media-lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update",
+          id: listId,
+          patch: { contact_ids: ids },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMessage(data.error || "Could not update the media list");
+      }
     });
-    await refreshAll();
+    await memberChain.current;
   }
 
   async function createClip() {
     setBusy(true);
     try {
-      await fetch("/api/pr/coverage", {
+      const res = await fetch("/api/pr/coverage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -428,6 +494,8 @@ export function PrClient({
           published_at: clipForm.published_at || null,
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not log the clip");
       setClipForm({
         title: "",
         url: "",
@@ -436,6 +504,8 @@ export function PrClient({
         notes: "",
       });
       await refreshAll();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not log the clip");
     } finally {
       setBusy(false);
     }
@@ -444,13 +514,17 @@ export function PrClient({
   async function createQuery() {
     setBusy(true);
     try {
-      await fetch("/api/pr/monitor", {
+      const res = await fetch("/api/pr/monitor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create_query", ...queryForm }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not save the search");
       setQueryForm({ name: "", keywords: "Peters & May", exclusions: "" });
       await refreshAll();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not save the search");
     } finally {
       setBusy(false);
     }
@@ -483,21 +557,31 @@ export function PrClient({
   }
 
   async function promoteMention(id: string) {
-    await fetch("/api/pr/monitor", {
+    const res = await fetch("/api/pr/monitor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "promote_mention", id }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setMessage(data.error || "Could not log that mention as coverage");
+      return;
+    }
     await refreshAll();
-    setTab("coverage");
+    openTab("coverage");
   }
 
   async function dismissMention(id: string) {
-    await fetch("/api/pr/monitor", {
+    const res = await fetch("/api/pr/monitor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "dismiss_mention", id }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setMessage(data.error || "Could not dismiss that mention");
+      return;
+    }
     await refreshAll();
   }
 
@@ -512,6 +596,7 @@ export function PrClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save newsroom");
+      newsroomDirty.current = false;
       setNewsroom(data.settings);
       setMessage("Newsroom settings saved.");
     } catch (e) {
@@ -527,34 +612,37 @@ export function PrClient({
         title="PR"
         description="Press contacts, media lists, releases, pitches, coverage, and monitoring."
         actions={
-          <>
-            <Link
-              href="/app/pr"
-              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
-            >
-              PR home
-            </Link>
-            <Link
-              href="/newsroom"
-              target="_blank"
-              className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
-            >
-              Open newsroom
-            </Link>
-          </>
+          <Link
+            href="/newsroom"
+            target="_blank"
+            className="rounded-lg border border-brand/20 px-3 py-2 text-sm text-brand hover:bg-mist"
+          >
+            Open newsroom
+          </Link>
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Press contacts", value: pressContacts.length },
+          { label: "Media lists", value: contactLists.length },
+          { label: "Published releases", value: publishedReleaseCount },
+          { label: "Coverage clips", value: coverage.length },
+        ].map((stat) => (
+          <div key={stat.label} className="surface-card px-4 py-3">
+            <div className="text-2xl font-display text-brand">{stat.value}</div>
+            <div className="text-xs text-muted">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <nav aria-label="PR sections" className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
-            onClick={() => {
-              setTab(t.id);
-              setSearch("");
-              setMessage("");
-            }}
+            aria-current={tab === t.id ? "page" : undefined}
+            onClick={() => openTab(t.id)}
             className={cn(
               "rounded-lg px-3 py-1.5 text-sm",
               tab === t.id
@@ -565,7 +653,7 @@ export function PrClient({
             {t.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {message ? (
         <p className="mb-4 rounded-lg border border-brand/15 bg-mist px-3 py-2 text-sm text-brand">
@@ -642,6 +730,7 @@ export function PrClient({
                 className="h-40 w-full rounded-md border border-brand/15 px-3 py-2 font-mono text-xs"
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
+                aria-label="Journalist CSV"
                 placeholder="name,email,outlet,beat,country"
               />
               <label className="block text-sm">
@@ -727,6 +816,7 @@ export function PrClient({
               </p>
               <input
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="List name"
                 placeholder="List name"
                 value={listForm.name}
                 onChange={(e) =>
@@ -735,6 +825,7 @@ export function PrClient({
               />
               <textarea
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="List description"
                 placeholder="Description"
                 value={listForm.description}
                 onChange={(e) =>
@@ -794,6 +885,7 @@ export function PrClient({
                 </p>
                 <input
                   className="mb-3 w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                  aria-label="Search contacts to add"
                   placeholder="Search contacts to add…"
                   value={listMemberSearch}
                   onChange={(e) => setListMemberSearch(e.target.value)}
@@ -870,6 +962,7 @@ export function PrClient({
       {tab === "releases" ? (
         <ReleasesPanel
           releases={releases}
+          campaigns={campaigns}
           newsroomTitle={newsroom.title}
           newsroomDescription={newsroom.description}
           spokespeople={spokespeople}
@@ -942,6 +1035,7 @@ export function PrClient({
             ))}
             <textarea
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Coverage notes"
               placeholder="Notes"
               value={clipForm.notes}
               onChange={(e) =>
@@ -1002,6 +1096,7 @@ export function PrClient({
               <h2 className="font-display text-lg text-brand">New query</h2>
               <input
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="Search name"
                 placeholder="Name"
                 value={queryForm.name}
                 onChange={(e) =>
@@ -1010,6 +1105,7 @@ export function PrClient({
               />
               <textarea
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="Keywords"
                 placeholder="Keywords (comma-separated)"
                 value={queryForm.keywords}
                 onChange={(e) =>
@@ -1018,6 +1114,7 @@ export function PrClient({
               />
               <textarea
                 className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="Exclusions"
                 placeholder="Exclusions (optional)"
                 value={queryForm.exclusions}
                 onChange={(e) =>
@@ -1174,7 +1271,7 @@ export function PrClient({
                 maxLength={150}
                 value={newsroomForm.title}
                 onChange={(e) =>
-                  setNewsroomForm((f) => ({ ...f, title: e.target.value }))
+                  touchNewsroom((f) => ({ ...f, title: e.target.value }))
                 }
               />
             </label>
@@ -1184,7 +1281,7 @@ export function PrClient({
                 className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
                 value={newsroomForm.language}
                 onChange={(e) =>
-                  setNewsroomForm((f) => ({
+                  touchNewsroom((f) => ({
                     ...f,
                     language: e.target.value === "pl" ? "pl" : "en",
                   }))
@@ -1200,7 +1297,7 @@ export function PrClient({
                 className="mt-1 h-28 w-full rounded-md border border-brand/15 px-3 py-2"
                 value={newsroomForm.homepage_greetings}
                 onChange={(e) =>
-                  setNewsroomForm((f) => ({
+                  touchNewsroom((f) => ({
                     ...f,
                     homepage_greetings: e.target.value,
                   }))
@@ -1213,7 +1310,7 @@ export function PrClient({
                 className="mt-1 h-28 w-full rounded-md border border-brand/15 px-3 py-2"
                 value={newsroomForm.description}
                 onChange={(e) =>
-                  setNewsroomForm((f) => ({
+                  touchNewsroom((f) => ({
                     ...f,
                     description: e.target.value,
                   }))
@@ -1238,7 +1335,7 @@ export function PrClient({
                   className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
                   value={newsroomForm.seo_title}
                   onChange={(e) =>
-                    setNewsroomForm((f) => ({ ...f, seo_title: e.target.value }))
+                    touchNewsroom((f) => ({ ...f, seo_title: e.target.value }))
                   }
                 />
               </label>
@@ -1248,7 +1345,7 @@ export function PrClient({
                   className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
                   value={newsroomForm.seo_keywords}
                   onChange={(e) =>
-                    setNewsroomForm((f) => ({
+                    touchNewsroom((f) => ({
                       ...f,
                       seo_keywords: e.target.value,
                     }))
@@ -1268,7 +1365,7 @@ export function PrClient({
                   maxLength={150}
                   value={newsroomForm.seo_description}
                   onChange={(e) =>
-                    setNewsroomForm((f) => ({
+                    touchNewsroom((f) => ({
                       ...f,
                       seo_description: e.target.value,
                     }))
@@ -1282,7 +1379,7 @@ export function PrClient({
                   className="mt-1 h-10 w-20 cursor-pointer rounded border border-brand/15"
                   value={newsroomForm.theme_color || "#007DC5"}
                   onChange={(e) =>
-                    setNewsroomForm((f) => ({
+                    touchNewsroom((f) => ({
                       ...f,
                       theme_color: e.target.value,
                     }))
@@ -1301,67 +1398,13 @@ export function PrClient({
                 Current title: <strong className="text-brand">{newsroom.title}</strong>
               </p>
               <p className="mt-1">
-                Published releases on the site:{" "}
-                {releases.filter((r) => r.status === "published").length}
+                Published releases on the site: {publishedReleaseCount}
               </p>
             </div>
           </div>
         </div>
       ) : null}
 
-      {tab === "reporting" ? (
-        <EmptyState
-          title="Reporting — coming soon"
-          description="Interactive coverage reports (clips, pitch activity, share of voice) will land here after enough coverage data is logged. Use Coverage and Monitoring for now."
-          action={
-            <button
-              type="button"
-              className="rounded-lg bg-brand px-3 py-2 text-sm text-white"
-              onClick={() => setTab("coverage")}
-            >
-              Open coverage
-            </button>
-          }
-        />
-      ) : null}
-
-      {tab === "statistics" ? (
-        <div className="space-y-4">
-          <p className="text-sm text-muted">
-            Lightweight overview of Hub PR activity. Open/click tracking for
-            Outlook pitches is not available yet.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Press contacts", value: pressContacts.length },
-              { label: "Media lists", value: contactLists.length },
-              { label: "Pitch drafts", value: pitches.length },
-              { label: "Coverage clips", value: coverage.length },
-              {
-                label: "Published releases",
-                value: releases.filter((r) => r.status === "published").length,
-              },
-              {
-                label: "Monitor queries",
-                value: queries.length,
-              },
-              {
-                label: "New mentions",
-                value: mentions.filter((m) => m.status === "new").length,
-              },
-              {
-                label: "Exported pitches",
-                value: pitches.filter((p) => p.status === "exported").length,
-              },
-            ].map((s) => (
-              <div key={s.label} className="surface-card px-4 py-3">
-                <div className="font-display text-2xl text-brand">{s.value}</div>
-                <div className="text-xs text-muted">{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

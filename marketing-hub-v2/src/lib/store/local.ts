@@ -242,6 +242,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     event_content: store.event_content ?? [],
     event_offices: store.event_offices ?? [],
     event_bookings: store.event_bookings ?? [],
+    event_cost_lines: store.event_cost_lines ?? [],
     event_attendance_requests: store.event_attendance_requests ?? [],
     event_attendance_request_lines: store.event_attendance_request_lines ?? [],
     profile_offices: store.profile_offices ?? [],
@@ -730,6 +731,11 @@ async function ensureStore(options?: { fresh?: boolean }): Promise<StoreRead> {
 export const readStore = cache(async (): Promise<HubStore> => {
   return (await ensureStore()).store;
 });
+
+/** Skip the read caches. For checks that must see other processes' writes. */
+export async function readStoreFresh(): Promise<HubStore> {
+  return (await ensureStore({ fresh: true })).store;
+}
 
 export async function writeStore(
   store: HubStore,

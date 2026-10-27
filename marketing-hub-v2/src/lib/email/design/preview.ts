@@ -1,4 +1,4 @@
-import { applyEmailMerge } from "@/lib/email/merge";
+import { applyEmailMerge, type MergeOptions } from "@/lib/email/merge";
 import type { Contact } from "@/lib/types";
 
 const SAMPLE_CONTACT: Contact = {
@@ -25,11 +25,15 @@ const SAMPLE_CONTACT: Contact = {
   updated_at: "",
 };
 
-export function previewMerge(template: string): string {
-  return applyEmailMerge(template, {
-    contact: SAMPLE_CONTACT,
-    unsubscribeUrl: "https://example.com/unsubscribe?view=unsubscribe",
-    preferencesUrl: "https://example.com/unsubscribe?view=preferences",
-    viewInBrowserUrl: "https://example.com/email/view",
-  });
+export function previewMerge(template: string, opts?: MergeOptions): string {
+  return applyEmailMerge(
+    template,
+    {
+      contact: SAMPLE_CONTACT,
+      unsubscribeUrl: "https://example.com/unsubscribe?view=unsubscribe",
+      preferencesUrl: "https://example.com/unsubscribe?view=preferences",
+      viewInBrowserUrl: "https://example.com/email/view",
+    },
+    opts
+  );
 }

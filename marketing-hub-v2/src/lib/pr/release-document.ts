@@ -54,13 +54,17 @@ export function pressReleaseSaveError(input: {
   return null;
 }
 
+/** Calendar day in the UK, including British Summer Time. */
 export function calendarDay(now: Date): string {
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
-/** True when the publish date is today or earlier in the local calendar. */
+/** True when the publish date is today or earlier in the UK. */
 export function releaseDueOnOrBefore(
   due: string | null | undefined,
   now: Date
@@ -90,11 +94,7 @@ function onNewsroom(item: ReleaseVisibility): boolean {
 
 function liveStatus(item: ReleaseVisibility, now: Date): boolean {
   if (item.status === "published") return true;
-  return (
-    item.status === "scheduled" &&
-    onNewsroom(item) &&
-    releaseDueOnOrBefore(item.due_date, now)
-  );
+  return item.status === "scheduled" && releaseDueOnOrBefore(item.due_date, now);
 }
 
 /** Public newsroom index: published or due scheduled stories filed on a newsroom. */
@@ -109,9 +109,9 @@ export function isNewsroomIndexRelease(
 }
 
 /**
- * Public story page. A published standalone release has a page and stays off
- * the index. A scheduled release is public once its date has arrived and it
- * is filed on a newsroom.
+ * Public story page. Published releases have a page. A scheduled release,
+ * including one that is not filed on a newsroom, is public once its UK date
+ * has arrived. Only filed releases appear on the newsroom index.
  */
 export function isPublicReleasePage(
   item: ReleaseVisibility,

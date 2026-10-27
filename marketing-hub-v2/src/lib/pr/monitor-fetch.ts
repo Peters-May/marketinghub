@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   splitKeywordTerms,
   textContainsKeywordPhrase,
@@ -38,6 +39,11 @@ export function newsApiKeywordQuery(keywords: string): string {
   return [...new Set(clauses)].join(" OR ");
 }
 
+/** Full-URL hash so two articles on the same site stay distinct. */
+export function newsApiExternalId(link: string): string {
+  return `newsapi:${createHash("sha256").update(link).digest("hex")}`;
+}
+
 export async function fetchMentionsForQuery(input: {
   keywords: string;
   exclusions: string;
@@ -59,16 +65,22 @@ export async function fetchMentionsForQuery(input: {
   url.searchParams.set("sortBy", "publishedAt");
   url.searchParams.set("pageSize", "25");
 
-  const res = await fetch(url.toString(), {
-    headers: { "X-Api-Key": apiKey },
-    next: { revalidate: 0 },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { "X-Api-Key": apiKey },
+      signal: AbortSignal.timeout(12_000),
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("[pr/monitor] NewsAPI request failed", error);
+    throw new Error("News monitoring is unavailable right now.");
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(
-      `NewsAPI error ${res.status}: ${text.slice(0, 200) || res.statusText}`
-    );
+    console.error("[pr/monitor] NewsAPI error", res.status, text.slice(0, 200));
+    throw new Error("News monitoring is unavailable right now.");
   }
 
   const data = (await res.json()) as {
@@ -97,9 +109,7 @@ export async function fetchMentionsForQuery(input: {
       outlet: article.source?.name?.trim() || "",
       published_at: article.publishedAt || null,
       snippet: description,
-      external_id: `newsapi:${Buffer.from(link, "utf8")
-        .toString("base64url")
-        .slice(0, 48)}`,
+      external_id: newsApiExternalId(link),
     });
   }
   return out;

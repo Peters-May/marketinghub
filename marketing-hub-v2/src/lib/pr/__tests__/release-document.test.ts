@@ -91,6 +91,15 @@ describe("press release visibility", () => {
     expect(isPublicReleasePage(item, today)).toBe(false);
   });
 
+  it("uses the UK date when the server clock is still on the previous UTC day", () => {
+    const now = new Date("2026-06-01T23:30:00.000Z");
+    const item = story({ status: "scheduled", due_date: "2026-06-02" });
+    expect(isPublicReleasePage(item, now)).toBe(true);
+    const winter = new Date("2026-01-01T23:30:00.000Z");
+    const held = story({ status: "scheduled", due_date: "2026-01-02" });
+    expect(isPublicReleasePage(held, winter)).toBe(false);
+  });
+
   it("lists a scheduled release once the date has arrived", () => {
     const item = story({ status: "scheduled", due_date: "2026-10-26" });
     expect(isNewsroomIndexRelease(item, today)).toBe(true);
@@ -124,6 +133,6 @@ describe("press release visibility", () => {
       due_date: "2026-10-26",
     });
     expect(isNewsroomIndexRelease(scheduled, today)).toBe(false);
-    expect(isPublicReleasePage(scheduled, today)).toBe(false);
+    expect(isPublicReleasePage(scheduled, today)).toBe(true);
   });
 });

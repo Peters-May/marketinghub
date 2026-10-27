@@ -32,7 +32,7 @@ type RecipientStore = {
   contacts?: Contact[];
   media_lists?: MediaList[];
   email_audiences?: EmailAudience[];
-  email_suppressions?: { email: string }[];
+  email_suppressions?: { email: string; reason?: string }[];
 };
 
 type RecipientIndex = {
@@ -40,7 +40,10 @@ type RecipientIndex = {
   listsById: Map<string, string[]>;
   pressListIds: Set<string>;
   audiencesById: Map<string, EmailAudience>;
+  /** Every suppressed address, including unsubscribes. */
   suppressions: Set<string>;
+  /** Bounces and complaints. Never mailed, whatever the audience settings. */
+  hardSuppressions: Set<string>;
 };
 
 function audienceFilter(
@@ -73,12 +76,22 @@ export function buildRecipientIndex(store: RecipientStore): RecipientIndex {
   }
 
   const suppressions = new Set<string>();
+  const hardSuppressions = new Set<string>();
   for (const row of store.email_suppressions ?? []) {
     const email = row.email.trim().toLowerCase();
-    if (email) suppressions.add(email);
+    if (!email) continue;
+    suppressions.add(email);
+    if (row.reason === "bounce" || row.reason === "complaint") hardSuppressions.add(email);
   }
 
-  return { contactsById, listsById, pressListIds, audiencesById, suppressions };
+  return {
+    contactsById,
+    listsById,
+    pressListIds,
+    audiencesById,
+    suppressions,
+    hardSuppressions,
+  };
 }
 
 function addListMembers(
@@ -127,6 +140,7 @@ function eligible(
   ) {
     return false;
   }
+  if (index.hardSuppressions.has(email)) return false;
   if (excludeUnsubscribed && index.suppressions.has(email)) return false;
   if (excludeEmails.has(email)) return false;
   if (optedOut(contact, topic)) return false;

@@ -160,7 +160,9 @@ function ShellInner({
         const active =
           item.href === "/app"
             ? pathname === "/app"
-            : pathname.startsWith(item.href);
+            : item.href.startsWith("/app/pr/")
+              ? pathname === "/app/pr" || pathname.startsWith("/app/pr/")
+              : pathname.startsWith(item.href);
         const Icon = item.icon;
         return (
           <Link

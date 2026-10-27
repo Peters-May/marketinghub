@@ -183,3 +183,29 @@ export function formatAttendanceChecklistCount(progress: {
   if (progress.total === 0) return "N/A";
   return `${progress.done}/${progress.total}`;
 }
+
+export type AttendanceOpsUpdate =
+  | Partial<EventAttendanceOpsFields>
+  | ((
+      current: EventAttendanceOpsFields
+    ) => Partial<EventAttendanceOpsFields>);
+
+/**
+ * Fold one checkbox or hotel edit into the latest draft.
+ * `patch` is what still needs saving; a later tick replaces `attendance_checklist_na`
+ * with the full map so an earlier N/A is not dropped.
+ */
+export function applyAttendanceOpsUpdate(
+  current: EventAttendanceOpsFields,
+  update: AttendanceOpsUpdate,
+  patch: Partial<EventAttendanceOpsFields> = {}
+): {
+  fields: EventAttendanceOpsFields;
+  patch: Partial<EventAttendanceOpsFields>;
+} {
+  const delta = typeof update === "function" ? update(current) : update;
+  return {
+    fields: readAttendanceOpsFields({ ...current, ...delta }),
+    patch: { ...patch, ...delta },
+  };
+}

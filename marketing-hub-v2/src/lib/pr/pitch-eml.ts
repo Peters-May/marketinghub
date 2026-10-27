@@ -30,6 +30,44 @@ export function applyPitchMerge(
 export const MERGE_TOKEN_HELP =
   "{{name}}, {{first_name}}, {{greeting}}, {{organisation}}, {{outlet}}, {{email}}, {{beat}}, {{country}}";
 
+function headerText(value: string): string {
+  const line = value.split(/[\r\n]+/)[0] ?? "";
+  return line.replace(/[<>"]/g, "").trim();
+}
+
+function headerAddress(value: string): string {
+  const line = value.split(/[\r\n]+/)[0]?.trim() ?? "";
+  const named = line.match(/^(.*)<([^>]+)>$/);
+  if (!named) return headerText(line);
+  const name = headerText(named[1] ?? "");
+  const email = (named[2] ?? "").replace(/[\s<>"]/g, "");
+  if (!email) return name;
+  return name ? `${name} <${email}>` : email;
+}
+
+/** RFC 2047 Q encoded-words. Each word stays on one line. */
+function encodeRfc2047Q(text: string): string {
+  const bytes = new TextEncoder().encode(text.replace(/[\r\n]+/g, " "));
+  const max = 75 - "=?UTF-8?Q?".length - "?=".length;
+  const words: string[] = [];
+  let current = "";
+  for (const b of bytes) {
+    const token =
+      b === 32
+        ? "_"
+        : b >= 33 && b <= 126 && b !== 61 && b !== 63 && b !== 95
+          ? String.fromCharCode(b)
+          : `=${b.toString(16).toUpperCase().padStart(2, "0")}`;
+    if (current.length + token.length > max) {
+      words.push(current);
+      current = "";
+    }
+    current += token;
+  }
+  if (current || words.length === 0) words.push(current);
+  return words.map((word) => `=?UTF-8?Q?${word}?=`).join("\r\n ");
+}
+
 function encodeQuotedPrintableUtf8(text: string): string {
   const bytes = new TextEncoder().encode(text);
   let out = "";
@@ -76,11 +114,11 @@ export type EmlBuildInput = {
 
 /** Build a simple MIME .eml string for Outlook. */
 export function buildEml(input: EmlBuildInput): string {
-  const from = input.from?.trim() || "marketing@petersandmay.com";
-  const to = input.to.filter(Boolean).join(", ");
-  const bcc = (input.bcc ?? []).filter(Boolean).join(", ");
+  const from = headerAddress(input.from?.trim() || "marketing@petersandmay.com");
+  const to = input.to.filter(Boolean).map(headerAddress).join(", ");
+  const bcc = (input.bcc ?? []).filter(Boolean).map(headerAddress).join(", ");
   const plain = plainTextFromHtml(input.body) || input.body;
-  const encodedSubject = `=?UTF-8?Q?${encodeQuotedPrintableUtf8(input.subject)}?=`;
+  const encodedSubject = encodeRfc2047Q(input.subject);
   const encodedBody = encodeQuotedPrintableUtf8(plain);
 
   const lines = [
@@ -124,14 +162,14 @@ export function pitchEmlFiles(input: {
   fromEmail: string;
   recipients: Contact[];
 }): { filename: string; eml: string }[] {
-  const from = `${input.fromName} <${input.fromEmail}>`;
+  const from = `${headerText(input.fromName)} <${headerText(input.fromEmail)}>`;
   return input.recipients
     .filter((contact) => contact.email?.trim())
     .map((contact) => ({
       filename: `${input.title}-${contact.name || contact.email}`,
       eml: buildEml({
         from,
-        to: [contact.email.trim()],
+        to: [`${headerText(contact.name || "")} <${headerText(contact.email)}>`],
         subject: applyPitchMerge(input.subject, contact),
         body: applyPitchMerge(input.body, contact),
       }),
@@ -181,7 +219,10 @@ export function recipientsToCsv(
     const parts = c.name.trim().split(/\s+/);
     const first = parts[0] || "";
     const last = parts.slice(1).join(" ");
-    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const esc = (v: string) => {
+      const safe = /^[\t\r\n ]*[=+\-@]/.test(v) ? `'${v}` : v;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     return [
       esc(c.email.trim()),
       esc(first),
@@ -216,7 +257,7 @@ export function insertReleaseBlock(
   release: { title: string; caption?: string; id: string },
   baseUrl = ""
 ): string {
-  const url = `${baseUrl.replace(/\/$/, "")}/newsroom`;
+  const url = `${baseUrl.replace(/\/$/, "")}/newsroom/${encodeURIComponent(release.id)}`;
   const snippet = (release.caption || "").trim().slice(0, 280);
   const block = [
     "",

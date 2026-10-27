@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/lib/auth/session";
 import {
+  mergeAttendanceLabel,
   proposedAttendanceId,
   splitProposedAttendance,
 } from "@/lib/command/attendance";
@@ -151,6 +152,23 @@ function attendanceSavedNote(resolved: ResolvedAttendance): string {
   if (resolved.people.length === 1) return " with 1 proposed attendee";
   if (resolved.people.length > 1) {
     return ` with ${resolved.people.length} proposed attendees`;
+  }
+  if (/^tbc$/i.test(resolved.pm_attendance)) return ", attendance still TBC";
+  return "";
+}
+
+function addedAttendeesNote(resolved: ResolvedAttendance): string {
+  const names = resolved.people.map((person) =>
+    person.attendance_status === "maybe"
+      ? `${person.user_name} (maybe)`
+      : person.user_name
+  );
+  if (names.length === 1) return ` Added ${names[0]} as attending.`;
+  if (names.length === 2) {
+    return ` Added ${names[0]} and ${names[1]} as attending.`;
+  }
+  if (names.length > 2) {
+    return ` Added ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} as attending.`;
   }
   if (/^tbc$/i.test(resolved.pm_attendance)) return ", attendance still TBC";
   return "";
@@ -330,8 +348,11 @@ export async function executeHubCommand(
       ...command.patch,
       ...(attendance
         ? {
-            pm_attendance: attendance.pm_attendance,
-            pm_attending: attendance.pm_attending,
+            pm_attendance: mergeAttendanceLabel(
+              found.item.pm_attendance ?? "",
+              attendance.pm_attendance
+            ),
+            ...(attendance.pm_attending ? { pm_attending: true } : {}),
           }
         : {}),
     });
@@ -342,7 +363,7 @@ export async function executeHubCommand(
     const title = command.patch.title || found.item.title;
     return {
       ok: true,
-      message: `Updated event “${title}”${attendance ? attendanceSavedNote(attendance) : ""}.`,
+      message: `Updated event “${title}”${attendance ? addedAttendeesNote(attendance) : ""}.`,
       href: command.href,
       area: command.area,
     };

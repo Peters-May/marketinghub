@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { NewsroomReleaseFrame } from "@/components/pr/NewsroomReleaseFrame";
+import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNewsroomSettings, getPressRelease } from "@/lib/data/repos";
 import { releasePageMetadata } from "@/lib/pr/release-metadata";
@@ -14,7 +15,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const user = await getSessionUser();
-  if (!user) return { title: "Preview", robots: { index: false, follow: false } };
+  if (!user || !isStaffSession(user.role)) {
+    return { title: "Preview", robots: { index: false, follow: false } };
+  }
   const release = await getPressRelease(id);
   if (!release) return { title: "Preview", robots: { index: false, follow: false } };
   return releasePageMetadata(release, { preview: true });
@@ -30,6 +33,7 @@ export default async function NewsroomPreviewPage({
   if (!user) {
     redirect(`/login?next=${encodeURIComponent(`/newsroom/preview/${id}`)}`);
   }
+  if (!isStaffSession(user.role)) notFound();
   const [settings, release] = await Promise.all([
     getNewsroomSettings(),
     getPressRelease(id),

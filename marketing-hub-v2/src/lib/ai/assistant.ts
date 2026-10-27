@@ -2,6 +2,7 @@ import { generateObject, generateText, type ModelMessage } from "ai";
 import { z } from "zod";
 import { getHubOpenAIModel } from "@/lib/ai/openai";
 import {
+  ensureNamedAttendanceCommand,
   extractHubCommand,
   type AssistantAttachment,
   type AssistantChatMessage,
@@ -51,6 +52,8 @@ Each line must match hub natural-language commands, for example:
 Write one Add an event line per show. Include the year on every date. Use the Today line: if the list runs from January through November and today is already past October, that cycle is the following year. Do not change an earlier year's show that has different dates.
 Use on 14-17 Jan 2027 for a range in one month, on 01-Feb 2027 for a single day, in February 2027 when only the month is known, and in April / May 2027 when the show spans two months.
 Put proposed people after attending, separated by commas. Keep maybe, + Team, and TBC as written. If nobody is named, omit attending.
+When the user asks to add named people to an event that already exists, write exactly one line, using the catalogue title: Update event Metstrade attending Ana Navarro, Giulia Fichera
+That line adds those people and keeps everyone already attending. People do not need to be existing contacts. Do not use Update events with someone attending we are attending when the user names people. That line only checks the company box.
 When the user asks to link existing social posts or other content to an event, review the Content section and Content linked to events. Skip posts already linked to that event. If they name a specific post and a specific event, propose that link using those exact catalogue titles, not a different event that shares a word. Do not repeat the link lines in the reply. The confirm list shows them. If they ask you to find past posts for an event, propose only posts whose title or caption refers to that event. If more than one event could match, ask which one and do not emit a command. If no post refers to that event, say so and do not emit a command. Otherwise end with one hub-command block, one line per post. Do not create new posts for that request. The admin ticks each proposed link before it is saved, and can select all or remove all.
 To check the company box on one show, write: Update event Valencia Boat Show we are attending
 To check that box on every event that already has someone attending, in 2026 and 2027, write exactly one line: Update events with someone attending we are attending
@@ -167,7 +170,12 @@ export async function generateAssistantChat(input: {
       .join("\n\n"),
     messages: buildChatMessages(input),
   });
-  if (!input.readOnly) return text;
+  if (!input.readOnly) {
+    const lastUser = [...input.messages]
+      .reverse()
+      .find((message) => message.role === "user");
+    return ensureNamedAttendanceCommand(lastUser?.content ?? "", text);
+  }
   const { displayText } = extractHubCommand(text);
   return (
     displayText ||

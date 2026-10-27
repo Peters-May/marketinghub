@@ -42,6 +42,13 @@ function phraseVariants(phrase: string): string[] {
     variants.add(
       cleaned.replace(/\s+and\s+/gi, " & ").replace(/\s+/g, " ").trim()
     );
+    variants.add(
+      cleaned
+        .replace(/\s*&\s*/g, " ")
+        .replace(/\band\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
   }
   return [...variants].filter(Boolean);
 }
@@ -54,9 +61,22 @@ function containsVariant(text: string, variant: string): boolean {
   const hay = fold(text);
   const needle = fold(variant);
   if (!needle) return false;
-  if (/\s/.test(needle)) return hay.includes(needle);
-  const re = new RegExp(`\\b${escapeRegExp(needle)}\\b`, "i");
-  return re.test(hay);
+  if (!/\s/.test(needle)) {
+    return new RegExp(`\\b${escapeRegExp(needle)}\\b`, "i").test(hay);
+  }
+  const re = new RegExp(
+    `(?<![a-z0-9])${escapeRegExp(needle)}(?![a-z0-9])`,
+    "gi"
+  );
+  const verbMay = !/&|\band\b/.test(needle) && needle.endsWith(" may");
+  for (const found of hay.matchAll(re)) {
+    if (verbMay) {
+      const after = hay.slice((found.index ?? 0) + found[0].length).trimStart();
+      if (/^(not|be|have|been|never)\b/.test(after)) continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 export function analyseMentionText(
@@ -118,7 +138,9 @@ export function highlightParts(text: string, keywords: string): HighlightPart[] 
   const pattern = needles
     .map((needle) => {
       const escaped = escapeRegExp(needle);
-      return /\s/.test(needle) ? escaped : `\\b${escaped}\\b`;
+      return /\s/.test(needle)
+        ? `(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`
+        : `\\b${escaped}\\b`;
     })
     .join("|");
   const re = new RegExp(pattern, "gi");

@@ -30,4 +30,12 @@ describe("mentionsToCsv", () => {
     expect(row).toContain("2026-10-01");
     expect(row?.endsWith(",Yacht transport")).toBe(true);
   });
+
+  it("stops a formula title from running in Excel", () => {
+    const csv = mentionsToCsv(
+      [{ ...mention, title: '=HYPERLINK("http://evil")' }],
+      [query]
+    );
+    expect(csv).toContain(`"'=HYPERLINK(""http://evil"")"`);
+  });
 });

@@ -159,6 +159,7 @@ function BlockFields({
             block.type === "header" ? "text-2xl" : "text-xl"
           }`}
           value={block.text}
+          aria-label={block.type === "header" ? "Header" : "Sub header"}
           placeholder={block.type === "header" ? "Header" : "Sub header"}
           onChange={(event) => onChange({ ...block, text: event.target.value })}
         />
@@ -207,12 +208,14 @@ function BlockFields({
             className={inputClass}
             rows={3}
             value={block.text}
+            aria-label="Quote"
             placeholder="The quote"
             onChange={(event) => onChange({ ...block, text: event.target.value })}
           />
           <input
             className={inputClass}
             value={block.attribution}
+            aria-label="Quote attribution"
             placeholder="Name, role"
             onChange={(event) => onChange({ ...block, attribution: event.target.value })}
           />
@@ -351,12 +354,14 @@ function BlockFields({
           <input
             className={inputClass}
             value={block.label}
+            aria-label="Button label"
             placeholder="Button label"
             onChange={(event) => onChange({ ...block, label: event.target.value })}
           />
           <input
             className={inputClass}
             value={block.href}
+            aria-label="Button link"
             placeholder="https://"
             onChange={(event) => onChange({ ...block, href: event.target.value })}
           />

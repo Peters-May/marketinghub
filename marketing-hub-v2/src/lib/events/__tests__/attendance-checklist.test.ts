@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ATTENDANCE_CHECKLIST_KEYS,
+  applyAttendanceOpsUpdate,
   attendanceChecklistProgress,
   emptyAttendanceOpsFields,
   formatAttendanceChecklistCount,
@@ -61,6 +62,28 @@ describe("attendance checklist", () => {
     );
     expect(done.accommodation_arranged).toBe(true);
     expect(done.attendance_checklist_na?.accommodation_arranged).toBeUndefined();
+  });
+
+  it("keeps earlier ticks when several boxes change before a save", () => {
+    const first = applyAttendanceOpsUpdate(
+      emptyAttendanceOpsFields(),
+      (current) =>
+        patchAttendanceChecklist(current, "accommodation_arranged", "na")
+    );
+    const second = applyAttendanceOpsUpdate(
+      first.fields,
+      (current) => patchAttendanceChecklist(current, "costs_collected", "done"),
+      first.patch
+    );
+    expect(second.fields.accommodation_arranged).toBe(false);
+    expect(second.fields.costs_collected).toBe(true);
+    expect(second.fields.attendance_checklist_na.accommodation_arranged).toBe(
+      true
+    );
+    expect(second.patch.costs_collected).toBe(true);
+    expect(second.patch.attendance_checklist_na?.accommodation_arranged).toBe(
+      true
+    );
   });
 
   it("drops a done flag when the same item is stored as N/A", () => {

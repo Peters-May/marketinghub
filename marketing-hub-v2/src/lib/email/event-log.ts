@@ -45,24 +45,76 @@ export async function insertEmailEventRows(items: EmailEvent[]): Promise<void> {
   }
 }
 
+const PAGE_SIZE = 1000;
+/** Matches the old single-query cap for report reads. */
+const MAX_EVENT_ROWS = 10000;
+
+type Page<T> = { data: T[] | null; error: { message: string } | null };
+
+/**
+ * Read every page of a query. PostgREST caps one response (1,000 rows by
+ * default), so one big .limit() silently drops rows. Throws on any error.
+ */
+export async function readAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<Page<T>>,
+  maxRows = Number.POSITIVE_INFINITY
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < maxRows; from += PAGE_SIZE) {
+    const to = Math.min(from + PAGE_SIZE, maxRows) - 1;
+    const { data, error } = await fetchPage(from, to);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < to - from + 1) break;
+  }
+  return out;
+}
+
+/**
+ * Every address with a sent event for the campaign. Sends use it to skip
+ * people already mailed, so it reads all pages and throws rather than
+ * returning a partial list that would cause re-sends.
+ */
+export async function listSentEmailRows(campaignId: string): Promise<string[]> {
+  if (!hasServiceRoleKey()) return [];
+  const supabase = createServiceClient();
+  const rows = await readAllPages<{ email: string | null }>((from, to) =>
+    supabase
+      .from(TABLE)
+      .select("email")
+      .eq("campaign_id", campaignId)
+      .eq("kind", "sent")
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
+  return rows
+    .map((row) => String(row.email ?? "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function listEmailEventRows(campaignId?: string): Promise<EmailEvent[]> {
   if (!hasServiceRoleKey()) return [];
   const supabase = createServiceClient();
-  let query = supabase
-    .from(TABLE)
-    .select(
-      "id, campaign_id, contact_id, email, kind, resend_message_id, meta, link, user_agent, created_at"
-    )
-    .order("created_at", { ascending: false })
-    .limit(10000);
-  if (campaignId) query = query.eq("campaign_id", campaignId);
-  const { data, error } = await query;
-  if (error) {
-    console.error("[email-events]", error.message);
+  let data: Array<Record<string, unknown>>;
+  try {
+    data = await readAllPages<Record<string, unknown>>((from, to) => {
+      let query = supabase
+        .from(TABLE)
+        .select(
+          "id, campaign_id, contact_id, email, kind, resend_message_id, meta, link, user_agent, created_at"
+        )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true });
+      if (campaignId) query = query.eq("campaign_id", campaignId);
+      return query.range(from, to);
+    }, MAX_EVENT_ROWS);
+  } catch (err) {
+    console.error("[email-events]", err instanceof Error ? err.message : err);
     return [];
   }
   const rows: EmailEvent[] = [];
-  for (const row of data ?? []) {
+  for (const row of data) {
     const kind = asKind(String(row.kind ?? ""));
     if (!kind) continue;
     rows.push({

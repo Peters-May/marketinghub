@@ -50,7 +50,7 @@ export const ALLOWED_UPLOAD_MIME = new Set([
 
 /** Extension fallback when browsers send empty / octet-stream MIME. */
 export const ALLOWED_UPLOAD_EXT =
-  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|docx?|xlsx?|pptx?|csv|txt|rtf|odt|ods|odp|zip)$/i;
+  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|docx?|xlsx?|xlsm|pptx?|csv|txt|rtf|odt|ods|odp|zip)$/i;
 
 /** HTML file input `accept` — MIME + extensions for broader picker support. */
 export const UPLOAD_ACCEPT =
@@ -106,13 +106,20 @@ export function isBlockedUpload(name: string, type?: string) {
   return type === "image/svg+xml" || /\.svg$/i.test(name);
 }
 
+const DANGEROUS_EXT = /\.(html?|xhtml|svgz?|xml|js|mjs|cjs|exe|bat|cmd|ps1|hta|php)$/i;
+const DANGEROUS_MIME =
+  /^(text\/html|image\/svg\+xml|application\/xhtml\+xml|application\/javascript|text\/javascript)/i;
+
 export function isAllowedUpload(name: string, type?: string) {
   if (isBlockedUpload(name, type)) return false;
-  const mime = type || "";
-  if (mime && ALLOWED_UPLOAD_MIME.has(mime)) return true;
-  // Broad image/* (except SVG) for paste/screenshots
-  if (mime.startsWith("image/") && mime !== "image/svg+xml") return true;
-  return ALLOWED_UPLOAD_EXT.test(name);
+  if (DANGEROUS_EXT.test(name) || DANGEROUS_MIME.test(type || "")) return false;
+  const mime = (type || "").trim().toLowerCase();
+  const extOk = ALLOWED_UPLOAD_EXT.test(name);
+  const declaredMime = Boolean(mime) && mime !== "application/octet-stream";
+  const mimeOk = declaredMime && ALLOWED_UPLOAD_MIME.has(mime);
+  if (declaredMime && !mimeOk) return false;
+  if (extOk && (mimeOk || !declaredMime)) return true;
+  return mimeOk && !/\.[a-z0-9]+$/i.test(name);
 }
 
 export function isForcedDownloadExt(ext: string) {

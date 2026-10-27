@@ -33,7 +33,14 @@ import {
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
 import { matchOwnerUserId, loadOwnerDirectory } from "@/lib/identity/owners";
-import { readStore, updateStore } from "@/lib/store/local";
+import { readStore, readStoreFresh, updateStore } from "@/lib/store/local";
+import {
+  canClaimSend,
+  holdsSend,
+  SEND_HEARTBEAT_MS,
+  sendHeartbeatAt,
+  type ClaimRule,
+} from "@/lib/email/send-lock";
 import { statusForThemeQuarter } from "@/lib/themes/calendar";
 import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 import { clothingProductById } from "@/lib/merch/north-sails";
@@ -3108,6 +3115,8 @@ function normalizeEmailCampaign(
         : Number(c.adj_click_rate),
     scheduled_at: c.scheduled_at ?? null,
     sent_at: c.sent_at ?? null,
+    send_claim: c.send_claim ?? "",
+    send_heartbeat_at: c.send_heartbeat_at ?? null,
     stats: normalizeEmailStats(c.stats),
     last_error: c.last_error ?? "",
     created_by: c.created_by ?? "",
@@ -3357,9 +3366,100 @@ export async function updateEmailCampaign(
       stats: patch.stats
         ? normalizeEmailStats(patch.stats)
         : prev.stats,
+      // Only the claim helpers below may change who owns a send.
+      send_claim: prev.send_claim,
+      send_heartbeat_at: prev.send_heartbeat_at,
       updated_at: nowIso(),
     });
     s.email_campaigns[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+/**
+ * Take ownership of a send. The check and the write run in one store
+ * mutation, so two callers racing for the same campaign get one claim.
+ * Returns the claim id, or null when the send is not claimable.
+ */
+export async function claimEmailCampaignSend(
+  id: string,
+  rule: ClaimRule & { clearSchedule?: boolean }
+): Promise<string | null> {
+  let claim: string | null = null;
+  await updateStore((s) => {
+    claim = null;
+    const idx = (s.email_campaigns ?? []).findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns![idx]);
+    if (!canClaimSend(prev, rule)) return;
+    const now = nowIso();
+    const next = uid("send");
+    s.email_campaigns![idx] = {
+      ...prev,
+      status: "sending",
+      scheduled_at: rule.clearSchedule ? null : prev.scheduled_at,
+      last_error: "",
+      send_claim: next,
+      send_heartbeat_at: now,
+      updated_at: now,
+    };
+    claim = next;
+  });
+  return claim;
+}
+
+/**
+ * Confirm the runner still owns the send, refreshing the heartbeat when it
+ * is getting old. False after a cancel or after another runner took over.
+ */
+export async function holdEmailCampaignSend(id: string, claim: string): Promise<boolean> {
+  const fresh = await readStoreFresh();
+  const current = (fresh.email_campaigns ?? []).find((x) => x.id === id);
+  if (!current || !holdsSend(normalizeEmailCampaign(current), claim)) return false;
+  if (Date.now() - sendHeartbeatAt(normalizeEmailCampaign(current)) < SEND_HEARTBEAT_MS) {
+    return true;
+  }
+  let held = false;
+  await updateStore((s) => {
+    held = false;
+    const idx = (s.email_campaigns ?? []).findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns![idx]);
+    if (!holdsSend(prev, claim)) return;
+    s.email_campaigns![idx] = { ...prev, send_heartbeat_at: nowIso() };
+    held = true;
+  });
+  return held;
+}
+
+/** Finish a send and give up the claim. Null when the runner no longer owns it. */
+export async function releaseEmailCampaignSend(
+  id: string,
+  claim: string,
+  patch: Partial<EmailCampaign>
+): Promise<EmailCampaign | null> {
+  let updated: EmailCampaign | null = null;
+  await updateStore((s) => {
+    updated = null;
+    const idx = (s.email_campaigns ?? []).findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns![idx]);
+    if (!holdsSend(prev, claim)) return;
+    const next = normalizeEmailCampaign({
+      ...prev,
+      ...patch,
+      id,
+      status:
+        patch.status !== undefined
+          ? normalizeEmailCampaignStatus(patch.status)
+          : prev.status,
+      stats: patch.stats ? normalizeEmailStats(patch.stats) : prev.stats,
+      send_claim: "",
+      send_heartbeat_at: null,
+      updated_at: nowIso(),
+    });
+    s.email_campaigns![idx] = next;
     updated = next;
   });
   return updated;
@@ -3466,6 +3566,21 @@ export async function listEmailEvents(campaignId?: string) {
   );
 }
 
+/** Lower-case addresses already sent this campaign. Throws if the log can't be read in full. */
+export async function listSentEmailAddresses(campaignId: string): Promise<Set<string>> {
+  const store = await readStoreFresh();
+  const sent = new Set<string>();
+  for (const event of store.email_events ?? []) {
+    if (event.campaign_id === campaignId && event.kind === "sent") {
+      const email = event.email.trim().toLowerCase();
+      if (email) sent.add(email);
+    }
+  }
+  const { listSentEmailRows } = await import("@/lib/email/event-log");
+  for (const email of await listSentEmailRows(campaignId)) sent.add(email);
+  return sent;
+}
+
 export async function appendEmailEvent(input: {
   campaign_id: string;
   contact_id?: string | null;
@@ -3481,7 +3596,7 @@ export async function appendEmailEvent(input: {
   return item;
 }
 
-/** One store write for a batch of sends, and refresh the campaign lock. */
+/** Record a batch of send or tracking events. */
 export async function appendEmailEvents(
   inputs: Array<{
     campaign_id: string;

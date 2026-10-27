@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { ContentItem } from "@/lib/types";
+import type { ContentItem, EmailCampaign } from "@/lib/types";
 import { StatusPill } from "@/components/ui/StatusPill";
 import {
   ReleaseEditor,
@@ -28,6 +28,7 @@ function storyTime(item: ContentItem): string {
 
 export function ReleasesPanel({
   releases,
+  campaigns = [],
   newsroomTitle,
   newsroomDescription,
   spokespeople,
@@ -35,6 +36,7 @@ export function ReleasesPanel({
   onRelease,
 }: {
   releases: ContentItem[];
+  campaigns?: EmailCampaign[];
   newsroomTitle: string;
   newsroomDescription: string;
   spokespeople: ReleaseSpokesperson[];
@@ -47,6 +49,7 @@ export function ReleasesPanel({
   const [editing, setEditing] = useState<ContentItem | "new" | null>(
     startNew ? "new" : null
   );
+  const pitching = useRef(new Set<string>());
 
   const stories = useMemo(() => {
     const rows = showAll
@@ -85,6 +88,18 @@ export function ReleasesPanel({
   }
 
   async function pitchStory(item: ContentItem) {
+    if (pitching.current.has(item.id)) return;
+    const existing = campaigns.find(
+      (campaign) =>
+        campaign.content_id === item.id &&
+        campaign.category === "pitch" &&
+        campaign.status === "draft"
+    );
+    if (existing) {
+      window.location.assign(`/app/email/design/campaign/${existing.id}`);
+      return;
+    }
+    pitching.current.add(item.id);
     setBusyId(item.id);
     setError("");
     try {
@@ -114,6 +129,7 @@ export function ReleasesPanel({
       if (!res.ok) throw new Error(data.error || "Could not open the pitch");
       window.location.assign(`/app/email/design/campaign/${data.item.id}`);
     } catch (err) {
+      pitching.current.delete(item.id);
       setError(err instanceof Error ? err.message : "Could not open the pitch");
       setBusyId("");
     }

@@ -1,7 +1,6 @@
 import { listEmailCampaigns } from "@/lib/data/repos";
 import { sendEmailCampaign } from "@/lib/email/send-campaign";
-
-const SENDING_LOCK_MS = 8 * 60 * 1000;
+import { sendLockExpired } from "@/lib/email/send-lock";
 
 /**
  * Send campaigns whose scheduled time has passed.
@@ -19,8 +18,7 @@ export async function listDueCampaignIds(
         Boolean(c.scheduled_at) && new Date(c.scheduled_at as string).getTime() <= now;
       if (c.status === "scheduled" && scheduledDue) return true;
       if (!resumeInterrupted || c.status !== "sending") return false;
-      const started = new Date(c.updated_at).getTime();
-      return now - started >= SENDING_LOCK_MS;
+      return sendLockExpired(c, now);
     })
     .slice(0, limit)
     .map((c) => c.id);

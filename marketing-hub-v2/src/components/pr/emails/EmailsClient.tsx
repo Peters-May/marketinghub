@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Contact,
   ContentItem,
@@ -82,6 +82,9 @@ export function EmailsClient({
   const [view, setView] = useState<ViewMode>("dashboard");
   const [step, setStep] = useState<WizardStep>("write");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const saveFlight = useRef<Promise<string | null> | null>(null);
+  selectedIdRef.current = selectedId;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [busy, setBusy] = useState(false);
@@ -232,6 +235,7 @@ export function EmailsClient({
       content_id: "",
       hubspot_url: "",
     });
+    selectedIdRef.current = null;
     setSelectedId(null);
     setStep("write");
     setView("wizard");
@@ -244,27 +248,46 @@ export function EmailsClient({
     setMessage("");
   }
 
-  async function saveDraft() {
+  async function saveDraft(): Promise<string | null> {
+    if (saveFlight.current) return saveFlight.current;
+    let finish: (id: string | null) => void = () => {};
+    const flight = new Promise<string | null>((resolve) => {
+      finish = resolve;
+    });
+    saveFlight.current = flight;
     setBusy(true);
     setMessage("");
     try {
+      const media_list_id = form.list_ids[0] || null;
+      const currentId = selectedIdRef.current;
       const res = await fetch("/api/pr/pitches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          media_list_id: form.list_ids[0] || null,
-        }),
+        body: JSON.stringify(
+          currentId
+            ? {
+                action: "update",
+                id: currentId,
+                patch: { ...form, media_list_id },
+              }
+            : { ...form, media_list_id }
+        ),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save");
+      selectedIdRef.current = data.item.id;
       await refresh();
       setSelectedId(data.item.id);
       setMessage("Draft saved.");
       setStep("export");
+      finish(data.item.id as string);
+      return data.item.id as string;
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Save failed");
+      finish(null);
+      return null;
     } finally {
+      saveFlight.current = null;
       setBusy(false);
     }
   }
@@ -288,24 +311,9 @@ export function EmailsClient({
     };
     let id = draft.id;
     if (!id) {
-      setBusy(true);
-      const res = await fetch("/api/pr/pitches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          media_list_id: form.list_ids[0] || null,
-        }),
-      });
-      const data = await res.json();
-      setBusy(false);
-      if (!res.ok || !data.item) {
-        setMessage(data.error || "Save failed");
-        return;
-      }
-      id = data.item.id;
-      setSelectedId(id);
-      await refresh();
+      const saved = await saveDraft();
+      if (!saved) return;
+      id = saved;
     }
 
     const full = (
@@ -350,8 +358,7 @@ export function EmailsClient({
   async function exportRecipientCsv() {
     let id = selectedId;
     if (!id) {
-      await saveDraft();
-      id = selectedId;
+      id = await saveDraft();
     }
     const full = pitchesOnly.find((p) => p.id === id) || selected;
     const draft = full || {
@@ -461,12 +468,14 @@ export function EmailsClient({
           <div className="surface-card space-y-3 p-5">
             <input
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Internal title"
               placeholder="Internal title"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             />
             <input
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Subject"
               placeholder="Subject"
               value={form.subject}
               onChange={(e) =>
@@ -475,6 +484,7 @@ export function EmailsClient({
             />
             <input
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Preview text"
               placeholder="Preview text"
               value={form.preview_text}
               onChange={(e) =>
@@ -484,6 +494,7 @@ export function EmailsClient({
             <div className="grid gap-3 sm:grid-cols-2">
               <input
                 className="rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="From name"
                 placeholder="From name"
                 value={form.from_name}
                 onChange={(e) =>
@@ -492,6 +503,7 @@ export function EmailsClient({
               />
               <input
                 className="rounded-md border border-brand/15 px-3 py-2 text-sm"
+                aria-label="From email"
                 placeholder="From email"
                 value={form.from_email}
                 onChange={(e) =>
@@ -501,6 +513,7 @@ export function EmailsClient({
             </div>
             <input
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Campaign tag"
               placeholder="Campaign tag (e.g. Forwarding)"
               value={form.campaign_tag}
               onChange={(e) =>
@@ -533,6 +546,7 @@ export function EmailsClient({
             </div>
             <textarea
               className="h-48 w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
+              aria-label="Pitch email"
               value={form.body}
               onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
             />

@@ -67,7 +67,7 @@ export const STAFF_NAV: NavItem[] = [
     icon: Mail,
   },
   {
-    href: "/app/pr",
+    href: "/app/pr/releases",
     label: "PR",
     description: "Press contacts, media lists, pitches, coverage — admin only",
     icon: Megaphone,

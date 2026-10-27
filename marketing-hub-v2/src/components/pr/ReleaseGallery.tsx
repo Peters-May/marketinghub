@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDialog } from "@/components/pr/useDialog";
 
 export function ReleaseGallery({
   images,
@@ -8,6 +9,7 @@ export function ReleaseGallery({
   images: { src: string; alt: string }[];
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const dialogRef = useDialog(open !== null, () => setOpen(null));
   if (!images.length) return null;
   const current = open === null ? null : images[open];
 
@@ -19,6 +21,7 @@ export function ReleaseGallery({
             key={`${image.src}-${index}`}
             type="button"
             className="overflow-hidden rounded-lg border border-brand/10"
+            aria-label={image.alt || `Open image ${index + 1}`}
             onClick={() => setOpen(index)}
           >
             {/* Staff uploads and pasted image URLs. */}
@@ -33,6 +36,10 @@ export function ReleaseGallery({
           onClick={() => setOpen(null)}
         >
           <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={current.alt || "Image"}
             className="max-h-[90vh] max-w-4xl"
             onClick={(event) => event.stopPropagation()}
           >
@@ -43,13 +50,13 @@ export function ReleaseGallery({
               className="max-h-[80vh] w-full rounded-lg object-contain"
             />
             <div className="mt-3 flex items-center justify-between gap-3 text-sm text-white">
-              <button type="button" onClick={() => setOpen((index) => (index === null ? 0 : (index + images.length - 1) % images.length))}>
+              <button type="button" aria-label="Previous image" onClick={() => setOpen((index) => (index === null ? 0 : (index + images.length - 1) % images.length))}>
                 Previous
               </button>
-              <button type="button" onClick={() => setOpen(null)}>
+              <button type="button" aria-label="Close gallery" onClick={() => setOpen(null)}>
                 Close
               </button>
-              <button type="button" onClick={() => setOpen((index) => (index === null ? 0 : (index + 1) % images.length))}>
+              <button type="button" aria-label="Next image" onClick={() => setOpen((index) => (index === null ? 0 : (index + 1) % images.length))}>
                 Next
               </button>
             </div>

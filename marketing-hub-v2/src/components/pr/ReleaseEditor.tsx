@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { ContentItem } from "@/lib/types";
@@ -21,7 +21,7 @@ import {
   releaseStatusLabel,
   type ReleaseEditorStatus,
 } from "@/lib/pr/release-document";
-import { seedReleaseDocument } from "@/lib/pr/release-blocks";
+import { attachmentNameFromUrl, seedReleaseDocument } from "@/lib/pr/release-blocks";
 import type { ReleaseAttachment } from "@/lib/types";
 
 export type { ReleaseSpokesperson };
@@ -31,8 +31,7 @@ function todayIso() {
 }
 
 function fileName(url: string): string {
-  const path = url.split("?")[0] ?? url;
-  return decodeURIComponent(path.split("/").pop() || "File") || "File";
+  return attachmentNameFromUrl(url);
 }
 
 export function ReleaseEditor({
@@ -76,10 +75,22 @@ export function ReleaseEditor({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [clean, setClean] = useState(true);
+  const editRevision = useRef(0);
 
   function mark() {
+    editRevision.current += 1;
     setClean(false);
   }
+
+  useEffect(() => {
+    if (clean) return;
+    const onLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [clean]);
 
   function setAttachments(joined: string) {
     const urls = parseAssetUrls(joined);
@@ -101,6 +112,7 @@ export function ReleaseEditor({
       setError(saveError);
       return null;
     }
+    const revision = editRevision.current;
     setBusy(true);
     setError("");
     setNotice("");
@@ -130,9 +142,10 @@ export function ReleaseEditor({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save the release");
       setSavedId(data.item.id);
+      onSaved(data.item);
+      if (editRevision.current !== revision) return data.item as ContentItem;
       setStatus(editorStatusFromContent(data.item.status));
       if (data.item.pr_document) setDocument(data.item.pr_document);
-      onSaved(data.item);
       setClean(true);
       setNotice(
         data.item.status === "published"
@@ -156,7 +169,21 @@ export function ReleaseEditor({
   }
 
   async function preview() {
-    const saved = await save(status);
+    const live = status === "published" || status === "scheduled";
+    if (live) {
+      if (!savedId) {
+        setError("Save this release as a draft before opening a preview.");
+        return;
+      }
+      if (!clean) {
+        setNotice(
+          "Preview shows the last saved version. These edits stay off the live release."
+        );
+      }
+      window.open(`/newsroom/preview/${savedId}`, "_blank", "noopener");
+      return;
+    }
+    const saved = clean && savedId ? { id: savedId } : await save(status);
     if (!saved) return;
     window.open(`/newsroom/preview/${saved.id}`, "_blank", "noopener");
   }
