@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useHubDataRefresh } from "@/lib/command/refresh";
+import { useHubView } from "@/lib/hub-view";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import { EmailCampaignsPanel } from "@/components/email/EmailCampaignsPanel";
@@ -34,6 +35,7 @@ export function EmailMarketingHub({
   initialTab,
   pitchCampaigns = [],
   contentTitles = [],
+  memberView = false,
 }: {
   initialCampaigns: EmailCampaign[];
   initialTemplates: EmailTemplate[];
@@ -42,16 +44,28 @@ export function EmailMarketingHub({
   initialTab?: Tab;
   pitchCampaigns?: EmailCampaign[];
   contentTitles?: { id: string; title: string }[];
+  /** Sent marketing emails only. Pitches and editing stay with admins. */
+  memberView?: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab ?? "emails");
+  const { view, ready } = useHubView();
+  const sentOnly = memberView || (ready && view === "member");
+  const [tab, setTab] = useState<Tab>(sentOnly ? "emails" : (initialTab ?? "emails"));
   const [pitchRows, setPitchRows] = useState(pitchCampaigns);
   const [audiencesOpen, setAudiencesOpen] = useState(false);
   const [templates, setTemplates] = useState(initialTemplates);
   const [audiences, setAudiences] = useState(initialAudiences);
   const [lists, setLists] = useState(initialLists);
-  const countLabel = `${initialCampaigns.length} marketing email${initialCampaigns.length === 1 ? "" : "s"}`;
+  const visibleCampaigns = sentOnly
+    ? initialCampaigns.filter(
+        (campaign) => campaign.status === "sent" || campaign.status === "sending"
+      )
+    : initialCampaigns;
+  const countLabel = sentOnly
+    ? `${visibleCampaigns.length} sent email${visibleCampaigns.length === 1 ? "" : "s"}`
+    : `${initialCampaigns.length} marketing email${initialCampaigns.length === 1 ? "" : "s"}`;
 
   useHubDataRefresh("email", () => {
+    if (sentOnly) return;
     void fetch("/api/email/audiences")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -64,10 +78,16 @@ export function EmailMarketingHub({
       });
   });
 
+  const section = sentOnly ? "emails" : tab;
+
   return (
     <div>
-      <PageHeader title="Email" description={countLabel} />
+      <PageHeader
+        title="Email"
+        description={sentOnly ? "Sent marketing emails" : countLabel}
+      />
 
+      {sentOnly ? null : (
       <SegmentFilter
         label="Email section"
         value={tab}
@@ -79,8 +99,9 @@ export function EmailMarketingHub({
         size="lg"
         tourIdPrefix="email-tab"
       />
+      )}
 
-      {tab === "emails" && audiencesOpen ? (
+      {section === "emails" && audiencesOpen && !sentOnly ? (
         <div>
           <button
             type="button"
@@ -98,14 +119,15 @@ export function EmailMarketingHub({
         </div>
       ) : null}
 
-      {tab === "emails" && !audiencesOpen ? (
+      {section === "emails" && (!audiencesOpen || sentOnly) ? (
         <EmailCampaignsPanel
-          campaigns={initialCampaigns}
+          campaigns={visibleCampaigns}
           onOpenAudiences={() => setAudiencesOpen(true)}
+          readOnly={sentOnly}
         />
       ) : null}
 
-      {tab === "pitches" ? (
+      {sentOnly || section !== "pitches" ? null : (
         <PitchesPanel
           campaigns={pitchRows}
           content={contentTitles}
@@ -114,15 +136,15 @@ export function EmailMarketingHub({
             setPitchRows((prev) => [item, ...prev.filter((c) => c.id !== item.id)])
           }
         />
-      ) : null}
+      )}
 
-      {tab === "templates" ? (
+      {sentOnly || section !== "templates" ? null : (
         <EmailTemplatesPanel templates={templates} setTemplates={setTemplates} />
-      ) : null}
+      )}
 
-      {tab === "analyse" ? <EmailReportsPanel /> : null}
+      {sentOnly || section !== "analyse" ? null : <EmailReportsPanel />}
 
-      {tab === "settings" ? <EmailSettingsPanel /> : null}
+      {sentOnly || section !== "settings" ? null : <EmailSettingsPanel />}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildDashboard } from "@/lib/dashboard/build";
 import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
 import { emptyPlannerFields } from "@/lib/events/planner";
-import type { ContentItem, EventItem, HubTask } from "@/lib/types";
+import type { ContentItem, EventItem, HubTask, WebEnquiry } from "@/lib/types";
 
 const now = new Date("2026-10-22T09:00:00.000Z");
 const viewer = { id: "user-sophie", fullName: "Sophie Edgerley", isAdmin: true };
@@ -252,5 +252,50 @@ describe("buildDashboard", () => {
       "enquiry:q1",
       "email:m1",
     ]);
+  });
+
+  it("keeps at most five enquiries that still need review", () => {
+    const enquiries: Pick<
+      WebEnquiry,
+      | "id"
+      | "customer_name"
+      | "needs_manual_review"
+      | "selected_office"
+      | "status"
+      | "updated_at"
+    >[] = Array.from({ length: 8 }, (_, index) => ({
+      id: `q${index}`,
+      customer_name: `Customer ${index}`,
+      needs_manual_review: true,
+      selected_office: "",
+      status: "new" as const,
+      updated_at: "2026-10-21T00:00:00.000Z",
+    }));
+    enquiries.push({
+      id: "done",
+      customer_name: "Closed",
+      needs_manual_review: false,
+      selected_office: "Southampton",
+      status: "done" as const,
+      updated_at: "2026-10-21T00:00:00.000Z",
+    });
+
+    const dashboard = buildDashboard({
+      now,
+      viewer,
+      scope: "everyone",
+      tasks: [],
+      content: [],
+      events: [],
+      attendance: [],
+      awards: [],
+      enquiries,
+      emails: [],
+      budget: null,
+    });
+
+    expect(
+      dashboard.actions.filter((row) => row.key.startsWith("enquiry:")).map((row) => row.key)
+    ).toEqual(["enquiry:q0", "enquiry:q1", "enquiry:q2", "enquiry:q3", "enquiry:q4"]);
   });
 });

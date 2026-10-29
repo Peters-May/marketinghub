@@ -117,10 +117,6 @@ export function EmailsClient({
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
     if (!prefillContentId) return;
     const piece = content.find((x) => x.id === prefillContentId);
     if (!piece || !isPressRelease(piece)) return;

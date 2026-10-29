@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import type { AwardEntry, AwardStatus } from "@/lib/types";
+import { FormAlert } from "@/components/ui/FormAlert";
 import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
 import { useHubView } from "@/lib/hub-view";
@@ -84,19 +86,11 @@ export function AwardsClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/awards");
-    const data = await res.json();
-    setItems(data.awards ?? []);
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useEffect(() => {
     if (!selected) return;
@@ -164,24 +158,35 @@ export function AwardsClient({
   const currentYear = new Date().getFullYear();
 
   async function create() {
-    if (!isAdmin) return;
-    const res = await fetch("/api/awards", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        year: Number(form.year) || new Date().getFullYear(),
-        submission_deadline: form.submission_deadline || null,
-        deadline_verified: form.deadline_verified === true,
-        ceremony_at: form.ceremony_at || null,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const item = rowFromResponse<AwardEntry>(data);
-    if (!res.ok || !item) return;
-    setItems((prev) => upsertById(prev, item));
-    setShowForm(false);
-    setForm(emptyForm);
+    if (!isAdmin || creating) return;
+    setCreating(true);
+    setFormError(null);
+    try {
+      const res = await fetch("/api/awards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          year: Number(form.year) || new Date().getFullYear(),
+          submission_deadline: form.submission_deadline || null,
+          deadline_verified: form.deadline_verified === true,
+          ceremony_at: form.ceremony_at || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<AwardEntry>(data);
+      if (!res.ok || !item) {
+        setFormError(apiErrorMessage(data, "Could not save award"));
+        return;
+      }
+      setItems((prev) => upsertById(prev, item));
+      setShowForm(false);
+      setForm(emptyForm);
+    } catch {
+      setFormError("Could not save award");
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEdit(item: AwardEntry) {
@@ -217,7 +222,10 @@ export function AwardsClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<AwardEntry>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save award"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setSelected(item);
   }
@@ -225,6 +233,7 @@ export function AwardsClient({
   async function saveEdit() {
     if (!isAdmin || !editingId || !edit) return;
     setSaving(true);
+    setFormError(null);
     try {
       const res = await fetch("/api/awards", {
         method: "POST",
@@ -248,7 +257,10 @@ export function AwardsClient({
       });
       const data = await res.json().catch(() => ({}));
       const item = rowFromResponse<AwardEntry>(data);
-      if (!res.ok || !item) return;
+      if (!res.ok || !item) {
+        setFormError(apiErrorMessage(data, "Could not save award"));
+        return;
+      }
       setItems((prev) => upsertById(prev, item));
       closeEdit();
     } finally {
@@ -264,7 +276,11 @@ export function AwardsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete award"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
     if (selected?.id === id) setSelected(null);
@@ -358,9 +374,17 @@ export function AwardsClient({
       {isAdmin && showForm ? (
         <div className="surface-card mb-6 grid gap-3 p-5 md:grid-cols-2">
           <AwardFields form={form} onChange={setForm} />
+          <div className="md:col-span-2">
+            <FormAlert message={formError} />
+          </div>
           <div className="md:col-span-2 flex gap-2">
-            <button type="button" className="btn-primary" onClick={() => void create()}>
-              Save
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={creating}
+              onClick={() => void create()}
+            >
+              {creating ? "Saving…" : "Save"}
             </button>
             <button
               type="button"
@@ -753,6 +777,7 @@ export function AwardsClient({
             </div>
           }
         >
+          <FormAlert message={formError} />
           <AwardFields form={edit} onChange={setEdit} />
           <RelatedTasksPanel
             className="mt-4"

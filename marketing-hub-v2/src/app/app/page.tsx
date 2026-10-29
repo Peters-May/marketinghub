@@ -57,7 +57,11 @@ export default async function AppHomePage() {
       listThemes(),
       listThemeMains(),
       hasServiceRoleKey()
-        ? listWebEnquiries({ includeTest: false }).catch(() => [])
+        ? listWebEnquiries({
+            includeTest: false,
+            limit: 5,
+            needsReview: true,
+          }).catch(() => [])
         : Promise.resolve([]),
       isAdmin ? listEmailCampaigns().catch(() => []) : Promise.resolve([]),
       showBudget ? listBudgetLines().catch(() => []) : Promise.resolve([]),
@@ -114,9 +118,11 @@ export default async function AppHomePage() {
                   </p>
                 ) : null}
               </div>
-              <Link href="/app/themes" className="btn-secondary shrink-0">
-                Open themes
-              </Link>
+              {isAdmin ? (
+                <Link href="/app/themes" className="btn-secondary shrink-0">
+                  Open themes
+                </Link>
+              ) : null}
             </div>
           </div>
           {themeMains.length > 0 ? (

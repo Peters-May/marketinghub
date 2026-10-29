@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
+import { confirmDiscard } from "@/lib/ui/form-feedback";
 
 export type RecordDrawerProps = {
   open: boolean;
@@ -21,6 +22,8 @@ export type RecordDrawerProps = {
   footer?: ReactNode;
   /** Extra classes on the panel (e.g. max-w-xl). */
   className?: string;
+  /** When true, overlay, Escape, and Close ask before discarding. */
+  dirty?: boolean;
 };
 
 export function RecordDrawer({
@@ -33,14 +36,22 @@ export function RecordDrawer({
   children,
   footer,
   className,
+  dirty = false,
 }: RecordDrawerProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLElement>(null);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  function requestClose() {
+    if (!confirmDiscard(dirtyRef.current)) return;
+    onClose();
+  }
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") requestClose();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -76,7 +87,7 @@ export function RecordDrawer({
     <>
       <div
         className="fixed inset-0 z-40 bg-black/25 md:left-sidebar lg:right-[var(--assistant-dock,0px)]"
-        onClick={onClose}
+        onClick={requestClose}
         aria-hidden
       />
       <aside
@@ -102,7 +113,7 @@ export function RecordDrawer({
           <button
             type="button"
             className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs"
-            onClick={onClose}
+            onClick={requestClose}
           >
             Close
           </button>

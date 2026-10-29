@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type {
   Contact,
   ContentItem,
@@ -68,6 +67,13 @@ const TAB_PATH: Record<TabId, string> = {
   monitor: "/app/pr/monitoring",
   newsroom: "/app/pr/newsroom",
 };
+
+function tabFromPathname(pathname: string): TabId | null {
+  const match = (Object.entries(TAB_PATH) as [TabId, string][]).find(
+    ([, href]) => pathname === href
+  );
+  return match?.[0] ?? null;
+}
 
 function sectionToTab(section?: PrSection | null): TabId {
   switch (section) {
@@ -150,7 +156,6 @@ export function PrClient({
   prefillContentId = null,
   openNewRelease = false,
 }: Props) {
-  const router = useRouter();
   const { canToggleAdminView } = useHubView();
   const canDelete = canToggleAdminView;
 
@@ -278,12 +283,20 @@ export function PrClient({
   }, []);
 
   useEffect(() => {
-    void refreshAll();
-  }, [refreshAll]);
-
-  useEffect(() => {
     setTab(sectionToTab(initialSection));
   }, [initialSection]);
+
+  useEffect(() => {
+    const onPop = () => {
+      const next = tabFromPathname(window.location.pathname);
+      if (!next) return;
+      setTab(next);
+      setSearch("");
+      setMessage("");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const contactLists = useMemo(
     () => lists.filter(isContactSegment),
@@ -327,7 +340,7 @@ export function PrClient({
     setMessage("");
     const href = TAB_PATH[next];
     if (window.location.pathname !== href) {
-      router.push(href);
+      window.history.pushState({ prTab: next }, "", href);
     }
   }
 

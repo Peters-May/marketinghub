@@ -103,25 +103,58 @@ function sortHub(items: HubEnquiry[]): HubEnquiry[] {
   });
 }
 
+/** Page size for the Enquiries screen. */
+export const HUB_ENQUIRY_PAGE_SIZE = 100;
+
+const HUB_ENQUIRY_FETCH_CAP = 20_000;
+
+/**
+ * How many rows each source must return so a merged newest-first page is complete.
+ * The newest `offset + limit` overall sit inside the newest `offset + limit` of each table.
+ */
+export function hubEnquirySourceWindow(offset: number, limit: number): {
+  sourceLimit: number;
+  from: number;
+  to: number;
+} {
+  const safeOffset = Math.max(offset, 0);
+  const safeLimit = Math.min(Math.max(limit, 1), HUB_ENQUIRY_FETCH_CAP);
+  const sourceLimit = Math.min(safeOffset + safeLimit, HUB_ENQUIRY_FETCH_CAP);
+  return { sourceLimit, from: safeOffset, to: safeOffset + safeLimit };
+}
+
 /** Combined web + WhatsApp + website chat list for the Enquiries tab. */
 export async function listHubEnquiries(options?: {
   includeTest?: boolean;
   channel?: EnquiryIntake;
   limit?: number;
+  offset?: number;
 }): Promise<HubEnquiry[]> {
   const includeTest = Boolean(options?.includeTest);
   const channel = options?.channel;
+  const offset = Math.max(options?.offset ?? 0, 0);
 
   const needWeb =
     !channel || channel === "web" || channel === "website_chat";
   const needWhatsApp = !channel || channel === "whatsapp";
 
+  const window =
+    options?.limit != null
+      ? hubEnquirySourceWindow(offset, options.limit)
+      : null;
+
   const [web, whatsapp] = await Promise.all([
     needWeb
-      ? listWebEnquiries({ includeTest })
+      ? listWebEnquiries({
+          includeTest,
+          ...(window ? { limit: window.sourceLimit } : {}),
+        })
       : Promise.resolve([] as WebEnquiry[]),
     needWhatsApp
-      ? listWhatsAppEnquiries({ includeTest })
+      ? listWhatsAppEnquiries({
+          includeTest,
+          ...(window ? { limit: window.sourceLimit } : {}),
+        })
       : Promise.resolve([] as WhatsAppEnquiry[]),
   ]);
 
@@ -134,9 +167,8 @@ export async function listHubEnquiries(options?: {
     merged = merged.filter((e) => e.channel === channel);
   }
 
-  if (options?.limit != null) {
-    const limit = Math.min(Math.max(options.limit, 1), 20_000);
-    merged = merged.slice(0, limit);
+  if (window) {
+    merged = merged.slice(window.from, window.to);
   }
 
   return merged;

@@ -40,13 +40,16 @@ export async function GET(request: NextRequest) {
       ? (channelRaw as EnquiryIntake)
       : undefined;
   const limitRaw = request.nextUrl.searchParams.get("limit");
+  const offsetRaw = request.nextUrl.searchParams.get("offset");
   const limit = limitRaw ? Number(limitRaw) : undefined;
+  const offset = offsetRaw ? Number(offsetRaw) : undefined;
 
   try {
     const enquiries = await listHubEnquiries({
       includeTest,
       channel,
       ...(Number.isFinite(limit) ? { limit } : {}),
+      ...(Number.isFinite(offset) ? { offset } : {}),
     });
     return jsonOk({ enquiries, configured: true });
   } catch (err) {

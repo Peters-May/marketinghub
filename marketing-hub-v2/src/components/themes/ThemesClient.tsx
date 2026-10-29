@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import Link from "next/link";
 import { CornerDownRight, ExternalLink, Paperclip, Plus } from "lucide-react";
 import type {
@@ -204,26 +205,6 @@ export function ThemesClient({
   const [addingMain, setAddingMain] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/themes");
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(
-        typeof data.error === "string" ? data.error : "Could not refresh themes"
-      );
-    }
-    setThemes(data.themes ?? []);
-    setMains(data.mains ?? []);
-    setOffshoots(data.offshoots ?? []);
-    setContent(data.content ?? []);
-  }, []);
-
-  useEffect(() => {
-    void refresh().catch((e) => {
-      setError(e instanceof Error ? e.message : "Could not refresh themes");
-    });
-  }, [refresh]);
-
   const years = useMemo(() => uniqueYears(themes), [themes]);
 
   const yearThemes = useMemo(
@@ -410,7 +391,11 @@ export function ThemesClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", entity: "theme", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(apiErrorMessage(data, "Could not delete theme"));
+      return;
+    }
     const removedMainIds = mains
       .filter((main) => main.theme_id === id)
       .map((main) => main.id);
@@ -540,7 +525,10 @@ export function ThemesClient({
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
+    if (!res.ok) {
+      setError(apiErrorMessage(data, "Could not update status"));
+      return;
+    }
     if (entity === "main") {
       const item = rowFromResponse<ThemeMainContent>(data);
       const linked = rowFromResponse<ContentItem>(data, "content");
@@ -558,7 +546,11 @@ export function ThemesClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", entity, id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(apiErrorMessage(data, "Could not delete content"));
+      return;
+    }
     if (entity === "main" && editingMainId === id) closeContentEdit();
     if (entity === "main") {
       setMains((prev) => removeById(prev, id));

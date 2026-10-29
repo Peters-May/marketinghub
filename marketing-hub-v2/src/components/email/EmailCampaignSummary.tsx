@@ -23,12 +23,14 @@ export function EmailCampaignSummary({
   report,
   sentCount = 0,
   backHref = "/app/email",
+  allowCopy = true,
 }: {
   campaign: EmailCampaign;
   audienceName: string;
   report: CampaignReport;
   sentCount?: number;
   backHref?: string;
+  allowCopy?: boolean;
 }) {
   const sentLabel = campaign.sent_at
     ? `${formatLondonStamp(campaign.sent_at)} London`
@@ -55,12 +57,14 @@ export function EmailCampaignSummary({
         <Link href={backHref} className="btn-secondary px-3 py-1.5 text-sm">
           Back
         </Link>
+        {allowCopy ? (
         <CopyEmailButton
           kind="campaign"
           id={campaign.id}
           className="btn-secondary px-3 py-1.5 text-sm"
           label="Copy for a new email"
         />
+        ) : null}
         <h1 className="font-display text-2xl text-brand">{campaign.title}</h1>
         <StatusPill status={campaign.status} label={STATUS_LABEL[campaign.status]} />
       </div>
@@ -238,7 +242,7 @@ export function EmailCampaignSummary({
                   <div className="text-xs text-muted">{person.email}</div>
                 ) : null}
                 <div className="mt-1 text-xs text-muted">
-                  Removed from future marketing sends
+                  {person.detail || "Removed from future marketing sends"}
                 </div>
               </li>
             ))}

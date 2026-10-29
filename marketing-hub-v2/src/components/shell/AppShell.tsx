@@ -101,7 +101,7 @@ function ShellInner({
   const pathname = usePathname();
   const mainRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(true);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
   const nav = navForView(view, { canAccessBudget, budgetInMemberNav });
   const canUseAssistant = accessRole === "admin" || accessRole === "staff";
@@ -109,11 +109,8 @@ function ShellInner({
 
   useEffect(() => {
     if (!canUseAssistant) return;
-    const saved = window.localStorage.getItem(ASSISTANT_DOCK_KEY);
-    if (saved === "0") setAssistantOpen(false);
-    else if (saved === "1") setAssistantOpen(true);
-    else if (!window.matchMedia("(min-width: 1024px)").matches) {
-      setAssistantOpen(false);
+    if (window.localStorage.getItem(ASSISTANT_DOCK_KEY) === "1") {
+      setAssistantOpen(true);
     }
   }, [canUseAssistant]);
 
@@ -293,6 +290,30 @@ function ShellInner({
               ref={mainRef}
               className="order-2 min-w-0 flex-1 px-4 py-6 md:order-1 md:px-8 md:py-8"
             >
+              {canToggleAdminView && (view === "seo" || view === "external") ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-sand/70 px-4 py-2 text-sm">
+                  <p>
+                    {view === "seo" ? "SEO view" : "External view"} is on, so
+                    most of the menu is hidden.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary px-3 py-1.5"
+                      onClick={() => setView("member")}
+                    >
+                      Member view
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary px-3 py-1.5"
+                      onClick={() => setView("admin")}
+                    >
+                      Admin view
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <MemberRouteGuard>{children}</MemberRouteGuard>
             </main>
             {canUseAssistant ? (

@@ -254,11 +254,14 @@ export async function listWebEnquiries(options?: {
   includeTest?: boolean;
   limit?: number;
   offset?: number;
+  /** Dashboard queue: not done, and flagged or missing an office. */
+  needsReview?: boolean;
 }): Promise<WebEnquiry[]> {
   if (!hasServiceRoleKey()) return [];
 
   const supabase = createServiceClient();
   const includeTest = Boolean(options?.includeTest);
+  const needsReview = Boolean(options?.needsReview);
 
   async function fetchRange(from: number, to: number): Promise<WebEnquiry[]> {
     let query = supabase
@@ -268,6 +271,13 @@ export async function listWebEnquiries(options?: {
       .order("received_at", { ascending: false })
       .range(from, to);
     if (!includeTest) query = query.eq("is_test", false);
+    if (needsReview) {
+      query = query
+        .or("status.is.null,status.neq.done")
+        .or(
+          "needs_manual_review.eq.true,selected_office.is.null,selected_office.eq."
+        );
+    }
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return (data ?? []).map((row) =>

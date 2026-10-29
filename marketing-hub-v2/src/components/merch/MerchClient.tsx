@@ -10,6 +10,8 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import { rowFromResponse, upsertById } from "@/lib/data/list-patch";
 import {
   CLOTHING_BRAND,
@@ -651,6 +653,7 @@ export function MerchClient({
   );
   const [editItemRows, setEditItemRows] = useState<OrderItemRow[]>([]);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     return onTourPrepare((action) => {
@@ -658,12 +661,6 @@ export function MerchClient({
         setShowForm(true);
       }
     });
-  }, []);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/merch");
-    const data = await res.json();
-    setOrders(data.orders ?? []);
   }, []);
 
   const refreshCatalogue = useCallback(async () => {
@@ -680,9 +677,8 @@ export function MerchClient({
   }, []);
 
   useEffect(() => {
-    void refresh();
     void refreshCatalogue();
-  }, [refresh, refreshCatalogue]);
+  }, [refreshCatalogue]);
 
   useEffect(() => {
     setOrderHeader(buildEmptyOrderHeader(viewerName, viewerContactId));
@@ -721,6 +717,9 @@ export function MerchClient({
       window.alert("Add at least one item to the order.");
       return;
     }
+    setSaving(true);
+    setFormError(null);
+    try {
     const { for_mode, ...header } = orderHeader;
     void for_mode;
     const res = await fetch("/api/merch", {
@@ -737,11 +736,17 @@ export function MerchClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<MerchOrder>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save order"));
+      return;
+    }
     setOrders((prev) => upsertById(prev, item));
     setShowForm(false);
     setOrderHeader(buildEmptyOrderHeader(viewerName, viewerContactId));
     setItemRows([buildEmptyItemRow(productCards)]);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openEdit(order: MerchOrder) {
@@ -784,7 +789,10 @@ export function MerchClient({
       });
       const data = await res.json().catch(() => ({}));
       const item = rowFromResponse<MerchOrder>(data);
-      if (!res.ok || !item) return;
+      if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save order"));
+      return;
+    }
       setOrders((prev) => upsertById(prev, item));
       closeEdit();
     } finally {
@@ -800,7 +808,10 @@ export function MerchClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<MerchOrder>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save order"));
+      return;
+    }
     setOrders((prev) => upsertById(prev, item));
     if (editingId === id && editHeader) {
       setEditHeader({ ...editHeader, status: item.status });
@@ -827,6 +838,7 @@ export function MerchClient({
 
   return (
     <div>
+      <FormAlert message={formError} />
       {hideHeader ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -989,9 +1001,10 @@ export function MerchClient({
             <button
               type="button"
               className="btn-primary"
+              disabled={saving}
               onClick={() => void create()}
             >
-              Submit order
+              {saving ? "Saving…" : "Submit order"}
             </button>
             <button
               type="button"

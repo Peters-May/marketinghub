@@ -178,6 +178,31 @@ describe("campaign report", () => {
     ]);
   });
 
+  it("keeps a temporary bounce on the list until it is repeated", () => {
+    const report = buildCampaignReport({
+      campaign: campaign({ adj_open_rate: null, adj_click_rate: null }),
+      events: [
+        event({
+          id: "b2",
+          kind: "bounced",
+          email: "full@example.com",
+          meta: "email.bounced:soft",
+        }),
+      ],
+      contacts: [{ email: "full@example.com", name: "Full mailbox" }],
+      suppressions: [],
+    });
+    expect(report.bouncedPeople).toEqual([
+      {
+        name: "Full mailbox",
+        email: "full@example.com",
+        reason: "bounce",
+        detail: "Temporary bounce. Still on the list.",
+      },
+    ]);
+    expect(report.suppressions.bounce).toBe(0);
+  });
+
   it("uses the event note when there is no suppression detail", () => {
     const report = buildCampaignReport({
       campaign: campaign({ adj_open_rate: null, adj_click_rate: null }),

@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Download, ExternalLink } from "lucide-react";
 import type { ResourceLink } from "@/lib/types";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import {
   optionsForField,
   RESOURCE_CATEGORIES,
@@ -35,6 +37,7 @@ export function ResourcesClient({
     RESOURCE_CATEGORIES
   );
   const [items, setItems] = useState(initial);
+  const [formError, setFormError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -42,16 +45,6 @@ export function ResourcesClient({
     url: "",
     category: "Press",
   });
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/resources");
-    const data = await res.json();
-    setItems(data.resources ?? []);
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   async function create() {
     if (!allowManage) return;
@@ -62,7 +55,10 @@ export function ResourcesClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<ResourceLink>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save resource"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm({ title: "", description: "", url: "", category: "Press" });
@@ -75,7 +71,11 @@ export function ResourcesClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete resource"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
   }
 
@@ -87,6 +87,7 @@ export function ResourcesClient({
 
   return (
     <div>
+      <FormAlert message={formError} />
       {hideHeader ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>

@@ -3585,6 +3585,35 @@ export async function removeUnsubscribeSuppression(email: string) {
   });
 }
 
+/** Bounce and delivery rows for one address, from the store and the event log. */
+export async function listAddressDeliveryEvents(email: string): Promise<EmailEvent[]> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+  const store = await readStore();
+  const local = (store.email_events ?? []).filter((event) => {
+    const address = event.email.trim().toLowerCase();
+    return (
+      address === normalized &&
+      (event.kind === "bounced" || event.kind === "delivered")
+    );
+  });
+  const { listAddressDeliveryRows } = await import("@/lib/email/event-log");
+  const remote = await listAddressDeliveryRows(normalized);
+  const seen = new Set<string>();
+  const merged: EmailEvent[] = [];
+  for (const event of [...remote, ...local]) {
+    const key = event.resend_message_id
+      ? `${event.kind}:${event.resend_message_id}`
+      : event.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(event);
+  }
+  return merged.sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
 export async function listEmailEvents(campaignId?: string) {
   const store = await readStore();
   let rows = [...(store.email_events ?? [])];

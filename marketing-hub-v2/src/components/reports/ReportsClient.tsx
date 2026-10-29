@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BarChart3, ExternalLink } from "lucide-react";
 import type { Advertisement, PaidCampaign, ReportLink } from "@/lib/types";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import {
   REPORT_CATEGORIES,
   REPORT_TOOLS,
@@ -45,6 +47,7 @@ export function ReportsClient({
   const categoryOrder = categoryOptions.map((c) => c.value);
 
   const [items, setItems] = useState(initial);
+  const [formError, setFormError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editUrl, setEditUrl] = useState("");
@@ -55,16 +58,6 @@ export function ReportsClient({
     category: "Dashboards",
     tool: "Google Analytics",
   });
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/reports");
-    const data = await res.json();
-    setItems(data.reports ?? []);
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const byCategory = useMemo(() => {
     const map = items.reduce<Record<string, ReportLink[]>>((acc, item) => {
@@ -87,7 +80,10 @@ export function ReportsClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<ReportLink>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save report"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm({
@@ -111,7 +107,10 @@ export function ReportsClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<ReportLink>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save report"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setEditingId(null);
     setEditUrl("");
@@ -123,12 +122,17 @@ export function ReportsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete report"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
   }
 
   return (
     <div>
+      <FormAlert message={formError} />
       <PageHeader
         title="Reporting"
         description="One place to open the tools you already use — Analytics, Ads, SE Ranking, Looker Studio. Print advertisements and paid-media snapshots sit below. Web enquiries live in the hub."

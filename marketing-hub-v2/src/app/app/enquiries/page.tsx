@@ -1,5 +1,8 @@
 import { EnquiriesClient } from "@/components/enquiries/EnquiriesClient";
-import { listHubEnquiries } from "@/lib/data/hub-enquiries";
+import {
+  HUB_ENQUIRY_PAGE_SIZE,
+  listHubEnquiries,
+} from "@/lib/data/hub-enquiries";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 
 export default async function EnquiriesPage({
@@ -11,7 +14,10 @@ export default async function EnquiriesPage({
   let initial: Awaited<ReturnType<typeof listHubEnquiries>> = [];
   if (configured) {
     try {
-      initial = await listHubEnquiries({ includeTest: false });
+      initial = await listHubEnquiries({
+        includeTest: false,
+        limit: HUB_ENQUIRY_PAGE_SIZE,
+      });
     } catch {
       initial = [];
     }

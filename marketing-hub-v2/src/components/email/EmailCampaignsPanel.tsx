@@ -44,12 +44,15 @@ function statusDot(status: EmailCampaign["status"]) {
 export function EmailCampaignsPanel({
   campaigns,
   onOpenAudiences,
+  readOnly = false,
 }: {
   campaigns: EmailCampaign[];
   onOpenAudiences: () => void;
+  /** Sent marketing emails only. No create, copy, delete, or audiences. */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
-  const [filter, setFilter] = useState<StatusFilter>("all");
+  const [filter, setFilter] = useState<StatusFilter>(readOnly ? "sent" : "all");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -64,7 +67,7 @@ export function EmailCampaignsPanel({
     const q = query.trim().toLowerCase();
     return [...items]
       .filter((c) => isMarketingInboxCampaign(c))
-      .filter((c) => matchesFilter(c.status, filter))
+      .filter((c) => readOnly || matchesFilter(c.status, filter))
       .filter((c) => {
         if (!q) return true;
         return (
@@ -76,7 +79,7 @@ export function EmailCampaignsPanel({
         (a, b) =>
           new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
-  }, [items, filter, query]);
+  }, [items, filter, query, readOnly]);
 
   async function removeDraft(campaign: EmailCampaign) {
     if (!canDeleteUnsentDraft(campaign) || deletingId) return;
@@ -104,6 +107,7 @@ export function EmailCampaignsPanel({
 
   return (
     <div>
+      {readOnly ? null : (
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <button type="button" className="btn-secondary" onClick={onOpenAudiences}>
           Audiences
@@ -117,8 +121,11 @@ export function EmailCampaignsPanel({
           Create email
         </button>
       </div>
+      )}
 
-      <CreateEmailDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {readOnly ? null : (
+        <CreateEmailDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      )}
 
       {error ? (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -126,6 +133,7 @@ export function EmailCampaignsPanel({
         </p>
       ) : null}
 
+      {readOnly ? null : (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {FILTERS.map((item) => (
           <button
@@ -144,6 +152,7 @@ export function EmailCampaignsPanel({
           </button>
         ))}
       </div>
+      )}
 
       <div className="relative mb-3 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -157,8 +166,12 @@ export function EmailCampaignsPanel({
 
       {items.length === 0 ? (
         <EmptyState
-          title="No emails yet"
-          description="Create an email, choose who it goes to, then preview and schedule it."
+          title={readOnly ? "No sent emails yet" : "No emails yet"}
+          description={
+            readOnly
+              ? "Sent marketing emails will appear here."
+              : "Create an email, choose who it goes to, then preview and schedule it."
+          }
         />
       ) : rows.length === 0 ? (
         <EmptyState
@@ -176,9 +189,11 @@ export function EmailCampaignsPanel({
                 <th className="px-3 py-3 font-medium">Click rate</th>
                 <th className="px-3 py-3 font-medium">Last updated</th>
                 <th className="px-3 py-3 font-medium">Last updated by</th>
+                {readOnly ? null : (
                 <th className="px-3 py-3 font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -209,6 +224,7 @@ export function EmailCampaignsPanel({
                       <div className="text-xs text-muted">{updated.time}</div>
                     </td>
                     <td className="px-3 py-3">{campaignUpdatedBy(c)}</td>
+                    {readOnly ? null : (
                     <td className="px-3 py-3 text-right">
                       <div className="inline-flex items-center justify-end gap-2">
                         <CopyEmailButton kind="campaign" id={c.id} />
@@ -227,6 +243,7 @@ export function EmailCampaignsPanel({
                         ) : null}
                       </div>
                     </td>
+                    )}
                   </tr>
                 );
               })}

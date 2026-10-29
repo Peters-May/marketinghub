@@ -132,3 +132,39 @@ export async function listEmailEventRows(campaignId?: string): Promise<EmailEven
   }
   return rows;
 }
+
+/** Bounces and deliveries for one address, oldest first. Throws if the read fails. */
+export async function listAddressDeliveryRows(email: string): Promise<EmailEvent[]> {
+  if (!hasServiceRoleKey()) return [];
+  const supabase = createServiceClient();
+  const data = await readAllPages<Record<string, unknown>>((from, to) =>
+    supabase
+      .from(TABLE)
+      .select(
+        "id, campaign_id, contact_id, email, kind, resend_message_id, meta, link, user_agent, created_at"
+      )
+      .eq("email", email)
+      .in("kind", ["bounced", "delivered"])
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  );
+  const rows: EmailEvent[] = [];
+  for (const row of data) {
+    const kind = asKind(String(row.kind ?? ""));
+    if (kind !== "bounced" && kind !== "delivered") continue;
+    rows.push({
+      id: String(row.id),
+      campaign_id: String(row.campaign_id),
+      contact_id: row.contact_id ? String(row.contact_id) : null,
+      email: String(row.email ?? ""),
+      kind,
+      resend_message_id: String(row.resend_message_id ?? ""),
+      meta: String(row.meta ?? ""),
+      link: String(row.link ?? ""),
+      user_agent: String(row.user_agent ?? ""),
+      created_at: String(row.created_at ?? ""),
+    });
+  }
+  return rows;
+}

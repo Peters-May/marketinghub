@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
     link: detail.link,
     userAgent: detail.userAgent,
     occurredAt: detail.occurredAt,
+    bounceClass: kind === "bounced" ? (detail.bounceClass ?? "soft") : null,
   };
   const run = await start(resendEventWorkflow, [job]);
   console.log("[email] resend workflow", kind, run.runId);

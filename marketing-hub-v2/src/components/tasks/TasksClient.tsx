@@ -9,6 +9,8 @@ import listPlugin from "@fullcalendar/list";
 import type { HubTask, TaskRelatedType, TaskStatus } from "@/lib/types";
 import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { confirmDiscard, apiErrorMessage } from "@/lib/ui/form-feedback";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
@@ -192,6 +194,7 @@ export function TasksClient({
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditForm | null>(null);
+  const [editBaseline, setEditBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -202,6 +205,8 @@ export function TasksClient({
   const [view, setView] = useState<ViewId>("kanban");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
+  const editDirty = edit != null && JSON.stringify(edit) !== editBaseline;
+  const createDirty = JSON.stringify(form) !== JSON.stringify(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -211,10 +216,6 @@ export function TasksClient({
     const data = await res.json();
     setItems(data.tasks ?? []);
   }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useHubDataRefresh("tasks", () => {
     void refresh();
@@ -226,8 +227,7 @@ export function TasksClient({
     openedFromQuery.current = true;
     const task = items.find((item) => item.id === initialOpenId);
     if (!task || !canSeeTask(task, viewer, seeAllTasks)) return;
-    setEditingId(task.id);
-    setEdit(toEditForm(task));
+    openEdit(task);
   }, [hubViewReady, initialOpenId, items, seeAllTasks, viewer]);
 
   useEffect(() => {
@@ -521,9 +521,19 @@ export function TasksClient({
     }
   }
 
+  function closeTaskEdit() {
+    setEditingId(null);
+    setEdit(null);
+    setEditBaseline(null);
+    setFormError(null);
+  }
+
   function openEdit(item: HubTask) {
+    const next = toEditForm(item);
     setEditingId(item.id);
-    setEdit(toEditForm(item));
+    setEdit(next);
+    setEditBaseline(JSON.stringify(next));
+    setFormError(null);
   }
 
   function onCardDragStart(e: DragEvent, id: string) {
@@ -570,12 +580,13 @@ export function TasksClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
-    setItems((prev) => removeById(prev, id));
-    if (editingId === id) {
-      setEditingId(null);
-      setEdit(null);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete task"));
+      return;
     }
+    setItems((prev) => removeById(prev, id));
+    if (editingId === id) closeTaskEdit();
   }
 
   return (
@@ -788,7 +799,9 @@ export function TasksClient({
               className="btn-secondary"
               disabled={creating}
               onClick={() => {
+                if (!confirmDiscard(createDirty)) return;
                 setShowForm(false);
+                setForm(emptyForm);
                 setFormError(null);
               }}
             >
@@ -867,10 +880,7 @@ export function TasksClient({
                 <button
                   type="button"
                   className="btn-secondary px-2.5 py-1.5 text-xs"
-                  onClick={() => {
-                    setEditingId(item.id);
-                    setEdit(toEditForm(item));
-                  }}
+                  onClick={() => openEdit(item)}
                 >
                   Edit
                 </button>
@@ -989,10 +999,7 @@ export function TasksClient({
                           <button
                             type="button"
                             className="btn-secondary px-2.5 py-1.5 text-xs"
-                            onClick={() => {
-                              setEditingId(item.id);
-                              setEdit(toEditForm(item));
-                            }}
+                            onClick={() => openEdit(item)}
                           >
                             Edit
                           </button>
@@ -1139,11 +1146,8 @@ export function TasksClient({
       {edit && editingId ? (
         <RecordDrawer
           open
-          onClose={() => {
-            setEditingId(null);
-            setEdit(null);
-            setFormError(null);
-          }}
+          dirty={editDirty}
+          onClose={closeTaskEdit}
           title="Edit task"
           ariaLabel="Edit task"
           footer={
@@ -1160,9 +1164,8 @@ export function TasksClient({
                 type="button"
                 className="btn-secondary"
                 onClick={() => {
-                  setEditingId(null);
-                  setEdit(null);
-                  setFormError(null);
+                  if (!confirmDiscard(editDirty)) return;
+                  closeTaskEdit();
                 }}
               >
                 Cancel

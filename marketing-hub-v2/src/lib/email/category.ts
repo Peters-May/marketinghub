@@ -52,6 +52,20 @@ export function isMarketingInboxCampaign(campaign: {
   return !isPitchTabCampaign(campaign);
 }
 
+/** Members may open a marketing email after it has been sent. */
+export function isMemberVisibleCampaign(campaign: {
+  id?: string | null;
+  category?: string | null;
+  folder?: string | null;
+  template_id?: string | null;
+  status?: string | null;
+}): boolean {
+  return (
+    isMarketingInboxCampaign(campaign) &&
+    (campaign.status === "sent" || campaign.status === "sending")
+  );
+}
+
 /** Where Back should land after editing or viewing a campaign. */
 export function emailCampaignHome(campaign: {
   id?: string | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -382,25 +382,6 @@ export function BudgetClient({
     },
     [lines]
   );
-
-  const applySnapshot = useCallback(
-    (data: { lines?: BudgetLine[]; payments?: BudgetPayment[] }) => {
-      if (data.lines) setLines(data.lines);
-      if (data.payments) setPayments(data.payments);
-    },
-    []
-  );
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/budget");
-    if (!res.ok) return;
-    const data = await res.json();
-    applySnapshot(data);
-  }, [applySnapshot]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   async function post(body: Record<string, unknown>) {
     setSaving(true);

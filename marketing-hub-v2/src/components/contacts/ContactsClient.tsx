@@ -14,6 +14,8 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage, confirmDiscard } from "@/lib/ui/form-feedback";
 import { removeById, rowFromResponse, upsertById } from "@/lib/data/list-patch";
 
 type KindFilter = "all" | ContactKind;
@@ -105,13 +107,11 @@ export function ContactsClient({
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<ContactForm | null>(null);
+  const [editBaseline, setEditBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/contacts");
-    const data = await res.json();
-    setItems(data.contacts ?? []);
-  }, []);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const editDirty = edit != null && JSON.stringify(edit) !== editBaseline;
 
   const refreshLists = useCallback(async () => {
     const res = await fetch("/api/pr/media-lists");
@@ -135,10 +135,9 @@ export function ContactsClient({
   }, []);
 
   useEffect(() => {
-    void refresh();
     void refreshUsers();
     void refreshLists();
-  }, [refresh, refreshUsers, refreshLists]);
+  }, [refreshUsers, refreshLists]);
 
   useEffect(() => {
     if (!selected) return;
@@ -207,7 +206,10 @@ export function ContactsClient({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return;
+      if (!res.ok) {
+        setFormError(apiErrorMessage(data, "Could not save list"));
+        return;
+      }
       const item = rowFromResponse<MediaList>(data);
       if (item && isContactSegment(item)) {
         setLists((prev) => upsertById(prev, item));
@@ -236,7 +238,10 @@ export function ContactsClient({
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return;
+      if (!res.ok) {
+        setFormError(apiErrorMessage(data, "Could not save list"));
+        return;
+      }
       const item = rowFromResponse<MediaList>(data);
       if (item) setLists((prev) => upsertById(prev, item));
     } finally {
@@ -252,7 +257,11 @@ export function ContactsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete", id: listId }),
       });
-      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(apiErrorMessage(data, "Could not delete list"));
+        return;
+      }
       if (listFilter === listId) setListFilter("all");
       setLists((prev) => removeById(prev, listId));
     } finally {
@@ -261,43 +270,61 @@ export function ContactsClient({
   }
 
   async function create() {
-    const res = await fetch("/api/contacts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        organisation: isCompany(form.kind)
-          ? form.organisation.trim() || form.name.trim()
-          : form.organisation,
-        user_id: isCompany(form.kind) ? null : form.user_id || null,
-        is_press: form.is_press,
-        beat: form.beat,
-        outlet: form.outlet,
-        country: form.country,
-        preferred_topics: form.preferred_topics,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const item = rowFromResponse<Contact>(data);
-    if (!res.ok || !item) return;
-    setItems((prev) => upsertById(prev, item));
-    setShowForm(false);
-    setForm(emptyForm);
+    if (creating) return;
+    setCreating(true);
+    setFormError(null);
+    try {
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          organisation: isCompany(form.kind)
+            ? form.organisation.trim() || form.name.trim()
+            : form.organisation,
+          user_id: isCompany(form.kind) ? null : form.user_id || null,
+          is_press: form.is_press,
+          beat: form.beat,
+          outlet: form.outlet,
+          country: form.country,
+          preferred_topics: form.preferred_topics,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const item = rowFromResponse<Contact>(data);
+      if (!res.ok || !item) {
+        setFormError(apiErrorMessage(data, "Could not save contact"));
+        return;
+      }
+      setItems((prev) => upsertById(prev, item));
+      setShowForm(false);
+      setForm(emptyForm);
+    } catch {
+      setFormError("Could not save contact");
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEdit(contact: Contact) {
+    const next = toForm(contact);
     setEditingId(contact.id);
-    setEdit(toForm(contact));
+    setEdit(next);
+    setEditBaseline(JSON.stringify(next));
+    setFormError(null);
   }
 
   function closeEdit() {
     setEditingId(null);
     setEdit(null);
+    setEditBaseline(null);
+    setFormError(null);
   }
 
   async function saveEdit() {
-    if (!editingId || !edit) return;
+    if (!editingId || !edit || saving) return;
     setSaving(true);
+    setFormError(null);
     try {
       const res = await fetch("/api/contacts", {
         method: "POST",
@@ -330,9 +357,14 @@ export function ContactsClient({
       });
       const data = await res.json().catch(() => ({}));
       const item = rowFromResponse<Contact>(data);
-      if (!res.ok || !item) return;
+      if (!res.ok || !item) {
+        setFormError(apiErrorMessage(data, "Could not save contact"));
+        return;
+      }
       setItems((prev) => upsertById(prev, item));
       closeEdit();
+    } catch {
+      setFormError("Could not save contact");
     } finally {
       setSaving(false);
     }
@@ -346,7 +378,11 @@ export function ContactsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete contact"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
     if (selected?.id === id) setSelected(null);
     if (editingId === id) closeEdit();
@@ -448,17 +484,33 @@ export function ContactsClient({
         ]}
       />
 
+      {!showForm && !edit ? <FormAlert message={formError} /> : null}
+
       {showForm ? (
         <div className="surface-card mb-6 p-5">
           <ContactFields form={form} onChange={setForm} users={users} />
+          <FormAlert message={formError} />
           <div className="mt-4 flex gap-2">
-            <button type="button" className="btn-primary" onClick={() => void create()}>
-              Save
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={creating}
+              onClick={() => void create()}
+            >
+              {creating ? "Saving…" : "Save"}
             </button>
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setShowForm(false)}
+              disabled={creating}
+              onClick={() => {
+                if (!confirmDiscard(JSON.stringify(form) !== JSON.stringify(emptyForm))) {
+                  return;
+                }
+                setShowForm(false);
+                setForm(emptyForm);
+                setFormError(null);
+              }}
             >
               Cancel
             </button>
@@ -775,6 +827,7 @@ export function ContactsClient({
       {edit && editingId ? (
         <RecordDrawer
           open
+          dirty={editDirty}
           onClose={closeEdit}
           title={isCompany(edit.kind) ? "Edit company" : "Edit contact"}
           ariaLabel="Edit contact"
@@ -788,12 +841,20 @@ export function ContactsClient({
               >
                 {saving ? "Saving…" : "Save changes"}
               </button>
-              <button type="button" className="btn-secondary" onClick={closeEdit}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  if (!confirmDiscard(editDirty)) return;
+                  closeEdit();
+                }}
+              >
                 Cancel
               </button>
             </div>
           }
         >
+          <FormAlert message={formError} />
           <ContactFields form={edit} onChange={setEdit} users={users} />
         </RecordDrawer>
       ) : null}

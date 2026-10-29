@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { EmailDesigner } from "@/components/email/builder/EmailDesigner";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
+import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
 import { emailCampaignHome } from "@/lib/email/category";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
@@ -15,8 +16,11 @@ export default async function EmailDesignPage({
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
-  if (!user || user.role !== "admin") {
+  if (!user || !isStaffSession(user.role)) {
     redirect("/app");
+  }
+  if (user.role !== "admin") {
+    redirect("/app/email");
   }
 
   const { kind, id } = params;

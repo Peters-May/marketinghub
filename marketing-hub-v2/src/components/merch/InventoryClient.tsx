@@ -471,12 +471,6 @@ export function InventoryClient({
   const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/merch/inventory");
-    const data = await res.json();
-    setItems(data.items ?? []);
-  }, []);
-
   const refreshCatalogue = useCallback(async () => {
     try {
       const res = await fetch("/api/merch/catalogue?include_hidden=1");
@@ -497,9 +491,8 @@ export function InventoryClient({
   }, []);
 
   useEffect(() => {
-    void refresh();
     void refreshCatalogue();
-  }, [refresh, refreshCatalogue]);
+  }, [refreshCatalogue]);
 
   function rowPreviewUrl(row: MerchInventoryItem) {
     if (row.image_url?.trim()) return row.image_url.trim();

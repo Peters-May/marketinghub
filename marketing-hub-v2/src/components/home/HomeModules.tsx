@@ -14,7 +14,7 @@ export function HomeModules({ supabaseReady }: { supabaseReady: boolean }) {
     <>
       <p className="mb-6 text-sm text-muted">
         {view === "member"
-          ? "Member view — events, partners, awards, library, Requests, and Enquiries. Switch to Admin for Content & Social, Tasks, Themes, Reporting, Budget, Contacts, and Logins."
+          ? "Member view — events, content and social, email, tasks, partners, awards, library, requests, and enquiries."
           : view === "seo"
             ? "SEO view — Enquiries only (web and WhatsApp), including source and campaign attribution."
           : view === "external"

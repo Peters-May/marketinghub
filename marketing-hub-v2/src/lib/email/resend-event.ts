@@ -1,9 +1,14 @@
+/** Permanent failure, or a temporary one we may retry. */
+export type BounceClass = "hard" | "soft";
+
 /** Fields we keep from a Resend email webhook. IP addresses are ignored. */
 export type ResendEventDetail = {
   campaignId: string | null;
   link: string;
   userAgent: string;
   occurredAt: string;
+  /** Set only when the payload includes a bounce classification. */
+  bounceClass: BounceClass | null;
 };
 
 export function readResendEventDetail(
@@ -14,7 +19,21 @@ export function readResendEventDetail(
     link: extractClickLink(data),
     userAgent: extractUserAgent(data),
     occurredAt: extractOccurredAt(data),
+    bounceClass: extractBounceClass(data),
   };
+}
+
+/**
+ * Resend uses `Permanent` for a dead address and `Transient` or
+ * `Undetermined` when delivery might succeed later.
+ */
+export function extractBounceClass(data: Record<string, unknown>): BounceClass | null {
+  const bounce = data.bounce;
+  if (!bounce || typeof bounce !== "object") return null;
+  const type = stringValue((bounce as { type?: unknown }).type).toLowerCase();
+  if (!type) return null;
+  if (type === "permanent" || type === "hard") return "hard";
+  return "soft";
 }
 
 /** Send uses `[{ name, value }]`. Webhooks return `tags` as an object. */
@@ -59,6 +78,10 @@ export function extractOccurredAt(data: Record<string, unknown>): string {
     if (stamp && !Number.isNaN(new Date(stamp).getTime())) {
       return new Date(stamp).toISOString();
     }
+  }
+  const created = stringValue(data.created_at);
+  if (created && !Number.isNaN(new Date(created).getTime())) {
+    return new Date(created).toISOString();
   }
   return "";
 }

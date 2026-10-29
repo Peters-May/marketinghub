@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   emailCampaignCategory,
   isMarketingInboxCampaign,
+  isMemberVisibleCampaign,
   isPitchCampaign,
   isPitchTabCampaign,
 } from "@/lib/email/category";
@@ -39,5 +40,24 @@ describe("email campaign category", () => {
     expect(isMarketingInboxCampaign(release)).toBe(false);
     expect(isMarketingInboxCampaign(newsletter)).toBe(true);
     expect(isPitchTabCampaign({ id: "ecamp_pitch", category: "pitch" })).toBe(true);
+  });
+
+  it("shows members sent marketing emails and hides pitches and drafts", () => {
+    expect(
+      isMemberVisibleCampaign({ id: "ecamp_asia", category: "marketing", status: "sent" })
+    ).toBe(true);
+    expect(
+      isMemberVisibleCampaign({ id: "ecamp_asia", category: "marketing", status: "draft" })
+    ).toBe(false);
+    expect(
+      isMemberVisibleCampaign({ id: "ecamp_pitch", category: "pitch", status: "sent" })
+    ).toBe(false);
+    expect(
+      isMemberVisibleCampaign({
+        id: "ecamp_rel_nl_uk",
+        category: "marketing",
+        status: "sent",
+      })
+    ).toBe(false);
   });
 });

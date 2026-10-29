@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Download } from "lucide-react";
 import type { HubEnquiry } from "@/lib/types";
@@ -17,6 +17,7 @@ import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import { EnquiryYearCompare } from "@/components/enquiries/EnquiryYearCompare";
+import { HUB_ENQUIRY_PAGE_SIZE } from "@/lib/data/hub-enquiries";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
@@ -733,6 +734,10 @@ export function EnquiriesClient({
   const canAddToMarketingList = view !== "seo";
 
   const [items, setItems] = useState(initial);
+  const [hasMore, setHasMore] = useState(
+    initial.length >= HUB_ENQUIRY_PAGE_SIZE
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
   const [configured, setConfigured] = useState(initialConfigured);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -771,16 +776,24 @@ export function EnquiriesClient({
   }, []);
 
   const refresh = useCallback(async () => {
-    const qs = showTest ? "?include_test=1" : "";
-    const res = await fetch(`/api/enquiries${qs}`);
+    const params = new URLSearchParams({
+      limit: String(HUB_ENQUIRY_PAGE_SIZE),
+    });
+    if (showTest) params.set("include_test", "1");
+    const res = await fetch(`/api/enquiries?${params}`);
     const data = await res.json();
-    setItems(data.enquiries ?? []);
+    const next = (data.enquiries ?? []) as HubEnquiry[];
+    setItems(next);
+    setHasMore(next.length >= HUB_ENQUIRY_PAGE_SIZE);
     setConfigured(data.configured !== false);
   }, [showTest]);
 
+  const showTestSeen = useRef(showTest);
   useEffect(() => {
+    if (showTestSeen.current === showTest) return;
+    showTestSeen.current = showTest;
     void refresh();
-  }, [refresh]);
+  }, [showTest, refresh]);
 
   useEffect(() => {
     if (!selected) return;
@@ -788,6 +801,29 @@ export function EnquiriesClient({
     setSelected(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync by id only
   }, [items, selected?.id]);
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        limit: String(HUB_ENQUIRY_PAGE_SIZE),
+        offset: String(items.length),
+      });
+      if (showTest) params.set("include_test", "1");
+      const res = await fetch(`/api/enquiries?${params}`);
+      const data = await res.json();
+      const next = (data.enquiries ?? []) as HubEnquiry[];
+      setItems((prev) => {
+        const seen = new Set(prev.map((item) => item.id));
+        return [...prev, ...next.filter((item) => !seen.has(item.id))];
+      });
+      setHasMore(next.length >= HUB_ENQUIRY_PAGE_SIZE);
+      setConfigured(data.configured !== false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   /** Date + test + intake tab — base pool for list/options. */
   const dated = useMemo(() => {
@@ -1344,7 +1380,14 @@ export function EnquiriesClient({
           Enquiry history {showHistory ? "▾" : "▸"}
         </button>
         {showHistory ? (
-          <EnquiryYearCompare items={yearCompareItems} includeTest />
+          <>
+            <EnquiryYearCompare items={yearCompareItems} includeTest />
+            {hasMore ? (
+              <p className="mt-2 text-xs text-muted">
+                Year totals include the enquiries loaded so far.
+              </p>
+            ) : null}
+          </>
         ) : null}
       </div>
       ) : null}
@@ -1454,6 +1497,18 @@ export function EnquiriesClient({
           </table>
         </div>
       )}
+      {hasMore ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </button>
+        </div>
+      ) : null}
       {selected && detail ? (
         <RecordDrawer
           open

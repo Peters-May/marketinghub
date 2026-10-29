@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Copy, Eye, EyeOff, ExternalLink, KeyRound } from "lucide-react";
 import type { PlatformCredential } from "@/lib/types";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import {
   PLATFORM_CREDENTIAL_PLATFORMS,
@@ -67,6 +69,7 @@ export function LoginsClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<LoginForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -106,7 +109,10 @@ export function LoginsClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<PlatformCredential>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save login"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
@@ -127,7 +133,10 @@ export function LoginsClient({
       });
       const data = await res.json().catch(() => ({}));
       const item = rowFromResponse<PlatformCredential>(data);
-      if (!res.ok || !item) return;
+      if (!res.ok || !item) {
+        setFormError(apiErrorMessage(data, "Could not save login"));
+        return;
+      }
       setItems((prev) => upsertById(prev, item));
       setEditingId(null);
       setEdit(null);
@@ -143,7 +152,11 @@ export function LoginsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete login"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
     if (editingId === id) {
       setEditingId(null);
@@ -153,6 +166,7 @@ export function LoginsClient({
 
   return (
     <div>
+      <FormAlert message={formError} />
       <PageHeader
         title="Logins"
         description="Shared marketing platform credentials. Admin only — this is an internal vault, not a replacement for a password manager."

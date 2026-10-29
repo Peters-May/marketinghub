@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { EmailCampaignSummary } from "@/components/email/EmailCampaignSummary";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
+import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
-import { emailCampaignHome } from "@/lib/email/category";
+import { emailCampaignHome, isMemberVisibleCampaign } from "@/lib/email/category";
 import { buildCampaignReport } from "@/lib/email/campaign-report";
 import {
   getEmailCampaign,
@@ -21,9 +22,10 @@ export default async function EmailCampaignSummaryPage({
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
-  if (!user || user.role !== "admin") {
+  if (!user || !isStaffSession(user.role)) {
     redirect("/app");
   }
+  const isAdmin = user.role === "admin";
 
   const [campaign, audiences, events, contacts, suppressions] = await Promise.all([
     getEmailCampaign(params.id),
@@ -33,7 +35,10 @@ export default async function EmailCampaignSummaryPage({
     listEmailSuppressions(),
   ]);
   if (!campaign) notFound();
-  if (campaign.status !== "sent" && campaign.status !== "sending") {
+  if (!isAdmin && !isMemberVisibleCampaign(campaign)) {
+    redirect("/app/email");
+  }
+  if (isAdmin && campaign.status !== "sent" && campaign.status !== "sending") {
     redirect(`/app/email/design/campaign/${encodeURIComponent(campaign.id)}`);
   }
 
@@ -53,7 +58,8 @@ export default async function EmailCampaignSummaryPage({
       audienceName={audienceName}
       report={report}
       sentCount={events.filter((event) => event.kind === "sent").length}
-      backHref={emailCampaignHome(campaign)}
+      backHref={isAdmin ? emailCampaignHome(campaign) : "/app/email"}
+      allowCopy={isAdmin}
     />
   );
 }

@@ -104,7 +104,6 @@ export function ContentSocialHub({
       />
 
       <ContentClient
-        key={scope}
         initialOpenId={initialOpenId}
         initial={initialContent}
         hideHeader

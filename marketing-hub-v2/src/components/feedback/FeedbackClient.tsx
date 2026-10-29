@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react";
 import { Bug, Lightbulb, Sparkles, MessageSquare, Plus, ChevronDown, ChevronUp, Trash2, CheckCircle2, Circle, Clock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 
 export type FeedbackItem = {
   id: string;
@@ -58,6 +60,7 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/feedback");
@@ -134,8 +137,12 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
         },
       }),
     });
+    const data = await res.json().catch(() => ({}));
     setEditSaving(false);
-    if (!res.ok) return;
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not save feedback"));
+      return;
+    }
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
@@ -174,6 +181,7 @@ export function FeedbackClient({ initial, isAdmin, currentUserId, currentUserNam
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-4xl mx-auto">
+      <FormAlert message={formError} />
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

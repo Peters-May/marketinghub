@@ -1224,7 +1224,7 @@ export type EmailSuppression = {
   id: string;
   email: string;
   reason: EmailSuppressionReason;
-  /** Why the recipient left (unsubscribe only). Empty for bounce/complaint. */
+  /** Why the recipient left, or whether a bounce was permanent. Empty when unknown. */
   detail?: string;
   contact_id: string | null;
   campaign_id: string | null;

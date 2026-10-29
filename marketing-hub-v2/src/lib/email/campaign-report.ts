@@ -1,3 +1,4 @@
+import { bounceListNote } from "@/lib/email/bounce-policy";
 import { linkKey } from "@/lib/email/click-map";
 import {
   campaignClickRateLabel,
@@ -193,10 +194,12 @@ export function buildCampaignReport(input: {
     }
     if (event.kind === "bounced" && !seenBounce.has(email)) {
       seenBounce.add(email);
+      const detail = bounceListNote(event.meta);
       bouncedPeople.push({
         email,
         name: names.get(email) || email,
         reason: "bounce",
+        ...(detail ? { detail } : {}),
       });
     }
   }

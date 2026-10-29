@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   MembershipType,
   PartnerKind,
@@ -8,6 +8,8 @@ import type {
   SponsorshipStatus,
 } from "@/lib/types";
 import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage } from "@/lib/ui/form-feedback";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
 import { useHubView } from "@/lib/hub-view";
@@ -123,6 +125,7 @@ export function SponsorshipsClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EditForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
   const [membershipTypeFilter, setMembershipTypeFilter] = useState("all");
@@ -169,16 +172,6 @@ export function SponsorshipsClient({
   useEffect(() => {
     if (!isAdminView) setFormKind("membership");
   }, [isAdminView]);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/sponsorships");
-    const data = await res.json();
-    setItems(data.sponsorships ?? []);
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useEffect(() => {
     if (!selected) return;
@@ -285,7 +278,10 @@ export function SponsorshipsClient({
     });
     const data = await res.json().catch(() => ({}));
     const item = rowFromResponse<Sponsorship>(data);
-    if (!res.ok || !item) return;
+    if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save partner"));
+      return;
+    }
     setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyForm);
@@ -326,7 +322,10 @@ export function SponsorshipsClient({
       });
       const data = await res.json().catch(() => ({}));
       const item = rowFromResponse<Sponsorship>(data);
-      if (!res.ok || !item) return;
+      if (!res.ok || !item) {
+      setFormError(apiErrorMessage(data, "Could not save partner"));
+      return;
+    }
       setItems((prev) => upsertById(prev, item));
       closeEdit();
     } finally {
@@ -344,7 +343,10 @@ export function SponsorshipsClient({
     });
     const data = await res.json().catch(() => ({}));
     const saved = rowFromResponse<Sponsorship>(data);
-    if (!res.ok || !saved) return;
+    if (!res.ok || !saved) {
+      setFormError(apiErrorMessage(data, "Could not update partner"));
+      return;
+    }
     setItems((prev) => upsertById(prev, saved));
     if (editingId === id && edit) setEdit({ ...edit, status: saved.status });
   }
@@ -358,7 +360,11 @@ export function SponsorshipsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete partner"));
+      return;
+    }
     setItems((prev) => removeById(prev, id));
     if (editingId === id) closeEdit();
     if (selected?.id === id) setSelected(null);
@@ -439,6 +445,7 @@ export function SponsorshipsClient({
 
   return (
     <div>
+      <FormAlert message={formError} />
       {hideHeader ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-display text-xl text-brand">{nounTitle}</h2>

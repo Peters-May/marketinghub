@@ -62,6 +62,7 @@ import { RichTextView } from "@/components/ui/RichTextView";
 import { plainTextFromHtml } from "@/lib/plain-text";
 import { statusEventColor } from "@/lib/ui/statusTokens";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { confirmDiscard } from "@/lib/ui/form-feedback";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
@@ -292,7 +293,11 @@ export function ContentClient({
   const [edit, setEdit] = useState<EditForm | null>(
     openedItem ? toEditForm(openedItem) : null
   );
+  const [editBaseline, setEditBaseline] = useState<string | null>(
+    openedItem ? JSON.stringify(toEditForm(openedItem)) : null
+  );
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -483,6 +488,7 @@ export function ContentClient({
     ? items.find((i) => i.id === editingId) ?? null
     : null;
   const editLocked = editingItem?.status === "published";
+  const editDirty = edit != null && JSON.stringify(edit) !== editBaseline;
 
   async function syncFromPlanable() {
     setSyncing(true);
@@ -575,7 +581,10 @@ export function ContentClient({
   );
 
   async function create() {
+    if (creating) return;
+    setCreating(true);
     setSyncMessage(null);
+    try {
     const res = await fetch("/api/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -600,11 +609,18 @@ export function ContentClient({
     if (item) setItems((prev) => upsertById(prev, item));
     setShowForm(false);
     setForm(emptyFormForScope(scope));
+    } catch {
+      setSyncMessage("Could not save content");
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEdit(item: ContentItem) {
+    const next = toEditForm(item);
     setEditingId(item.id);
-    setEdit(toEditForm(item));
+    setEdit(next);
+    setEditBaseline(JSON.stringify(next));
   }
 
   function openCreateOnDate(dateStr: string) {
@@ -624,6 +640,7 @@ export function ContentClient({
   function closeEdit() {
     setEditingId(null);
     setEdit(null);
+    setEditBaseline(null);
   }
 
   async function saveEdit() {
@@ -948,7 +965,17 @@ export function ContentClient({
       )}
 
       {syncMessage ? (
-        <p className="mb-4 text-xs text-muted">{syncMessage}</p>
+        <p
+          className={cn(
+            "mb-4 text-sm",
+            syncMessage.startsWith("Planable sync:")
+              ? "text-muted"
+              : "text-[var(--danger)]"
+          )}
+          role={syncMessage.startsWith("Planable sync:") ? "status" : "alert"}
+        >
+          {syncMessage}
+        </p>
       ) : null}
 
       <div
@@ -1248,13 +1275,27 @@ export function ContentClient({
             />
           </div>
           <div className="flex gap-2">
-            <button type="button" className="btn-primary" onClick={() => void create()}>
-              Save
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={creating}
+              onClick={() => void create()}
+            >
+              {creating ? "Saving…" : "Save"}
             </button>
             <button
               type="button"
               className="btn-secondary"
+              disabled={creating}
               onClick={() => {
+                if (
+                  !confirmDiscard(
+                    JSON.stringify(form) !==
+                      JSON.stringify(emptyFormForScope(scope))
+                  )
+                ) {
+                  return;
+                }
                 setShowForm(false);
                 setForm(emptyFormForScope(scope));
               }}
@@ -1502,6 +1543,7 @@ export function ContentClient({
       {edit && editingItem ? (
         <RecordDrawer
           open
+          dirty={editDirty && !editLocked}
           onClose={closeEdit}
           title={editLocked ? "Published piece (locked)" : "Edit piece"}
           ariaLabel="Edit content piece"
@@ -1529,7 +1571,10 @@ export function ContentClient({
                 type="button"
                 className="btn-secondary"
                 disabled={saving}
-                onClick={closeEdit}
+                onClick={() => {
+                  if (!editLocked && !confirmDiscard(editDirty)) return;
+                  closeEdit();
+                }}
               >
                 {editLocked ? "Close" : "Cancel"}
               </button>

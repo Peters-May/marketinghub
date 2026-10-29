@@ -23,6 +23,8 @@ import type {
 import { EventCostsModal } from "@/components/events/EventCostsModal";
 import { EventPlanning } from "@/components/events/EventPlanning";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
+import { FormAlert } from "@/components/ui/FormAlert";
+import { apiErrorMessage, confirmDiscard } from "@/lib/ui/form-feedback";
 import { participationColor, participationOf } from "@/lib/events/participation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { FullCalendarStyles } from "@/components/ui/FullCalendarStyles";
@@ -1280,7 +1282,11 @@ export function EventsClient({
   const [form, setForm] = useState<EventForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<EventForm | null>(null);
+  const [editBaseline, setEditBaseline] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const editDirty = edit != null && JSON.stringify(edit) !== editBaseline;
   const attendanceOpsPending = useRef(
     new Map<
       string,
@@ -1323,10 +1329,6 @@ export function EventsClient({
       setAllAttendance(data.attendance);
     }
   }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   useHubDataRefresh("events", () => {
     void refresh();
@@ -1625,8 +1627,8 @@ export function EventsClient({
   ]);
 
   /**
-   * On the default window, the calendar still shows past months.
-   * Events after the end date stay hidden until the range is widened.
+   * Same window as the list: today through the next three months, unless
+   * the date filter has been changed.
    */
   const calendarFiltered = useMemo(() => {
     return events.filter((e) => {
@@ -1641,9 +1643,6 @@ export function EventsClient({
         )
       ) {
         return false;
-      }
-      if (isDefaultUpcomingDateRange(dateFrom, dateTo)) {
-        return matchesDateRange(e, "", dateTo);
       }
       return matchesDateRange(e, dateFrom, dateTo);
     });
@@ -1847,38 +1846,56 @@ export function EventsClient({
   }, [flashSyncNotice]);
 
   async function createEvent() {
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        starts_at: form.starts_at
-          ? new Date(form.starts_at).toISOString()
-          : null,
-        ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    const event = rowFromResponse<EventItem>(data, "event");
-    if (!res.ok || !event) return;
-    setEvents((prev) => upsertById(prev, event));
-    setShowForm(false);
-    setForm(emptyForm);
+    if (creating) return;
+    setCreating(true);
+    setFormError(null);
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          starts_at: form.starts_at
+            ? new Date(form.starts_at).toISOString()
+            : null,
+          ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const event = rowFromResponse<EventItem>(data, "event");
+      if (!res.ok || !event) {
+        setFormError(apiErrorMessage(data, "Could not save event"));
+        return;
+      }
+      setEvents((prev) => upsertById(prev, event));
+      setShowForm(false);
+      setForm(emptyForm);
+    } catch {
+      setFormError("Could not save event");
+    } finally {
+      setCreating(false);
+    }
   }
 
   function openEdit(event: EventItem) {
+    const next = toEditForm(event);
     setEditingId(event.id);
-    setEdit(toEditForm(event));
+    setEdit(next);
+    setEditBaseline(JSON.stringify(next));
+    setFormError(null);
   }
 
   function closeEdit() {
     setEditingId(null);
     setEdit(null);
+    setEditBaseline(null);
+    setFormError(null);
   }
 
   async function saveEdit() {
-    if (!editingId || !edit) return;
+    if (!editingId || !edit || saving) return;
     setSaving(true);
+    setFormError(null);
     try {
       const res = await fetch("/api/events", {
         method: "POST",
@@ -1917,9 +1934,14 @@ export function EventsClient({
       });
       const data = await res.json().catch(() => ({}));
       const event = rowFromResponse<EventItem>(data, "event");
-      if (!res.ok || !event) return;
+      if (!res.ok || !event) {
+        setFormError(apiErrorMessage(data, "Could not save event"));
+        return;
+      }
       setEvents((prev) => upsertById(prev, event));
       closeEdit();
+    } catch {
+      setFormError("Could not save event");
     } finally {
       setSaving(false);
     }
@@ -1968,7 +1990,11 @@ export function EventsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "delete", id }),
     });
-    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFormError(apiErrorMessage(data, "Could not delete event"));
+      return;
+    }
     setEvents((prev) => removeById(prev, id));
     setAllAttendance((prev) => prev.filter((row) => row.event_id !== id));
     if (editingId === id) closeEdit();
@@ -2160,6 +2186,8 @@ export function EventsClient({
           onToChange: setDateTo,
           clearFrom: todayDateKey(),
           clearTo: defaultToDateKey(),
+          fromLabel: "From",
+          toLabel: "To",
         }}
         selects={[
           {
@@ -2197,6 +2225,13 @@ export function EventsClient({
           },
         ]}
       />
+
+      {isDefaultUpcomingDateRange(dateFrom, dateTo) ? (
+        <p className="-mt-2 mb-4 text-xs text-muted">
+          List and calendar show today through the next three months.
+        </p>
+      ) : null}
+      {!showForm && !edit ? <FormAlert message={formError} /> : null}
 
       {viewMode !== "dashboard" ? (
       <>
@@ -2271,18 +2306,28 @@ export function EventsClient({
             divisionOptions={divisionOptions}
             showAdminChecks={showAttendanceOps}
           />
+          <FormAlert message={formError} />
           <div className="mt-4 flex gap-2">
             <button
               type="button"
               className="btn-primary"
+              disabled={creating}
               onClick={() => void createEvent()}
             >
-              Save
+              {creating ? "Saving…" : "Save"}
             </button>
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => setShowForm(false)}
+              disabled={creating}
+              onClick={() => {
+                if (!confirmDiscard(JSON.stringify(form) !== JSON.stringify(emptyForm))) {
+                  return;
+                }
+                setShowForm(false);
+                setForm(emptyForm);
+                setFormError(null);
+              }}
             >
               Cancel
             </button>
@@ -2313,6 +2358,15 @@ export function EventsClient({
             <FullCalendar
               plugins={[dayGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"
+              initialDate={dateFrom || undefined}
+              validRange={
+                dateFrom && dateTo
+                  ? {
+                      start: dateFrom,
+                      end: format(addDays(parseISO(dateTo), 1), "yyyy-MM-dd"),
+                    }
+                  : undefined
+              }
               height="auto"
               firstDay={1}
               editable
@@ -2845,6 +2899,7 @@ export function EventsClient({
       {edit && editingEvent ? (
         <RecordDrawer
           open
+          dirty={editDirty}
           onClose={closeEdit}
           title="Edit event"
           ariaLabel="Edit event"
@@ -2861,7 +2916,10 @@ export function EventsClient({
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={closeEdit}
+                onClick={() => {
+                  if (!confirmDiscard(editDirty)) return;
+                  closeEdit();
+                }}
               >
                 Cancel
               </button>
@@ -2878,6 +2936,7 @@ export function EventsClient({
             </div>
           }
         >
+          <FormAlert message={formError} />
           <EventFields
             form={edit}
             onChange={setEdit}

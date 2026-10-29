@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { EmailMarketingHub } from "@/components/email/EmailMarketingHub";
 import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
+import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
 import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import {
@@ -14,6 +15,7 @@ import {
 import { isMarketingList, toAudienceListOption } from "@/lib/email/audience-list";
 import {
   isMarketingInboxCampaign,
+  isMemberVisibleCampaign,
   isPitchTabCampaign,
 } from "@/lib/email/category";
 import type { EmailCampaign, EmailTemplate } from "@/lib/types";
@@ -28,18 +30,43 @@ export default async function EmailPage({
 }) {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
-  if (!user || user.role !== "admin") {
+  if (!user || !isStaffSession(user.role)) {
     redirect("/app");
   }
+  const isAdmin = user.role === "admin";
 
-  if (searchParams?.campaign) {
+  if (searchParams?.campaign && isAdmin) {
     redirect(`/app/email/design/campaign/${encodeURIComponent(searchParams.campaign)}`);
   }
 
-  try {
-    await queueDueCampaignSends(1, { resumeInterrupted: false });
-  } catch (err) {
-    console.error("[email] scheduled send", err);
+  if (isAdmin) {
+    try {
+      await queueDueCampaignSends(1, { resumeInterrupted: false });
+    } catch (err) {
+      console.error("[email] scheduled send", err);
+    }
+  }
+
+  if (!isAdmin) {
+    const campaigns = await listEmailCampaigns();
+    const requested = searchParams?.campaign;
+    if (requested) {
+      const match = campaigns.find((campaign) => campaign.id === requested);
+      if (match && isMemberVisibleCampaign(match)) {
+        redirect(`/app/email/campaign/${encodeURIComponent(match.id)}`);
+      }
+    }
+    return (
+      <EmailMarketingHub
+        memberView
+        initialCampaigns={campaigns
+          .filter(isMemberVisibleCampaign)
+          .map(withoutEmailDocument)}
+        initialTemplates={[]}
+        initialAudiences={[]}
+        initialLists={[]}
+      />
+    );
   }
 
   const [campaigns, templates, audiences, lists, contentTitles] = await Promise.all([
