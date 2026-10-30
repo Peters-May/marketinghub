@@ -1595,6 +1595,8 @@ export function ContentClient({
                     Platform preview
                   </p>
                   <PlatformPostPreview
+                    key={editingItem.id}
+                    mode="switch"
                     platforms={edit.channel}
                     caption={stripHtml(edit.caption || edit.title)}
                     captionHtml={edit.caption}
