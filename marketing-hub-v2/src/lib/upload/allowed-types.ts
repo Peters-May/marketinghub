@@ -43,18 +43,19 @@ export const ALLOWED_UPLOAD_MIME = new Set([
   // Archives / design packages
   "application/zip",
   "application/x-zip-compressed",
-  // Video
+  // Video (.m4v is MPEG-4; browsers often report video/x-m4v or video/mp4)
   "video/mp4",
   "video/quicktime",
+  "video/x-m4v",
 ]);
 
 /** Extension fallback when browsers send empty / octet-stream MIME. */
 export const ALLOWED_UPLOAD_EXT =
-  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|docx?|xlsx?|xlsm|pptx?|csv|txt|rtf|odt|ods|odp|zip)$/i;
+  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|m4v|docx?|xlsx?|xlsm|pptx?|csv|txt|rtf|odt|ods|odp|zip)$/i;
 
 /** HTML file input `accept` — MIME + extensions for broader picker support. */
 export const UPLOAD_ACCEPT =
-  "image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,video/mp4,video/quicktime,.jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.rtf,.odt,.ods,.odp,.zip,.mp4,.mov";
+  "image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,video/mp4,video/quicktime,video/x-m4v,.jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.rtf,.odt,.ods,.odp,.zip,.mp4,.mov,.m4v";
 
 export const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -64,6 +65,7 @@ export const MIME_BY_EXT: Record<string, string> = {
   ".webp": "image/webp",
   ".pdf": "application/pdf",
   ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
   ".mov": "video/quicktime",
   ".doc": "application/msword",
   ".docx":
@@ -86,6 +88,7 @@ export const MIME_BY_EXT: Record<string, string> = {
 const FORCE_DOWNLOAD_EXT = new Set([
   ".pdf",
   ".mp4",
+  ".m4v",
   ".mov",
   ".doc",
   ".docx",
@@ -101,6 +104,16 @@ const FORCE_DOWNLOAD_EXT = new Set([
   ".odp",
   ".zip",
 ]);
+
+/**
+ * Content-Type stored with the file. An .m4v is MPEG-4; label it as MP4 so
+ * players and Planable treat it like the other video uploads.
+ */
+export function uploadContentType(name: string, type?: string): string {
+  if (/\.m4v$/i.test(name)) return "video/mp4";
+  const mime = (type || "").trim();
+  return mime || "application/octet-stream";
+}
 
 export function isBlockedUpload(name: string, type?: string) {
   return type === "image/svg+xml" || /\.svg$/i.test(name);

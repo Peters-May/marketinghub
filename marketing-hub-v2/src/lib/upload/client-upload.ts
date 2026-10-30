@@ -8,6 +8,7 @@
 import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_BYTES_ADMIN,
+  uploadContentType,
 } from "@/lib/upload/allowed-types";
 
 export type UploadedAsset = {
@@ -74,7 +75,7 @@ function putFileWithProgress(
     return fetch(url, {
       method: "PUT",
       headers: {
-        "Content-Type": file.type || "application/octet-stream",
+        "Content-Type": uploadContentType(file.name, file.type),
       },
       body: file,
     }).then(async (putRes) => {
@@ -93,7 +94,10 @@ function putFileWithProgress(
     const xhr = new XMLHttpRequest();
     const lastEmit = { at: 0 };
     xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader(
+      "Content-Type",
+      uploadContentType(file.name, file.type)
+    );
     xhr.upload.onprogress = (event) => {
       const total = event.lengthComputable ? event.total : file.size;
       reportProgress(onProgress, event.loaded, total, false, lastEmit);
@@ -141,7 +145,7 @@ export async function uploadAssetDirect(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: file.name,
-      type: file.type || "application/octet-stream",
+      type: uploadContentType(file.name, file.type),
       size: file.size,
     }),
   });

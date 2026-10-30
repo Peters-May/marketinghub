@@ -8,6 +8,7 @@ import { getDataDir } from "@/lib/store/paths";
 import {
   isAllowedUpload,
   maxUploadBytesForRole,
+  uploadContentType,
 } from "@/lib/upload/allowed-types";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +83,11 @@ export async function POST(request: NextRequest) {
   const bytes = Buffer.from(await blob.arrayBuffer());
   const filename = `${Date.now()}-${safeName(blob.name || "asset")}`;
 
-  const remoteUrl = await uploadToSupabase(bytes, filename, type);
+  const remoteUrl = await uploadToSupabase(
+    bytes,
+    filename,
+    uploadContentType(blob.name, type)
+  );
   if (remoteUrl) {
     return jsonOk({ url: remoteUrl, name: blob.name, storage: "supabase" });
   }

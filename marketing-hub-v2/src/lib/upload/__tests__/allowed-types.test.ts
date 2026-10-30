@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedUpload } from "@/lib/upload/allowed-types";
+import { isAllowedUpload, uploadContentType } from "@/lib/upload/allowed-types";
 
 describe("isAllowedUpload", () => {
   it("rejects HTML and SVG even when the other half looks safe", () => {
@@ -13,5 +13,15 @@ describe("isAllowedUpload", () => {
     expect(isAllowedUpload("yard.png", "image/png")).toBe(true);
     expect(isAllowedUpload("notes.pdf", "")).toBe(true);
     expect(isAllowedUpload("pasted", "image/png")).toBe(true);
+  });
+
+  it("allows M4V and stores it as MP4", () => {
+    expect(isAllowedUpload("arrival.m4v", "video/mp4")).toBe(true);
+    expect(isAllowedUpload("arrival.m4v", "video/x-m4v")).toBe(true);
+    expect(isAllowedUpload("arrival.m4v", "")).toBe(true);
+    expect(isAllowedUpload("arrival.m4v", "application/octet-stream")).toBe(true);
+    expect(isAllowedUpload("clip.exe", "video/x-m4v")).toBe(false);
+    expect(uploadContentType("arrival.m4v", "video/x-m4v")).toBe("video/mp4");
+    expect(uploadContentType("arrival.mp4", "video/mp4")).toBe("video/mp4");
   });
 });
