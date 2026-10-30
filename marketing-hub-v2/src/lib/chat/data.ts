@@ -1,3 +1,7 @@
+import {
+  SITE_KB_PREFIX,
+  knowledgeQueryWords,
+} from "@/lib/chat/site-knowledge";
 import { uid } from "@/lib/utils";
 import {
   createServiceClient,
@@ -191,6 +195,100 @@ export async function listKbDocuments(opts?: {
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []).map((r) => rowToKb(r as Record<string, unknown>));
+}
+
+/** Train tab: staff documents in full, website copies without the page text. */
+export async function listKbCatalogue(): Promise<ChatKbDocument[]> {
+  const supabase = requireService();
+  const [manuals, site] = await Promise.all([
+    supabase
+      .from("chat_kb_documents")
+      .select("*")
+      .not("id", "like", `${SITE_KB_PREFIX}%`)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("chat_kb_documents")
+      .select("id,title,source_url,active,sort_order,created_at,updated_at")
+      .like("id", `${SITE_KB_PREFIX}%`)
+      .order("title", { ascending: true })
+      .limit(2000),
+  ]);
+  if (manuals.error) throw new Error(manuals.error.message);
+  if (site.error) throw new Error(site.error.message);
+  return [
+    ...(manuals.data ?? []).map((r) => rowToKb(r as Record<string, unknown>)),
+    ...(site.data ?? []).map((r) =>
+      rowToKb({ ...(r as Record<string, unknown>), body: "" })
+    ),
+  ];
+}
+
+export async function getKbDocument(id: string): Promise<ChatKbDocument | null> {
+  const supabase = requireService();
+  const { data, error } = await supabase
+    .from("chat_kb_documents")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return rowToKb(data as Record<string, unknown>);
+}
+
+/**
+ * Staff documents plus website pages that mention the question.
+ * Avoids loading every copied page on each visitor message.
+ */
+export async function searchKbDocuments(query: string): Promise<ChatKbDocument[]> {
+  const supabase = requireService();
+  const manuals = await supabase
+    .from("chat_kb_documents")
+    .select("*")
+    .eq("active", true)
+    .not("id", "like", `${SITE_KB_PREFIX}%`)
+    .order("sort_order", { ascending: true });
+  if (manuals.error) throw new Error(manuals.error.message);
+  const manualDocs = (manuals.data ?? []).map((r) =>
+    rowToKb(r as Record<string, unknown>)
+  );
+
+  const words = knowledgeQueryWords(query);
+  if (words.length === 0) return manualDocs;
+
+  const longest = [...words].sort((a, b) => b.length - a.length)[0];
+  const titleOr = words.map((word) => `title.ilike.%${word}%`).join(",");
+  const [byTitle, byBody] = await Promise.all([
+    supabase
+      .from("chat_kb_documents")
+      .select("*")
+      .eq("active", true)
+      .like("id", `${SITE_KB_PREFIX}%`)
+      .or(titleOr)
+      .limit(12),
+    supabase
+      .from("chat_kb_documents")
+      .select("*")
+      .eq("active", true)
+      .like("id", `${SITE_KB_PREFIX}%`)
+      .ilike("body", `%${longest}%`)
+      .limit(24),
+  ]);
+  if (byTitle.error || byBody.error) {
+    console.warn(
+      "[chat-kb-search]",
+      byTitle.error?.message ?? byBody.error?.message
+    );
+    return manualDocs;
+  }
+  const seen = new Set<string>();
+  const siteDocs: ChatKbDocument[] = [];
+  for (const row of [...(byTitle.data ?? []), ...(byBody.data ?? [])]) {
+    const doc = rowToKb(row as Record<string, unknown>);
+    if (seen.has(doc.id)) continue;
+    seen.add(doc.id);
+    siteDocs.push(doc);
+  }
+  return [...manualDocs, ...siteDocs];
 }
 
 export async function upsertKbDocument(

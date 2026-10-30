@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
   type FormEvent,
 } from "react";
 import {
@@ -171,6 +172,7 @@ export function AiAssistantPanel({
   const [draft, setDraft] = useState<DraftResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [fullPage, setFullPage] = useState(false);
@@ -196,10 +198,8 @@ export function AiAssistantPanel({
     setCopied(false);
   }, []);
 
-  async function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
+  async function addFiles(files: File[]) {
+    if (!files.length || busy || uploading) return;
     setUploading(true);
     setError(null);
     try {
@@ -223,6 +223,49 @@ export function AiAssistantPanel({
     } finally {
       setUploading(false);
     }
+  }
+
+  function onPickFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void addFiles(files);
+  }
+
+  function dragHasFiles(event: DragEvent<HTMLDivElement>) {
+    return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  }
+
+  function onAssistantDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (busy || uploading || !dragHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(true);
+  }
+
+  function onAssistantDragOver(event: DragEvent<HTMLDivElement>) {
+    if (busy || uploading || !dragHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    if (!dragActive) setDragActive(true);
+  }
+
+  function onAssistantDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (!dragHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setDragActive(false);
+  }
+
+  function onAssistantDrop(event: DragEvent<HTMLDivElement>) {
+    if (!dragHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    if (busy || uploading) return;
+    void addFiles(Array.from(event.dataTransfer.files));
   }
 
   async function previewCommand(text: string) {
@@ -594,7 +637,13 @@ export function AiAssistantPanel({
       aria-label="Assistant"
     >
       {open ? (
-        <>
+        <div
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+          onDragEnter={onAssistantDragEnter}
+          onDragOver={onAssistantDragOver}
+          onDragLeave={onAssistantDragLeave}
+          onDrop={onAssistantDrop}
+        >
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-brand">Assistant</h2>
@@ -712,7 +761,7 @@ export function AiAssistantPanel({
             <p className="text-xs text-muted">
               {readOnly
                 ? "Ask about enquiry statistics, the library, events, or scheduled and published content. This assistant cannot save records."
-                : "Upload a brief or asset, then ask for a draft, a rewrite, or to add a task, event, or social post. You can also ask to link existing posts to an event. Nothing is saved until you confirm."}
+                : "Drop or upload a brief or asset, then ask for a draft, a rewrite, or to add a task, event, or social post. You can also ask to link existing posts to an event. Nothing is saved until you confirm."}
             </p>
           ) : null}
           {messages.map((msg) => (
@@ -970,11 +1019,16 @@ export function AiAssistantPanel({
                 </button>
               </div>
               <p className="text-[11px] text-muted">
-                Images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
+                Drop files here, or use Upload · images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
               </p>
             </form>
           </div>
-        </>
+          {dragActive ? (
+            <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand bg-white/95 px-6 text-center text-sm font-medium text-brand">
+              Drop to attach
+            </div>
+          ) : null}
+        </div>
       ) : (
         <button
           type="button"

@@ -11,6 +11,10 @@
     {
       "path": "/api/automation/daily",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/chat/sync-site",
+      "schedule": "0 6 1 * *"
     }
   ]
 }

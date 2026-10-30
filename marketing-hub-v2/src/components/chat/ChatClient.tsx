@@ -7,6 +7,7 @@ import {
   DEFAULT_CHAT_GREETING,
   DEFAULT_ENQUIRY_CHAT_GUIDANCE,
 } from "@/lib/chat/enquiry-guidance";
+import { SITE_KB_PREFIX } from "@/lib/chat/site-knowledge";
 import { ALLOWLISTED_SITE_PAGES } from "@/lib/chat/site-pages";
 import { cn } from "@/lib/utils";
 import type {
@@ -201,6 +202,8 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     source_url: "",
     body: "",
   });
+  const [syncNote, setSyncNote] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   const loadSessions = useCallback(async () => {
     const res = await fetch("/api/chat/admin?view=sessions&status=all");
@@ -428,6 +431,84 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       setError(e instanceof Error ? e.message : "KB save failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function openKb(doc: ChatKbDocument) {
+    let next = doc;
+    if (doc.id.startsWith(SITE_KB_PREFIX) && !doc.body) {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/chat/admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get_kb", id: doc.id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Could not open this page");
+        next = data.document as ChatKbDocument;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not open this page");
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+    setKbForm({
+      id: next.id,
+      title: next.title,
+      source_url: next.source_url,
+      body: next.body,
+    });
+    setKbOpen(true);
+  }
+
+  async function updateFromWebsite() {
+    setSyncing(true);
+    setSyncNote("Starting the website update…");
+    setError("");
+    try {
+      const res = await fetch("/api/chat/sync-site", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not start the update");
+      const runId = String(data.runId ?? "");
+      if (!runId) throw new Error("Could not start the update");
+      for (let i = 0; i < 120; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const statusRes = await fetch(
+          `/api/chat/sync-site?runId=${encodeURIComponent(runId)}`
+        );
+        const status = await statusRes.json();
+        if (!statusRes.ok) {
+          throw new Error(status.error ?? "Could not check the update");
+        }
+        if (status.status === "completed") {
+          const result = status.result ?? {};
+          const copied = Number(result.updated ?? 0);
+          const failed = Number(result.failed ?? 0);
+          const missed =
+            failed === 1 ? "1 page could not be read." : `${failed} pages could not be read.`;
+          setSyncNote(
+            failed > 0
+              ? `Copied ${copied} pages. ${missed}`
+              : `Copied ${copied} pages from petersandmay.com.`
+          );
+          await loadKb();
+          return;
+        }
+        if (status.status === "failed" || status.status === "cancelled") {
+          throw new Error(status.error ?? "The website update did not finish.");
+        }
+        setSyncNote("Reading petersandmay.com…");
+      }
+      setSyncNote(
+        "The update is still running. Refresh this page in a few minutes."
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Website update failed");
+      setSyncNote("");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -1118,7 +1199,8 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 Knowledge base
               </h2>
               <p className="mt-1 text-sm text-[#5b6472]">
-                Documents the assistant may quote, and the published pages it can read.
+                Documents the assistant may quote. Public pages from petersandmay.com
+                are copied in on the first day of each month.
               </p>
             </div>
             <div className="space-y-4 px-6 py-5">
@@ -1132,21 +1214,15 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {documents.map((d) => (
+                  {documents
+                    .filter((d) => !d.id.startsWith(SITE_KB_PREFIX))
+                    .map((d) => (
                     <tr key={d.id} className="border-t border-border">
                       <td className="py-2">
                         <button
                           type="button"
                           className="text-left font-medium text-[#0B2545]"
-                          onClick={() => {
-                            setKbForm({
-                              id: d.id,
-                              title: d.title,
-                              source_url: d.source_url,
-                              body: d.body,
-                            });
-                            setKbOpen(true);
-                          }}
+                          onClick={() => void openKb(d)}
                         >
                           {d.title}
                         </button>
@@ -1209,6 +1285,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               }
             >
               <div className="space-y-3">
+                {kbForm.id.startsWith(SITE_KB_PREFIX) ? (
+                  <p className="text-sm text-[#5b6472]">
+                    This page is copied from the website. The next update replaces
+                    this text. Add a separate document for a note that must stay.
+                  </p>
+                ) : null}
                 <input
                   className="field"
                   placeholder="Title"
@@ -1235,9 +1317,56 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                 />
               </div>
             </RecordDrawer>
+            <div className="rounded-lg border border-[#e3e6e9] bg-[#f4f6f7] px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#0B2545]">
+                    From the website
+                  </h3>
+                  <p className="mt-1 max-w-xl text-sm text-[#5b6472]">
+                    {documents.filter((d) => d.id.startsWith(SITE_KB_PREFIX)).length}{" "}
+                    public pages copied from petersandmay.com. The copy updates on
+                    the first day of each month. Sailing schedules stay live, because
+                    those dates change more often.
+                  </p>
+                  {syncNote ? (
+                    <p className="mt-2 text-sm text-[#0B2545]">{syncNote}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary disabled:opacity-50"
+                  disabled={syncing || busy}
+                  onClick={() => void updateFromWebsite()}
+                >
+                  {syncing ? "Updating…" : "Update from website"}
+                </button>
+              </div>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm font-medium text-[#005f97]">
+                  Browse copied pages
+                </summary>
+                <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-sm">
+                  {documents
+                    .filter((d) => d.id.startsWith(SITE_KB_PREFIX))
+                    .map((d) => (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          className="text-left text-[#0B2545]"
+                          onClick={() => void openKb(d)}
+                        >
+                          {d.title || d.source_url}
+                          {d.active ? "" : " (inactive)"}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            </div>
             <div>
               <h3 className="text-xs font-semibold text-[#0B2545]">
-                Published pages the assistant may read
+                Pages also read live when the question matches
               </h3>
               <ul className="mt-2 space-y-1 text-xs text-muted">
                 {ALLOWLISTED_SITE_PAGES.map((p) => (

@@ -24,4 +24,23 @@ describe("isAllowedUpload", () => {
     expect(uploadContentType("arrival.m4v", "video/x-m4v")).toBe("video/mp4");
     expect(uploadContentType("arrival.mp4", "video/mp4")).toBe("video/mp4");
   });
+
+  it("allows Outlook email templates", () => {
+    expect(
+      isAllowedUpload(
+        "Booking Confirmation and Next Steps V6.oft",
+        "application/vnd.ms-outlook"
+      )
+    ).toBe(true);
+    expect(
+      isAllowedUpload(
+        "Booking Confirmation and Next Steps V6.oft",
+        "application/octet-stream"
+      )
+    ).toBe(true);
+    expect(isAllowedUpload("Booking Confirmation.oft", "")).toBe(true);
+    expect(uploadContentType("Booking Confirmation.oft", "")).toBe(
+      "application/vnd.ms-outlook"
+    );
+  });
 });

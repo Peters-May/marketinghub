@@ -32,13 +32,24 @@ Tables: `chat_settings`, `chat_kb_documents`, `chat_sessions`, `chat_messages`
 
 Leads upsert `web_enquiries` with `submission_id = chat:<sessionId>` and Portal mirror via existing sync. The Portal payload always includes the full chat transcript (`form_fields.Message`, `make_fields.chat_transcript`, `raw_payload.transcript`).
 
+## Website knowledge
+
+Public pages from the petersandmay.com sitemap (pages, news, FAQs, guides, services, offices, team, ports, vessels, and similar) are copied into `chat_kb_documents` with ids starting `kb_site_`.
+
+- Schedule: Vercel cron `GET /api/chat/sync-site` at 06:00 UTC on the 1st of each month (`CRON_SECRET`).
+- Staff can run the same copy from Hub → Chat → Train → **Update from website**.
+- Pages removed from the sitemap are switched off. A page switched off by staff stays off.
+- Edits to a copied page are replaced on the next update. Add a separate document for notes that must stay.
+- Sailing schedules are not stored. When a visitor asks, Hub still fetches https://www.petersandmay.com/sailings/ live, because those dates change more often than once a month.
+
 ## Allowlisted website fetch
 
-When a visitor asks about leadership, offices, or careers, Hub fetches these public pages (cached ~1 hour) and feeds the text into the answer — not a full-site crawl:
+When a visitor asks about leadership, offices, careers, or published sailing schedules, Hub also fetches these public pages (cached ~1 hour):
 
 - https://www.petersandmay.com/our-group/
 - https://www.petersandmay.com/offices/
 - https://www.petersandmay.com/careers/
+- https://www.petersandmay.com/sailings/
 
 ## Portal UI
 

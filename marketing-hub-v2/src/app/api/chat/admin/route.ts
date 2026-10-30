@@ -4,7 +4,8 @@ import {
   latestMessagePreviews,
   getChatSettings,
   listChatSessions,
-  listKbDocuments,
+  getKbDocument,
+  listKbCatalogue,
   updateChatSettings,
   upsertKbDocument,
   deleteKbDocument,
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
       });
     }
     if (view === "kb") {
-      const documents = await listKbDocuments();
+      const documents = await listKbCatalogue();
       return jsonOk({ configured: true, documents });
     }
     if (view === "insights") {
@@ -123,6 +124,14 @@ export async function POST(request: Request) {
           typeof body.sort_order === "number" ? body.sort_order : 100,
       });
       return jsonOk({ document: doc });
+    }
+
+    if (action === "get_kb") {
+      const id = String(body.id ?? "");
+      if (!id) return jsonError("id required");
+      const document = await getKbDocument(id);
+      if (!document) return jsonError("Not found", 404);
+      return jsonOk({ document });
     }
 
     if (action === "delete_kb") {

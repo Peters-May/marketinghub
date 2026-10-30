@@ -49,7 +49,7 @@ const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_CHARS = 12_000;
 
-function stripHtml(html: string): string {
+export function htmlToPlainText(html: string, maxChars = MAX_CHARS): string {
   const t = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -70,7 +70,7 @@ function stripHtml(html: string): string {
     .replace(/&quot;/gi, '"')
     .replace(/\s+/g, " ")
     .trim()
-    .slice(0, MAX_CHARS);
+    .slice(0, maxChars);
 }
 
 export function selectSitePagesForQuery(query: string): SitePageDef[] {
@@ -102,7 +102,7 @@ export async function fetchAllowlistedPage(
       return null;
     }
     const html = await res.text();
-    const text = stripHtml(html);
+    const text = htmlToPlainText(html);
     if (text.length < 80) {
       cache.set(page.url, { text: "", fetchedAt: Date.now(), ok: false });
       return null;

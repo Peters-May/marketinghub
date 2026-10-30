@@ -5,7 +5,7 @@ import { resolveChatGuidance } from "@/lib/chat/enquiry-guidance";
 import { extractReplyChoices } from "@/lib/chat/reply-choices";
 import { fetchRelevantSitePages } from "@/lib/chat/site-pages";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
-import { listKbDocuments, getChatSettings } from "@/lib/chat/data";
+import { searchKbDocuments, getChatSettings } from "@/lib/chat/data";
 
 function scoreDoc(query: string, doc: ChatKbDocument): number {
   const q = query.toLowerCase();
@@ -78,7 +78,7 @@ export async function streamAssistantReply(input: {
 }> {
   const [settings, docs, sitePages] = await Promise.all([
     getChatSettings(),
-    listKbDocuments({ activeOnly: true }),
+    searchKbDocuments(input.visitorMessage),
     fetchRelevantSitePages(input.visitorMessage),
   ]);
   const retrieved = retrieveKb(input.visitorMessage, docs);
@@ -109,7 +109,7 @@ export async function streamAssistantReply(input: {
 
   const kbBlock =
     kbParts.length === 0
-      ? "(No knowledge base or allowlisted website excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
+      ? "(No knowledge base or website excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
       : kbParts.join("\n\n");
 
   const guidance = resolveChatGuidance(
@@ -140,7 +140,7 @@ ${guidance}
 
 Hard rules:
 - Follow Guidance for qualification flows, specialist replies (careers, personal effects, suppliers, existing bookings), and what never to promise.
-- Use knowledge base and allowlisted website excerpts below for factual extras (leadership, offices, careers, contacts, published sailing schedules). Do not invent contacts, names, titles, sailing dates, or URLs not present in those excerpts.
+- Use the knowledge base and website excerpts below for published facts (services, guides, FAQs, offices, people, ports, careers, contacts, news, and sailing schedules). Do not invent contacts, names, titles, sailing dates, or URLs not present in those excerpts.
 - British English when the visitor writes in English. Short paragraphs. No emoji. No exclamation marks. No hype.
 - If the visitor writes in another language, reply in that language, including sailing dates and the other-options caveat. Keep port names, dates, vessel names, reference codes, and email addresses as published. Do not refuse because of the language. This overrides any Guidance line that says British English only.
 - Never invent rates, capacity, sailing dates, clients, case studies, leadership names, or company figures. Published facts are allowed only when present in the excerpts below (Train KB or fetched website pages). A published sailing date must be followed by the point that other options are available and the team can look further.${sailingRule}

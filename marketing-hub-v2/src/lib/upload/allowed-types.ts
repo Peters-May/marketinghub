@@ -43,6 +43,9 @@ export const ALLOWED_UPLOAD_MIME = new Set([
   // Archives / design packages
   "application/zip",
   "application/x-zip-compressed",
+  // Outlook email templates (.oft). Browsers often send one of these.
+  "application/vnd.ms-outlook",
+  "application/x-msoutlook",
   // Video (.m4v is MPEG-4; browsers often report video/x-m4v or video/mp4)
   "video/mp4",
   "video/quicktime",
@@ -51,11 +54,11 @@ export const ALLOWED_UPLOAD_MIME = new Set([
 
 /** Extension fallback when browsers send empty / octet-stream MIME. */
 export const ALLOWED_UPLOAD_EXT =
-  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|m4v|docx?|xlsx?|xlsm|pptx?|csv|txt|rtf|odt|ods|odp|zip)$/i;
+  /\.(png|jpe?g|gif|webp|pdf|mp4|mov|m4v|docx?|xlsx?|xlsm|pptx?|csv|txt|rtf|odt|ods|odp|zip|oft)$/i;
 
 /** HTML file input `accept` — MIME + extensions for broader picker support. */
 export const UPLOAD_ACCEPT =
-  "image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,video/mp4,video/quicktime,video/x-m4v,.jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.rtf,.odt,.ods,.odp,.zip,.mp4,.mov,.m4v";
+  "image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip,video/mp4,video/quicktime,video/x-m4v,application/vnd.ms-outlook,.jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.rtf,.odt,.ods,.odp,.zip,.mp4,.mov,.m4v,.oft";
 
 export const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -83,6 +86,7 @@ export const MIME_BY_EXT: Record<string, string> = {
   ".ods": "application/vnd.oasis.opendocument.spreadsheet",
   ".odp": "application/vnd.oasis.opendocument.presentation",
   ".zip": "application/zip",
+  ".oft": "application/vnd.ms-outlook",
 };
 
 const FORCE_DOWNLOAD_EXT = new Set([
@@ -103,6 +107,7 @@ const FORCE_DOWNLOAD_EXT = new Set([
   ".ods",
   ".odp",
   ".zip",
+  ".oft",
 ]);
 
 /**
@@ -111,6 +116,7 @@ const FORCE_DOWNLOAD_EXT = new Set([
  */
 export function uploadContentType(name: string, type?: string): string {
   if (/\.m4v$/i.test(name)) return "video/mp4";
+  if (/\.oft$/i.test(name)) return "application/vnd.ms-outlook";
   const mime = (type || "").trim();
   return mime || "application/octet-stream";
 }
