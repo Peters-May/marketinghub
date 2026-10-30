@@ -88,4 +88,20 @@ describe("PlatformPostPreview", () => {
     expect(html).not.toContain("Instagram preview");
     expect(html).not.toContain("Facebook preview");
   });
+
+  it("plays a share-link video at full frame instead of a cropped still", () => {
+    const html = renderToStaticMarkup(
+      createElement(PlatformPostPreview, {
+        mode: "switch",
+        videoReview: true,
+        platforms: ["LinkedIn", "Instagram"],
+        caption: "Yard update",
+        images: ["https://cdn.example/film.mp4"],
+      })
+    );
+    expect(html).toContain("<video");
+    expect(html).toContain("controls");
+    expect(html).toContain("https://cdn.example/film.mp4#t=0.1");
+    expect(html).not.toContain("object-cover");
+  });
 });

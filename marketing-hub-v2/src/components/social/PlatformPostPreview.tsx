@@ -337,7 +337,57 @@ type FrameProps = {
   media: ReactNode;
   layout: LayoutMode;
   imageCount: number;
+  /** Share review: the video has its own controls, so captions stay clear of them. */
+  interactiveVideo?: boolean;
 };
+
+function reviewVideoSrc(url: string): string {
+  if (/#t=/i.test(url)) return url;
+  return `${url}#t=0.1`;
+}
+
+/** Full frame and a player. Used on the staff share link, not the cropped stills. */
+function ReviewVideo({ urls }: { urls: string[] }) {
+  const [index, setIndex] = useState(0);
+  const url = urls[Math.min(index, urls.length - 1)] ?? urls[0];
+  if (!url) return null;
+
+  return (
+    <div className="bg-black">
+      {urls.length > 1 ? (
+        <div className="flex items-center justify-between px-2 py-1.5 text-[11px] text-white/80">
+          <button
+            type="button"
+            className="rounded px-2 py-1 hover:bg-white/10"
+            onClick={() => setIndex((i) => (i - 1 + urls.length) % urls.length)}
+          >
+            Previous
+          </button>
+          <span>
+            {index + 1} / {urls.length}
+          </span>
+          <button
+            type="button"
+            className="rounded px-2 py-1 hover:bg-white/10"
+            onClick={() => setIndex((i) => (i + 1) % urls.length)}
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
+      <div className="flex justify-center">
+        <video
+          key={url}
+          src={reviewVideoSrc(url)}
+          controls
+          playsInline
+          preload="metadata"
+          className="max-h-[70vh] max-w-full bg-black"
+        />
+      </div>
+    </div>
+  );
+}
 
 function InstagramFrame({ captionHtml, captionText, media }: FrameProps) {
   return (
@@ -477,7 +527,22 @@ function XFrame({ captionHtml, captionText, media }: FrameProps) {
   );
 }
 
-function TikTokFrame({ captionText, media }: FrameProps) {
+function TikTokFrame({ captionText, media, interactiveVideo }: FrameProps) {
+  if (interactiveVideo) {
+    return (
+      <article className="overflow-hidden rounded-xl bg-black shadow-md">
+        {media}
+        <div className="px-3 py-3">
+          <p className="text-[14px] font-semibold text-white">Peters &amp; May</p>
+          {captionText ? (
+            <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap text-[13px] leading-snug text-white/95">
+              {captionText}
+            </p>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
   return (
     <article className="relative mx-auto w-full max-w-[280px] overflow-hidden rounded-[1.6rem] bg-black shadow-md ring-1 ring-white/10">
       {media}
@@ -607,6 +672,7 @@ function PlatformStage({
   captionHtml,
   images,
   canvaUrl,
+  videoReview = false,
 }: {
   platform: PlatformKey;
   label: string;
@@ -614,6 +680,8 @@ function PlatformStage({
   captionHtml?: string | null;
   images: string[];
   canvaUrl?: string | null;
+  /** Staff share link: play the whole video instead of a cropped still. */
+  videoReview?: boolean;
 }) {
   const meta = PLATFORM_META[platform];
   const layout = layoutForPlatform(platform, images.length);
@@ -621,10 +689,13 @@ function PlatformStage({
   const captionText = caption || stripHtml(captionHtml ?? "");
   const playback =
     platform === "tiktok" ? "autoplay" : platform === "youtube" ? "controls" : "still";
+  const reviewUrls = videoReview ? images.filter((url) => isVideoUrl(url)) : [];
   const primaryIsVideo = images.length === 1 && isVideoUrl(images[0]);
 
   const media =
-    images.length > 0 ? (
+    reviewUrls.length > 0 ? (
+      <ReviewVideo urls={reviewUrls} />
+    ) : images.length > 0 ? (
       layout === "carousel" ? (
         <CarouselMedia
           images={images}
@@ -656,6 +727,7 @@ function PlatformStage({
     media,
     layout,
     imageCount: images.length,
+    interactiveVideo: reviewUrls.length > 0,
   };
 
   const frame =
@@ -701,6 +773,7 @@ export function PlatformPostPreview({
   images,
   canvaUrl,
   mode = "stack",
+  videoReview = false,
 }: {
   platforms: string[];
   caption: string;
@@ -709,6 +782,8 @@ export function PlatformPostPreview({
   canvaUrl?: string | null;
   /** stack lists every platform. switch shows one, with an icon toggle. */
   mode?: "stack" | "switch";
+  /** Share link: play the video at full frame instead of cropping a still. */
+  videoReview?: boolean;
 }) {
   const resolved = useMemo(() => resolvePreviewPlatforms(platforms), [platforms]);
   const [activeId, setActiveId] = useState(() =>
@@ -761,6 +836,7 @@ export function PlatformPostPreview({
             captionHtml={captionHtml}
             images={images}
             canvaUrl={canvaUrl}
+            videoReview={videoReview}
           />
         ) : null}
       </div>
@@ -778,6 +854,7 @@ export function PlatformPostPreview({
           captionHtml={captionHtml}
           images={images}
           canvaUrl={canvaUrl}
+          videoReview={videoReview}
         />
       ))}
     </div>

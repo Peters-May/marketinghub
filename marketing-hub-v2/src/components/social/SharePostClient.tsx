@@ -62,6 +62,7 @@ export function SharePostClient({
             </div>
             <PlatformPostPreview
               mode="switch"
+              videoReview
               platforms={preview.platforms.length ? preview.platforms : ["Social"]}
               caption={preview.caption}
               captionHtml={preview.captionHtml}
