@@ -2209,7 +2209,8 @@ export function MediaGallery({
                         )
                       }
                     >
-                      {copiedFolder === categoryShareName ? "Copied" : "Copy link"}
+                      <Link2 className="h-3.5 w-3.5" />
+                      {copiedFolder === categoryShareName ? "Copied" : "Share"}
                     </button>
                   ) : allowManage ? (
                     <p className="text-xs text-muted">
@@ -2317,6 +2318,23 @@ export function MediaGallery({
                   key={photo.id}
                   className="group relative mb-2 break-inside-avoid overflow-hidden rounded-lg bg-[#f0f2f3] lg:mb-3"
                 >
+                  {isInternal && categoryShare?.enabled && categoryShareName && !inGallery ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-[10px] font-semibold text-brand shadow-sm hover:bg-white"
+                      aria-label={`Share ${photo.itemName || photo.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void copyShareLink(
+                          categoryShareName,
+                          categoryShare.share_token
+                        );
+                      }}
+                    >
+                      <Link2 className="h-3 w-3" />
+                      {copiedFolder === categoryShareName ? "Copied" : "Share"}
+                    </button>
+                  ) : null}
                   {allowManage ? (
                     <span
                       className={cn(
@@ -2483,6 +2501,22 @@ export function MediaGallery({
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
+                      {isInternal && categoryShare?.enabled && categoryShareName ? (
+                        <button
+                          type="button"
+                          className="btn-secondary px-2.5 py-1.5 text-xs"
+                          aria-label={`Share ${item.name || "template"}`}
+                          onClick={() =>
+                            void copyShareLink(
+                              categoryShareName,
+                              categoryShare.share_token
+                            )
+                          }
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                          {copiedFolder === categoryShareName ? "Copied" : "Share"}
+                        </button>
+                      ) : null}
                       {isInternal ? (
                         <button
                           type="button"

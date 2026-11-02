@@ -22,12 +22,16 @@ import {
   removeBlock,
   removeColumn,
   removeSection,
+  designHasUnlockedContent,
+  importEmailHtml,
+  replaceUnlockedSections,
   resolveEmailDesign,
   setColumnWidths,
   setSectionPreset,
   updateBlock,
   updateSection,
   type EmailBlockType,
+  type HtmlImportResult,
   type SectionPreset,
 } from "@/lib/email/design";
 import { excerptFromDesign } from "@/lib/email/design-excerpt";
@@ -45,8 +49,26 @@ import {
   insertTokenAtSelection,
 } from "@/components/email/builder/EmailVariableSelect";
 import { EmailPalette } from "@/components/email/builder/EmailPalette";
+import { PasteHtmlDialog } from "@/components/email/builder/PasteHtmlDialog";
 import type { DesignerDrag } from "@/components/email/builder/drag";
 import { cn } from "@/lib/utils";
+
+function firstImportedSelection(sections: EmailSection[]): CanvasSelection | null {
+  for (const section of sections) {
+    for (const column of section.columns) {
+      const block = column.blocks[0];
+      if (!block) continue;
+      return {
+        type: "block",
+        sectionId: section.id,
+        columnId: column.id,
+        blockId: block.id,
+      };
+    }
+  }
+  const section = sections[0];
+  return section ? { type: "section", sectionId: section.id } : null;
+}
 
 function sameDesign(a: EmailDesign, b: EmailDesign) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -186,6 +208,10 @@ export function EmailDesigner({
   const [sending, setSending] = useState(false);
   const [selection, setSelection] = useState<CanvasSelection>({ type: "email" });
   const [tab, setTab] = useState<"content" | "layouts">("content");
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteHtml, setPasteHtml] = useState("");
+  const [pasteError, setPasteError] = useState("");
+  const [pasteConfirm, setPasteConfirm] = useState(false);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewing, setPreviewing] = useState(false);
   const [shareEnabled, setShareEnabled] = useState(initialShareEnabled);
@@ -961,6 +987,42 @@ export function EmailDesigner({
     markDirty();
   }
 
+  function openPaste() {
+    if (readOnly) return;
+    setPasteHtml("");
+    setPasteError("");
+    setPasteConfirm(false);
+    setPasteOpen(true);
+  }
+
+  function applyPastedHtml(imported: HtmlImportResult) {
+    commitDesign(replaceUnlockedSections(history.designRef.current, imported.sections));
+    const first = firstImportedSelection(imported.sections);
+    if (first) setSelection(first);
+    if (imported.previewText) setPreviewText(imported.previewText);
+    if (imported.title && !subject.trim()) setSubject(imported.title);
+    setPasteOpen(false);
+  }
+
+  function requestImport() {
+    const html = pasteHtml.trim();
+    if (!html) {
+      setPasteError("Paste HTML first.");
+      return;
+    }
+    const imported = importEmailHtml(html);
+    if (imported.sections.length === 0) {
+      setPasteError("That HTML did not include anything to import.");
+      return;
+    }
+    if (!pasteConfirm && designHasUnlockedContent(history.designRef.current)) {
+      setPasteError("");
+      setPasteConfirm(true);
+      return;
+    }
+    applyPastedHtml(imported);
+  }
+
   function sectionIsBrandLocked(sectionId: string) {
     const design = history.designRef.current;
     if (!design.styles.brandLocked) return false;
@@ -1384,6 +1446,7 @@ export function EmailDesigner({
           disabled={readOnly}
           onAddBlock={addBlock}
           onAddSection={(preset) => addSection(preset)}
+          onPasteHtml={openPaste}
         />
         <div className="min-w-0 flex-1 overflow-auto">
           {previewing ? (
@@ -1665,6 +1728,20 @@ export function EmailDesigner({
           </aside>
         </>
       ) : null}
+      <PasteHtmlDialog
+        open={pasteOpen}
+        html={pasteHtml}
+        error={pasteError}
+        confirming={pasteConfirm}
+        onHtml={(value) => {
+          setPasteHtml(value);
+          setPasteError("");
+          setPasteConfirm(false);
+        }}
+        onCancel={() => setPasteOpen(false)}
+        onBack={() => setPasteConfirm(false)}
+        onImport={requestImport}
+      />
     </div>
   );
 }

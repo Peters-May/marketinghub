@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ClipboardPaste,
   Code2,
   Columns2,
   Heading,
@@ -52,12 +53,14 @@ export function EmailPalette({
   disabled,
   onAddBlock,
   onAddSection,
+  onPasteHtml,
 }: {
   tab: "content" | "layouts";
   onTab: (tab: "content" | "layouts") => void;
   disabled?: boolean;
   onAddBlock: (type: EmailBlockType) => void;
   onAddSection: (preset: SectionPreset) => void;
+  onPasteHtml: () => void;
 }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -151,6 +154,19 @@ export function EmailPalette({
           <p className="px-2 py-4 text-xs text-muted">No matches.</p>
         ) : null}
       </div>
+      {tab === "content" ? (
+        <div className="border-t border-border p-2">
+          <button
+            type="button"
+            disabled={disabled}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-50"
+            onClick={onPasteHtml}
+          >
+            <ClipboardPaste className="h-4 w-4 text-muted" />
+            Paste HTML
+          </button>
+        </div>
+      ) : null}
     </aside>
   );
 }

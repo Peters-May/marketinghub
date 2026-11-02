@@ -57,4 +57,14 @@ export {
 } from "@/lib/email/design/document";
 
 export { compileEmailDesign, emailImageSrc, safeEmailUrl } from "@/lib/email/design/compile";
+export {
+  designHasUnlockedContent,
+  htmlToEmailSections,
+  importEmailHtml,
+  parseImportMarkup,
+  replaceUnlockedSections,
+  sectionsFromImportNodes,
+  type HtmlImportResult,
+  type ImportNode,
+} from "@/lib/email/design/import-html";
 export { previewMerge } from "@/lib/email/design/preview";
