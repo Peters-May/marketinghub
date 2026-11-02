@@ -57,9 +57,13 @@ function appOrigin(): string {
   return "http://localhost:3001";
 }
 
+const DATA_IMAGE =
+  /^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=\r\n]+$/i;
+
 /** Image src for the canvas, or an absolute URL when the email is compiled. */
 export function emailImageSrc(url: string, absolute: boolean): string {
   const trimmed = url.trim();
+  if (DATA_IMAGE.test(trimmed)) return trimmed.replace(/\s+/g, "");
   if (GALLERY_PATH.test(trimmed)) {
     return absolute ? `${appOrigin()}${trimmed}` : trimmed;
   }
@@ -87,7 +91,8 @@ const RICH_TAGS = new Set([
 ]);
 
 /** Keep a small set of tags for text blocks. */
-export function sanitizeRichEmailHtml(html: string): string {
+export function sanitizeRichEmailHtml(html: string, linkColor?: string): string {
+  const color = escapeAttr(cssValue(linkColor, "inherit"));
   const withoutDanger = html
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -103,15 +108,17 @@ export function sanitizeRichEmailHtml(html: string): string {
     if (name === "a") {
       const href = /href\s*=\s*("([^"]*)"|'([^']*)')/i.exec(String(attrs));
       const url = safeEmailUrl(href?.[2] || href?.[3] || "");
-      return url ? `<a href="${escapeAttr(url)}" style="color:inherit;">` : "<span>";
+      return url
+        ? `<a href="${escapeAttr(url)}" style="color:${color};text-decoration:underline;">`
+        : "<span>";
     }
     return `<${name}>`;
   });
 }
 
 /** Paragraph spacing shared with the canvas and the selected editor. */
-function emailRichHtml(html: string): string {
-  return sanitizeRichEmailHtml(html)
+function emailRichHtml(html: string, linkColor?: string): string {
+  return sanitizeRichEmailHtml(html, linkColor)
     .replace(/<p>/g, '<p style="margin:0 0 12px;">')
     .replace(/<h2>/g, '<h2 style="margin:12px 0 6px;font-size:1.15em;line-height:1.3;">')
     .replace(/<ul>/g, '<ul style="margin:0 0 12px;padding-left:20px;">')
@@ -206,6 +213,70 @@ function alignStyle(align: EmailBlock["align"]): string {
   return `text-align:${align};`;
 }
 
+const PRESENTATION =
+  'role="presentation" cellpadding="0" cellspacing="0" border="0"';
+
+/**
+ * Outlook's Word engine ignores padding and border-radius on a link, so a
+ * CSS button paints as a highlight on the words. Word gets a VML shape.
+ * Other clients get a table cell with the same padding and colour.
+ */
+function bulletproofButton(options: {
+  href: string;
+  label: string;
+  background: string;
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  padX: number;
+  padY: number;
+  radius: number;
+  fullWidth: boolean;
+  align: EmailBlock["align"];
+  borderWidth: number;
+  borderColor: string;
+  contentWidth: number;
+}): string {
+  const label = options.label.trim() || "Read more";
+  const bg = escapeAttr(options.background);
+  const fg = escapeAttr(options.color);
+  const font = escapeAttr(options.fontFamily);
+  const url = escapeAttr(options.href);
+  const safeLabel = escapeHtml(label);
+  const borderW = options.borderWidth > 0 && options.borderColor ? options.borderWidth : 0;
+  const border =
+    borderW > 0
+      ? `border:${borderW}px solid ${escapeAttr(options.borderColor)};`
+      : "";
+  const height = options.padY * 2 + options.fontSize + borderW * 2;
+  const textWidth = Math.ceil(label.length * options.fontSize * 0.5);
+  const buttonWidth = options.fullWidth
+    ? Math.max(120, options.contentWidth)
+    : Math.max(options.fontSize * 4, textWidth + options.padX * 2 + borderW * 2);
+  const arc =
+    height > 0 ? Math.min(100, Math.round((options.radius / (height / 2)) * 100)) : 0;
+  const stroke =
+    borderW > 0
+      ? `stroke="t" strokecolor="${escapeAttr(options.borderColor)}" strokeweight="${borderW}px"`
+      : `stroke="f"`;
+  const display = options.fullWidth ? "block" : "inline-block";
+  const widthAttr = options.fullWidth ? ' width="100%"' : "";
+  return `<!--[if mso]>
+<table ${PRESENTATION} width="100%" style="border-collapse:collapse;"><tr><td align="${options.align}">
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:office" href="${url}" style="height:${height}px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="${arc}%" ${stroke} fillcolor="${bg}">
+<w:anchorlock/>
+<center style="color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:bold;">${safeLabel}</center>
+</v:roundrect>
+</td></tr></table>
+<![endif]-->
+<!--[if !mso]><!-->
+<table ${PRESENTATION} align="${options.align}"${widthAttr} style="border-collapse:collapse;${options.fullWidth ? "width:100%;" : ""}">
+<tr><td align="center" bgcolor="${bg}" style="background-color:${bg};border-radius:${options.radius}px;${border}">
+<a href="${url}" style="display:${display};padding:${options.padY}px ${options.padX}px;background-color:${bg};color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:600;line-height:${options.fontSize}px;text-align:center;text-decoration:none;border-radius:${options.radius}px;${border}${options.fullWidth ? "width:100%;box-sizing:border-box;" : ""}">${safeLabel}</a>
+</td></tr></table>
+<!--<![endif]-->`;
+}
+
 function renderBlock(block: EmailBlock, design: EmailDesign): string {
   const styles = design.styles;
   const pad = paddingStyle(block);
@@ -218,7 +289,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
       return `<${tag} style="margin:0;${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.2;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`;
     }
     case "text":
-      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html)}</div>`;
+      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html, styles.linkColor)}</div>`;
     case "image": {
       const src = emailImageSrc(block.src, true);
       if (!src) {
@@ -241,19 +312,29 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
     }
     case "button": {
       const href = safeEmailUrl(block.href) || "#";
-      const width = block.fullWidth ? "display:block;width:100%;" : "display:inline-block;";
       const fontSize = block.fontSize || 16;
       const padX = block.paddingX ?? 22;
       const padY = block.paddingY ?? 14;
       const borderW = block.borderWidth ?? 0;
-      const border =
-        borderW > 0 && block.borderColor
-          ? `border:${borderW}px solid ${escapeAttr(block.borderColor)};`
-          : "border:0;";
-      return `<div style="${pad}${align}"><a href="${escapeAttr(href)}" style="${width}background:${escapeAttr(block.background)};color:${escapeAttr(block.color)};font-family:${styles.fontFamily};font-size:${fontSize}px;font-weight:600;line-height:1;text-decoration:none;padding:${padY}px ${padX}px;border-radius:${block.radius}px;${border}">${escapeHtml(block.label || "Read more")}</a></div>`;
+      return `<div style="${pad}${align}">${bulletproofButton({
+        href,
+        label: block.label,
+        background: block.background,
+        color: block.color,
+        fontFamily: styles.fontFamily,
+        fontSize,
+        padX,
+        padY,
+        radius: block.radius,
+        fullWidth: block.fullWidth,
+        align: block.align,
+        borderWidth: borderW,
+        borderColor: block.borderColor,
+        contentWidth: styles.contentWidth,
+      })}</div>`;
     }
     case "divider":
-      return `<div style="${pad}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:${block.thickness}px solid ${escapeAttr(block.color)};font-size:0;line-height:0;">&nbsp;</td></tr></table></div>`;
+      return `<div style="${pad}"><table ${PRESENTATION} width="100%" style="border-collapse:collapse;"><tr><td style="border-top:${block.thickness}px solid ${escapeAttr(block.color)};font-size:0;line-height:0;">&nbsp;</td></tr></table></div>`;
     case "spacer":
       return `<div style="height:${block.height}px;line-height:${block.height}px;font-size:1px;">&nbsp;</div>`;
     case "social": {
@@ -276,7 +357,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
       return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:13px;line-height:1.6;">${links.join("&nbsp;&nbsp;")}</div>`;
     }
     case "html":
-      return `<div style="${pad}">${sanitizeHtmlBlock(block.html)}</div>`;
+      return `<div class="em-html" style="${pad}font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${sanitizeHtmlBlock(block.html)}</div>`;
     case "footer": {
       const footerText =
         block.text.trim() === "Peters & May" ? OFFICE_FOOTER : block.text;
@@ -296,7 +377,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
         linkParts.length > 0
           ? `<p style="margin:8px 0 0;">${linkParts.join(" &nbsp;|&nbsp; ")}</p>`
           : "";
-      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText).replace(/\n/g, "<br>")}${linkRow}</div>`;
+      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText, styles.linkColor).replace(/\n/g, "<br>")}${linkRow}</div>`;
     }
     case "video": {
       const thumb = emailImageSrc(block.thumbnailSrc, true);
@@ -321,9 +402,24 @@ function renderBlock(block: EmailBlock, design: EmailDesign): string {
         ? `<img src="${escapeAttr(src)}" alt="" width="100%" style="display:block;border:0;max-width:100%;height:auto;margin:0 0 12px;" />`
         : "";
       const cta = block.ctaLabel.trim()
-        ? `<p style="margin:12px 0 0;"><a href="${escapeAttr(href)}" style="display:inline-block;background:${escapeAttr(styles.buttonBackground)};color:${escapeAttr(styles.buttonColor)};font-family:${styles.fontFamily};font-size:14px;font-weight:600;text-decoration:none;padding:12px 18px;border-radius:${styles.buttonRadius}px;">${escapeHtml(block.ctaLabel)}</a></p>`
+        ? `<div style="margin:12px 0 0;">${bulletproofButton({
+            href,
+            label: block.ctaLabel,
+            background: styles.buttonBackground,
+            color: styles.buttonColor,
+            fontFamily: styles.fontFamily,
+            fontSize: 14,
+            padX: 18,
+            padY: 12,
+            radius: styles.buttonRadius,
+            fullWidth: false,
+            align: block.align,
+            borderWidth: 0,
+            borderColor: "",
+            contentWidth: styles.contentWidth,
+          })}</div>`
         : "";
-      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="margin:0 0 8px;font-family:${styles.headingFontFamily};font-size:22px;line-height:1.25;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml)}</div>${cta}</div>`;
+      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="margin:0 0 8px;font-family:${styles.headingFontFamily};font-size:22px;line-height:1.25;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml, styles.linkColor)}</div>${cta}</div>`;
     }
     default:
       return "";
@@ -366,7 +462,7 @@ function renderSection(section: EmailSection, design: EmailDesign): string {
     })
     .join("");
   const rowAttr = reverse ? ' dir="rtl"' : "";
-  return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr${rowAttr}>${cells}</tr></table></td></tr>`;
+  return `<tr><td style="background:${escapeAttr(background)};padding:${section.paddingTop}px ${section.paddingRight}px ${section.paddingBottom}px ${section.paddingLeft}px;"><table ${PRESENTATION} width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tr${rowAttr}>${cells}</tr></table></td></tr>`;
 }
 
 /** Hidden inbox snippet. Contact variables stay as {{tokens}} until send. */
@@ -399,13 +495,25 @@ export function compileEmailDesign(
     .join("");
   const preheader = hiddenPreheader(options?.previewText ?? "");
   const html = `<!DOCTYPE html>
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="x-apple-disable-message-reformatting">
 <title></title>
+<!--[if gte mso 9]>
+<xml>
+<o:OfficeDocumentSettings>
+<o:AllowPNG/>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+</o:OfficeDocumentSettings>
+</xml>
+<![endif]-->
 <style>
   body { margin:0; padding:0; }
+  table { border-collapse:collapse; }
+  img { border:0; outline:none; text-decoration:none; }
   @media only screen and (max-width: 620px) {
     .em-container { width:100% !important; }
     .em-stack { display:block !important; width:100% !important; max-width:100% !important; padding-left:0 !important; direction:ltr !important; }
@@ -413,11 +521,17 @@ export function compileEmailDesign(
 </style>
 </head>
 <body style="margin:0;padding:0;background:${escapeAttr(working.styles.pageBackground)};">${preheader}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${escapeAttr(working.styles.pageBackground)};">
+<table ${PRESENTATION} width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;background:${escapeAttr(working.styles.pageBackground)};">
 <tr><td align="center" style="padding:24px 12px;">
-<table role="presentation" class="em-container" width="${width}" cellpadding="0" cellspacing="0" style="width:${width}px;max-width:${width}px;background:${escapeAttr(working.styles.contentBackground)};">
+<!--[if mso]>
+<table ${PRESENTATION} width="${width}" align="center" style="width:${width}px;border-collapse:collapse;"><tr><td>
+<![endif]-->
+<table ${PRESENTATION} class="em-container" width="${width}" align="center" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;width:${width}px;max-width:${width}px;background:${escapeAttr(working.styles.contentBackground)};">
 ${sections}
 </table>
+<!--[if mso]>
+</td></tr></table>
+<![endif]-->
 </td></tr>
 </table>
 </body>

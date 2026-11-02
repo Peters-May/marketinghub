@@ -169,8 +169,9 @@ const VIEW_IN_BROWSER_LINK = `<p style="margin:0 0 16px;padding:0;font-family:Ar
 export function ensureViewInBrowserLink(html: string): string {
   if (/\{\{\s*view_in_browser_url\s*\}\}/i.test(html)) return html;
   if (/view this email in your browser/i.test(html)) return html;
-  const marker = '<table role="presentation" class="em-container"';
-  const at = html.indexOf(marker);
+  const card = html.search(/<table\b[^>]*\bclass="em-container"/i);
+  const msoBeforeCard = card === -1 ? -1 : html.lastIndexOf("<!--[if mso]>", card);
+  const at = msoBeforeCard !== -1 ? msoBeforeCard : card;
   if (at !== -1) return html.slice(0, at) + VIEW_IN_BROWSER_LINK + html.slice(at);
   if (/<body[^>]*>/i.test(html)) {
     return html.replace(/<body([^>]*)>/i, `<body$1>${VIEW_IN_BROWSER_LINK}`);

@@ -182,10 +182,7 @@ export function EmailCanvas({
                 />
 
                 <div
-                  className={cn(
-                    "relative ml-3",
-                    showSectionOutline && "z-[2]"
-                  )}
+                  className={cn("relative", showSectionOutline && "z-[2]")}
                   onMouseEnter={() => setHoverSectionId(section.id)}
                   onMouseLeave={() => {
                     setHoverSectionId((current) =>
@@ -748,9 +745,17 @@ function BlockView({
   }
 
   if (block.type === "text") {
+    const textStyle = {
+      ...style,
+      color: block.color,
+      fontSize: block.fontSize,
+      fontFamily: design.styles.fontFamily,
+      lineHeight: 1.5,
+      ["--email-link" as string]: design.styles.linkColor,
+    };
     if (selected && !readOnly) {
       return (
-        <div style={style} onClick={(event) => event.stopPropagation()}>
+        <div style={textStyle} onClick={(event) => event.stopPropagation()}>
           <RichTextEditor
             value={block.html}
             onChange={(html) => onLive({ html } as Partial<EmailBlock>)}
@@ -770,14 +775,10 @@ function BlockView({
     return (
       <div
         className="email-rich-text"
-        style={{
-          ...style,
-          color: block.color,
-          fontSize: block.fontSize,
-          fontFamily: design.styles.fontFamily,
-          lineHeight: 1.5,
+        style={textStyle}
+        dangerouslySetInnerHTML={{
+          __html: sanitizeRichEmailHtml(block.html, design.styles.linkColor),
         }}
-        dangerouslySetInnerHTML={{ __html: sanitizeRichEmailHtml(block.html) }}
       />
     );
   }
@@ -816,23 +817,28 @@ function BlockView({
   }
 
   if (block.type === "button") {
+    const fontSize = block.fontSize ?? 16;
     const buttonStyle = {
       background: block.background,
       color: block.color,
       borderRadius: block.radius,
       width: block.fullWidth ? "100%" : undefined,
-      fontSize: block.fontSize ?? 16,
+      fontFamily: design.styles.fontFamily,
+      fontSize,
+      fontWeight: 600,
+      lineHeight: `${fontSize}px`,
+      textAlign: "center" as const,
       padding: `${block.paddingY ?? 14}px ${block.paddingX ?? 22}px`,
       border:
         (block.borderWidth ?? 0) > 0 && block.borderColor
           ? `${block.borderWidth}px solid ${block.borderColor}`
           : "0",
-    } as const;
+    };
     if (selected && !readOnly) {
       return (
         <div style={style} onClick={(event) => event.stopPropagation()}>
           <input
-            className="inline-block bg-transparent text-center font-semibold outline-none"
+            className="inline-block bg-transparent outline-none"
             style={buttonStyle}
             value={block.label}
             onChange={(event) =>
@@ -845,7 +851,7 @@ function BlockView({
     }
     return (
       <div style={style}>
-        <span className="inline-block font-semibold" style={buttonStyle}>
+        <span className="inline-block" style={buttonStyle}>
           {block.label || "Button"}
         </span>
       </div>
@@ -933,17 +939,24 @@ function BlockView({
           {block.title}
         </p>
         <div
-          className="email-rich-text mt-1 text-sm"
+          className="email-rich-text mt-1"
+          style={{ ["--email-link" as string]: design.styles.linkColor, fontSize: 15 }}
           dangerouslySetInnerHTML={{
-            __html: sanitizeRichEmailHtml(block.bodyHtml),
+            __html: sanitizeRichEmailHtml(block.bodyHtml, design.styles.linkColor),
           }}
         />
         {block.ctaLabel ? (
           <span
-            className="mt-2 inline-block px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-3 inline-block"
             style={{
               background: design.styles.buttonBackground,
+              color: design.styles.buttonColor,
               borderRadius: design.styles.buttonRadius,
+              fontFamily: design.styles.fontFamily,
+              fontSize: 14,
+              fontWeight: 600,
+              lineHeight: "14px",
+              padding: "12px 18px",
             }}
           >
             {block.ctaLabel}
@@ -1002,14 +1015,24 @@ function BlockView({
     if (links.showUnsubscribe) parts.push(links.unsubscribeLabel);
     if (links.showPreferences) parts.push(links.preferencesLabel);
     return (
-      <div style={{ ...style, fontSize: 12, color: "#666666" }}>
+      <div
+        style={{
+          ...style,
+          fontFamily: design.styles.fontFamily,
+          fontSize: 12,
+          lineHeight: 1.5,
+          color: "#666666",
+        }}
+      >
         <div className="whitespace-pre-line">{block.text}</div>
         {parts.length > 0 ? (
-          <div className="mt-1" style={{ color: design.styles.linkColor }}>
+          <div style={{ marginTop: 8 }}>
             {parts.map((label, index) => (
               <span key={label}>
-                {index > 0 ? <span className="text-muted">{" · "}</span> : null}
-                <span className="underline">{label}</span>
+                {index > 0 ? <span>{"\u00a0|\u00a0"}</span> : null}
+                <span className="underline" style={{ color: design.styles.linkColor }}>
+                  {label}
+                </span>
               </span>
             ))}
           </div>
@@ -1020,8 +1043,13 @@ function BlockView({
 
   return (
     <div
-      className="overflow-hidden text-xs"
-      style={style}
+      style={{
+        ...style,
+        fontFamily: design.styles.fontFamily,
+        fontSize: 15,
+        lineHeight: 1.5,
+        color: design.styles.textColor,
+      }}
       dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(block.html) || "<p>HTML block</p>" }}
     />
   );

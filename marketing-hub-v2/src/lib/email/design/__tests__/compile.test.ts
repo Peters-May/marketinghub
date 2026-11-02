@@ -37,6 +37,55 @@ describe("email design compiler", () => {
     expect(html).toContain("League Spartan, Arial, sans-serif");
   });
 
+  it("builds buttons Outlook can paint, and colours text links explicitly", () => {
+    const html = compileEmailDesign(newsletterDesign());
+    expect(html).toContain("v:roundrect");
+    expect(html).toContain("PixelsPerInch");
+    expect(html).toContain(`fillcolor="${COLORS.ensignNavy.hex}"`);
+    expect(html).toContain("Read the update");
+    expect(html).not.toContain("display:inline-block;background:");
+
+    const linked = normalizeEmailDesign({
+      version: 1,
+      styles: newsletterDesign().styles,
+      sections: [
+        {
+          id: "s1",
+          background: "",
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [
+            {
+              id: "c1",
+              width: 100,
+              blocks: [
+                {
+                  id: "t1",
+                  type: "text",
+                  html: '<p>Visit <a href="https://www.petersandmay.com/">www.petersandmay.com</a></p>',
+                  color: "#23496d",
+                  fontSize: 15,
+                  align: "center",
+                  paddingTop: 0,
+                  paddingRight: 0,
+                  paddingBottom: 0,
+                  paddingLeft: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(linked).not.toBeNull();
+    const withLink = compileEmailDesign(linked!);
+    expect(withLink).toContain(`color:${COLORS.pmBlue.hex};text-decoration:underline`);
+    expect(withLink).not.toContain("color:inherit");
+  });
+
   it("hides preview text, including a name variable, above the email", () => {
     const html = compileEmailDesign(newsletterDesign(), {
       previewText: "Hello {{first_name}}",
@@ -147,6 +196,10 @@ describe("email design compiler", () => {
       /^https?:\/\/.+\/api\/email\/gallery\/file\/photo.png$/
     );
     expect(emailImageSrc("javascript:alert(1)", true)).toBe("");
+    expect(emailImageSrc("data:image/png;base64,iVBORw0KGgo=", true)).toBe(
+      "data:image/png;base64,iVBORw0KGgo="
+    );
+    expect(emailImageSrc("data:text/html;base64,PHNjcmlwdD4=", true)).toBe("");
   });
 
   it("rejects a document that is not version 1", () => {

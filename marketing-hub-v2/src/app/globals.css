@@ -155,33 +155,31 @@ body {
     background: #f1f5f9;
   }
 
-  /* Rich text (notes / long text) */
+  /* Rich text — spacing matches the compiled email (compile.ts emailRichHtml). */
   .email-rich-text p {
-    margin: 0 0 0.75em;
-  }
-  .email-rich-text p:last-child {
-    margin-bottom: 0;
+    margin: 0 0 12px;
   }
   .email-rich-text h2 {
-    margin: 0.75em 0 0.4em;
+    margin: 12px 0 6px;
     font-size: 1.15em;
     font-weight: 650;
     line-height: 1.3;
   }
   .email-rich-text ul {
     list-style: disc;
-    margin: 0 0 0.75em;
-    padding-left: 1.25rem;
+    margin: 0 0 12px;
+    padding-left: 20px;
   }
   .email-rich-text ol {
     list-style: decimal;
-    margin: 0 0 0.75em;
-    padding-left: 1.25rem;
+    margin: 0 0 12px;
+    padding-left: 20px;
   }
   .email-rich-text li {
     margin: 0 0 0.2em;
   }
   .email-rich-text a {
+    color: var(--email-link, #007dc5);
     text-decoration: underline;
   }
   .email-rich-text strong,
