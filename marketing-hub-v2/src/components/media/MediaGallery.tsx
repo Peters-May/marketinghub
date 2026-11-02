@@ -21,9 +21,11 @@ import {
 import { EmptyState, PageHeader } from "@/components/ui/PageHeader";
 import { MediaDetailPanel } from "@/components/media/MediaDetailPanel";
 import {
+  categoryShareKey,
   GALLERY_CATEGORY,
   GALLERY_VISIBILITY_OPTIONS,
   MEDIA_HUB_CATEGORIES,
+  TEMPLATES_CATEGORY,
   effectiveMediaVisibility,
   gallerySharePath,
   matchesMediaDivisionFilter,
@@ -794,6 +796,12 @@ export function MediaGallery({
   }, [galleryItems, scope]);
 
   const inGallery = isGalleryCategory(collection);
+  const showingTemplates =
+    (collection ?? "").trim().toLowerCase() ===
+    TEMPLATES_CATEGORY.toLowerCase();
+  const templatesShare = folderShareByName.get(
+    categoryShareKey(TEMPLATES_CATEGORY)
+  );
   const showingGallerySubfolders = inGallery && !activeSubfolder;
 
   const visibleItems = useMemo(() => {
@@ -1274,6 +1282,31 @@ export function MediaGallery({
       }, 2000);
     } catch {
       window.prompt("Copy this share link:", url);
+    }
+  }
+
+  async function setCategoryShare(enabled: boolean) {
+    if (!allowManage || shareSaving) return;
+    setShareSaving(TEMPLATES_CATEGORY);
+    try {
+      const res = await fetch("/api/media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_category_share",
+          category: TEMPLATES_CATEGORY,
+          enabled,
+        }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error || "Could not update share link");
+      await load();
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : "Could not update share link"
+      );
+    } finally {
+      setShareSaving(null);
     }
   }
 
@@ -2125,17 +2158,67 @@ export function MediaGallery({
                 <p className="mt-0.5 text-xs text-muted">Gallery / {activeSubfolder}</p>
               ) : null}
               <p className="mt-1 text-sm text-muted">
-                {photos.length > 0
-                  ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`
-                  : "Documents & links"}
-                {isInternal
-                  ? canDownload
-                    ? " · Click a photo to open details & download"
-                    : " · Click a photo to open details"
-                  : canDownload
-                    ? " · Click a photo to view & download"
-                    : " · Click a photo to view"}
+                {showingTemplates
+                  ? `${docs.length} template${docs.length === 1 ? "" : "s"}`
+                  : photos.length > 0
+                    ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`
+                    : "Documents & links"}
+                {showingTemplates
+                  ? " · Share a link so staff can download without signing in"
+                  : isInternal
+                    ? canDownload
+                      ? " · Click a photo to open details & download"
+                      : " · Click a photo to open details"
+                    : canDownload
+                      ? " · Click a photo to view & download"
+                      : " · Click a photo to view"}
               </p>
+              {isInternal && showingTemplates ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {allowManage ? (
+                    <button
+                      type="button"
+                      disabled={shareSaving === TEMPLATES_CATEGORY}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium transition",
+                        templatesShare?.enabled
+                          ? "bg-accent-soft text-brand"
+                          : "bg-white text-muted hover:text-foreground"
+                      )}
+                      onClick={() =>
+                        void setCategoryShare(!templatesShare?.enabled)
+                      }
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      {shareSaving === TEMPLATES_CATEGORY
+                        ? "…"
+                        : templatesShare?.enabled
+                          ? "Link on"
+                          : "Link share"}
+                    </button>
+                  ) : null}
+                  {templatesShare?.enabled ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
+                      onClick={() =>
+                        void copyShareLink(
+                          TEMPLATES_CATEGORY,
+                          templatesShare.share_token
+                        )
+                      }
+                    >
+                      {copiedFolder === TEMPLATES_CATEGORY
+                        ? "Copied"
+                        : "Copy link"}
+                    </button>
+                  ) : allowManage ? (
+                    <p className="text-xs text-muted">
+                      Turn on Link share, then copy the link for staff.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {allowManage && inGallery && activeSubfolder ? (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <div

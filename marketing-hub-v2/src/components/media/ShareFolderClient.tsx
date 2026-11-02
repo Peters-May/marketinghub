@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, X } from "lucide-react";
 import { downloadMediaFile } from "@/lib/media/download-file";
 import type { MediaListItem } from "@/lib/supabase/media-list";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,22 @@ type Photo = {
   itemName: string;
 };
 
+type SharedFile = {
+  id: string;
+  url: string;
+  name: string;
+  itemName: string;
+  kind: "file" | "link";
+};
+
+function linkLabel(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "Link";
+  }
+}
+
 function isImageFile(file: { type?: string; name?: string; url?: string }) {
   const type = (file.type || "").toLowerCase();
   if (type.startsWith("image/")) return true;
@@ -30,7 +46,7 @@ function isImageFile(file: { type?: string; name?: string; url?: string }) {
 export function ShareFolderClient({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [folderName, setFolderName] = useState("Shared gallery");
+  const [folderName, setFolderName] = useState("Shared folder");
   const [items, setItems] = useState<MediaListItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -80,14 +96,42 @@ export function ShareFolderClient({ token }: { token: string }) {
     return next;
   }, [items]);
 
+  const files = useMemo(() => {
+    const next: SharedFile[] = [];
+    for (const item of items) {
+      const itemName = item.display_name || item.public_title || item.name;
+      for (const file of item.files) {
+        if (!file.url || isImageFile(file)) continue;
+        next.push({
+          id: `${item.id}__${file.url}`,
+          url: file.url,
+          name: file.name || itemName,
+          itemName,
+          kind: "file",
+        });
+      }
+      const link = item.document_link?.trim();
+      if (link) {
+        next.push({
+          id: `${item.id}__link`,
+          url: link,
+          name: linkLabel(link),
+          itemName,
+          kind: "link",
+        });
+      }
+    }
+    return next;
+  }, [items]);
+
   const lightboxPhoto =
     lightboxIndex != null ? photos[lightboxIndex] ?? null : null;
 
-  async function handleDownload(photo: Photo) {
+  async function handleDownload(file: { id: string; url: string; name: string }) {
     if (downloadingId) return;
-    setDownloadingId(photo.id);
+    setDownloadingId(file.id);
     try {
-      await downloadMediaFile(photo.url, photo.name, { shareToken: token });
+      await downloadMediaFile(file.url, file.name, { shareToken: token });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Download failed");
     } finally {
@@ -127,7 +171,7 @@ export function ShareFolderClient({ token }: { token: string }) {
               {folderName}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              Shared folder · view and download without signing in
+              Shared with staff · view and download without signing in
             </p>
           </div>
         </div>
@@ -135,21 +179,68 @@ export function ShareFolderClient({ token }: { token: string }) {
 
       <main className="mx-auto max-w-6xl px-4 py-8 md:px-6">
         {loading ? (
-          <p className="text-sm text-muted">Loading shared images…</p>
+          <p className="text-sm text-muted">Loading shared folder…</p>
         ) : error ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="font-display text-2xl text-brand">Link unavailable</h2>
             <p className="mt-2 text-sm text-muted">{error}</p>
           </div>
-        ) : photos.length === 0 ? (
+        ) : photos.length === 0 && files.length === 0 ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
-            <h2 className="font-display text-2xl text-brand">No images yet</h2>
+            <h2 className="font-display text-2xl text-brand">Nothing here yet</h2>
             <p className="mt-2 text-sm text-muted">
-              This shared folder does not contain any downloadable images.
+              This shared folder does not contain any downloadable files.
             </p>
           </div>
         ) : (
           <>
+            {files.length > 0 ? (
+              <section className="mb-8">
+                <p className="mb-3 text-sm text-muted">
+                  {files.length} item{files.length === 1 ? "" : "s"}
+                </p>
+                <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
+                  {files.map((file) => (
+                    <li
+                      key={file.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {file.itemName}
+                          </p>
+                          <p className="truncate text-xs text-muted">{file.name}</p>
+                        </div>
+                      </div>
+                      {file.kind === "link" ? (
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60 disabled:opacity-60"
+                          disabled={downloadingId === file.id}
+                          onClick={() => void handleDownload(file)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {downloadingId === file.id ? "…" : "Download"}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {photos.length > 0 ? (
+              <>
             <p className="mb-4 text-sm text-muted">
               {photos.length} image{photos.length === 1 ? "" : "s"} · click to
               view or download
@@ -187,6 +278,8 @@ export function ShareFolderClient({ token }: { token: string }) {
                 </div>
               ))}
             </div>
+              </>
+            ) : null}
           </>
         )}
       </main>

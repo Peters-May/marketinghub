@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ShareFolderClient } from "@/components/media/ShareFolderClient";
 
 export const metadata: Metadata = {
-  title: "Shared gallery",
+  title: "Shared folder",
   robots: { index: false, follow: false },
 };
 

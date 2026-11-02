@@ -7,6 +7,7 @@ import {
   deleteMediaFileInSupabase,
   normalizeGalleryVisibility,
   renameMediaFileInSupabase,
+  setCategoryShareEnabled,
   setGalleryFolderShareEnabled,
   setGallerySubfolderVisibility,
   softDeleteMediaInSupabase,
@@ -161,6 +162,14 @@ export async function POST(request: NextRequest) {
         subfolder,
         enabled,
       });
+      return jsonOk({ ok: true, share });
+    }
+
+    if (action === "set_category_share") {
+      if (user.role !== "admin") return jsonError("Admin required", 403);
+      const category = typeof body.category === "string" ? body.category : "";
+      const enabled = body.enabled === true;
+      const share = await setCategoryShareEnabled({ category, enabled });
       return jsonOk({ ok: true, share });
     }
 

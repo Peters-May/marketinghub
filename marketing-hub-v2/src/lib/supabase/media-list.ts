@@ -117,9 +117,28 @@ export function visibilityLabel(value: GalleryFolderVisibility): string {
   return "Public";
 }
 
-/** Path for an unlisted Gallery folder share (no login required). */
+/** Path for an unlisted folder or category share (no login required). */
 export function gallerySharePath(token: string): string {
   return `/share/gallery/${encodeURIComponent(token)}`;
+}
+
+/** Stored on gallery_folder_shares.subfolder so it cannot clash with a Gallery folder name. */
+export const CATEGORY_SHARE_PREFIX = "category:";
+
+/** Library category that can be shared with staff by link. */
+export const TEMPLATES_CATEGORY = "Templates";
+
+export function categoryShareKey(category: string): string {
+  return `${CATEGORY_SHARE_PREFIX}${category.trim()}`;
+}
+
+/** Templates only. Other categories stay inside the signed-in library. */
+export function categoryFromShareKey(subfolder: string): string | null {
+  const raw = subfolder.trim();
+  if (!raw.toLowerCase().startsWith(CATEGORY_SHARE_PREFIX)) return null;
+  const name = raw.slice(CATEGORY_SHARE_PREFIX.length).trim();
+  if (name.toLowerCase() !== TEMPLATES_CATEGORY.toLowerCase()) return null;
+  return TEMPLATES_CATEGORY;
 }
 
 function generateShareToken(): string {
@@ -627,8 +646,27 @@ export async function setGalleryFolderShareEnabled(input: {
   subfolder: string;
   enabled: boolean;
 }): Promise<GalleryFolderShare> {
+  const subfolder = input.subfolder.trim();
+  if (subfolder.toLowerCase().startsWith(CATEGORY_SHARE_PREFIX)) {
+    throw new Error("That folder name is reserved.");
+  }
   return syncGalleryFolderShare({
-    subfolder: input.subfolder,
+    subfolder,
+    enabled: input.enabled,
+  });
+}
+
+/** Enable or disable the unlisted share link for the Templates category. */
+export async function setCategoryShareEnabled(input: {
+  category: string;
+  enabled: boolean;
+}): Promise<GalleryFolderShare> {
+  const category = categoryFromShareKey(categoryShareKey(input.category));
+  if (!category) {
+    throw new Error("Only the Templates category can be shared by link.");
+  }
+  return syncGalleryFolderShare({
+    subfolder: categoryShareKey(category),
     enabled: input.enabled,
   });
 }
@@ -723,12 +761,19 @@ export async function listMediaByShareToken(token: string): Promise<{
     share_token: asString(shareRow.share_token),
     enabled: Boolean(shareRow.enabled),
   };
+  const sharedCategory = categoryFromShareKey(share.subfolder);
+  if (
+    share.subfolder.trim().toLowerCase().startsWith(CATEGORY_SHARE_PREFIX) &&
+    !sharedCategory
+  ) {
+    return null;
+  }
 
   const tables = await listCoreTables();
   const mediaTable = findMediaTable(tables);
   if (!mediaTable) {
     return {
-      folderName: share.subfolder || "Gallery",
+      folderName: sharedCategory || share.subfolder || "Gallery",
       share,
       items: [],
     };
@@ -738,29 +783,32 @@ export async function listMediaByShareToken(token: string): Promise<{
     .from(mediaTable.supabase_table)
     .select("*")
     .is("deleted_at", null)
-    .ilike("hub_category", GALLERY_CATEGORY);
+    .ilike("hub_category", sharedCategory || GALLERY_CATEGORY);
 
-  if (share.subfolder) {
-    query = query.eq("subfolder", share.subfolder);
-  } else {
-    query = query.or("subfolder.is.null,subfolder.eq.");
+  if (!sharedCategory) {
+    if (share.subfolder) {
+      query = query.eq("subfolder", share.subfolder);
+    } else {
+      query = query.or("subfolder.is.null,subfolder.eq.");
+    }
   }
 
   const { data, error } = await query.limit(500);
   if (error) throw new Error(error.message);
 
   const items = ((data ?? []) as Record<string, unknown>[])
-    .map((r) => mapMediaRow(r, "public"))
-    // Hide items that are more restrictive than the folder (e.g. admin
-    // override on an internal shared folder).
+    .map((r) => mapMediaRow(r, sharedCategory ? "all" : "public"))
     .filter((item) => {
+      if (sharedCategory) return effectiveMediaVisibility(item) !== "admin";
+      // Hide items that are more restrictive than the folder (e.g. admin
+      // override on an internal shared folder).
       const folderVis = item.subfolder_visibility;
       return moreRestrictiveVisibility(folderVis, item.visibility) === folderVis;
     })
     .sort((a, b) => a.display_name.localeCompare(b.display_name));
 
   return {
-    folderName: share.subfolder || "Unsorted",
+    folderName: sharedCategory || share.subfolder || "Unsorted",
     share,
     items,
   };
