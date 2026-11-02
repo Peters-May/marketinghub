@@ -3,6 +3,8 @@ import { COLORS } from "@/lib/brand/tokens";
 import {
   announcementDesign,
   compileEmailDesign,
+  createBlock,
+  createSection,
   designFromLegacyHtml,
   emailImageSrc,
   moveBlock,
@@ -10,6 +12,7 @@ import {
   normalizeEmailDesign,
   resolveEmailDesign,
 } from "@/lib/email/design";
+import { sanitizeHtmlBlock } from "@/lib/email/design/compile";
 
 const LEGACY = `<!DOCTYPE html>
 <html><body style="font-family: Arial, sans-serif;">
@@ -301,5 +304,43 @@ describe("email design compiler", () => {
     const forFreight = compileEmailDesign(design, { topic: "freight_forwarding" });
     expect(forFreight).not.toContain("Experience matters.");
     expect(forFreight).toContain("Unsubscribe");
+  });
+
+  it("sizes a column image to that column, and gives Outlook a cell colour", () => {
+    const styles = newsletterDesign().styles;
+    const design = {
+      version: 1 as const,
+      styles,
+      sections: [
+        createSection("3", {
+          background: "#0B2545",
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [33, 33, 34].map((width) => ({
+            id: `col-${width}`,
+            width,
+            blocks: [
+              createBlock("image", {
+                src: "https://example.com/logo.png",
+                alt: "Division",
+                widthPercent: 100,
+              }),
+            ],
+          })),
+        }),
+      ],
+    };
+    const html = compileEmailDesign(design);
+    expect(html).toContain('bgcolor="#0B2545"');
+    expect(html).toContain('width="198"');
+    expect(html).toContain('width="204"');
+    expect(html).not.toContain('width="600" src=');
+    const table = sanitizeHtmlBlock(
+      '<th style="background-color:#0B2545;color:#FFFFFF;">Shipment type</th>'
+    );
+    expect(table).toContain('bgcolor="#0B2545"');
   });
 });

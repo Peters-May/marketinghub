@@ -27,6 +27,7 @@ import {
 import { isPitchCampaign } from "@/lib/email/category";
 import { batchIdempotencyKey } from "@/lib/email/send-lock";
 import { emptyRecipientError } from "@/lib/email/recipient-rules";
+import { hostInlineEmailImages } from "@/lib/email/host-inline-images";
 import { appendUtmToEmailHtml } from "@/lib/email/utm";
 import {
   notifyPortalCampaignSend,
@@ -216,11 +217,13 @@ export async function deliverNextCampaignBatch(
     footerLinks,
     previewText: latest.preview_text,
   });
-  const htmlBase = appendUtmToEmailHtml(
-    ensureViewInBrowserLink(
-      ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")
-    ),
-    { campaign: latest.title || latest.id }
+  const htmlBase = await hostInlineEmailImages(
+    appendUtmToEmailHtml(
+      ensureViewInBrowserLink(
+        ensureUnsubscribeFooter(compiled || latest.html_body || "<p></p>")
+      ),
+      { campaign: latest.title || latest.id }
+    )
   );
 
   const chunk = pending.slice(0, BATCH_SIZE);
@@ -454,7 +457,9 @@ export async function sendTestEmail(input: {
   const prefs = preferencesUrlFor(identity);
   const browser = viewInBrowserUrlFor(identity);
   const html = applyEmailMerge(
-    ensureViewInBrowserLink(ensureUnsubscribeFooter(input.html || "<p></p>")),
+    await hostInlineEmailImages(
+      ensureViewInBrowserLink(ensureUnsubscribeFooter(input.html || "<p></p>"))
+    ),
     {
       contact,
       unsubscribeUrl: unsub,
