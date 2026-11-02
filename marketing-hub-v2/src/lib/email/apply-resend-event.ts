@@ -42,11 +42,13 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
   const priorDelivery = bounceClass && job.email
     ? await listAddressDeliveryEvents(job.email)
     : [];
-  const countsEngagement =
-    Boolean(job.email) &&
-    (job.kind === "delivered" || job.kind === "opened" || job.kind === "clicked");
-  const firstForAddress = countsEngagement
-    ? !(await hasEmailCampaignEvent(job.campaignId, job.email, job.kind))
+  const engagementKind =
+    job.email &&
+    (job.kind === "delivered" || job.kind === "opened" || job.kind === "clicked")
+      ? job.kind
+      : null;
+  const firstForAddress = engagementKind
+    ? !(await hasEmailCampaignEvent(job.campaignId, job.email, engagementKind))
     : false;
 
   await appendEmailEvent({
@@ -60,8 +62,8 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
     created_at: job.occurredAt || undefined,
   });
 
-  if (firstForAddress) {
-    await bumpEmailCampaignStat(job.campaignId, job.kind, 1, false);
+  if (engagementKind && firstForAddress) {
+    await bumpEmailCampaignStat(job.campaignId, engagementKind, 1, false);
   }
 
   if (!job.email) return { ok: true };
