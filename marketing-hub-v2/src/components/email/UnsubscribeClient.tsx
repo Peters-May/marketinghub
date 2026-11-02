@@ -19,6 +19,14 @@ function topicLabel(id: EmailPreferenceTopic | null): string {
   );
 }
 
+function joinedTopicLabels(ids: EmailPreferenceTopic[]): string {
+  const labels = ids.map((id) => topicLabel(id));
+  if (labels.length === 0) return "these marketing emails";
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
 export function UnsubscribeClient() {
   const params = useSearchParams();
   const token = params.get("token") ?? "";
@@ -44,18 +52,16 @@ export function UnsubscribeClient() {
   const [optOuts, setOptOuts] = useState<EmailPreferenceTopic[]>([]);
   const [all, setAll] = useState(false);
   const [locked, setLocked] = useState(false);
-  const [campaignTopic, setCampaignTopic] = useState<EmailPreferenceTopic | null>(
-    () => (isPreview ? "general_marketing" : null)
-  );
   const [arrivedOptedOut, setArrivedOptedOut] = useState(false);
   /** Preferences UI: topics the person wants to receive. */
   const [subscribed, setSubscribed] = useState<EmailPreferenceTopic[]>(() =>
     isPreview ? EMAIL_PREFERENCE_TOPICS.map((topic) => topic.id) : []
   );
-  /** Unsubscribe UI: stop this list vs stop everything. */
-  const [unsubScope, setUnsubScope] = useState<"list" | "all">(() =>
-    isPreview ? "list" : "list"
+  /** Unsubscribe UI: topics they have chosen to leave. */
+  const [leaveTopics, setLeaveTopics] = useState<EmailPreferenceTopic[]>(() =>
+    isPreview ? ["general_marketing"] : []
   );
+  const [unsubAll, setUnsubAll] = useState(false);
   const [feedbackReason, setFeedbackReason] = useState<UnsubscribeFeedbackReason | "">(
     ""
   );
@@ -84,10 +90,12 @@ export function UnsubscribeClient() {
             : null;
         setOptOuts(nextOptOuts);
         setAll(nextAll);
-        setCampaignTopic(topic);
         setArrivedOptedOut(nextAll || nextOptOuts.length > 0);
         setLocked(Boolean(data.locked));
-        setUnsubScope(topic ? "list" : "all");
+        setLeaveTopics(
+          topic && !nextAll && !nextOptOuts.includes(topic) ? [topic] : []
+        );
+        setUnsubAll(false);
         setSubscribed(
           nextAll
             ? []
@@ -124,6 +132,40 @@ export function UnsubscribeClient() {
     setSubscribed((current) =>
       current.includes(id) ? current.filter((topic) => topic !== id) : [...current, id]
     );
+  }
+
+  const activeTopics = useMemo(
+    () =>
+      all
+        ? []
+        : EMAIL_PREFERENCE_TOPICS.filter((topic) => !optOuts.includes(topic.id)),
+    [all, optOuts]
+  );
+
+  const leavingIds = unsubAll
+    ? activeTopics.map((topic) => topic.id)
+    : leaveTopics.filter((id) => activeTopics.some((topic) => topic.id === id));
+  const leavingAll =
+    activeTopics.length > 0 &&
+    (unsubAll || leavingIds.length === activeTopics.length);
+
+  function toggleLeave(id: EmailPreferenceTopic) {
+    setLeaveTopics((current) => {
+      const base = unsubAll ? activeTopics.map((topic) => topic.id) : current;
+      return base.includes(id)
+        ? base.filter((topic) => topic !== id)
+        : [...base, id];
+    });
+    setUnsubAll(false);
+  }
+
+  function toggleUnsubAll() {
+    if (leavingAll) {
+      setLeaveTopics([]);
+      setUnsubAll(false);
+      return;
+    }
+    setUnsubAll(true);
   }
 
   const prefsOptOuts = EMAIL_PREFERENCE_TOPICS.map((topic) => topic.id).filter(
@@ -208,6 +250,10 @@ export function UnsubscribeClient() {
       setMessage("Preview only — changes are not saved.");
       return;
     }
+    if (leavingIds.length === 0) {
+      setMessage("Choose a list to leave, or unsubscribe from all.");
+      return;
+    }
     setStatus("saving");
     setMessage("");
     if (unsubNeedsFeedback) {
@@ -222,10 +268,10 @@ export function UnsubscribeClient() {
         return;
       }
     }
-    const wantsAll = unsubScope === "all" || !campaignTopic;
+    const wantsAll = leavingAll;
     const topics: EmailPreferenceTopic[] = wantsAll
       ? EMAIL_PREFERENCE_TOPICS.map((topic) => topic.id)
-      : Array.from(new Set([...optOuts, campaignTopic!]));
+      : Array.from(new Set([...optOuts, ...leavingIds]));
     try {
       const res = await fetch("/api/unsubscribe", {
         method: "POST",
@@ -244,13 +290,24 @@ export function UnsubscribeClient() {
         setMessage(data.error || "Could not update your subscription.");
         return;
       }
-      setOptOuts(Array.isArray(data.topics) ? data.topics : topics);
-      setAll(Boolean(data.all));
+      const nextOptOuts = Array.isArray(data.topics) ? data.topics : topics;
+      const nextAll = Boolean(data.all);
+      setOptOuts(nextOptOuts);
+      setAll(nextAll);
+      setLeaveTopics([]);
+      setUnsubAll(false);
+      setSubscribed(
+        nextAll
+          ? []
+          : EMAIL_PREFERENCE_TOPICS.map((item) => item.id).filter(
+              (id) => !nextOptOuts.includes(id)
+            )
+      );
       setStatus("done");
       setMessage(
-        data.all
+        nextAll
           ? "You are unsubscribed from all Peters & May marketing emails."
-          : `You are unsubscribed from ${topicLabel(campaignTopic)}.`
+          : `You are unsubscribed from ${joinedTopicLabels(leavingIds)}.`
       );
     } catch {
       setStatus("ready");
@@ -281,7 +338,7 @@ export function UnsubscribeClient() {
       <p className="mt-2 text-sm text-muted">
         {view === "preferences"
           ? "Choose which marketing emails you would like to receive. Operational messages about a booking or quote still arrive."
-          : "Stop this marketing list, or leave all marketing email. Operational messages about a booking or quote still arrive."}
+          : "Tick the lists you want to leave, or unsubscribe from all. Operational messages about a booking or quote still arrive."}
       </p>
       {email ? (
         <p className="mt-3 text-sm text-[#0B2545]">{email}</p>
@@ -311,35 +368,41 @@ export function UnsubscribeClient() {
             Untick a list to stop it. Tick again to subscribe.
           </p>
         </fieldset>
-      ) : (
+      ) : activeTopics.length === 0 && status !== "done" ? (
+        <p className="mt-6 text-sm text-[#0B2545]">
+          You are already unsubscribed from all Peters &amp; May marketing lists.
+        </p>
+      ) : activeTopics.length > 0 ? (
         <fieldset className="mt-6 space-y-3" disabled={locked || status === "saving"}>
           <legend className="text-sm font-semibold text-[#0B2545]">
-            Stop receiving
+            Your subscriptions
           </legend>
-          {campaignTopic ? (
-            <label className="flex items-start gap-3 text-sm text-[#0B2545]">
+          <p className="text-xs text-muted">Tick a list to unsubscribe from it.</p>
+          {activeTopics.map((topic) => (
+            <label
+              key={topic.id}
+              className="flex items-start gap-3 text-sm text-[#0B2545]"
+            >
               <input
-                type="radio"
-                name="unsub-scope"
+                type="checkbox"
                 className="mt-0.5"
-                checked={unsubScope === "list"}
-                onChange={() => setUnsubScope("list")}
+                checked={leavingIds.includes(topic.id)}
+                onChange={() => toggleLeave(topic.id)}
               />
-              <span>{topicLabel(campaignTopic)} only</span>
+              <span>{topic.label}</span>
             </label>
-          ) : null}
-          <label className="flex items-start gap-3 text-sm font-medium text-[#0B2545]">
+          ))}
+          <label className="flex items-start gap-3 border-t border-[#E3E6E9] pt-3 text-sm font-medium text-[#0B2545]">
             <input
-              type="radio"
-              name="unsub-scope"
+              type="checkbox"
               className="mt-0.5"
-              checked={unsubScope === "all" || !campaignTopic}
-              onChange={() => setUnsubScope("all")}
+              checked={leavingAll}
+              onChange={toggleUnsubAll}
             />
-            <span>All Peters &amp; May marketing email</span>
+            <span>Unsubscribe from all marketing email</span>
           </label>
         </fieldset>
-      )}
+      ) : null}
 
       {showFeedback ? (
         <fieldset className="mt-6 space-y-3" disabled={status === "saving"}>
@@ -393,7 +456,10 @@ export function UnsubscribeClient() {
         <p className="mt-4 text-sm text-red-700">{message}</p>
       ) : null}
 
-      {!locked && status !== "loading" && status !== "error" ? (
+      {!locked &&
+      status !== "loading" &&
+      status !== "error" &&
+      (view === "preferences" || activeTopics.length > 0) ? (
         <button
           type="button"
           disabled={status === "saving"}
