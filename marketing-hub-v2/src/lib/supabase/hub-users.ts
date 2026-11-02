@@ -40,7 +40,8 @@ function displayName(user: User): string {
 function toHubUser(
   user: User,
   profileRole: string | null | undefined,
-  profileEmail?: string | null
+  profileEmail?: string | null,
+  websiteChat?: boolean
 ): HubUser {
   const meta = user.user_metadata ?? {};
   const appRole = (user.app_metadata as { role?: string } | undefined)?.role;
@@ -50,6 +51,7 @@ function toHubUser(
     full_name: displayName(user),
     role: normalizeHubAccessRole(profileRole ?? appRole),
     notes: String(meta.notes ?? ""),
+    website_chat: websiteChat === true,
     last_sign_in_at: user.last_sign_in_at ?? null,
     email_confirmed_at: user.email_confirmed_at ?? null,
     invited_at: user.invited_at ?? null,
@@ -95,9 +97,9 @@ export async function listSupabaseHubUsers(): Promise<HubUser[]> {
   const supabase = createAdminClient();
   const [authUsers, profilesRes] = await Promise.all([
     listAllAuthUsers(),
-    supabase
+      supabase
       .from("profiles")
-      .select("user_id, role, email, is_archived")
+      .select("user_id, role, email, is_archived, website_chat")
       .or("is_archived.is.null,is_archived.eq.false"),
   ]);
 
@@ -109,13 +111,14 @@ export async function listSupabaseHubUsers(): Promise<HubUser[]> {
       {
         role: p.role as string,
         email: (p.email as string | null) ?? null,
+        website_chat: p.website_chat === true,
       },
     ])
   );
 
   const users = authUsers.map((u) => {
     const profile = roleByUser.get(u.id);
-    return toHubUser(u, profile?.role, profile?.email);
+    return toHubUser(u, profile?.role, profile?.email, profile?.website_chat);
   });
 
   return users.sort((a, b) => {
@@ -247,7 +250,9 @@ export async function inviteSupabaseHubUser(input: {
 
 export async function updateSupabaseHubUser(
   id: string,
-  patch: Partial<Pick<HubUser, "role" | "full_name" | "notes" | "email">>
+  patch: Partial<
+    Pick<HubUser, "role" | "full_name" | "notes" | "email" | "website_chat">
+  >
 ): Promise<HubUser | null> {
   const supabase = createAdminClient();
   const { data: existing, error: getError } =
@@ -255,16 +260,17 @@ export async function updateSupabaseHubUser(
   if (getError) throw new Error(getError.message);
   if (!existing.user) return null;
 
+  const profileRes = await supabase
+    .from("profiles")
+    .select("role, website_chat")
+    .eq("user_id", id)
+    .maybeSingle();
+  if (profileRes.error) throw new Error(profileRes.error.message);
+
   const role = patch.role
     ? normalizeHubAccessRole(patch.role)
     : normalizeHubAccessRole(
-        (
-          await supabase
-            .from("profiles")
-            .select("role")
-            .eq("user_id", id)
-            .maybeSingle()
-        ).data?.role ??
+        profileRes.data?.role ??
           (existing.user.app_metadata as { role?: string })?.role
       );
 
@@ -289,6 +295,19 @@ export async function updateSupabaseHubUser(
   await syncAuthMetadata(id, role, fullName, notes, existing.user);
   await upsertProfile(id, email, role);
 
+  let websiteChat = profileRes.data?.website_chat === true;
+  if (typeof patch.website_chat === "boolean") {
+    const { error: chatError } = await supabase
+      .from("profiles")
+      .update({
+        website_chat: patch.website_chat,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", id);
+    if (chatError) throw new Error(chatError.message);
+    websiteChat = patch.website_chat;
+  }
+
   if (patch.email && patch.email.trim().toLowerCase() !== (existing.user.email ?? "").toLowerCase()) {
     const { ensureContactForUser } = await import("@/lib/data/repos");
     await ensureContactForUser({
@@ -305,7 +324,7 @@ export async function updateSupabaseHubUser(
   if (refreshError) throw new Error(refreshError.message);
   if (!refreshed.user) return null;
 
-  return toHubUser(refreshed.user, role, email);
+  return toHubUser(refreshed.user, role, email, websiteChat);
 }
 
 export async function deleteSupabaseHubUser(id: string): Promise<void> {
@@ -466,37 +485,52 @@ export async function setPasswordForHubUser(
   if (error) throw new Error(error.message);
 }
 
-/** Resolve hub role from profiles (preferred) or app_metadata. */
-export async function getProfileRoleForUser(
-  userId: string
-): Promise<HubAccessRole | null> {
+/** Resolve hub role and Website chat grant from profiles. */
+export async function getProfileAccessForUser(userId: string): Promise<{
+  role: HubAccessRole;
+  websiteChat: boolean;
+} | null> {
   if (!hasSupabaseConfig()) return null;
 
   try {
-    if (hasServiceRoleKey()) {
-      const supabase = createAdminClient();
-      const { data } = await supabase
+    const supabase = hasServiceRoleKey()
+      ? createAdminClient()
+      : await (await import("@/lib/supabase/server")).createClient();
+
+    const full = await supabase
+      .from("profiles")
+      .select("role, website_chat")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (full.error && /website_chat/i.test(full.error.message)) {
+      const roleOnly = await supabase
         .from("profiles")
         .select("role")
         .eq("user_id", userId)
         .maybeSingle();
-      if (data?.role) return normalizeHubAccessRole(data.role);
-      return null;
+      if (roleOnly.error || !roleOnly.data?.role) return null;
+      return {
+        role: normalizeHubAccessRole(roleOnly.data.role),
+        websiteChat: false,
+      };
     }
 
-    const { createClient: createServerClient } = await import(
-      "@/lib/supabase/server"
-    );
-    const server = await createServerClient();
-    const { data } = await server
-      .from("profiles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (data?.role) return normalizeHubAccessRole(data.role);
-    return null;
+    if (full.error || !full.data?.role) return null;
+    return {
+      role: normalizeHubAccessRole(full.data.role),
+      websiteChat: full.data.website_chat === true,
+    };
   } catch {
     return null;
   }
+}
+
+/** Resolve hub role from profiles (preferred) or app_metadata. */
+export async function getProfileRoleForUser(
+  userId: string
+): Promise<HubAccessRole | null> {
+  const access = await getProfileAccessForUser(userId);
+  return access?.role ?? null;
 }
 

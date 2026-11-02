@@ -10,7 +10,8 @@ const ALWAYS_ALLOWED = ["/app/me"];
 
 /** Redirect restricted views away from routes they should not see. */
 export function MemberRouteGuard({ children }: { children: React.ReactNode }) {
-  const { view, ready, canAccessBudget, budgetInMemberNav } = useHubView();
+  const { view, ready, canAccessBudget, budgetInMemberNav, chatInMemberNav } =
+    useHubView();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -19,9 +20,11 @@ export function MemberRouteGuard({ children }: { children: React.ReactNode }) {
     const allowed = Array.from(
       new Set([
         ...ALWAYS_ALLOWED,
-        ...navForView(view, { canAccessBudget, budgetInMemberNav }).map(
-          (n) => n.href
-        ),
+        ...navForView(view, {
+          canAccessBudget,
+          budgetInMemberNav,
+          chatInMemberNav,
+        }).map((n) => n.href),
       ])
     );
     const ok = allowed.some((href) =>
@@ -38,7 +41,7 @@ export function MemberRouteGuard({ children }: { children: React.ReactNode }) {
             : "/app"
       );
     }
-  }, [ready, view, pathname, router, canAccessBudget, budgetInMemberNav]);
+  }, [ready, view, pathname, router, canAccessBudget, budgetInMemberNav, chatInMemberNav]);
 
   return <>{children}</>;
 }

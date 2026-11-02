@@ -129,6 +129,8 @@ export async function listHubEnquiries(options?: {
   channel?: EnquiryIntake;
   limit?: number;
   offset?: number;
+  /** When false, website chat leads are left out of the merged list. */
+  includeWebsiteChat?: boolean;
 }): Promise<HubEnquiry[]> {
   const includeTest = Boolean(options?.includeTest);
   const channel = options?.channel;
@@ -165,6 +167,10 @@ export async function listHubEnquiries(options?: {
 
   if (channel) {
     merged = merged.filter((e) => e.channel === channel);
+  }
+
+  if (options?.includeWebsiteChat === false) {
+    merged = merged.filter((e) => e.channel !== "website_chat");
   }
 
   if (window) {

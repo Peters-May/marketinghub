@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { canAccessWebsiteChat } from "@/lib/auth/chat-access";
 import { canAccessEnquiries, isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser, type SessionUser } from "@/lib/auth/session";
 
@@ -35,6 +36,21 @@ export async function requireEnquiriesAccess(): Promise<
     return { user: null, error: unauthorized() };
   }
   if (!canAccessEnquiries(user.role)) {
+    return { user: null, error: forbidden() };
+  }
+  return { user, error: null };
+}
+
+/** Admin, SEO, or a member an admin has granted Website chat. */
+export async function requireWebsiteChatAccess(): Promise<
+  | { user: SessionUser; error: null }
+  | { user: null; error: NextResponse }
+> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { user: null, error: unauthorized() };
+  }
+  if (!canAccessWebsiteChat(user)) {
     return { user: null, error: forbidden() };
   }
   return { user, error: null };

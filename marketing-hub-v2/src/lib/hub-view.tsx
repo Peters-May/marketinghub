@@ -22,6 +22,10 @@ type HubViewContextValue = {
   canAccessBudget: boolean;
   /** Allowlisted non-admins only — Budget must not appear for Member preview. */
   budgetInMemberNav: boolean;
+  /** Admin, SEO, or a member granted Website chat. */
+  canAccessChat: boolean;
+  /** Member sidebar only — not the Admin preview of Member view. */
+  chatInMemberNav: boolean;
 };
 
 const HubViewContext = createContext<HubViewContextValue | null>(null);
@@ -32,12 +36,16 @@ export function HubViewProvider({
   canToggleAdminView = false,
   canAccessBudget = false,
   budgetInMemberNav = false,
+  canAccessChat = false,
+  chatInMemberNav = false,
 }: {
   children: React.ReactNode;
   initialView?: HubViewMode;
   canToggleAdminView?: boolean;
   canAccessBudget?: boolean;
   budgetInMemberNav?: boolean;
+  canAccessChat?: boolean;
+  chatInMemberNav?: boolean;
 }) {
   const [view, setViewState] = useState<HubViewMode>(initialView);
   const [ready, setReady] = useState(false);
@@ -88,6 +96,8 @@ export function HubViewProvider({
       canToggleAdminView,
       canAccessBudget,
       budgetInMemberNav,
+      canAccessChat,
+      chatInMemberNav,
     }),
     [
       view,
@@ -96,6 +106,8 @@ export function HubViewProvider({
       canToggleAdminView,
       canAccessBudget,
       budgetInMemberNav,
+      canAccessChat,
+      chatInMemberNav,
     ]
   );
 

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin, requireEnquiriesAccess } from "@/lib/api";
+import { canAccessWebsiteChat } from "@/lib/auth/chat-access";
 import { listHubEnquiries } from "@/lib/data/hub-enquiries";
 import {
   deleteWebEnquiry,
@@ -22,8 +23,8 @@ import { syncWebEnquiryToPortal } from "@/lib/sync/portal-enquiries";
  * Staff mutations: POST with session + action update|delete (delete = admin only).
  */
 export async function GET(request: NextRequest) {
-  const { error } = await requireEnquiriesAccess();
-  if (error) return error;
+  const gate = await requireEnquiriesAccess();
+  if (gate.error) return gate.error;
 
   if (!hasServiceRoleKey()) {
     return jsonOk({ enquiries: [], configured: false });
@@ -39,6 +40,10 @@ export async function GET(request: NextRequest) {
     channelRaw === "website_chat"
       ? (channelRaw as EnquiryIntake)
       : undefined;
+  const includeWebsiteChat = canAccessWebsiteChat(gate.user);
+  if (channel === "website_chat" && !includeWebsiteChat) {
+    return jsonOk({ enquiries: [], configured: true });
+  }
   const limitRaw = request.nextUrl.searchParams.get("limit");
   const offsetRaw = request.nextUrl.searchParams.get("offset");
   const limit = limitRaw ? Number(limitRaw) : undefined;
@@ -47,6 +52,7 @@ export async function GET(request: NextRequest) {
   try {
     const enquiries = await listHubEnquiries({
       includeTest,
+      includeWebsiteChat,
       channel,
       ...(Number.isFinite(limit) ? { limit } : {}),
       ...(Number.isFinite(offset) ? { offset } : {}),

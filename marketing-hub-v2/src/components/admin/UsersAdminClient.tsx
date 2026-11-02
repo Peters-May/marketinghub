@@ -33,6 +33,7 @@ const ROLE_OPTIONS: {
     process: [
       "Invite → they set a password from the email.",
       "Sign in at /login → land in /app as staff.",
+      "Website chat stays hidden until you turn it on for that person.",
       "Optional: link a Contact so they can edit My details.",
     ],
   },
@@ -222,6 +223,31 @@ export function UsersAdminClient({
     setShowForm(false);
     setForm({ full_name: "", email: "", role: "member", notes: "" });
     await refresh();
+  }
+
+  async function setWebsiteChat(id: string, website_chat: boolean) {
+    setError(null);
+    setActingUserKey(`${id}:chat`);
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        id,
+        patch: { website_chat },
+      }),
+    });
+    const data = await res.json();
+    setActingUserKey(null);
+    if (!res.ok) {
+      setError(data.error ?? "Could not update Website chat access");
+      return;
+    }
+    setItems((current) =>
+      current.map((user) =>
+        user.id === id ? { ...user, website_chat } : user
+      )
+    );
   }
 
   async function setRole(id: string, role: HubAccessRole) {
@@ -760,6 +786,9 @@ export function UsersAdminClient({
               <th className="px-4 py-3 font-semibold">Name</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="hidden px-4 py-3 font-semibold md:table-cell">
+                Website chat
+              </th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">
                 Linked contact
               </th>
@@ -804,6 +833,27 @@ export function UsersAdminClient({
                       label: r.label,
                     }))}
                   />
+                </td>
+                <td className="hidden px-4 py-3 md:table-cell">
+                  {u.role === "member" ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
+                      <input
+                        type="checkbox"
+                        className="rounded border-border"
+                        checked={u.website_chat === true}
+                        disabled={actingUserKey === `${u.id}:chat`}
+                        aria-label={`Website chat for ${u.full_name || u.email}`}
+                        onChange={(e) =>
+                          void setWebsiteChat(u.id, e.target.checked)
+                        }
+                      />
+                      {u.website_chat ? "On" : "Off"}
+                    </label>
+                  ) : u.role === "admin" || u.role === "seo" ? (
+                    <span className="text-xs text-muted">Included</span>
+                  ) : (
+                    <span className="text-xs text-muted">—</span>
+                  )}
                 </td>
                 <td className="hidden px-4 py-3 lg:table-cell">
                   <SearchSelect

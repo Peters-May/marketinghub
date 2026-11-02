@@ -1,4 +1,4 @@
-import { jsonError, jsonOk, requireEnquiriesAccess } from "@/lib/api";
+import { jsonError, jsonOk, requireWebsiteChatAccess } from "@/lib/api";
 import {
   getChatInsights,
   latestMessagePreviews,
@@ -23,7 +23,7 @@ import type { ChatSessionStatus } from "@/lib/types";
 
 /** Staff: list sessions, settings, KB, insights — action via query or body. */
 export async function GET(request: Request) {
-  const gate = await requireEnquiriesAccess();
+  const gate = await requireWebsiteChatAccess();
   if (gate.error) return gate.error;
   if (!hasServiceRoleKey()) {
     return jsonOk({ configured: false });
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const gate = await requireEnquiriesAccess();
+  const gate = await requireWebsiteChatAccess();
   if (gate.error) return gate.error;
   if (!hasServiceRoleKey()) {
     return jsonError("Chat storage is not configured", 503);

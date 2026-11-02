@@ -69,7 +69,15 @@ export async function POST(request: NextRequest) {
         patch.role !== undefined ||
         patch.full_name !== undefined ||
         patch.notes !== undefined ||
-        patch.email !== undefined;
+        patch.email !== undefined ||
+        patch.website_chat !== undefined;
+
+      if (
+        patch.website_chat !== undefined &&
+        typeof patch.website_chat !== "boolean"
+      ) {
+        return jsonError("Website chat access must be true or false");
+      }
 
       let updated = null;
       if (hasUserFields) {

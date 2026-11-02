@@ -2183,6 +2183,7 @@ export async function createHubUser(
     full_name: input.full_name.trim() || input.email.trim(),
     role: normalizeHubAccessRole(input.role),
     notes: input.notes ?? "",
+    website_chat: input.website_chat === true,
     last_sign_in_at: input.last_sign_in_at ?? null,
     id: uid("usr"),
     created_at: nowIso(),

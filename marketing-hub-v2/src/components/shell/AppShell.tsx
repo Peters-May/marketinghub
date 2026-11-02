@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Menu, Sparkles, X } from "lucide-react";
 import { canAccessBudget as userCanAccessBudget } from "@/lib/auth/budget-access";
+import {
+  canAccessWebsiteChat,
+  websiteChatInMemberNav,
+} from "@/lib/auth/chat-access";
 import { navForView } from "@/lib/nav";
 import { HubViewProvider, useHubView } from "@/lib/hub-view";
 import {
@@ -102,8 +106,13 @@ function ShellInner({
   const mainRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const { view, setView, canAccessBudget, budgetInMemberNav } = useHubView();
-  const nav = navForView(view, { canAccessBudget, budgetInMemberNav });
+  const { view, setView, canAccessBudget, budgetInMemberNav, chatInMemberNav } =
+    useHubView();
+  const nav = navForView(view, {
+    canAccessBudget,
+    budgetInMemberNav,
+    chatInMemberNav,
+  });
   const canUseAssistant = accessRole === "admin" || accessRole === "staff";
   const assistantReadOnly = accessRole !== "admin";
 
@@ -337,12 +346,14 @@ export function AppShell({
   userName,
   userEmail,
   accessRole = "admin",
+  websiteChat = false,
 }: {
   children: React.ReactNode;
   userName: string;
   userEmail?: string;
   /** Session role from profiles — admins may toggle Admin/Member/SEO/External UI. */
   accessRole?: UserRole;
+  websiteChat?: boolean;
 }) {
   const canToggleAdminView = accessRole === "admin";
   const canAccessBudget = userCanAccessBudget({
@@ -352,6 +363,9 @@ export function AppShell({
   // Members must not see Budget. Admins only see it in Admin view.
   // Allowlisted non-admins (Simon / Tom / Michael) still get it in Member nav.
   const budgetInMemberNav = canAccessBudget && !canToggleAdminView;
+  const chatUser = { role: accessRole, websiteChat };
+  const canAccessChat = canAccessWebsiteChat(chatUser);
+  const chatInMemberNav = websiteChatInMemberNav(chatUser);
   const initialView: HubViewMode =
     accessRole === "admin"
       ? "admin"
@@ -365,6 +379,8 @@ export function AppShell({
       canToggleAdminView={canToggleAdminView}
       canAccessBudget={canAccessBudget}
       budgetInMemberNav={budgetInMemberNav}
+      canAccessChat={canAccessChat}
+      chatInMemberNav={chatInMemberNav}
     >
       <ShellInner
         userName={userName}

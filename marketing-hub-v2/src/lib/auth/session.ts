@@ -22,26 +22,32 @@ import {
 } from "@/lib/auth/config";
 import type { UserRole } from "@/lib/types";
 import { hubRoleToSessionRole } from "@/lib/auth/roles";
-import { getProfileRoleForUser } from "@/lib/supabase/hub-users";
+import { getProfileAccessForUser } from "@/lib/supabase/hub-users";
 
 export type SessionUser = {
   id: string;
   email: string;
   full_name: string;
   role: UserRole;
+  /** True when an admin has granted this member Website chat. */
+  websiteChat?: boolean;
 };
 
 async function withProfileRole(base: SessionUser): Promise<SessionUser> {
-  const hubRole = await getProfileRoleForUser(base.id);
-  if (!hubRole) {
+  const access = await getProfileAccessForUser(base.id);
+  if (!access) {
     // Fail closed: authenticated user without a profile cannot access staff APIs.
     console.warn("[auth] No profile for user — defaulting to media_guest", {
       userId: base.id,
       email: base.email,
     });
-    return { ...base, role: "media_guest" };
+    return { ...base, role: "media_guest", websiteChat: false };
   }
-  return { ...base, role: hubRoleToSessionRole(hubRole) };
+  return {
+    ...base,
+    role: hubRoleToSessionRole(access.role),
+    websiteChat: access.websiteChat,
+  };
 }
 
 async function readVerifiedGate(

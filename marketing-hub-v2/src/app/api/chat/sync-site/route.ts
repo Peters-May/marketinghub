@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireEnquiriesAccess } from "@/lib/api";
+import { requireWebsiteChatAccess } from "@/lib/api";
 import type { SiteKnowledgeSyncResult } from "@/lib/chat/sync-site-knowledge";
 import { readWorkflowResult } from "@/lib/workflow/run-status";
 import { siteKnowledgeSyncWorkflow } from "@/workflows/site-knowledge";
@@ -12,7 +12,7 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   const runId = request.nextUrl.searchParams.get("runId");
   if (runId) {
-    const gate = await requireEnquiriesAccess();
+    const gate = await requireWebsiteChatAccess();
     if (gate.error) return gate.error;
     const status = await readWorkflowResult<SiteKnowledgeSyncResult>(runId);
     return NextResponse.json(status);
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
 /** Staff: copy the public website into the chat knowledge base now. */
 export async function POST() {
-  const gate = await requireEnquiriesAccess();
+  const gate = await requireWebsiteChatAccess();
   if (gate.error) return gate.error;
   try {
     const run = await start(siteKnowledgeSyncWorkflow);

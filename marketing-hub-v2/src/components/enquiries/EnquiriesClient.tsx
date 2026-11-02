@@ -5,7 +5,12 @@ import { format, parseISO } from "date-fns";
 import { Download } from "lucide-react";
 import type { HubEnquiry } from "@/lib/types";
 import {
-  computeEnquiryStats,
+  computeEnquiryStatsFromFacts,
+  factInDateRange,
+  factsForYearCompare,
+  type EnquiryFact,
+} from "@/lib/data/enquiry-facts";
+import {
   enquiryInDateRange,
   enquiryReferrerKey,
   enquiryReferrerLabel,
@@ -21,7 +26,6 @@ import { HUB_ENQUIRY_PAGE_SIZE } from "@/lib/data/hub-enquiries";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
-import { enquiryRoutingGap } from "@/lib/enquiries/routing";
 
 const MARKETING_SOURCE_UPDATE_KEY = "web-enquiries-marketing-source-1.3.24";
 
@@ -723,17 +727,23 @@ function downloadCsv(rows: HubEnquiry[]) {
 export function EnquiriesClient({
   initialOpenId = null,
   initial,
+  facts: initialFacts,
   configured: initialConfigured,
 }: {
   initialOpenId?: string | null;
   initial: HubEnquiry[];
+  facts: EnquiryFact[];
   configured: boolean;
 }) {
-  const { canToggleAdminView, view } = useHubView();
+  const { canToggleAdminView, view, canAccessChat, chatInMemberNav } =
+    useHubView();
+  const showWebsiteChat =
+    canAccessChat && (view !== "member" || chatInMemberNav);
   const canDelete = canToggleAdminView;
   const canAddToMarketingList = view !== "seo";
 
   const [items, setItems] = useState(initial);
+  const [facts, setFacts] = useState(initialFacts);
   const [hasMore, setHasMore] = useState(
     initial.length >= HUB_ENQUIRY_PAGE_SIZE
   );
@@ -745,6 +755,19 @@ export function EnquiriesClient({
   const [officeFilter, setOfficeFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [intakeTab, setIntakeTab] = useState<IntakeTab>("web");
+  const intakeTabs = useMemo(
+    () =>
+      showWebsiteChat
+        ? INTAKE_TABS
+        : INTAKE_TABS.filter((tab) => tab.id !== "website_chat"),
+    [showWebsiteChat]
+  );
+
+  useEffect(() => {
+    if (!showWebsiteChat && intakeTab === "website_chat") {
+      setIntakeTab("web");
+    }
+  }, [showWebsiteChat, intakeTab]);
   const [referrerFilter, setReferrerFilter] = useState("all");
   const [manualRouteOnly, setManualRouteOnly] = useState(false);
   const [showTest, setShowTest] = useState(false);
@@ -758,8 +781,10 @@ export function EnquiriesClient({
   const [showSourceUpdate, setShowSourceUpdate] = useState(false);
   const [listHint, setListHint] = useState("");
   const unroutedCount = useMemo(
-    () => items.filter((item) => enquiryRoutingGap(item) !== null).length,
-    [items]
+    () =>
+      facts.filter((fact) => fact.openGap && (showTest || !fact.isTest))
+        .length,
+    [facts, showTest]
   );
 
 
@@ -834,10 +859,18 @@ export function EnquiriesClient({
     });
   }, [items, showTest, dateFrom, dateTo, intakeTab]);
 
+  const datedFacts = useMemo(() => {
+    return facts.filter((fact) => {
+      if (fact.channel !== intakeTab) return false;
+      if (!showTest && fact.isTest) return false;
+      return factInDateRange(fact, dateFrom, dateTo);
+    });
+  }, [facts, showTest, dateFrom, dateTo, intakeTab]);
+
   const offices = useMemo(() => {
-    const set = new Set(dated.map((e) => e.selected_office).filter(Boolean));
+    const set = new Set(datedFacts.map((fact) => fact.office).filter(Boolean));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [dated]);
+  }, [datedFacts]);
 
   function matchesListFilters(e: HubEnquiry): boolean {
     if (manualRouteOnly && !e.needs_manual_review) return false;
@@ -888,22 +921,52 @@ export function EnquiriesClient({
     manualRouteOnly,
   ]);
 
+  function matchesFactFilters(fact: EnquiryFact): boolean {
+    if (manualRouteOnly && !fact.needsReview) return false;
+    if (officeFilter !== "all") {
+      const office = fact.office || "Unassigned";
+      if (office !== officeFilter) return false;
+    }
+    if (sourceFilter !== "all" && fact.source !== sourceFilter) return false;
+    if (referrerFilter !== "all") {
+      if (!fact.googleAds || fact.adsGroup !== referrerFilter) return false;
+    }
+    const query = search.trim().toLowerCase();
+    if (query && !fact.search.includes(query)) return false;
+    return true;
+  }
+
   /** Overview KPIs + summaries for the date range (before chip filters). */
   const rangeStats = useMemo(
-    () => computeEnquiryStats(dated, { includeTest: true }),
-    [dated]
+    () => computeEnquiryStatsFromFacts(datedFacts, { includeTest: true }),
+    [datedFacts]
+  );
+
+  const filteredFactCount = useMemo(
+    () => datedFacts.filter(matchesFactFilters).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFactFilters closes over filter state
+    [
+      datedFacts,
+      search,
+      officeFilter,
+      sourceFilter,
+      referrerFilter,
+      manualRouteOnly,
+    ]
   );
 
   /** YoY table respects attribute filters, but not the date range (needs full years). */
   const yearCompareItems = useMemo(() => {
-    return items.filter((e) => {
-      if (e.channel !== intakeTab) return false;
-      if (!showTest && e.is_test) return false;
-      return matchesListFilters(e);
-    });
+    return factsForYearCompare(
+      facts.filter((fact) => {
+        if (fact.channel !== intakeTab) return false;
+        if (!showTest && fact.isTest) return false;
+        return matchesFactFilters(fact);
+      })
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    items,
+    facts,
     showTest,
     intakeTab,
     search,
@@ -949,6 +1012,7 @@ export function EnquiriesClient({
         }),
       });
       setSelected(null);
+      setFacts((prev) => prev.filter((fact) => fact.id !== e.id));
       await refresh();
     } finally {
       setSaving(false);
@@ -1053,7 +1117,7 @@ export function EnquiriesClient({
         label="Enquiry type"
         value={intakeTab}
         onChange={selectIntakeTab}
-        options={INTAKE_TABS}
+        options={intakeTabs}
         size="lg"
         tourIdPrefix="enquiries-tab"
       />
@@ -1122,8 +1186,8 @@ export function EnquiriesClient({
             ? "Search name, phone, vessel, office, status…"
             : "Search name, email, vessel, route, office…"
         }
-        resultCount={filtered.length}
-        totalCount={dated.length}
+        resultCount={filteredFactCount}
+        totalCount={datedFacts.length}
         dateRange={{
           from: dateFrom,
           to: dateTo,
@@ -1183,7 +1247,7 @@ export function EnquiriesClient({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="surface-card p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            This week
+            Last 7 days
           </p>
           <p className="mt-1 font-display text-2xl text-brand">
             {rangeStats.thisWeek}
@@ -1382,11 +1446,6 @@ export function EnquiriesClient({
         {showHistory ? (
           <>
             <EnquiryYearCompare items={yearCompareItems} includeTest />
-            {hasMore ? (
-              <p className="mt-2 text-xs text-muted">
-                Year totals include the enquiries loaded so far.
-              </p>
-            ) : null}
           </>
         ) : null}
       </div>

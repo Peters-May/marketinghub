@@ -36,6 +36,8 @@ export type NavItem = {
   external?: boolean;
   /** Only shown to Hub admins plus the Budget allowlist. */
   budgetAccess?: boolean;
+  /** Member view only when that person has been granted Website chat. */
+  chatAccess?: boolean;
 };
 
 export const STAFF_NAV: NavItem[] = [
@@ -128,8 +130,8 @@ export const STAFF_NAV: NavItem[] = [
     label: "Website chat",
     description: "Train, test, deploy, and reply to the site chatbot",
     icon: MessageCircle,
-    member: true,
     seo: true,
+    chatAccess: true,
   },
   {
     href: "/app/reports",
@@ -180,10 +182,13 @@ export function navForView(
      * Admins previewing Member must not see Budget — members never should.
      */
     budgetInMemberNav?: boolean;
+    /** Member view only when Website chat was granted to that person. */
+    chatInMemberNav?: boolean;
   }
 ): NavItem[] {
   const includeBudget = Boolean(options?.canAccessBudget);
   const budgetInMemberNav = Boolean(options?.budgetInMemberNav);
+  const chatInMemberNav = Boolean(options?.chatInMemberNav);
 
   if (view === "external") {
     return STAFF_NAV.filter((item) => item.external);
@@ -200,7 +205,11 @@ export function navForView(
   }
 
   // Member view: daily tools only — never Budget for admins previewing Member.
+  // Website chat only when that member has been given access.
   return STAFF_NAV.filter(
-    (item) => item.member || (budgetInMemberNav && item.budgetAccess)
+    (item) =>
+      item.member ||
+      (chatInMemberNav && item.chatAccess) ||
+      (budgetInMemberNav && item.budgetAccess)
   );
 }

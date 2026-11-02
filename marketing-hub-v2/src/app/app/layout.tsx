@@ -21,6 +21,7 @@ export default async function StaffAppLayout({
       userName={user.full_name}
       userEmail={user.email}
       accessRole={user.role}
+      websiteChat={user.websiteChat}
     >
       {children}
     </AppShell>
