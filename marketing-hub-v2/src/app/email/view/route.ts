@@ -49,12 +49,14 @@ export async function GET(request: NextRequest) {
     campaignId: parsed.campaignId,
     contactId: contact.id,
   };
+  const staffPreview = request.nextUrl.searchParams.get("preview") === "1";
   const html = applyEmailMerge(
     ensureViewInBrowserLink(ensureUnsubscribeFooter(campaign.html_body)),
     {
       contact,
-      unsubscribeUrl: unsubscribeUrlFor(identity),
-      viewInBrowserUrl: viewInBrowserUrlFor(identity),
+      unsubscribeUrl: staffPreview ? "#" : unsubscribeUrlFor(identity),
+      preferencesUrl: staffPreview ? "#" : undefined,
+      viewInBrowserUrl: staffPreview ? "#" : viewInBrowserUrlFor(identity),
     }
   );
 

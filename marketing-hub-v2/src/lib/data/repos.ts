@@ -48,6 +48,10 @@ import {
 } from "@/lib/email/send-lock";
 import { statusForThemeQuarter } from "@/lib/themes/calendar";
 import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
+import {
+  hasEmailEventRow,
+  listEmailStatKeyRows,
+} from "@/lib/email/stat-keys";
 import { clothingProductById } from "@/lib/merch/north-sails";
 import {
   normalizeMerchOrderItems,
@@ -3836,6 +3840,42 @@ export async function listAddressDeliveryEvents(email: string): Promise<EmailEve
   );
 }
 
+/** Campaign, address, and kind for every event. The email list counts these. */
+export async function listEmailStatEvents(): Promise<
+  Array<Pick<EmailEvent, "campaign_id" | "email" | "kind">>
+> {
+  const store = await readStore();
+  const local = (store.email_events ?? []).map((event) => ({
+    campaign_id: event.campaign_id,
+    email: event.email,
+    kind: event.kind,
+  }));
+  const remote = await listEmailStatKeyRows();
+  return [...remote, ...local];
+}
+
+/** Whether this address already recorded this kind of event on the campaign. */
+export async function hasEmailCampaignEvent(
+  campaignId: string,
+  email: string,
+  kind: EmailEventKind
+): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  if (!campaignId || !normalized) return false;
+  const store = await readStore();
+  if (
+    (store.email_events ?? []).some(
+      (event) =>
+        event.campaign_id === campaignId &&
+        event.kind === kind &&
+        event.email.trim().toLowerCase() === normalized
+    )
+  ) {
+    return true;
+  }
+  return hasEmailEventRow(campaignId, normalized, kind);
+}
+
 export async function listEmailEvents(campaignId?: string) {
   const store = await readStore();
   let rows = [...(store.email_events ?? [])];
@@ -3936,7 +3976,8 @@ export async function appendEmailEvents(
 export async function bumpEmailCampaignStat(
   campaignId: string,
   field: keyof EmailCampaignStats,
-  delta = 1
+  delta = 1,
+  touchUpdated = true
 ) {
   let updated: EmailCampaign | null = null;
   await updateStore((s) => {
@@ -3948,7 +3989,7 @@ export async function bumpEmailCampaignStat(
     s.email_campaigns[idx] = normalizeEmailCampaign({
       ...prev,
       stats,
-      updated_at: nowIso(),
+      updated_at: touchUpdated ? nowIso() : prev.updated_at,
     });
     updated = s.email_campaigns[idx];
   });

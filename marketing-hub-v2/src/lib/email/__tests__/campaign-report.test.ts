@@ -114,8 +114,44 @@ describe("campaign report", () => {
     });
     expect(report.openRate).toBe("10%");
     expect(report.clickRate).toBe("10%");
+    expect(report.deliveredTo).toBe(10);
     expect(report.contacts[0]).toMatchObject({ name: "Blake", clicks: 1 });
     expect(report.links).toHaveLength(1);
+  });
+
+  it("counts deliveries from events when the stored total is still zero", () => {
+    const report = buildCampaignReport({
+      campaign: campaign({
+        adj_open_rate: null,
+        adj_click_rate: null,
+        stats: {
+          recipients: 4,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          complained: 0,
+          unsubscribed: 0,
+        },
+      }),
+      events: [
+        event({ id: "d1", kind: "delivered", email: "a@example.com" }),
+        event({ id: "d2", kind: "delivered", email: "b@example.com" }),
+        event({ id: "o1", kind: "opened", email: "a@example.com" }),
+        event({
+          id: "c1",
+          kind: "clicked",
+          email: "b@example.com",
+          link: "https://www.petersandmay.com/sailing-schedules/",
+        }),
+      ],
+      contacts: [],
+      suppressions: [],
+    });
+    expect(report.deliveredTo).toBe(2);
+    expect(report.sentTo).toBe(4);
+    expect(report.openRate).toBe("50%");
+    expect(report.clickRate).toBe("50%");
   });
 
   it("keeps imported rates when no events have been stored", () => {

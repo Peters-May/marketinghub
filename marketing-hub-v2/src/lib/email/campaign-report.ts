@@ -4,6 +4,7 @@ import {
   campaignClickRateLabel,
   campaignOpenRateLabel,
 } from "@/lib/email/display";
+import { campaignStatsFromEvents } from "@/lib/email/stats-projector";
 import type {
   EmailCampaign,
   EmailEvent,
@@ -84,7 +85,7 @@ export function buildCampaignReport(input: {
     (event) => event.campaign_id === input.campaign.id
   );
   const tracked = events.length > 0;
-  const stats = input.campaign.stats;
+  const stats = campaignStatsFromEvents(events, input.campaign.stats);
   const base = stats.delivered || stats.recipients;
 
   const names = new Map<string, string>();

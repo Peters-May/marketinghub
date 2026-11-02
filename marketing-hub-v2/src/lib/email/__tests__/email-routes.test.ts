@@ -99,5 +99,11 @@ describe("view in browser", () => {
     const html = await res.text();
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
+
+    const preview = await GET(
+      new NextRequest(`https://hub.test/email/view?token=${token}&preview=1`)
+    );
+    const previewHtml = await preview.text();
+    expect(previewHtml).not.toContain("/unsubscribe");
   });
 });

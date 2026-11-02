@@ -12,6 +12,7 @@
  *   node scripts/backfill-portal-marketing.mjs --dry-run
  */
 
+import { createHmac } from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -107,6 +108,19 @@ const campaigns = Array.isArray(store.email_campaigns) ? store.email_campaigns :
 const events = Array.isArray(store.email_events) ? store.email_events : [];
 const suppressions = Array.isArray(store.email_suppressions) ? store.email_suppressions : [];
 
+function previewUrl(email, campaignId, contactId) {
+  const secret = (
+    env.EMAIL_UNSUBSCRIBE_SECRET ||
+    env.RESEND_API_KEY ||
+    "marketing-hub-dev-unsubscribe"
+  ).trim();
+  const normalized = String(email || "").trim().toLowerCase();
+  const payload = `${normalized}|${campaignId}|${contactId || ""}`;
+  const sig = createHmac("sha256", secret).update(payload).digest("base64url");
+  const token = Buffer.from(`${payload}|${sig}`, "utf8").toString("base64url");
+  return `${hubOrigin}/email/view?token=${encodeURIComponent(token)}&preview=1`;
+}
+
 function contactFor(email, contactId) {
   const normalized = String(email || "").trim().toLowerCase();
   return (
@@ -134,6 +148,7 @@ for (const event of events) {
     hub_campaign_id: event.campaign_id,
     campaign_title: campaign?.title || "Marketing email",
     campaign_url: `${hubOrigin}/app/email?campaign=${encodeURIComponent(event.campaign_id)}`,
+    preview_url: previewUrl(contact.email || event.email, event.campaign_id, contact.id),
     sent_at: event.created_at,
   });
   posted += 1;

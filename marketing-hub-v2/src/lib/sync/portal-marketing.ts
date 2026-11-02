@@ -16,6 +16,7 @@ import {
   updateMediaList,
   upsertPortalAudienceContacts,
 } from "@/lib/data/repos";
+import { createUnsubscribeToken } from "@/lib/email/unsubscribe-token";
 import type { Contact, EmailSuppressionReason } from "@/lib/types";
 
 const PORTAL_LIST_NAME = "Portal customers";
@@ -87,6 +88,20 @@ export function hubContactRecordUrl(contactId: string): string {
 
 export function hubCampaignUrl(campaignId: string): string {
   return `${hubAppOrigin()}/app/email?campaign=${encodeURIComponent(campaignId)}`;
+}
+
+/** Public view-in-browser page for the email this person was sent. */
+export function hubEmailPreviewUrl(input: {
+  email: string;
+  campaignId: string;
+  contactId?: string | null;
+}): string {
+  const token = createUnsubscribeToken({
+    email: input.email,
+    campaignId: input.campaignId,
+    contactId: input.contactId,
+  });
+  return `${hubAppOrigin()}/email/view?token=${encodeURIComponent(token)}&preview=1`;
 }
 
 type PortalCallResult =
@@ -487,6 +502,11 @@ export async function notifyPortalCampaignSend(input: {
     hub_campaign_id: input.campaignId,
     campaign_title: input.campaignTitle,
     campaign_url: hubCampaignUrl(input.campaignId),
+    preview_url: hubEmailPreviewUrl({
+      email: input.contact.email,
+      campaignId: input.campaignId,
+      contactId: input.contact.id,
+    }),
     sent_at: input.sentAt,
   });
   if (!result.ok) {

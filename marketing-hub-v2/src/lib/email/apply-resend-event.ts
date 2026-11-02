@@ -3,6 +3,7 @@ import {
   appendEmailEvent,
   bumpEmailCampaignStat,
   findEmailSuppression,
+  hasEmailCampaignEvent,
   listAddressDeliveryEvents,
   listContacts,
   updateContact,
@@ -41,6 +42,12 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
   const priorDelivery = bounceClass && job.email
     ? await listAddressDeliveryEvents(job.email)
     : [];
+  const countsEngagement =
+    Boolean(job.email) &&
+    (job.kind === "delivered" || job.kind === "opened" || job.kind === "clicked");
+  const firstForAddress = countsEngagement
+    ? !(await hasEmailCampaignEvent(job.campaignId, job.email, job.kind))
+    : false;
 
   await appendEmailEvent({
     campaign_id: job.campaignId,
@@ -52,6 +59,10 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
     user_agent: job.userAgent,
     created_at: job.occurredAt || undefined,
   });
+
+  if (firstForAddress) {
+    await bumpEmailCampaignStat(job.campaignId, job.kind, 1, false);
+  }
 
   if (!job.email) return { ok: true };
 

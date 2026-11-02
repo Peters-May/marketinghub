@@ -46,8 +46,10 @@ export async function insertEmailEventRows(items: EmailEvent[]): Promise<void> {
 }
 
 const PAGE_SIZE = 1000;
-/** Matches the old single-query cap for report reads. */
+/** Matches the old single-query cap for report reads across every campaign. */
 const MAX_EVENT_ROWS = 10000;
+/** One campaign summary needs every delivery, open, and click for that send. */
+const SINGLE_CAMPAIGN_MAX = 100_000;
 
 type Page<T> = { data: T[] | null; error: { message: string } | null };
 
@@ -108,7 +110,7 @@ export async function listEmailEventRows(campaignId?: string): Promise<EmailEven
         .order("id", { ascending: true });
       if (campaignId) query = query.eq("campaign_id", campaignId);
       return query.range(from, to);
-    }, MAX_EVENT_ROWS);
+    }, campaignId ? SINGLE_CAMPAIGN_MAX : MAX_EVENT_ROWS);
   } catch (err) {
     console.error("[email-events]", err instanceof Error ? err.message : err);
     return [];
