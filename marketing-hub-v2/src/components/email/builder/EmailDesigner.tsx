@@ -38,6 +38,7 @@ import {
 } from "@/lib/email/email-settings";
 import type { FooterLinkSettings } from "@/lib/email/footer-links";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
+import { EmailPublicShareControls } from "@/components/email/EmailPublicShareControls";
 import { EmailInspector } from "@/components/email/builder/EmailInspector";
 import {
   EmailVariableSelect,
@@ -137,6 +138,8 @@ export function EmailDesigner({
   initialExcludeAudienceId = "",
   initialBrief = "",
   canDelete = false,
+  initialShareEnabled = false,
+  initialSharePath = "",
 }: {
   kind: "template" | "campaign";
   id: string;
@@ -155,6 +158,8 @@ export function EmailDesigner({
   initialBrief?: string;
   /** Unsent drafts only. Scheduled and sent emails cannot be deleted. */
   canDelete?: boolean;
+  initialShareEnabled?: boolean;
+  initialSharePath?: string;
 }) {
   const router = useRouter();
   const history = useDesignHistory(() =>
@@ -183,6 +188,8 @@ export function EmailDesigner({
   const [tab, setTab] = useState<"content" | "layouts">("content");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewing, setPreviewing] = useState(false);
+  const [shareEnabled, setShareEnabled] = useState(initialShareEnabled);
+  const [sharePath, setSharePath] = useState(initialSharePath);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
@@ -470,37 +477,49 @@ export function EmailDesigner({
     }
   }
 
-  async function save() {
-    if (readOnly) return false;
-    setSaving(true);
-    setError("");
-    setSavedNote("");
+  function buildPatch(): Record<string, unknown> {
     const design = history.designRef.current;
     const html_body = compileEmailDesign(design, {
       footerLinks,
       previewText,
     });
-    const patch =
-      kind === "template"
-        ? {
-            name: name || "Untitled template",
-            subject_default: subject,
-            preview_text_default: previewText,
-            design,
-            html_body,
-          }
-        : {
-            title: name || "Untitled email",
-            subject,
-            preview_text: previewText,
-            from_name: fromName,
-            from_email: fromEmail,
-            audience_id: audienceId || null,
-            exclude_audience_id: excludeAudienceId || null,
-            brief,
-            design,
-            html_body,
-          };
+    if (kind === "template") {
+      return {
+        name: name || "Untitled template",
+        subject_default: subject,
+        preview_text_default: previewText,
+        design,
+        html_body,
+      };
+    }
+    return {
+      title: name || "Untitled email",
+      subject,
+      preview_text: previewText,
+      from_name: fromName,
+      from_email: fromEmail,
+      audience_id: audienceId || null,
+      exclude_audience_id: excludeAudienceId || null,
+      brief,
+      design,
+      html_body,
+    };
+  }
+
+  function takeShareDraft() {
+    if (!dirtyRef.current) return null;
+    const patch = buildPatch();
+    dirtyRef.current = false;
+    setDirty(false);
+    return patch;
+  }
+
+  async function save() {
+    if (readOnly) return false;
+    setSaving(true);
+    setError("");
+    setSavedNote("");
+    const patch = buildPatch();
     try {
       const res = await fetch(
         kind === "template" ? "/api/email/templates" : "/api/email/campaigns",
@@ -1015,7 +1034,7 @@ export function EmailDesigner({
             Preview and test
           </button>
           {previewMenu ? (
-            <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-border bg-white py-1 shadow-lg">
+            <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-border bg-white py-1 shadow-lg">
               <button
                 type="button"
                 className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
@@ -1041,8 +1060,26 @@ export function EmailDesigner({
                 className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
                 onClick={() => void copyLink()}
               >
-                Copy link
+                Copy editor link
               </button>
+              <EmailPublicShareControls
+                kind={kind}
+                id={id}
+                initialEnabled={shareEnabled}
+                initialPath={sharePath}
+                layout="menu"
+                allowEnable={!readOnly}
+                takeDraft={readOnly ? undefined : takeShareDraft}
+                restoreDraft={() => {
+                  dirtyRef.current = true;
+                  setDirty(true);
+                }}
+                onNote={setSavedNote}
+                onError={setError}
+                onEnabledChange={setShareEnabled}
+                onPathChange={setSharePath}
+                onDone={() => setPreviewMenu(false)}
+              />
             </div>
           ) : null}
         </div>

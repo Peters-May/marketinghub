@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { emailCampaignHome } from "@/lib/email/category";
 import { canDeleteUnsentDraft } from "@/lib/email/display";
 import { getEmailCampaign, getEmailTemplate, listEmailAudiences } from "@/lib/data/repos";
+import { emailSharePath } from "@/lib/email/share";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,12 @@ export default async function EmailDesignPage({
         initialPreview={template.preview_text_default}
         initialDesign={template.design}
         initialHtml={template.html_body}
+        initialShareEnabled={template.share_enabled === true}
+        initialSharePath={
+          template.share_enabled
+            ? emailSharePath(template.share_token ?? "")
+            : ""
+        }
       />
     );
   }
@@ -73,6 +80,10 @@ export default async function EmailDesignPage({
       initialExcludeAudienceId={campaign.exclude_audience_id ?? ""}
       initialBrief={campaign.brief ?? ""}
       canDelete={canDeleteUnsentDraft(campaign)}
+      initialShareEnabled={campaign.share_enabled === true}
+      initialSharePath={
+        campaign.share_enabled ? emailSharePath(campaign.share_token ?? "") : ""
+      }
     />
   );
 }

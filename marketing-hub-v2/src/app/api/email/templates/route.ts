@@ -5,9 +5,12 @@ import {
   deleteEmailTemplate,
   getEmailTemplate,
   listEmailTemplates,
+  setEmailTemplateShare,
   updateEmailTemplate,
 } from "@/lib/data/repos";
 import { copyName } from "@/lib/email/clone";
+import type { EmailTemplate } from "@/lib/types";
+import { emailSharePath, omitEmailSharePatch } from "@/lib/email/share";
 
 export async function GET() {
   const { error } = await requireAdmin();
@@ -22,9 +25,33 @@ export async function POST(request: NextRequest) {
   const action = body.action as string | undefined;
 
   if (action === "update") {
-    const item = await updateEmailTemplate(body.id, body.patch ?? {});
+    const patch = omitEmailSharePatch(
+      body.patch && typeof body.patch === "object" ? body.patch : {}
+    );
+    const item = await updateEmailTemplate(
+      body.id,
+      patch as Partial<EmailTemplate>
+    );
     if (!item) return jsonError("Not found", 404);
     return jsonOk({ item });
+  }
+
+  if (action === "set_share") {
+    const id = String(body.id ?? "");
+    if (!id) return jsonError("id required", 400);
+    const enabled = body.enabled === true;
+    const patch = enabled
+      ? (omitEmailSharePatch(
+          body.patch && typeof body.patch === "object" ? body.patch : {}
+        ) as Partial<EmailTemplate>)
+      : undefined;
+    const result = await setEmailTemplateShare(id, enabled, patch);
+    if (!result) return jsonError("Not found", 404);
+    return jsonOk({
+      share_enabled: result.share_enabled,
+      share_token: result.share_token,
+      path: result.share_enabled ? emailSharePath(result.share_token) : "",
+    });
   }
 
   if (action === "clone") {

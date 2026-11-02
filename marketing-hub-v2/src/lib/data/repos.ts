@@ -3101,6 +3101,8 @@ function normalizeEmailTemplate(
     preview_text_default: t.preview_text_default ?? "",
     html_body: t.html_body ?? "",
     design: normalizeEmailDesign(t.design),
+    share_token: (t.share_token ?? "").trim(),
+    share_enabled: t.share_enabled === true,
     created_at: t.created_at ?? nowIso(),
     updated_at: t.updated_at ?? nowIso(),
   };
@@ -3160,6 +3162,8 @@ function normalizeEmailCampaign(
     sent_at: c.sent_at ?? null,
     send_claim: c.send_claim ?? "",
     send_heartbeat_at: c.send_heartbeat_at ?? null,
+    share_token: (c.share_token ?? "").trim(),
+    share_enabled: c.share_enabled === true,
     stats: normalizeEmailStats(c.stats),
     last_error: c.last_error ?? "",
     created_by: c.created_by ?? "",
@@ -3224,10 +3228,13 @@ export async function updateEmailTemplate(
     if (!s.email_templates) s.email_templates = [];
     const idx = s.email_templates.findIndex((x) => x.id === id);
     if (idx === -1) return;
+    const prev = normalizeEmailTemplate(s.email_templates[idx]);
     const next = normalizeEmailTemplate({
-      ...normalizeEmailTemplate(s.email_templates[idx]),
+      ...prev,
       ...patch,
       id,
+      share_token: prev.share_token ?? "",
+      share_enabled: prev.share_enabled === true,
       updated_at: nowIso(),
     });
     s.email_templates[idx] = next;
@@ -3240,6 +3247,37 @@ export async function deleteEmailTemplate(id: string) {
   await updateStore((s) => {
     s.email_templates = (s.email_templates ?? []).filter((x) => x.id !== id);
   });
+}
+
+/** Turn the unlisted draft link on or off. The token stays so the same link can be restored. */
+export async function setEmailTemplateShare(
+  id: string,
+  enabled: boolean,
+  patch?: Partial<EmailTemplate>
+): Promise<{ share_token: string; share_enabled: boolean } | null> {
+  const { generateShareToken, isShareToken } = await import(
+    "@/lib/social/post-share"
+  );
+  let result: { share_token: string; share_enabled: boolean } | null = null;
+  await updateStore((s) => {
+    if (!s.email_templates) s.email_templates = [];
+    const idx = s.email_templates.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailTemplate(s.email_templates[idx]);
+    const share_token = isShareToken(prev.share_token ?? "")
+      ? prev.share_token!
+      : generateShareToken();
+    s.email_templates[idx] = normalizeEmailTemplate({
+      ...prev,
+      ...(enabled ? patch : undefined),
+      id,
+      share_token,
+      share_enabled: enabled,
+      updated_at: nowIso(),
+    });
+    result = { share_token, share_enabled: enabled };
+  });
+  return result;
 }
 
 export async function listEmailAudiences() {
@@ -3412,12 +3450,102 @@ export async function updateEmailCampaign(
       // Only the claim helpers below may change who owns a send.
       send_claim: prev.send_claim,
       send_heartbeat_at: prev.send_heartbeat_at,
+      // Share links change only through setEmailCampaignShare.
+      share_token: prev.share_token ?? "",
+      share_enabled: prev.share_enabled === true,
       updated_at: nowIso(),
     });
     s.email_campaigns[idx] = next;
     updated = next;
   });
   return updated;
+}
+
+/** Turn the unlisted draft link on or off. The token stays so the same link can be restored. */
+export async function setEmailCampaignShare(
+  id: string,
+  enabled: boolean,
+  patch?: Partial<EmailCampaign>
+): Promise<{ share_token: string; share_enabled: boolean } | null> {
+  const { generateShareToken, isShareToken } = await import(
+    "@/lib/social/post-share"
+  );
+  let result: { share_token: string; share_enabled: boolean } | null = null;
+  await updateStore((s) => {
+    if (!s.email_campaigns) s.email_campaigns = [];
+    const idx = s.email_campaigns.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
+    const share_token = isShareToken(prev.share_token ?? "")
+      ? prev.share_token!
+      : generateShareToken();
+    const content = enabled && patch ? patch : {};
+    s.email_campaigns[idx] = normalizeEmailCampaign({
+      ...prev,
+      ...content,
+      id,
+      status:
+        content.status !== undefined
+          ? normalizeEmailCampaignStatus(content.status)
+          : prev.status,
+      list_ids: Array.isArray(content.list_ids) ? content.list_ids : prev.list_ids,
+      recipient_ids: Array.isArray(content.recipient_ids)
+        ? content.recipient_ids
+        : prev.recipient_ids,
+      stats: content.stats ? normalizeEmailStats(content.stats) : prev.stats,
+      send_claim: prev.send_claim,
+      send_heartbeat_at: prev.send_heartbeat_at,
+      share_token,
+      share_enabled: enabled,
+      updated_at: nowIso(),
+    });
+    result = { share_token, share_enabled: enabled };
+  });
+  return result;
+}
+
+/** Public draft preview. Null when the token is unknown or the link is off. */
+export async function getPublicEmailByShareToken(token: string) {
+  const { isShareToken } = await import("@/lib/social/post-share");
+  const { toPublicEmailDraft } = await import("@/lib/email/share");
+  const trimmed = token.trim();
+  if (!isShareToken(trimmed)) return null;
+  const store = await readStore();
+  for (const row of store.email_campaigns ?? []) {
+    if (row.share_enabled !== true) continue;
+    if ((row.share_token ?? "").trim() !== trimmed) continue;
+    const campaign = normalizeEmailCampaign(row);
+    const draft = toPublicEmailDraft(
+      {
+        share_enabled: campaign.share_enabled,
+        share_token: campaign.share_token,
+        title: campaign.title,
+        subject: campaign.subject,
+        html_body: campaign.html_body,
+        sent: campaign.status === "sent" || campaign.status === "sending",
+      },
+      trimmed
+    );
+    if (draft) return draft;
+  }
+  for (const row of store.email_templates ?? []) {
+    if (row.share_enabled !== true) continue;
+    if ((row.share_token ?? "").trim() !== trimmed) continue;
+    const template = normalizeEmailTemplate(row);
+    const draft = toPublicEmailDraft(
+      {
+        share_enabled: template.share_enabled,
+        share_token: template.share_token,
+        title: template.name,
+        subject: template.subject_default,
+        html_body: template.html_body,
+        sent: false,
+      },
+      trimmed
+    );
+    if (draft) return draft;
+  }
+  return null;
 }
 
 /**

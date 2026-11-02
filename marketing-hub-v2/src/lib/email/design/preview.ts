@@ -25,14 +25,26 @@ const SAMPLE_CONTACT: Contact = {
   updated_at: "",
 };
 
-export function previewMerge(template: string, opts?: MergeOptions): string {
+export function previewMerge(
+  template: string,
+  opts?: MergeOptions & {
+    unsubscribeUrl?: string;
+    preferencesUrl?: string;
+    viewInBrowserUrl?: string;
+  }
+): string {
   return applyEmailMerge(
     template,
     {
       contact: SAMPLE_CONTACT,
-      unsubscribeUrl: "https://example.com/unsubscribe?view=unsubscribe",
-      preferencesUrl: "https://example.com/unsubscribe?view=preferences",
-      viewInBrowserUrl: "https://example.com/email/view",
+      unsubscribeUrl:
+        opts?.unsubscribeUrl ??
+        "https://example.com/unsubscribe?view=unsubscribe",
+      preferencesUrl:
+        opts?.preferencesUrl ??
+        "https://example.com/unsubscribe?view=preferences",
+      viewInBrowserUrl:
+        opts?.viewInBrowserUrl ?? "https://example.com/email/view",
     },
     opts
   );

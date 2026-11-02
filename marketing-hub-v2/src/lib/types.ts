@@ -1138,6 +1138,10 @@ export type EmailTemplate = {
   html_body: string;
   /** Visual builder document. Null for hand-written HTML. */
   design: EmailDesign | null;
+  /** Unlisted token for a draft preview outside the Hub. */
+  share_token?: string;
+  /** When true, anyone with the share link can view the saved draft. */
+  share_enabled?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -1208,6 +1212,10 @@ export type EmailCampaign = {
   send_claim?: string;
   /** Refreshed by the runner while it sends. Drives the stale-send lock. */
   send_heartbeat_at?: string | null;
+  /** Unlisted token for a draft preview outside the Hub. */
+  share_token?: string;
+  /** When true, anyone with the share link can view the saved draft. */
+  share_enabled?: boolean;
   stats: EmailCampaignStats;
   last_error: string;
   created_by: string;

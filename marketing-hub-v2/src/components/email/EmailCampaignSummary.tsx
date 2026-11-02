@@ -3,8 +3,10 @@ import { annotateClickMap } from "@/lib/email/click-map";
 import type { CampaignReport } from "@/lib/email/campaign-report";
 import { formatLondonStamp } from "@/lib/email/display";
 import { previewMerge } from "@/lib/email/design/preview";
+import { emailSharePath } from "@/lib/email/share";
 import type { EmailCampaign } from "@/lib/types";
 import { CopyEmailButton } from "@/components/email/CopyEmailButton";
+import { EmailPublicShareControls } from "@/components/email/EmailPublicShareControls";
 import { SendingProgress } from "@/components/email/SendingProgress";
 import { StatusPill } from "@/components/ui/StatusPill";
 
@@ -64,6 +66,19 @@ export function EmailCampaignSummary({
           className="btn-secondary px-3 py-1.5 text-sm"
           label="Copy for a new email"
         />
+        ) : null}
+        {allowCopy ? (
+          <EmailPublicShareControls
+            kind="campaign"
+            id={campaign.id}
+            initialEnabled={campaign.share_enabled === true}
+            initialPath={
+              campaign.share_enabled
+                ? emailSharePath(campaign.share_token ?? "")
+                : ""
+            }
+            layout="inline"
+          />
         ) : null}
         <h1 className="font-display text-2xl text-brand">{campaign.title}</h1>
         <StatusPill status={campaign.status} label={STATUS_LABEL[campaign.status]} />
