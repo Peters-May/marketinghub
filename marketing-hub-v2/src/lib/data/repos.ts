@@ -49,6 +49,17 @@ import {
 import { statusForThemeQuarter } from "@/lib/themes/calendar";
 import { createServiceClient, hasServiceRoleKey } from "@/lib/supabase/admin";
 import {
+  clearContactUserLinks,
+  deleteContactRecords,
+  getContactRecord,
+  getContactRecordByEmail,
+  getContactRecordByUserId,
+  listContactRecords,
+  revokeStoredConsent,
+  upsertContactRecords,
+  upsertPortalMembers,
+} from "@/lib/data/contact-records";
+import {
   hasEmailEventRow,
   listEmailStatKeyRows,
 } from "@/lib/email/stat-keys";
@@ -880,6 +891,8 @@ export async function setSponsorshipStatus(
 }
 
 export async function listContacts() {
+  const rows = await listContactRecords();
+  if (rows) return rows.map(normalizeContact);
   const store = await readStore();
   return store.contacts.map(normalizeContact);
 }
@@ -910,12 +923,16 @@ function normalizeContact(c: Contact): Contact {
 }
 
 export async function getContact(id: string) {
+  const direct = await getContactRecord(id);
+  if (direct !== undefined) return direct ? normalizeContact(direct) : null;
   const store = await readStore();
   const c = store.contacts.find((x) => x.id === id);
   return c ? normalizeContact(c) : null;
 }
 
 export async function getContactByUserId(userId: string) {
+  const direct = await getContactRecordByUserId(userId);
+  if (direct !== undefined) return direct ? normalizeContact(direct) : null;
   const contacts = await listContacts();
   return contacts.find((c) => c.user_id === userId) ?? null;
 }
@@ -923,6 +940,8 @@ export async function getContactByUserId(userId: string) {
 export async function getContactByEmail(email: string) {
   const needle = email.trim().toLowerCase();
   if (!needle) return null;
+  const direct = await getContactRecordByEmail(needle);
+  if (direct !== undefined) return direct ? normalizeContact(direct) : null;
   const contacts = await listContacts();
   return (
     contacts.find((c) => c.email.trim().toLowerCase() === needle) ?? null
@@ -937,6 +956,11 @@ export async function linkUserToContact(
   userId: string,
   contactId: string | null
 ) {
+  const cleared = await clearContactUserLinks(userId, contactId ?? undefined);
+  if (cleared) {
+    if (!contactId) return null;
+    return updateContact(contactId, { user_id: userId });
+  }
   let linked: Contact | null = null;
   await updateStore((s) => {
     for (let i = 0; i < s.contacts.length; i++) {
@@ -1040,6 +1064,12 @@ export async function createContact(
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  if (item.user_id) {
+    const cleared = await clearContactUserLinks(item.user_id);
+    if (cleared && (await upsertContactRecords([item]))) return item;
+  } else if (await upsertContactRecords([item])) {
+    return item;
+  }
   await updateStore((s) => {
     if (item.user_id) {
       for (let i = 0; i < s.contacts.length; i++) {
@@ -1055,6 +1085,20 @@ export async function createContact(
 }
 
 export async function updateContact(id: string, patch: Partial<Contact>) {
+  const current = await getContactRecord(id);
+  if (current) {
+    const next = normalizeContact({
+      ...current,
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    });
+    const nextUserId = next.user_id;
+    if (nextUserId) await clearContactUserLinks(nextUserId, id);
+    if (await upsertContactRecords([next])) return next;
+  } else if (current === null) {
+    return null;
+  }
   let updated: Contact | null = null;
   await updateStore((s) => {
     const idx = s.contacts.findIndex((c) => c.id === id);
@@ -1084,6 +1128,7 @@ export async function updateContact(id: string, patch: Partial<Contact>) {
 }
 
 export async function deleteContact(id: string) {
+  if (await deleteContactRecords([id])) return;
   await updateStore((s) => {
     s.contacts = s.contacts.filter((c) => c.id !== id);
   });
@@ -2609,18 +2654,22 @@ export async function applyPortalSharedList(input: {
   members: PortalListMemberInput[];
 }): Promise<number> {
   let count = 0;
+  const prebuiltIds = await upsertPortalMembers(input.members);
   await updateStore((s) => {
     if (!s.contacts) s.contacts = [];
     if (!s.media_lists) s.media_lists = [];
     if (!s.email_audiences) s.email_audiences = [];
     const now = nowIso();
+    const contactIds: string[] = [];
+    if (prebuiltIds) {
+      contactIds.push(...prebuiltIds);
+    } else {
     const byEmail = new Map<string, number>();
     s.contacts.forEach((contact, index) => {
       const email = (contact.email || "").trim().toLowerCase();
       if (email && !byEmail.has(email)) byEmail.set(email, index);
     });
 
-    const contactIds: string[] = [];
     const seen = new Set<string>();
     for (const member of input.members) {
       const email = member.email.trim().toLowerCase();
@@ -2636,6 +2685,7 @@ export async function applyPortalSharedList(input: {
         s.contacts[idx] = next;
       }
       contactIds.push(next.id);
+    }
     }
 
     const source = `portal-list:${input.portalListId}`;
@@ -2776,6 +2826,8 @@ export async function clearRetiredPortalLists(activeIds: string[]) {
 export async function upsertPortalAudienceContacts(
   members: PortalListMemberInput[]
 ): Promise<string[]> {
+  const fromTable = await upsertPortalMembers(members);
+  if (fromTable) return fromTable;
   const ids: string[] = [];
   await updateStore((s) => {
     if (!s.contacts) s.contacts = [];
@@ -2807,6 +2859,14 @@ export async function upsertPortalAudienceContacts(
 }
 
 export async function revokePortalConsentExcept(keepIds: Set<string>) {
+  const storeForLists = await readStore();
+  const listed: string[] = [];
+  for (const list of storeForLists.media_lists ?? []) {
+    if (!list.portal_list_id && list.source !== "portal") continue;
+    for (const id of list.contact_ids ?? []) listed.push(id);
+  }
+  const fromTable = await revokeStoredConsent([...keepIds], listed);
+  if (fromTable !== null) return fromTable;
   let removed = 0;
   await updateStore((s) => {
     removed = 0;
@@ -4010,7 +4070,9 @@ export async function resolveEmailRecipients(opts: {
   excludeUnsubscribed?: boolean;
   purpose?: "marketing" | "pitch";
 }): Promise<Contact[]> {
-  const index = buildRecipientIndex(await readStore());
+  const store = await readStore();
+  const contacts = await listContacts();
+  const index = buildRecipientIndex({ ...store, contacts });
   return matchEmailRecipients(index, opts);
 }
 
@@ -4018,7 +4080,9 @@ export async function resolveEmailRecipients(opts: {
 export async function countAudienceRecipients(
   audienceIds: string[]
 ): Promise<Map<string, number>> {
-  const index = buildRecipientIndex(await readStore());
+  const store = await readStore();
+  const contacts = await listContacts();
+  const index = buildRecipientIndex({ ...store, contacts });
   const counts = new Map<string, number>();
   for (const id of audienceIds) {
     counts.set(id, countEmailRecipients(index, { audienceId: id }));

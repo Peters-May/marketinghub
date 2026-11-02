@@ -5,7 +5,7 @@ import {
   findEmailSuppression,
   hasEmailCampaignEvent,
   listAddressDeliveryEvents,
-  listContacts,
+  getContactByEmail,
   updateContact,
 } from "@/lib/data/repos";
 import {
@@ -69,10 +69,7 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
   if (!job.email) return { ok: true };
 
   if (job.kind === "opened" || job.kind === "clicked" || job.kind === "unsubscribed") {
-    const contacts = await listContacts();
-    const contact =
-      contacts.find((c) => c.email.trim().toLowerCase() === job.email.toLowerCase()) ??
-      null;
+    const contact = await getContactByEmail(job.email);
     await notifyPortalCampaignEngagement({
       email: job.email,
       portalContactId: contact?.portal_contact_id,
@@ -88,10 +85,7 @@ export async function applyResendEvent(job: ResendEventJob): Promise<{ ok: true 
   }
 
   if (job.kind === "complained") {
-    const contacts = await listContacts();
-    const contact =
-      contacts.find((c) => c.email.trim().toLowerCase() === job.email.toLowerCase()) ??
-      null;
+    const contact = await getContactByEmail(job.email);
     const alreadySuppressed = await findEmailSuppression(job.email);
     await addEmailSuppression({
       email: job.email,
@@ -120,10 +114,7 @@ async function applyBounce(
   bounceClass: BounceClass,
   priorDelivery: Awaited<ReturnType<typeof listAddressDeliveryEvents>>
 ) {
-  const contacts = await listContacts();
-  const contact =
-    contacts.find((c) => c.email.trim().toLowerCase() === job.email.toLowerCase()) ??
-    null;
+  const contact = await getContactByEmail(job.email);
   const decision = shouldSuppressBounce({
     bounceClass,
     events: [

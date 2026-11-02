@@ -50,6 +50,10 @@ export async function exportStoreToSupabase(
   store?: HubStore
 ): Promise<ExportResult> {
   const data = store ?? (await readStore());
+  if (!store?.contacts?.length) {
+    const { listContacts } = await import("@/lib/data/repos");
+    data.contacts = await listContacts();
+  }
 
   const events = await upsertBatch(
     "events",

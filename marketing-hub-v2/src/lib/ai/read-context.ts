@@ -46,7 +46,11 @@ function section(title: string, rows: string[]) {
 }
 
 /** Every event, task, post, partner, and budget line. Not a sample. */
-export function formatHubCatalogue(store: Catalogue, today?: string) {
+export function formatHubCatalogue(
+  store: Catalogue,
+  today?: string,
+  contactCount?: number
+) {
   const asOf = today ?? new Date().toISOString().slice(0, 10);
   const attendance = new Map<string, string[]>();
   for (const row of store.event_attendance ?? []) {
@@ -158,7 +162,7 @@ export function formatHubCatalogue(store: Catalogue, today?: string) {
   return [
     `Live hub catalogue as of ${asOf}. Sections marked complete list every record in that section. Use them to extract, compare, and name the exact record to edit.`,
     `Events: ${events.length} total, ${yearCount("2026")} in 2026, ${yearCount("2027")} in 2027.`,
-    `Contacts are not listed (${(store.contacts ?? []).length} records). Credentials, email bodies, and notes are not listed.`,
+    `Contacts are not listed (${contactCount ?? (store.contacts ?? []).length} records). Credentials, email bodies, and notes are not listed.`,
     "Edits to events, tasks, and posts still need a hub-command block and confirmation. A marketing list for a country uses: Add a marketing list for the USA. A public presentation link uses: Add a public presentation Title https://example.com/deck. Do not invent a command for budget or other media.",
     'To link a post that already exists, write one line per post: Link post "Exact content title" to event "Exact event title". Skip pairs already listed under Content linked to events. The admin ticks which links to save.',
     "Do not invent records, and do not say a listed record is missing.",
@@ -175,7 +179,13 @@ export function formatHubCatalogue(store: Catalogue, today?: string) {
 /** Full catalogue for the admin assistant. It cannot change records by itself. */
 export async function assistantReadContext() {
   const store = await readStore();
-  return formatHubCatalogue(store);
+  const { countContactRecords } = await import("@/lib/data/contact-records");
+  const contactCount = await countContactRecords();
+  return formatHubCatalogue(
+    store,
+    undefined,
+    contactCount ?? store.contacts.length
+  );
 }
 
 function enquirySummaryLines(

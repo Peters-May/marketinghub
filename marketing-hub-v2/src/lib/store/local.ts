@@ -254,7 +254,11 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     content: migrateContent(store.content) ?? seed.content,
     sponsorships:
       migrateSponsorships(store.sponsorships) ?? seed.sponsorships,
-    contacts: migrateContacts(store.contacts) ?? seed.contacts,
+    contacts: Array.isArray(store.contacts)
+      ? (migrateContacts(store.contacts) ?? [])
+      : fillMissingFromSeed
+        ? seed.contacts
+        : [],
     resources: store.resources ?? seed.resources,
     reports: store.reports ?? seed.reports,
     paid_campaigns: store.paid_campaigns ?? seed.paid_campaigns,
@@ -468,16 +472,29 @@ const STORE_READ_ERROR = "Hub store could not be read. Nothing was replaced.";
 async function readRemoteStoreUncached(): Promise<RemoteStoreRow | null> {
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
+    const { ensureHubContactsSplit } = await import("@/lib/data/contact-records");
     const supabase = createServiceClient();
-    const rpc = await supabase
-      .rpc("hub_store_read", { p_id: HUB_STORE_ID })
+    const split = await ensureHubContactsSplit();
+    let rpc = await supabase
+      .rpc(split ? "hub_store_read_core" : "hub_store_read", { p_id: HUB_STORE_ID })
       .abortSignal(AbortSignal.timeout(STORE_READ_TIMEOUT_MS));
-    const missingFunction = Boolean(
+    let missingFunction = Boolean(
       rpc.error &&
         /PGRST202|schema cache|Could not find the function/i.test(
           rpc.error.message ?? ""
         )
     );
+    if (split && missingFunction) {
+      rpc = await supabase
+        .rpc("hub_store_read", { p_id: HUB_STORE_ID })
+        .abortSignal(AbortSignal.timeout(STORE_READ_TIMEOUT_MS));
+      missingFunction = Boolean(
+        rpc.error &&
+          /PGRST202|schema cache|Could not find the function/i.test(
+            rpc.error.message ?? ""
+          )
+      );
+    }
     if (!rpc.error) {
       if (rpc.data == null) return null;
       const row = rowFromPayload(
@@ -746,6 +763,11 @@ export async function writeStore(
   store: HubStore,
   expectedRemoteUpdatedAt: string | null = null
 ): Promise<void> {
+  const { hubContactsAreSplit } = await import("@/lib/data/contact-records");
+  const persisted =
+    hubContactsAreSplit() && store.contacts.length > 0
+      ? { ...store, contacts: [] }
+      : store;
   if (shouldUseDurableSupabaseStore()) {
     const version = expectedRemoteUpdatedAt;
     if (!version) {
@@ -754,24 +776,24 @@ export async function writeStore(
         // Row exists — never blind-upsert; force CAS retry with a version.
         throw new StoreConflictError();
       }
-      const inserted = await insertRemoteStoreIfMissing(store);
+      const inserted = await insertRemoteStoreIfMissing(persisted);
       if (inserted === "exists") throw new StoreConflictError();
       if (inserted === "error") {
         throw new Error("Failed to persist hub store to Supabase");
       }
-      await writeLocalFile(store);
+      await writeLocalFile(persisted);
       return;
     }
-    const result = await writeRemoteStore(store, version);
+    const result = await writeRemoteStore(persisted, version);
     if (result === "conflict") throw new StoreConflictError();
     if (result === "error") {
       console.error("[store] durable write failed; local cache updated only");
       throw new Error("Failed to persist hub store to Supabase");
     }
-    await writeLocalFile(store);
+    await writeLocalFile(persisted);
     return;
   }
-  await writeLocalFile(store);
+  await writeLocalFile(persisted);
 }
 
 /** One attempt can sit on the 120s statement timeout. A longer loop hits the 300s platform kill. */

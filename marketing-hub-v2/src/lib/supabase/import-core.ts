@@ -556,6 +556,12 @@ export async function importFromCoreData(): Promise<ImportResult> {
 
   const partners = [...mappedSponsorships, ...mappedMemberships];
 
+  let contactsSavedToTable = false;
+  if (mappedContacts.length) {
+    const { upsertContactRecords } = await import("@/lib/data/contact-records");
+    contactsSavedToTable = await upsertContactRecords(mappedContacts);
+  }
+
   await updateStore((store) => {
     if (mappedEvents.length) {
       store.events = mappedEvents;
@@ -566,7 +572,7 @@ export async function importFromCoreData(): Promise<ImportResult> {
     if (partners.length) {
       store.sponsorships = partners;
     }
-    if (mappedContacts.length) {
+    if (mappedContacts.length && !contactsSavedToTable) {
       store.contacts = mappedContacts;
     }
     if (mappedAwards.length) {

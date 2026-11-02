@@ -2,8 +2,14 @@ import { promises as fs } from "fs";
 import path from "path";
 import { uid } from "@/lib/utils";
 import { readStore, updateStore } from "@/lib/store/local";
+import {
+  createContact,
+  deleteContact,
+  listContacts,
+  updateContact,
+} from "@/lib/data/repos";
 import { getDataDir } from "@/lib/store/paths";
-import type { ContentStatus, HubStore } from "@/lib/types";
+import type { Contact, ContentStatus, HubStore } from "@/lib/types";
 import {
   CONTENT_STATUS,
   DATA_COLLECTIONS,
@@ -242,7 +248,11 @@ export async function getTable(collection: string) {
   }
   const def = getCollection(collection)!;
   const store = await readStore();
-  const rows = asRows(store, collection);
+  const view =
+    collection === "contacts"
+      ? { ...store, contacts: await listContacts() }
+      : store;
+  const rows = asRows(view, collection);
   const extras = await readExtras();
   const stored = extras[collection] ?? [];
   const storedByKey = new Map(stored.map((f) => [f.key, f]));
@@ -301,7 +311,16 @@ export async function getTable(collection: string) {
   const rest = Array.from(fieldMap.keys())
     .filter((k) => !coreKeys.has(k))
     .sort((a, b) => a.localeCompare(b));
-  const contactOpts = contactOwnerOptions(store.contacts ?? []);
+  const needsContactOptions = [...fieldMap.values()].some(
+    (field) => field.optionsSource === "contacts" || field.key === "owner"
+  );
+  const contactOpts = contactOwnerOptions(
+    collection === "contacts"
+      ? view.contacts
+      : needsContactOptions
+        ? await listContacts()
+        : (store.contacts ?? [])
+  );
   const themeOpts = themeLinkOptions(store.themes ?? []);
   const fields = [...coreOrder, ...rest]
     .map((k) => fieldMap.get(k)!)
@@ -346,6 +365,13 @@ export async function updateCell(
 ) {
   if (!isCollectionKey(collection)) throw new Error("Unknown collection");
   if (field === "id") throw new Error("Cannot edit id");
+  if (collection === "contacts") {
+    const saved = await updateContact(id, {
+      [field]: value,
+    } as Partial<Contact>);
+    if (!saved) throw new Error("Row not found");
+    return saved;
+  }
 
   let updated: Record<string, unknown> | null = null;
   await updateStore((store) => {
@@ -376,6 +402,16 @@ export async function bulkUpdate(
   if (!isCollectionKey(collection)) throw new Error("Unknown collection");
   if (field === "id") throw new Error("Cannot edit id");
   if (!ids.length) return { updated: 0 };
+  if (collection === "contacts") {
+    let updated = 0;
+    for (const id of ids) {
+      const saved = await updateContact(id, {
+        [field]: value,
+      } as Partial<Contact>);
+      if (saved) updated += 1;
+    }
+    return { updated };
+  }
 
   const idSet = new Set(ids.map(String));
   let updated = 0;
@@ -398,6 +434,10 @@ export async function bulkUpdate(
 export async function bulkDelete(collection: string, ids: string[]) {
   if (!isCollectionKey(collection)) throw new Error("Unknown collection");
   if (!ids.length) return { deleted: 0 };
+  if (collection === "contacts") {
+    for (const id of ids) await deleteContact(id);
+    return { deleted: ids.length };
+  }
   const idSet = new Set(ids.map(String));
   let deleted = 0;
   await updateStore((store) => {
@@ -437,6 +477,12 @@ export async function addRow(collection: string, patch: Record<string, unknown> 
             : field.key === "content_id"
               ? null
               : "";
+  }
+
+  if (collection === "contacts") {
+    return createContact(
+      row as Omit<Contact, "id" | "created_at" | "updated_at">
+    );
   }
 
   // Theme mains must create a linked Content row in the same write, otherwise
@@ -493,6 +539,10 @@ export async function addRow(collection: string, patch: Record<string, unknown> 
 
 export async function deleteRow(collection: string, id: string) {
   if (!isCollectionKey(collection)) throw new Error("Unknown collection");
+  if (collection === "contacts") {
+    await deleteContact(id);
+    return;
+  }
   await updateStore((store) => {
     const rows = asRows(store, collection).filter((r) => String(r.id) !== id);
     (store as HubStore)[collection] = rows as never;
