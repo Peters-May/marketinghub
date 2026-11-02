@@ -304,9 +304,18 @@ export function MediaDetailPanel({
     }
   }
 
-  async function deleteFile() {
-    if (!canEdit || saving || !focusedFile) return;
-    if (!window.confirm("Delete this file from the asset?")) return;
+  async function deleteFile(target?: {
+    url: string;
+    name: string;
+    index: number;
+  }) {
+    const url = target?.url || focusedFile?.url;
+    if (!canEdit || saving || !url) return;
+    const label = target?.name || focusedFile?.name || "this file";
+    const index =
+      target?.index ??
+      item.files.findIndex((file) => file.url === url);
+    if (!window.confirm(`Delete “${label}” from this asset?`)) return;
     setSaving(true);
     setError(null);
     try {
@@ -316,7 +325,8 @@ export function MediaDetailPanel({
         body: JSON.stringify({
           action: "delete_file",
           id: item.id,
-          fileUrl: focusedFile.url,
+          fileUrl: url,
+          fileIndex: index >= 0 ? index : undefined,
         }),
       });
       const json = (await res.json()) as {
@@ -326,7 +336,7 @@ export function MediaDetailPanel({
       if (!res.ok) throw new Error(json.error || "Could not delete");
       await onSaved();
       if (json.deletedItem) onClose();
-      else onFocusFile?.(null);
+      else if (!focusedFile || focusedFile.url === url) onFocusFile?.(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete");
     } finally {
@@ -685,13 +695,13 @@ export function MediaDetailPanel({
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
                 Files in this asset
               </p>
-              <ul className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-border bg-sand/30 p-1.5">
-                {item.files.map((file) => (
-                  <li key={file.url}>
+              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border bg-sand/30 p-1.5">
+                {item.files.map((file, index) => (
+                  <li key={`${file.url}-${index}`} className="flex items-center gap-0.5">
                     <button
                       type="button"
                       className={cn(
-                        "w-full truncate rounded-lg px-2.5 py-1.5 text-left text-xs transition",
+                        "min-w-0 flex-1 truncate rounded-lg px-2.5 py-1.5 text-left text-xs transition",
                         focusedFile?.url === file.url
                           ? "bg-white font-medium text-brand shadow-sm"
                           : "text-muted hover:bg-white/70 hover:text-foreground"
@@ -700,6 +710,24 @@ export function MediaDetailPanel({
                     >
                       {file.name}
                     </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md p-1.5 text-muted transition hover:bg-white hover:text-[var(--danger)] disabled:opacity-50"
+                        aria-label={`Delete ${file.name}`}
+                        title="Delete this file"
+                        disabled={saving || uploading}
+                        onClick={() =>
+                          void deleteFile({
+                            url: file.url,
+                            name: file.name,
+                            index,
+                          })
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>

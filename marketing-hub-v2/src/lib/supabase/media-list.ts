@@ -1009,6 +1009,8 @@ export async function renameMediaFileInSupabase(input: {
 export async function deleteMediaFileInSupabase(input: {
   id: string;
   fileUrl: string;
+  /** When several files share a URL, remove this row only. */
+  fileIndex?: number;
   actorId: string;
 }): Promise<{ deletedItem: boolean; item: MediaListItem | null }> {
   const id = input.id.trim();
@@ -1034,11 +1036,18 @@ export async function deleteMediaFileInSupabase(input: {
   if (readError) throw new Error(readError.message);
   const row = existing as Record<string, unknown>;
   const files = parseFiles(row.media);
-  if (!files.some((f) => f.url === fileUrl)) {
+  const indexed =
+    typeof input.fileIndex === "number" &&
+    Number.isInteger(input.fileIndex) &&
+    input.fileIndex >= 0 &&
+    files[input.fileIndex]?.url === fileUrl
+      ? input.fileIndex
+      : files.findIndex((f) => f.url === fileUrl);
+  if (indexed < 0) {
     throw new Error("File not found on this asset");
   }
 
-  const next = files.filter((f) => f.url !== fileUrl);
+  const next = files.filter((_, index) => index !== indexed);
   const documentLink = normalizeLink(asString(row.document_link));
   const documentRaw = asString(row.document);
   const hasOtherContent =

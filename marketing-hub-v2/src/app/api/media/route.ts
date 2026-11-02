@@ -109,11 +109,14 @@ export async function POST(request: NextRequest) {
     if (action === "delete_file") {
       const id = typeof body.id === "string" ? body.id : "";
       const fileUrl = typeof body.fileUrl === "string" ? body.fileUrl : "";
+      const fileIndex =
+        typeof body.fileIndex === "number" ? body.fileIndex : undefined;
       if (!id) return jsonError("id is required");
       if (!fileUrl) return jsonError("fileUrl is required");
       const result = await deleteMediaFileInSupabase({
         id,
         fileUrl,
+        fileIndex,
         actorId: user.id,
       });
       return jsonOk(result);
