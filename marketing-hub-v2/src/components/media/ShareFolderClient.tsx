@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 type ShareResponse = {
   folderName?: string;
+  shareKind?: "item" | "folder";
   canDownload?: boolean;
   needsSignIn?: boolean;
   loginPath?: string;
@@ -50,6 +51,7 @@ export function ShareFolderClient({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("Shared folder");
+  const [singleFile, setSingleFile] = useState(false);
   const [items, setItems] = useState<MediaListItem[]>([]);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [loginPath, setLoginPath] = useState("/login");
@@ -68,7 +70,8 @@ export function ShareFolderClient({ token }: { token: string }) {
           throw new Error(json.error || "This share link is unavailable.");
         }
         if (cancelled) return;
-        setFolderName(json.folderName || "Shared folder");
+        setSingleFile(json.shareKind === "item");
+        setFolderName(json.folderName || (json.shareKind === "item" ? "Shared file" : "Shared folder"));
         setItems(json.items || []);
         setNeedsSignIn(json.needsSignIn === true);
         setLoginPath(json.loginPath || "/login");
@@ -178,7 +181,9 @@ export function ShareFolderClient({ token }: { token: string }) {
               {folderName}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              Public files are open. Internal files need a staff sign-in.
+              {singleFile
+                ? "This link is for this file only. Public files are open. Internal files need a staff sign-in."
+                : "Public files are open. Internal files need a staff sign-in."}
             </p>
           </div>
         </div>
@@ -186,7 +191,9 @@ export function ShareFolderClient({ token }: { token: string }) {
 
       <main className="mx-auto max-w-6xl px-4 py-8 md:px-6">
         {loading ? (
-          <p className="text-sm text-muted">Loading shared folder…</p>
+          <p className="text-sm text-muted">
+            {singleFile ? "Loading file…" : "Loading shared folder…"}
+          </p>
         ) : error ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="font-display text-2xl text-brand">Link unavailable</h2>
@@ -213,7 +220,9 @@ export function ShareFolderClient({ token }: { token: string }) {
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="font-display text-2xl text-brand">Nothing here yet</h2>
             <p className="mt-2 text-sm text-muted">
-              This shared folder does not contain any downloadable files.
+              {singleFile
+                ? "This file is not available on this link."
+                : "This shared folder does not contain any downloadable files."}
             </p>
           </div>
         ) : (

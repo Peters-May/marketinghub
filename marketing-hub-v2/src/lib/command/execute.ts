@@ -33,6 +33,10 @@ import {
 } from "@/lib/planable/sync";
 import type { Contact, ContentItem, ContentStatus } from "@/lib/types";
 import { createPortalCountryMarketingList } from "@/lib/sync/portal-marketing";
+import {
+  createMediaInSupabase,
+  listMediaFromSupabase,
+} from "@/lib/supabase/media-list";
 
 export type ExecuteResult =
   | {
@@ -45,7 +49,7 @@ export type ExecuteResult =
   | { ok: false; message: string };
 
 const ADMIN_MESSAGE =
-  "Tasks and posts can be changed with an admin account. Events can be added or updated from this box.";
+  "Tasks, posts, and library presentations can be changed with an admin account. Events can be added or updated from this box.";
 
 function needsAdmin(kind: HubCommand["kind"]) {
   return (
@@ -55,8 +59,23 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "update_content" ||
     kind === "link_content" ||
     kind === "mark_events_we_are_attending" ||
-    kind === "create_marketing_list"
+    kind === "create_marketing_list" ||
+    kind === "create_presentation"
   );
+}
+
+function samePresentationLink(left: string, right: string) {
+  const normalize = (value: string) =>
+    value.trim().replace(/\/+$/g, "").toLowerCase();
+  const a = normalize(left);
+  const b = normalize(right);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const designId = (value: string) =>
+    value.match(/\/design\/([a-z0-9]+)/i)?.[1]?.toLowerCase() ?? "";
+  const aId = designId(a);
+  const bId = designId(b);
+  return Boolean(aId && bId && aId === bId);
 }
 
 type ResolvedAttendance = {
@@ -255,6 +274,43 @@ export async function executeHubCommand(
     return {
       ok: true,
       message,
+      href: command.href,
+      area: command.area,
+    };
+  }
+
+  if (command.kind === "create_presentation") {
+    const existing = await listMediaFromSupabase({
+      scope: "all",
+      includeAdmin: true,
+      categories: ["Presentations"],
+      limit: 1000,
+    });
+    const duplicate = existing.items.find((item) =>
+      samePresentationLink(item.document_link, command.url)
+    );
+    if (duplicate) {
+      return {
+        ok: true,
+        message: `“${duplicate.display_name || duplicate.name}” is already in the library.`,
+        href: command.href,
+        area: command.area,
+      };
+    }
+    const item = await createMediaInSupabase({
+      name: command.title,
+      public_title: command.visibility === "public" ? command.title : "",
+      category: "Presentations",
+      visibility: command.visibility,
+      division: "All",
+      document_link: command.url,
+      status: "Internal Resource",
+      actorId: user.id,
+    });
+    const where = command.visibility === "public" ? "public library" : "library";
+    return {
+      ok: true,
+      message: `Added “${item.name}” to the ${where}.`,
       href: command.href,
       area: command.area,
     };

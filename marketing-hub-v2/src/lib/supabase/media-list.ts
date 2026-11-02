@@ -125,6 +125,9 @@ export function gallerySharePath(token: string): string {
 /** Stored on gallery_folder_shares.subfolder so it cannot clash with a Gallery folder name. */
 export const CATEGORY_SHARE_PREFIX = "category:";
 
+/** One library file. Stored the same way, so it cannot clash with a folder name. */
+export const ITEM_SHARE_PREFIX = "item:";
+
 /** Library category that can be shared with staff by link. */
 export const TEMPLATES_CATEGORY = "Templates";
 
@@ -143,6 +146,21 @@ export function categoryFromShareKey(subfolder: string): string | null {
     (category) => category.toLowerCase() === name.toLowerCase()
   );
   return match ?? name;
+}
+
+const ITEM_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function itemShareKey(id: string): string {
+  return `${ITEM_SHARE_PREFIX}${id.trim()}`;
+}
+
+/** A single library file. Folder and category keys are not item shares. */
+export function itemIdFromShareKey(subfolder: string): string | null {
+  const raw = subfolder.trim();
+  if (!raw.toLowerCase().startsWith(ITEM_SHARE_PREFIX)) return null;
+  const id = raw.slice(ITEM_SHARE_PREFIX.length).trim();
+  return ITEM_ID_PATTERN.test(id) ? id : null;
 }
 
 export type ShareViewer = {
@@ -676,7 +694,11 @@ export async function setGalleryFolderShareEnabled(input: {
   enabled: boolean;
 }): Promise<GalleryFolderShare> {
   const subfolder = input.subfolder.trim();
-  if (subfolder.toLowerCase().startsWith(CATEGORY_SHARE_PREFIX)) {
+  const reserved = subfolder.toLowerCase();
+  if (
+    reserved.startsWith(CATEGORY_SHARE_PREFIX) ||
+    reserved.startsWith(ITEM_SHARE_PREFIX)
+  ) {
     throw new Error("That folder name is reserved.");
   }
   return syncGalleryFolderShare({
@@ -696,6 +718,34 @@ export async function setCategoryShareEnabled(input: {
   }
   return syncGalleryFolderShare({
     subfolder: categoryShareKey(category),
+    enabled: input.enabled,
+  });
+}
+
+/** Enable or disable the unlisted share link for one library file. */
+export async function setItemShareEnabled(input: {
+  id: string;
+  enabled: boolean;
+}): Promise<GalleryFolderShare> {
+  const id = itemIdFromShareKey(itemShareKey(input.id));
+  if (!id) throw new Error("Choose a file to share.");
+
+  const tables = await listCoreTables();
+  const mediaTable = findMediaTable(tables);
+  if (!mediaTable) throw new Error("Media Links Resources table not found");
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from(mediaTable.supabase_table)
+    .select("id")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("That file is no longer in the library.");
+
+  return syncGalleryFolderShare({
+    subfolder: itemShareKey(id),
     enabled: input.enabled,
   });
 }
@@ -772,6 +822,7 @@ export async function listMediaByShareToken(
   viewer: ShareViewer = ANONYMOUS_SHARE_VIEWER
 ): Promise<{
   folderName: string;
+  shareKind: "item" | "folder";
   share: GalleryFolderShare;
   items: MediaListItem[];
   /** True when internal items exist and this viewer is not staff. */
@@ -796,18 +847,19 @@ export async function listMediaByShareToken(
     enabled: Boolean(shareRow.enabled),
   };
   const sharedCategory = categoryFromShareKey(share.subfolder);
-  if (
-    share.subfolder.trim().toLowerCase().startsWith(CATEGORY_SHARE_PREFIX) &&
-    !sharedCategory
-  ) {
-    return null;
-  }
+  const sharedItemId = itemIdFromShareKey(share.subfolder);
+  const key = share.subfolder.trim().toLowerCase();
+  if (key.startsWith(CATEGORY_SHARE_PREFIX) && !sharedCategory) return null;
+  if (key.startsWith(ITEM_SHARE_PREFIX) && !sharedItemId) return null;
 
   const tables = await listCoreTables();
   const mediaTable = findMediaTable(tables);
   if (!mediaTable) {
     return {
-      folderName: sharedCategory || share.subfolder || "Gallery",
+      folderName: sharedItemId
+        ? "Shared file"
+        : sharedCategory || share.subfolder || "Gallery",
+      shareKind: sharedItemId ? "item" : "folder",
       share,
       items: [],
       needsSignIn: false,
@@ -817,14 +869,18 @@ export async function listMediaByShareToken(
   let query = supabase
     .from(mediaTable.supabase_table)
     .select("*")
-    .is("deleted_at", null)
-    .ilike("hub_category", sharedCategory || GALLERY_CATEGORY);
+    .is("deleted_at", null);
 
-  if (!sharedCategory) {
-    if (share.subfolder) {
-      query = query.eq("subfolder", share.subfolder);
-    } else {
-      query = query.or("subfolder.is.null,subfolder.eq.");
+  if (sharedItemId) {
+    query = query.eq("id", sharedItemId);
+  } else {
+    query = query.ilike("hub_category", sharedCategory || GALLERY_CATEGORY);
+    if (!sharedCategory) {
+      if (share.subfolder) {
+        query = query.eq("subfolder", share.subfolder);
+      } else {
+        query = query.or("subfolder.is.null,subfolder.eq.");
+      }
     }
   }
 
@@ -834,13 +890,19 @@ export async function listMediaByShareToken(
   const loaded = ((data ?? []) as Record<string, unknown>[])
     .map((r) => mapMediaRow(r, viewer.staff ? "all" : "public"))
     .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  if (sharedItemId && loaded.length === 0) return null;
   const needsSignIn =
     !viewer.staff &&
     loaded.some((item) => effectiveMediaVisibility(item) === "internal");
   const items = loaded.filter((item) => shareItemVisibleTo(item, viewer));
+  const itemTitle =
+    loaded[0]?.display_name || loaded[0]?.name || "Shared file";
 
   return {
-    folderName: sharedCategory || share.subfolder || "Unsorted",
+    folderName: sharedItemId
+      ? itemTitle
+      : sharedCategory || share.subfolder || "Unsorted",
+    shareKind: sharedItemId ? "item" : "folder",
     share,
     items,
     needsSignIn,

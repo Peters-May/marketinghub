@@ -1,7 +1,7 @@
 import { addDays, format, nextDay, startOfDay } from "date-fns";
 import type { ContentStatus } from "@/lib/types";
 
-export type HubDataArea = "tasks" | "events" | "content" | "email";
+export type HubDataArea = "tasks" | "events" | "content" | "email" | "library";
 
 export const COMMAND_EXAMPLES = [
   "Add a task to call the organiser, due Friday",
@@ -11,6 +11,7 @@ export const COMMAND_EXAMPLES = [
   "Update task call the organiser status done",
   "Update event Monaco Yacht Show location Port Hercules",
   'Link post "Monaco stand setup" to event "Monaco Yacht Show"',
+  "Add a public presentation ARC 2026 Seminar https://canva.link/arc",
 ];
 
 export type CommandVerb = "Add" | "Update" | "Link";
@@ -107,6 +108,12 @@ export type HubCommand = CommandBase &
         kind: "create_marketing_list";
         country: string;
         name: string;
+      }
+    | {
+        kind: "create_presentation";
+        title: string;
+        url: string;
+        visibility: "public" | "internal";
       }
   );
 
@@ -1144,8 +1151,77 @@ function parseMarketingListCommand(text: string): HubCommand | null {
   };
 }
 
+function presentationTitleFromUrl(url: string): string {
+  try {
+    const segment = decodeURIComponent(
+      new URL(url).pathname.split("/").filter(Boolean).pop() ?? ""
+    )
+      .replace(/\.[a-z0-9]{2,5}$/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim();
+    if (segment.length < 2) return "Presentation";
+    return segment
+      .replace(/\b[a-z]/g, (letter) => letter.toUpperCase())
+      .slice(0, 160);
+  } catch {
+    return "Presentation";
+  }
+}
+
+/** Add a Canva or other link to the Presentations library. */
+function parsePresentationCommand(text: string): ParseResult | null {
+  const match = text.match(
+    /^(?:add|create|new)\s+(?:a\s+|an\s+|the\s+)?(?:(public|internal)\s+)?presentation\b\s*(.*)$/i
+  );
+  if (!match) return null;
+
+  const urlMatch = match[2].match(/https?:\/\/[^\s<>]+/i);
+  if (!urlMatch || urlMatch.index == null) {
+    return fail(
+      "Include the presentation link. For example: Add a public presentation ARC 2026 Seminar https://canva.link/arc"
+    );
+  }
+
+  const url = urlMatch[0].replace(/[),.;]+$/g, "");
+  let rest = `${match[2].slice(0, urlMatch.index)} ${match[2].slice(urlMatch.index + urlMatch[0].length)}`;
+  let visibility: "public" | "internal" =
+    match[1]?.toLowerCase() === "public" ? "public" : "internal";
+  const asVisibility = rest.match(/\bas\s+(public|internal)\b/i);
+  if (asVisibility) {
+    visibility = asVisibility[1].toLowerCase() === "public" ? "public" : "internal";
+    rest = rest.replace(asVisibility[0], " ");
+  }
+  rest = rest
+    .replace(/\bto\s+the\s+(?:public\s+)?library\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["“”']+|["“”']+$/g, "")
+    .trim();
+
+  const title = (rest || presentationTitleFromUrl(url)).slice(0, 160);
+  const where = visibility === "public" ? "public library" : "library";
+  return {
+    ok: true,
+    command: {
+      kind: "create_presentation",
+      title,
+      url,
+      visibility,
+      summary: `Add “${title}” to the ${where}.`,
+      verb: "Add",
+      href: "/app/library",
+      area: "library",
+    },
+  };
+}
+
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
+  const presentation = parsePresentationCommand(text);
+  if (presentation) {
+    if (!presentation.ok) return presentation;
+    return { ok: true, command: { ...presentation.command, source: text } };
+  }
   const marketing = parseMarketingListCommand(text);
   if (marketing) return { ok: true, command: { ...marketing, source: text } };
   const linked = parseLinkCommand(text);

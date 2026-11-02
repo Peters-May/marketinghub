@@ -33,7 +33,12 @@ import {
   normalizeHubAccessRole,
 } from "@/lib/auth/roles";
 import { matchOwnerUserId, loadOwnerDirectory } from "@/lib/identity/owners";
-import { readStore, readStoreFresh, updateStore } from "@/lib/store/local";
+import {
+  forgetRemoteStore,
+  readStore,
+  readStoreFresh,
+  updateStore,
+} from "@/lib/store/local";
 import {
   canClaimSend,
   holdsSend,
@@ -403,9 +408,51 @@ export async function unlinkEventContent(id: string) {
   });
 }
 
+type ContentRpcError = { code?: string; message?: string };
+
+function isMissingContentRpc(error: ContentRpcError): boolean {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST202" ||
+    /hub_content_get|hub_content_replace|hub_content_insert|hub_content_delete|schema cache/i.test(
+      message
+    )
+  );
+}
+
+function contentFromRpc(data: unknown): ContentItem | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  return withContentPlanableDefaults(data as ContentItem);
+}
+
+/** One post. Undefined when the database helper is not available yet. */
+async function getContentDirect(
+  id: string
+): Promise<ContentItem | null | undefined> {
+  if (!hasServiceRoleKey()) return undefined;
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_content_get", {
+    p_content_id: id,
+  });
+  if (error) {
+    if (isMissingContentRpc(error)) return undefined;
+    throw new Error(error.message);
+  }
+  if (data == null) return null;
+  return contentFromRpc(data);
+}
+
 export async function listContent() {
   const store = await readStore();
   return store.content.map(withContentPlanableDefaults);
+}
+
+export async function getContent(id: string): Promise<ContentItem | null> {
+  const direct = await getContentDirect(id);
+  if (direct !== undefined) return direct;
+  const store = await readStore();
+  const item = store.content.find((row) => row.id === id);
+  return item ? withContentPlanableDefaults(item) : null;
 }
 
 /** Titles only. The email list does not need release bodies. */
@@ -509,6 +556,19 @@ export async function createContent(
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_content_insert", {
+      p_item: item,
+    });
+    if (!error) {
+      forgetRemoteStore();
+      const stored = contentFromRpc(data);
+      if (!stored) throw new Error("Could not save content");
+      return stored;
+    }
+    if (!isMissingContentRpc(error)) throw new Error(error.message);
+  }
   await updateStore((s) => {
     s.content.push(item);
   });
@@ -519,6 +579,29 @@ export async function updateContent(
   id: string,
   patch: Partial<ContentItem>
 ): Promise<ContentItem | null> {
+  const existing = await getContentDirect(id);
+  if (existing) {
+    const next: ContentItem = {
+      ...existing,
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    };
+    if (hasServiceRoleKey()) {
+      const supabase = createServiceClient();
+      const { data, error } = await supabase.rpc("hub_content_replace", {
+        p_item: next,
+      });
+      if (!error) {
+        forgetRemoteStore();
+        return contentFromRpc(data);
+      }
+      if (!isMissingContentRpc(error)) throw new Error(error.message);
+    }
+  } else if (existing === null) {
+    return null;
+  }
+
   let updated: ContentItem | null = null;
   await updateStore((s) => {
     const idx = s.content.findIndex((c) => c.id === id);
@@ -670,6 +753,17 @@ export async function savePressRelease(input: {
 }
 
 export async function deleteContent(id: string) {
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { error } = await supabase.rpc("hub_content_delete", {
+      p_content_id: id,
+    });
+    if (!error) {
+      forgetRemoteStore();
+      return;
+    }
+    if (!isMissingContentRpc(error)) throw new Error(error.message);
+  }
   await updateStore((s) => {
     s.content = s.content.filter((c) => c.id !== id);
   });

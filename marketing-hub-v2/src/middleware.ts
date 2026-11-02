@@ -5,32 +5,27 @@ import {
   hasSupabaseConfig,
   productionAuthMisconfigured,
 } from "@/lib/auth/config";
-import { hubCookieOptions } from "@/lib/auth/cookies";
+import {
+  fetchWithAuthTimeout,
+  getAuthUser,
+  isTransientAuthError,
+} from "@/lib/auth/auth-fetch";
+import {
+  AUTH_GATE_COOKIE,
+  AUTH_GATE_GRACE_MS,
+  AUTH_GATE_HEADER,
+  authGateFreshness,
+  authGateSecret,
+  issueAuthGateToken,
+  issueAuthOutageMark,
+  readAuthGateToken,
+  type AuthGate,
+} from "@/lib/auth/auth-gate";
+import { hubCookieOptions, clearHubCookieOptions } from "@/lib/auth/cookies";
 import {
   hubRoleFromAuthMetadata,
   isSeoAllowedAppPath,
 } from "@/lib/auth/roles";
-
-/** Stay well under Vercel's 25s middleware limit when Supabase stalls. */
-const AUTH_CHECK_TIMEOUT_MS = 8_000;
-
-function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT_MS);
-  const upstream = init?.signal;
-  if (upstream?.aborted) controller.abort();
-  else upstream?.addEventListener("abort", () => controller.abort(), { once: true });
-  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
-    clearTimeout(timer);
-  });
-}
-
-function isTransientAuthError(error: { name?: string; status?: number; message?: string } | null) {
-  if (!error) return false;
-  if (error.name === "AuthRetryableFetchError" || error.name === "AbortError") return true;
-  if (typeof error.status === "number" && (error.status === 0 || error.status >= 500)) return true;
-  return /timeout|aborted|fetch failed|network/i.test(error.message ?? "");
-}
 
 function authUnavailableResponse() {
   const html = `<!doctype html>
@@ -56,6 +51,69 @@ function authUnavailableResponse() {
       "cache-control": "no-store",
     },
   });
+}
+
+function describeAuthError(error: unknown) {
+  if (!error || typeof error !== "object") return String(error);
+  const failure = error as { name?: string; status?: number; message?: string };
+  return [failure.name, failure.status, failure.message].filter((part) => part != null).join(" ");
+}
+
+function continueRequest(
+  request: NextRequest,
+  source: NextResponse,
+  gateToken: string | null,
+  outageMark: string | null = null
+) {
+  const headers = new Headers(request.headers);
+  if (gateToken) headers.set(AUTH_GATE_HEADER, gateToken);
+  else headers.delete(AUTH_GATE_HEADER);
+  if (outageMark) headers.set("x-mh-auth-outage", outageMark);
+  else headers.delete("x-mh-auth-outage");
+  const response = NextResponse.next({ request: { headers } });
+  source.cookies.getAll().forEach((cookie) => {
+    response.cookies.set(cookie);
+  });
+  if (gateToken) {
+    response.cookies.set(
+      AUTH_GATE_COOKIE,
+      gateToken,
+      hubCookieOptions(Math.ceil(AUTH_GATE_GRACE_MS / 1000))
+    );
+  }
+  return response;
+}
+
+function redirectWithCookies(url: URL, source: NextResponse, clearGate = false) {
+  const response = NextResponse.redirect(url);
+  source.cookies.getAll().forEach((cookie) => {
+    response.cookies.set(cookie);
+  });
+  if (clearGate) {
+    response.cookies.set(AUTH_GATE_COOKIE, "", clearHubCookieOptions());
+  }
+  return response;
+}
+
+function roleResponse(
+  request: NextRequest,
+  source: NextResponse,
+  role: string,
+  gateToken: string | null,
+  outageMark: string | null = null
+) {
+  if (role === "seo" && !isSeoAllowedAppPath(request.nextUrl.pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/app/enquiries";
+    url.search = "";
+    const redirectResponse = NextResponse.redirect(url);
+    const continued = continueRequest(request, source, gateToken, outageMark);
+    continued.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
+  }
+  return continueRequest(request, source, gateToken, outageMark);
 }
 
 export async function middleware(request: NextRequest) {
@@ -89,6 +147,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  const secret = authGateSecret();
+  const gate = secret
+    ? await readAuthGateToken(request.cookies.get(AUTH_GATE_COOKIE)?.value, secret)
+    : null;
+
+  if (gate && authGateFreshness(gate) === "fresh") {
+    return roleResponse(request, NextResponse.next({ request }), gate.role, null);
+  }
+
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -107,43 +174,59 @@ export async function middleware(request: NextRequest) {
         },
       },
       global: {
-        fetch: fetchWithTimeout,
+        fetch: fetchWithAuthTimeout,
       },
     }
   );
 
-  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
   try {
-    const result = await supabase.auth.getUser();
+    const result = await getAuthUser(() => supabase.auth.getUser());
     if (isTransientAuthError(result.error)) {
-      console.error("[middleware] auth check unavailable", result.error?.message);
+      console.error("[middleware] auth check unavailable", describeAuthError(result.error));
+      if (gate && secret) {
+        return roleResponse(
+          request,
+          response,
+          gate.role,
+          null,
+          await issueAuthOutageMark(secret)
+        );
+      }
       return authUnavailableResponse();
     }
-    user = result.data.user;
+    const user = result.data.user;
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname);
+      return redirectWithCookies(url, response, true);
+    }
+
+    const nextGate: AuthGate = {
+      userId: user.id,
+      role: hubRoleFromAuthMetadata(user),
+      email: user.email ?? "",
+      fullName:
+        (user.user_metadata?.full_name as string | undefined) ??
+        user.email ??
+        "Staff",
+      issuedAt: Date.now(),
+    };
+    const gateToken = secret ? await issueAuthGateToken(nextGate, secret) : null;
+    return roleResponse(request, response, nextGate.role, gateToken);
   } catch (error) {
-    console.error("[middleware] auth check failed", error);
+    console.error("[middleware] auth check failed", describeAuthError(error));
+    if (gate && secret) {
+      return roleResponse(
+        request,
+        response,
+        gate.role,
+        null,
+        await issueAuthOutageMark(secret)
+      );
+    }
     return authUnavailableResponse();
   }
-
-  if (!user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (hubRoleFromAuthMetadata(user) === "seo" && !isSeoAllowedAppPath(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/app/enquiries";
-    url.search = "";
-    const redirectResponse = NextResponse.redirect(url);
-    response.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie.name, cookie.value);
-    });
-    return redirectResponse;
-  }
-
-  return response;
 }
 
 export const config = {

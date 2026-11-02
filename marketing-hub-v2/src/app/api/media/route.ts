@@ -9,6 +9,7 @@ import {
   renameMediaFileInSupabase,
   setCategoryShareEnabled,
   setGalleryFolderShareEnabled,
+  setItemShareEnabled,
   setGallerySubfolderVisibility,
   softDeleteMediaInSupabase,
   updateMediaItemInSupabase,
@@ -173,6 +174,13 @@ export async function POST(request: NextRequest) {
       const category = typeof body.category === "string" ? body.category : "";
       const enabled = body.enabled === true;
       const share = await setCategoryShareEnabled({ category, enabled });
+      return jsonOk({ ok: true, share });
+    }
+
+    if (action === "set_item_share") {
+      const id = typeof body.id === "string" ? body.id : "";
+      const enabled = body.enabled === true;
+      const share = await setItemShareEnabled({ id, enabled });
       return jsonOk({ ok: true, share });
     }
 

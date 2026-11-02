@@ -28,6 +28,7 @@ import {
   MEDIA_HUB_CATEGORIES,
   effectiveMediaVisibility,
   gallerySharePath,
+  itemShareKey,
   matchesMediaDivisionFilter,
   moreRestrictiveVisibility,
   normalizeGalleryVisibility,
@@ -42,6 +43,7 @@ import {
   divisionColor,
   normalizeDivision,
 } from "@/lib/events/division-colors";
+import { useHubDataRefresh } from "@/lib/command/refresh";
 import { uploadAssetDirect } from "@/lib/upload/client-upload";
 import { downloadMediaFile } from "@/lib/media/download-file";
 import {
@@ -668,6 +670,10 @@ export function MediaGallery({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useHubDataRefresh("library", () => {
+    void load();
+  });
 
   // Soft navigation / parent refresh can change auth without remounting; keep in sync.
   useEffect(() => {
@@ -1381,6 +1387,48 @@ export function MediaGallery({
       return;
     }
     await copyShareLink(folderName, token);
+  }
+
+  async function setItemShare(id: string): Promise<string | null> {
+    const key = itemShareKey(id);
+    if (shareSaving) return null;
+    setShareSaving(key);
+    try {
+      const res = await fetch("/api/media", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_item_share",
+          id,
+          enabled: true,
+        }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        share?: { share_token?: string };
+      };
+      if (!res.ok) throw new Error(json.error || "Could not create a file link");
+      await load();
+      return json.share?.share_token ?? null;
+    } catch (e) {
+      window.alert(
+        e instanceof Error ? e.message : "Could not create a file link"
+      );
+      return null;
+    } finally {
+      setShareSaving(null);
+    }
+  }
+
+  async function shareItem(id: string) {
+    const key = itemShareKey(id);
+    const existing = folderShareByName.get(key);
+    const token =
+      existing?.enabled && existing.share_token
+        ? existing.share_token
+        : await setItemShare(id);
+    if (!token) return;
+    await copyShareLink(key, token);
   }
 
   async function handleMediaDownload(url: string, filename: string) {
@@ -2281,7 +2329,7 @@ export function MediaGallery({
                       ? "…"
                       : copiedFolder === categoryShareName
                         ? "Copied"
-                        : "Share"}
+                        : "Share folder"}
                   </button>
                 </div>
               ) : null}
@@ -2386,27 +2434,18 @@ export function MediaGallery({
                   key={photo.id}
                   className="group relative mb-2 break-inside-avoid overflow-hidden rounded-lg bg-[#f0f2f3] lg:mb-3"
                 >
-                  {isInternal && (categoryShareName || activeSubfolder) ? (
+                  {isInternal ? (
                     <button
                       type="button"
                       className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-[10px] font-semibold text-brand shadow-sm hover:bg-white"
                       aria-label={`Share ${photo.itemName || photo.name}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (inGallery && activeSubfolder) {
-                          void shareNamedFolder(activeSubfolder);
-                          return;
-                        }
-                        if (categoryShareName) {
-                          void shareNamedCategory(categoryShareName);
-                        }
+                        void shareItem(photo.itemId);
                       }}
                     >
                       <Link2 className="h-3 w-3" />
-                      {copiedFolder ===
-                      (inGallery && activeSubfolder
-                        ? activeSubfolder
-                        : categoryShareName)
+                      {copiedFolder === itemShareKey(photo.itemId)
                         ? "Copied"
                         : "Share"}
                     </button>
@@ -2577,26 +2616,15 @@ export function MediaGallery({
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      {isInternal && (categoryShareName || activeSubfolder) ? (
+                      {isInternal ? (
                         <button
                           type="button"
                           className="btn-secondary px-2.5 py-1.5 text-xs"
                           aria-label={`Share ${item.name || "file"}`}
-                          onClick={() => {
-                            if (inGallery && activeSubfolder) {
-                              void shareNamedFolder(activeSubfolder);
-                              return;
-                            }
-                            if (categoryShareName) {
-                              void shareNamedCategory(categoryShareName);
-                            }
-                          }}
+                          onClick={() => void shareItem(item.id)}
                         >
                           <Link2 className="h-3.5 w-3.5" />
-                          {copiedFolder ===
-                          (inGallery && activeSubfolder
-                            ? activeSubfolder
-                            : categoryShareName)
+                          {copiedFolder === itemShareKey(item.id)
                             ? "Copied"
                             : "Share"}
                         </button>

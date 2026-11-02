@@ -41,6 +41,7 @@ export async function GET(request: Request, context: Ctx) {
     const loginPath = `/login?next=${encodeURIComponent(gallerySharePath(token))}`;
     return NextResponse.json({
       folderName: result.folderName,
+      shareKind: result.shareKind,
       canDownload: true,
       needsSignIn: result.needsSignIn,
       loginPath,

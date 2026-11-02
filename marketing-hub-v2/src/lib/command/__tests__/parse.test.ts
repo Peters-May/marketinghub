@@ -366,4 +366,37 @@ Add an event METS in November 2027 attending FF, Racing, Kristina
     expect(shanghai.starts_at).toBe("2027-03-28");
     expect(shanghai.ends_at).toBe("2027-03-30");
   });
+
+  it("adds a public presentation from a title and link", () => {
+    const parsed = command(
+      "Add a public presentation Peters & May ARC 2026 Seminar (5 min) https://canva.link/arc"
+    );
+    expect(parsed.kind).toBe("create_presentation");
+    if (parsed.kind !== "create_presentation") return;
+    expect(parsed.title).toBe("Peters & May ARC 2026 Seminar (5 min)");
+    expect(parsed.url).toBe("https://canva.link/arc");
+    expect(parsed.visibility).toBe("public");
+    expect(parsed.area).toBe("library");
+  });
+
+  it("adds a presentation link to the public library when the title is the link", () => {
+    const parsed = command(
+      "Add presentation https://canva.link/arc to the library as public"
+    );
+    expect(parsed.kind).toBe("create_presentation");
+    if (parsed.kind !== "create_presentation") return;
+    expect(parsed.title).toBe("Arc");
+    expect(parsed.url).toBe("https://canva.link/arc");
+    expect(parsed.visibility).toBe("public");
+  });
+
+  it("keeps a presentation internal unless public is requested", () => {
+    const parsed = command(
+      "Add an internal presentation Customs guide https://present.petersandmay.com/generalcustoms"
+    );
+    expect(parsed.kind).toBe("create_presentation");
+    if (parsed.kind !== "create_presentation") return;
+    expect(parsed.title).toBe("Customs guide");
+    expect(parsed.visibility).toBe("internal");
+  });
 });

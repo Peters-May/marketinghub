@@ -421,6 +421,11 @@ type RemoteReadCache = {
 let remoteReadCache: RemoteReadCache | null = null;
 let remoteReadInflight: Promise<RemoteStoreRow | null> | null = null;
 
+/** A targeted content write did not go through the full-document cache. */
+export function forgetRemoteStore(): void {
+  remoteReadCache = null;
+}
+
 function rememberRemoteRead(row: RemoteStoreRow) {
   remoteReadCache = {
     row: {

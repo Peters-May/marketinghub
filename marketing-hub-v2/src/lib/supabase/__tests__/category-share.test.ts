@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   categoryFromShareKey,
   categoryShareKey,
+  itemIdFromShareKey,
+  itemShareKey,
   shareItemVisibleTo,
   TEMPLATES_CATEGORY,
 } from "@/lib/supabase/media-list";
@@ -21,6 +23,15 @@ describe("category share keys", () => {
     expect(categoryFromShareKey("category:documents")).toBe("Documents");
     expect(categoryFromShareKey("category:logos")).toBe("Logos");
     expect(categoryFromShareKey("category:QR Codes")).toBe("QR Codes");
+  });
+
+  it("stores one library file under its own key", () => {
+    const id = "5da6059c-bdca-486c-a8d0-d5f42efc2e7d";
+    expect(itemShareKey(id)).toBe(`item:${id}`);
+    expect(itemIdFromShareKey(`item:${id}`)).toBe(id);
+    expect(itemIdFromShareKey("item:not-an-id")).toBeNull();
+    expect(itemIdFromShareKey("category:Documents")).toBeNull();
+    expect(categoryFromShareKey(`item:${id}`)).toBeNull();
   });
 
   it("does not treat gallery folders as a category share", () => {

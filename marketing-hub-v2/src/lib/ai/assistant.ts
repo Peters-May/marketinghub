@@ -66,10 +66,16 @@ Add a marketing list for the USA
 :::
 Use the country they named. The list is people in that country who can receive general marketing. It is saved on the portal and then shown in Email.
 
-Do not invent commands for emails, budgets, or media.
-Linking an existing post to an event is allowed. If the user asks to update budget, media, or anything outside tasks, events, content, marketing lists, and those links, explain that clearly and do not invent a hub-command block.
+When the user asks to add a presentation, slide deck, or Canva link to the library, end with one line. Use public only when they ask for it to be public. Otherwise use internal. Put their title before the URL. If they did not give a title, use a short title from the link.
+:::hub-command
+Add a public presentation Peters & May ARC 2026 Seminar (5 min) https://canva.link/arc
+:::
+
+Do not invent commands for emails, budgets, or other media such as logos, photos, or file uploads.
+Linking an existing post to an event is allowed. A presentation link uses the presentation command above. If the user asks to update budget, or anything outside tasks, events, content, marketing lists, presentation links, and content-to-event links, explain that in one sentence and do not invent a hub-command block.
 Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it” or “add them”.
 Do not ask them to confirm again, and do not say you are waiting for a review. After you emit the block, stop.
+If you cannot save the request, say so in one sentence. Do not ask them to confirm or type do it unless a hub-command block is in the same reply.
 Uploads are available as context when the admin attaches files with Upload before sending.`;
 
 export const MEMBER_ASSISTANT_SYSTEM = `${BRAND_AI_SUMMARY}

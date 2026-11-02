@@ -3,6 +3,7 @@ import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
 import {
   createContent,
   deleteContent,
+  getContent,
   listContent,
   savePressRelease,
   setContentPostShare,
@@ -146,8 +147,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "update") {
-    const existingList = await listContent();
-    const existing = existingList.find((c) => c.id === body.id);
+    const existing = await getContent(String(body.id ?? ""));
     if (!existing) return jsonError("Not found", 404);
 
     if (existing.status === "published") {
@@ -193,8 +193,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "delete") {
-    const existingList = await listContent();
-    const existing = existingList.find((c) => c.id === body.id);
+    const existing = await getContent(String(body.id ?? ""));
     if (existing) {
       const planable = await removeContentFromPlanable(
         withContentPlanableDefaults(existing)
