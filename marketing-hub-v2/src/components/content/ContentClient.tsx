@@ -63,6 +63,7 @@ import { plainTextFromHtml } from "@/lib/plain-text";
 import { statusEventColor } from "@/lib/ui/statusTokens";
 import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { confirmDiscard } from "@/lib/ui/form-feedback";
+import { useDialog } from "@/components/pr/useDialog";
 import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { ContactOwnerSelect } from "@/components/ui/ContactOwnerSelect";
@@ -282,7 +283,6 @@ export function ContentClient({
   const [view, setView] = useState<ContentView>("calendar");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(() => emptyFormForScope(scope));
-  const formRef = useRef<HTMLDivElement>(null);
   const ideasPanelRef = useRef<HTMLElement>(null);
   const ignoreNextDateClick = useRef(false);
   const [creatingIdea, setCreatingIdea] = useState(false);
@@ -321,6 +321,21 @@ export function ContentClient({
         channel: edit.channel,
       })
     : false;
+
+  function closeCreateForm() {
+    if (creating) return;
+    if (
+      !confirmDiscard(
+        JSON.stringify(form) !== JSON.stringify(emptyFormForScope(scope))
+      )
+    ) {
+      return;
+    }
+    setShowForm(false);
+    setForm(emptyFormForScope(scope));
+  }
+
+  const createDialogRef = useDialog(showForm, closeCreateForm);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/content");
@@ -632,9 +647,6 @@ export function ContentClient({
       due_date: day,
     }));
     setShowForm(true);
-    requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
 
   function closeEdit() {
@@ -964,7 +976,7 @@ export function ContentClient({
         />
       )}
 
-      {syncMessage ? (
+      {syncMessage && !showForm ? (
         <p
           className={cn(
             "mb-4 text-sm",
@@ -1093,9 +1105,35 @@ export function ContentClient({
 
       {showForm ? (
         <div
-          ref={formRef}
-          className="surface-card mb-6 grid gap-3 p-5 md:grid-cols-2"
+          ref={createDialogRef}
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 md:left-sidebar md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="content-new-title"
+          onClick={closeCreateForm}
         >
+        <div
+          className="surface-card my-auto grid w-full max-w-3xl gap-3 p-5 shadow-xl md:grid-cols-2 md:p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="md:col-span-2">
+            <h2 id="content-new-title" className="font-display text-xl text-brand">
+              {scope === "social" ? "New post" : "New content"}
+            </h2>
+          </div>
+          {syncMessage ? (
+            <p
+              className={cn(
+                "md:col-span-2 text-sm",
+                syncMessage.startsWith("Planable sync:")
+                  ? "text-muted"
+                  : "text-[var(--danger)]"
+              )}
+              role={syncMessage.startsWith("Planable sync:") ? "status" : "alert"}
+            >
+              {syncMessage}
+            </p>
+          ) : null}
           <div className="md:col-span-2">
             <label className="label">Title</label>
             <input
@@ -1287,22 +1325,12 @@ export function ContentClient({
               type="button"
               className="btn-secondary"
               disabled={creating}
-              onClick={() => {
-                if (
-                  !confirmDiscard(
-                    JSON.stringify(form) !==
-                      JSON.stringify(emptyFormForScope(scope))
-                  )
-                ) {
-                  return;
-                }
-                setShowForm(false);
-                setForm(emptyFormForScope(scope));
-              }}
+              onClick={closeCreateForm}
             >
               Cancel
             </button>
           </div>
+        </div>
         </div>
       ) : null}
 

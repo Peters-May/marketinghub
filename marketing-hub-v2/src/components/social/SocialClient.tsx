@@ -15,6 +15,7 @@ import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { useHubDataRefresh } from "@/lib/command/refresh";
 import { cn } from "@/lib/utils";
+import { useDialog } from "@/components/pr/useDialog";
 import { CONTENT_STATUS } from "@/lib/data/collections";
 import type { ContentItem, ContentStatus } from "@/lib/types";
 import {
@@ -463,7 +464,6 @@ export function SocialClient({
   const [parkingId, setParkingId] = useState<string | null>(null);
   const [parkingActive, setParkingActive] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
-  const createFormRef = useRef<HTMLDivElement>(null);
   const ideasPanelRef = useRef<HTMLElement>(null);
   const ignoreNextDateClick = useRef(false);
 
@@ -475,6 +475,16 @@ export function SocialClient({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [overflowDay]);
+
+  function closeCreateForm() {
+    if (creating) return;
+    setCreateForm(null);
+  }
+
+  const createDialogRef = useDialog(
+    Boolean(createForm) && !memberView,
+    closeCreateForm
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -966,12 +976,6 @@ export function SocialClient({
         ? { ...prev, due_date: day }
         : { due_date: day, title: "", caption: "", status: "idea" }
     );
-    requestAnimationFrame(() => {
-      createFormRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
   }
 
   async function createPostFromDay() {
@@ -1189,15 +1193,30 @@ export function SocialClient({
 
       {createForm && !memberView ? (
         <div
-          ref={createFormRef}
-          className="surface-card mb-6 grid gap-3 p-5 md:grid-cols-2"
+          ref={createDialogRef}
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4 md:left-sidebar md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="social-new-post-title"
+          onClick={closeCreateForm}
+        >
+        <div
+          className="surface-card my-auto grid w-full max-w-xl gap-3 p-5 shadow-xl md:grid-cols-2 md:p-6"
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="md:col-span-2">
-            <p className="text-sm font-semibold text-brand">New post</p>
-            <p className="mt-0.5 text-xs text-muted">
+            <h2 id="social-new-post-title" className="font-display text-xl text-brand">
+              New post
+            </h2>
+            <p className="mt-1 text-sm text-muted">
               Date is set from the calendar day you clicked.
             </p>
           </div>
+          {error ? (
+            <p className="md:col-span-2 text-sm text-[var(--danger)]" role="alert">
+              {error}
+            </p>
+          ) : null}
           <div>
             <label className="label">Title</label>
             <input
@@ -1263,11 +1282,12 @@ export function SocialClient({
               type="button"
               className="btn-secondary"
               disabled={creating}
-              onClick={() => setCreateForm(null)}
+              onClick={closeCreateForm}
             >
               Cancel
             </button>
           </div>
+        </div>
         </div>
       ) : null}
 

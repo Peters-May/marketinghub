@@ -32,16 +32,13 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
 
-  /* Match shell sidebar so overlays don't cover nav on md+ */
-  .left-sidebar {
-    left: 0;
-  }
-
-  @media (min-width: 768px) {
-    .md\:left-sidebar {
-      left: 16rem; /* w-64 */
-    }
+/* Keep this unlayered. A layered .left-sidebar utility makes Tailwind
+   regenerate md:left-sidebar as left: 0, which covers the shell nav. */
+@media (min-width: 768px) {
+  .md\:left-sidebar {
+    left: 16rem; /* w-64, matches AppShell */
   }
 }
 
