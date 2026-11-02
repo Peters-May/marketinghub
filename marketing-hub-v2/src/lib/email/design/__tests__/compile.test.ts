@@ -86,6 +86,48 @@ describe("email design compiler", () => {
     expect(withLink).not.toContain("color:inherit");
   });
 
+  it("keeps paragraph alignment when a text block is compiled", () => {
+    const design = normalizeEmailDesign({
+      version: 1,
+      styles: newsletterDesign().styles,
+      sections: [
+        {
+          id: "s1",
+          background: "",
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [
+            {
+              id: "c1",
+              width: 100,
+              blocks: [
+                {
+                  id: "t1",
+                  type: "text",
+                  html: '<p style="text-align: center">Centred line</p><p>Left line</p>',
+                  color: "#23496d",
+                  fontSize: 15,
+                  align: "left",
+                  paddingTop: 0,
+                  paddingRight: 0,
+                  paddingBottom: 0,
+                  paddingLeft: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(design).not.toBeNull();
+    const html = compileEmailDesign(design!);
+    expect(html).toContain('<p style="text-align:center;margin:0 0 12px;">Centred line</p>');
+    expect(html).toContain('<p style="margin:0 0 12px;">Left line</p>');
+  });
+
   it("hides preview text, including a name variable, above the email", () => {
     const html = compileEmailDesign(newsletterDesign(), {
       previewText: "Hello {{first_name}}",

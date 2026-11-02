@@ -5,7 +5,11 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import TextAlign from "@tiptap/extension-text-align";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   Bold,
   Italic,
   Strikethrough,
@@ -112,6 +116,10 @@ export function RichTextEditorImpl({
           rel: "noopener noreferrer",
           target: "_blank",
         },
+      }),
+      TextAlign.configure({
+        types: ["heading", "paragraph", "blockquote"],
+        alignments: ["left", "center", "right"],
       }),
       Placeholder.configure({
         placeholder,
@@ -259,6 +267,23 @@ export function RichTextEditorImpl({
         >
           <ListOrdered className="h-3.5 w-3.5" />
         </ToolbarButton>
+        <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+        {(
+          [
+            ["left", "Align left", AlignLeft],
+            ["center", "Align centre", AlignCenter],
+            ["right", "Align right", AlignRight],
+          ] as const
+        ).map(([align, label, Icon]) => (
+          <ToolbarButton
+            key={align}
+            label={label}
+            active={editor.isActive({ textAlign: align })}
+            onClick={() => editor.chain().focus().setTextAlign(align).run()}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </ToolbarButton>
+        ))}
         <span className="mx-1 h-4 w-px bg-border" aria-hidden />
         <ToolbarButton
           label="Link"

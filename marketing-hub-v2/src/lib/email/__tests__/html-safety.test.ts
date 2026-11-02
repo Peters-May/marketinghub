@@ -5,6 +5,7 @@ import {
   sanitizeHtmlBlock,
   sanitizeRichEmailHtml,
 } from "@/lib/email/design/compile";
+import { sanitizeRichText } from "@/lib/sanitize";
 import { cssNumber, cssValue } from "@/lib/email/css-value";
 import { applyEmailMerge, ensureUnsubscribeFooter } from "@/lib/email/merge";
 import type { Contact } from "@/lib/types";
@@ -120,11 +121,39 @@ describe("sanitizeRichEmailHtml", () => {
     expect(hasHandler(`<div>${out}</div>`)).toBe(false);
   });
 
+  it("keeps paragraph alignment and drops other styles", () => {
+    const out = sanitizeRichEmailHtml(
+      `<p style="text-align: center;background:url(https://evil.test)">Hi</p>` +
+        `<h2 style="text-align:right" onclick="alert(1)">Title</h2>` +
+        `<p style="color:red" onclick="alert(1)">No</p>`
+    );
+    expect(out).toContain('<p style="text-align:center">Hi</p>');
+    expect(out).toContain('<h2 style="text-align:right">Title</h2>');
+    expect(out).toContain("<p>No</p>");
+    expect(out).not.toContain("background");
+    expect(out).not.toContain("color:red");
+    expect(out).not.toContain("onclick");
+    expect(hasHandler(out)).toBe(false);
+  });
+
   it("only allows link merge tokens as hrefs", () => {
     expect(safeEmailUrl("{{unsubscribe_url}}")).toBe("{{unsubscribe_url}}");
     expect(safeEmailUrl("{{ view_in_browser_url }}")).toBe("{{ view_in_browser_url }}");
     expect(safeEmailUrl("{{name}}")).toBe("");
     expect(sanitizeRichEmailHtml('<a href="{{name}}">x</a>')).not.toContain("href");
+  });
+});
+
+describe("sanitizeRichText", () => {
+  it("keeps text alignment and drops other styles and handlers", () => {
+    const out = sanitizeRichText(
+      `<p style="text-align: center;color:red" onclick="alert(1)">Hi</p><script>alert(1)</script>`
+    );
+    expect(out).toContain('style="text-align:center"');
+    expect(out).toContain(">Hi</p>");
+    expect(out).not.toContain("color");
+    expect(out).not.toContain("onclick");
+    expect(out).not.toContain("script");
   });
 });
 

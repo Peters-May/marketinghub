@@ -11,6 +11,7 @@ import type {
 } from "@/lib/email/design/types";
 import { extractEmailBody, OFFICE_FOOTER } from "@/lib/email/design/document";
 import { cssNumber, cssValue } from "@/lib/email/css-value";
+import { textAlignFromStyle, type TextAlign } from "@/lib/text-align";
 
 export type CompileEmailOptions = {
   /** When set, sections with a matching showFor (or "all") are kept. */
@@ -70,6 +71,19 @@ export function emailImageSrc(url: string, absolute: boolean): string {
   return safeEmailUrl(trimmed);
 }
 
+const ALIGN_TAGS = new Set(["p", "h1", "h2", "h3", "blockquote"]);
+
+function textAlignAttr(attrs: string): string {
+  const style = /style\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(attrs);
+  const fromStyle = style ? textAlignFromStyle(style[1] || style[2] || "") : null;
+  const data = /data-align\s*=\s*(?:"(left|center|right)"|'(left|center|right)')/i.exec(attrs);
+  const fromData = (data?.[1] || data?.[2] || "").toLowerCase();
+  const align: TextAlign | null =
+    fromStyle ||
+    (fromData === "left" || fromData === "center" || fromData === "right" ? fromData : null);
+  return align ? ` style="text-align:${align}"` : "";
+}
+
 const RICH_TAGS = new Set([
   "p",
   "br",
@@ -112,15 +126,27 @@ export function sanitizeRichEmailHtml(html: string, linkColor?: string): string 
         ? `<a href="${escapeAttr(url)}" style="color:${color};text-decoration:underline;">`
         : "<span>";
     }
-    return `<${name}>`;
+    const align = ALIGN_TAGS.has(name) ? textAlignAttr(String(attrs)) : "";
+    return `<${name}${align}>`;
+  });
+}
+
+function withBlockStyle(html: string, tag: string, base: string): string {
+  const re = new RegExp(`<${tag}(?:\\sstyle="text-align:(left|center|right)")?>`, "gi");
+  return html.replace(re, (_full, align?: string) => {
+    const alignCss = align ? `text-align:${align.toLowerCase()};` : "";
+    return `<${tag} style="${alignCss}${base}">`;
   });
 }
 
 /** Paragraph spacing shared with the canvas and the selected editor. */
 function emailRichHtml(html: string, linkColor?: string): string {
-  return sanitizeRichEmailHtml(html, linkColor)
-    .replace(/<p>/g, '<p style="margin:0 0 12px;">')
-    .replace(/<h2>/g, '<h2 style="margin:12px 0 6px;font-size:1.15em;line-height:1.3;">')
+  const safe = sanitizeRichEmailHtml(html, linkColor);
+  return withBlockStyle(
+    withBlockStyle(safe, "p", "margin:0 0 12px;"),
+    "h2",
+    "margin:12px 0 6px;font-size:1.15em;line-height:1.3;"
+  )
     .replace(/<ul>/g, '<ul style="margin:0 0 12px;padding-left:20px;">')
     .replace(/<ol>/g, '<ol style="margin:0 0 12px;padding-left:20px;">');
 }
