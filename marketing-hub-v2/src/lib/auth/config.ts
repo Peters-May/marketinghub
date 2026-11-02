@@ -34,9 +34,11 @@ export const DEMO_STAFF: {
   email: string;
   full_name: string;
   role: "admin";
+  websiteChat: boolean;
 } = {
   id: "demo-staff",
   email: "marketing@petersandmay.com",
   full_name: "Marketing Team",
   role: "admin",
+  websiteChat: true,
 };
