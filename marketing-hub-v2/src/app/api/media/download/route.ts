@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasMediaDownloadAccess } from "@/lib/auth/media-access";
+import { isStaffSession } from "@/lib/auth/roles";
+import { getSessionUser } from "@/lib/auth/session";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
-import { listMediaByShareToken } from "@/lib/supabase/media-list";
+import {
+  gallerySharePath,
+  listMediaByShareToken,
+  type MediaListItem,
+  type ShareViewer,
+} from "@/lib/supabase/media-list";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,19 +64,42 @@ export async function GET(request: NextRequest) {
 
   if (token) {
     try {
-      const shared = await listMediaByShareToken(token);
+      const user = await getSessionUser();
+      const viewer: ShareViewer = {
+        staff: isStaffSession(user?.role),
+        admin: user?.role === "admin",
+      };
+      const shared = await listMediaByShareToken(token, viewer);
       if (!shared) {
         return NextResponse.json(
           { error: "This share link is invalid or has been turned off." },
           { status: 404 }
         );
       }
-      const allowed = shared.items.some((item) =>
-        item.files.some((file) => file.url === url)
-      );
-      if (!allowed) {
+      const fileOnShare = (items: MediaListItem[]) =>
+        items.some((item) => item.files.some((file) => file.url === url));
+      if (!fileOnShare(shared.items)) {
+        const full = await listMediaByShareToken(token, {
+          staff: true,
+          admin: true,
+        });
+        if (!full || !fileOnShare(full.items)) {
+          return NextResponse.json(
+            { error: "File is not part of this shared folder." },
+            { status: 403 }
+          );
+        }
+        if (!viewer.staff) {
+          return NextResponse.json(
+            {
+              error: "Sign in required to download this file",
+              loginUrl: `/login?next=${encodeURIComponent(gallerySharePath(token))}`,
+            },
+            { status: 401 }
+          );
+        }
         return NextResponse.json(
-          { error: "File is not part of this shared folder." },
+          { error: "This file is not available on this link." },
           { status: 403 }
         );
       }

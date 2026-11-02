@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText, X } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Download, FileText, Lock, X } from "lucide-react";
 import { downloadMediaFile } from "@/lib/media/download-file";
 import type { MediaListItem } from "@/lib/supabase/media-list";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,8 @@ import { cn } from "@/lib/utils";
 type ShareResponse = {
   folderName?: string;
   canDownload?: boolean;
+  needsSignIn?: boolean;
+  loginPath?: string;
   items?: MediaListItem[];
   error?: string;
 };
@@ -48,6 +51,8 @@ export function ShareFolderClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [folderName, setFolderName] = useState("Shared folder");
   const [items, setItems] = useState<MediaListItem[]>([]);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
+  const [loginPath, setLoginPath] = useState("/login");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -63,8 +68,10 @@ export function ShareFolderClient({ token }: { token: string }) {
           throw new Error(json.error || "This share link is unavailable.");
         }
         if (cancelled) return;
-        setFolderName(json.folderName || "Shared gallery");
+        setFolderName(json.folderName || "Shared folder");
         setItems(json.items || []);
+        setNeedsSignIn(json.needsSignIn === true);
+        setLoginPath(json.loginPath || "/login");
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Could not load folder");
@@ -171,7 +178,7 @@ export function ShareFolderClient({ token }: { token: string }) {
               {folderName}
             </h1>
             <p className="mt-1 text-sm text-muted">
-              Shared with staff · view and download without signing in
+              Public files are open. Internal files need a staff sign-in.
             </p>
           </div>
         </div>
@@ -185,6 +192,23 @@ export function ShareFolderClient({ token }: { token: string }) {
             <h2 className="font-display text-2xl text-brand">Link unavailable</h2>
             <p className="mt-2 text-sm text-muted">{error}</p>
           </div>
+        ) : photos.length === 0 && files.length === 0 && needsSignIn ? (
+          <div className="rounded-2xl border border-border bg-white p-8 text-center">
+            <Lock className="mx-auto h-5 w-5 text-brand" />
+            <h2 className="mt-3 font-display text-2xl text-brand">
+              Sign in to see internal files
+            </h2>
+            <p className="mt-2 text-sm text-muted">
+              This link includes internal files. Staff need to sign in before
+              those files appear.
+            </p>
+            <Link
+              href={loginPath}
+              className="mt-4 inline-flex rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white"
+            >
+              Sign in
+            </Link>
+          </div>
         ) : photos.length === 0 && files.length === 0 ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="font-display text-2xl text-brand">Nothing here yet</h2>
@@ -194,6 +218,20 @@ export function ShareFolderClient({ token }: { token: string }) {
           </div>
         ) : (
           <>
+            {needsSignIn ? (
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3">
+                <p className="flex items-center gap-2 text-sm text-foreground">
+                  <Lock className="h-4 w-4 text-brand" />
+                  Internal files on this link need a staff sign-in.
+                </p>
+                <Link
+                  href={loginPath}
+                  className="inline-flex rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  Sign in
+                </Link>
+              </div>
+            ) : null}
             {files.length > 0 ? (
               <section className="mb-8">
                 <p className="mb-3 text-sm text-muted">

@@ -132,13 +132,41 @@ export function categoryShareKey(category: string): string {
   return `${CATEGORY_SHARE_PREFIX}${category.trim()}`;
 }
 
-/** Templates only. Other categories stay inside the signed-in library. */
+/** Any library category. Gallery folder names are not category shares. */
 export function categoryFromShareKey(subfolder: string): string | null {
   const raw = subfolder.trim();
   if (!raw.toLowerCase().startsWith(CATEGORY_SHARE_PREFIX)) return null;
   const name = raw.slice(CATEGORY_SHARE_PREFIX.length).trim();
-  if (name.toLowerCase() !== TEMPLATES_CATEGORY.toLowerCase()) return null;
-  return TEMPLATES_CATEGORY;
+  if (!name || name.includes(":") || name.length > 80) return null;
+  const match = MEDIA_HUB_CATEGORIES.find(
+    (category) => category.toLowerCase() === name.toLowerCase()
+  );
+  return match ?? null;
+}
+
+export type ShareViewer = {
+  staff: boolean;
+  admin: boolean;
+};
+
+export const ANONYMOUS_SHARE_VIEWER: ShareViewer = {
+  staff: false,
+  admin: false,
+};
+
+/** Public files are open. Internal files need a staff sign-in. Admin files need an admin. */
+export function shareItemVisibleTo(
+  item: {
+    category: string;
+    subfolder_visibility: GalleryFolderVisibility;
+    visibility: GalleryFolderVisibility;
+  },
+  viewer: ShareViewer
+): boolean {
+  const visibility = effectiveMediaVisibility(item);
+  if (visibility === "public") return true;
+  if (visibility === "admin") return viewer.admin;
+  return viewer.staff;
 }
 
 function generateShareToken(): string {
@@ -656,14 +684,14 @@ export async function setGalleryFolderShareEnabled(input: {
   });
 }
 
-/** Enable or disable the unlisted share link for the Templates category. */
+/** Enable or disable the unlisted share link for a library category. */
 export async function setCategoryShareEnabled(input: {
   category: string;
   enabled: boolean;
 }): Promise<GalleryFolderShare> {
   const category = categoryFromShareKey(categoryShareKey(input.category));
   if (!category) {
-    throw new Error("Only the Templates category can be shared by link.");
+    throw new Error("Choose a library category to share.");
   }
   return syncGalleryFolderShare({
     subfolder: categoryShareKey(category),
@@ -737,11 +765,16 @@ export async function listGalleryFolderShares(): Promise<GalleryFolderShare[]> {
   }));
 }
 
-/** Public share page: resolve token → folder + items visible on the link. */
-export async function listMediaByShareToken(token: string): Promise<{
+/** Share page: public items are open. Internal items need a staff sign-in. */
+export async function listMediaByShareToken(
+  token: string,
+  viewer: ShareViewer = ANONYMOUS_SHARE_VIEWER
+): Promise<{
   folderName: string;
   share: GalleryFolderShare;
   items: MediaListItem[];
+  /** True when internal items exist and this viewer is not staff. */
+  needsSignIn: boolean;
 } | null> {
   const trimmed = token.trim();
   if (!trimmed || trimmed.length < 16 || trimmed.length > 128) return null;
@@ -776,6 +809,7 @@ export async function listMediaByShareToken(token: string): Promise<{
       folderName: sharedCategory || share.subfolder || "Gallery",
       share,
       items: [],
+      needsSignIn: false,
     };
   }
 
@@ -796,21 +830,19 @@ export async function listMediaByShareToken(token: string): Promise<{
   const { data, error } = await query.limit(500);
   if (error) throw new Error(error.message);
 
-  const items = ((data ?? []) as Record<string, unknown>[])
-    .map((r) => mapMediaRow(r, sharedCategory ? "all" : "public"))
-    .filter((item) => {
-      if (sharedCategory) return effectiveMediaVisibility(item) !== "admin";
-      // Hide items that are more restrictive than the folder (e.g. admin
-      // override on an internal shared folder).
-      const folderVis = item.subfolder_visibility;
-      return moreRestrictiveVisibility(folderVis, item.visibility) === folderVis;
-    })
+  const loaded = ((data ?? []) as Record<string, unknown>[])
+    .map((r) => mapMediaRow(r, viewer.staff ? "all" : "public"))
     .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const needsSignIn =
+    !viewer.staff &&
+    loaded.some((item) => effectiveMediaVisibility(item) === "internal");
+  const items = loaded.filter((item) => shareItemVisibleTo(item, viewer));
 
   return {
     folderName: sharedCategory || share.subfolder || "Unsorted",
     share,
     items,
+    needsSignIn,
   };
 }
 
