@@ -139,21 +139,67 @@ function withBlockStyle(html: string, tag: string, base: string): string {
   });
 }
 
+/**
+ * Word adds its own space around paragraphs unless the CSS margin is
+ * cleared and the gap is repeated as an mso margin.
+ */
+function outlookGap(top: number, bottom: number): string {
+  return `margin:${top}px 0 ${bottom}px;mso-margin-top-alt:${top}px;mso-margin-bottom-alt:${bottom}px;`;
+}
+
 /** Paragraph spacing shared with the canvas and the selected editor. */
-function emailRichHtml(html: string, linkColor?: string): string {
+function emailRichHtml(html: string, linkColor?: string, fontSize = 16): string {
   const safe = sanitizeRichEmailHtml(html, linkColor);
-  return withBlockStyle(
-    withBlockStyle(safe, "p", "margin:0 0 12px;"),
-    "h2",
-    "margin:12px 0 6px;font-size:1.15em;line-height:1.3;"
-  )
-    .replace(/<ul>/g, '<ul style="margin:0 0 12px;padding-left:20px;">')
-    .replace(/<ol>/g, '<ol style="margin:0 0 12px;padding-left:20px;">');
+  const heading = Math.max(12, Math.round(fontSize * 1.15));
+  return withBlockStyle(withBlockStyle(safe, "p", outlookGap(0, 12)), "h2", `${outlookGap(12, 6)}font-size:${heading}px;line-height:${Math.round(heading * 1.3)}px;mso-line-height-rule:exactly;`)
+    .replace(/<ul>/g, `<ul style="${outlookGap(0, 12)}padding-left:20px;">`)
+    .replace(/<ol>/g, `<ol style="${outlookGap(0, 12)}padding-left:20px;">`);
+}
+
+/**
+ * Outlook turns a horizontal rule into a paragraph and adds a large gap.
+ * A cell border with padding keeps the same space the browser shows.
+ */
+function ruleSpacing(attrs: string): { top: number; bottom: number; thickness: string; color: string } {
+  const style = /style\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ?? "";
+  const border = /border-top\s*:\s*(\d+)px\s+solid\s+(#[0-9a-f]{3,8})/i.exec(style);
+  const margin = /margin\s*:\s*([^;]+)/i.exec(style)?.[1];
+  const nums = margin ? [...margin.matchAll(/(\d+)px/gi)].map((match) => Number(match[1])) : [];
+  return {
+    top: nums[0] ?? 0,
+    bottom: (nums.length >= 3 ? nums[2] : nums[0]) ?? 0,
+    thickness: border?.[1] ?? "1",
+    color: border?.[2] ?? "#dddddd",
+  };
+}
+
+function spacerRow(px: number): string {
+  if (px <= 0) return "";
+  return `<tr><td height="${px}" style="height:${px}px;font-size:${px}px;line-height:${px}px;mso-line-height-rule:exactly;">&nbsp;</td></tr>`;
+}
+
+function outlookHorizontalRules(html: string): string {
+  return html.replace(/(?:<hr\b[^>]*\/?\s*>\s*)+/gi, (run) => {
+    const rules = [...run.matchAll(/<hr\b([^>]*)\/?\s*>/gi)].map((match) =>
+      ruleSpacing(String(match[1] ?? ""))
+    );
+    const rows = rules.flatMap((rule, index) => {
+      const gapBefore =
+        index === 0 ? rule.top : Math.max(rules[index - 1].bottom, rule.top);
+      return [
+        spacerRow(gapBefore),
+        `<tr><td style="border-top:${rule.thickness}px solid ${rule.color};font-size:1px;line-height:1px;mso-line-height-rule:exactly;">&nbsp;</td></tr>`,
+      ];
+    });
+    rows.push(spacerRow(rules[rules.length - 1]?.bottom ?? 0));
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">${rows.join("")}</table>`;
+  });
 }
 
 /** HTML blocks keep layout markup, without scripts or event handlers. */
 export function sanitizeHtmlBlock(html: string): string {
-  return withOutlookBackground(
+  return outlookHorizontalRules(
+    withOutlookBackground(
     extractEmailBody(html)
       .replace(/<!--[\s\S]*?-->/g, "")
       .replace(/<(script|iframe|object|noscript|template|form)\b[\s\S]*?<\/\1\s*>/gi, "")
@@ -163,6 +209,7 @@ export function sanitizeHtmlBlock(html: string): string {
       .replace(/([\s"'/])(on[a-z]+|srcdoc|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "$1")
       .replace(/(java|vb)script\s*:/gi, "")
       .replace(/data\s*:\s*text\/html/gi, "")
+    )
   );
 }
 
@@ -257,6 +304,17 @@ function alignStyle(align: EmailBlock["align"]): string {
 const PRESENTATION =
   'role="presentation" cellpadding="0" cellspacing="0" border="0"';
 
+/** Bold labels are wider than half an em, and Outlook clips whatever falls outside the shape. */
+function estimateButtonTextWidth(label: string, fontSize: number): number {
+  let width = 0;
+  for (const char of label) {
+    if (/\s/.test(char)) width += fontSize * 0.34;
+    else if (/[A-Z]/.test(char)) width += fontSize * 0.75;
+    else width += fontSize * 0.58;
+  }
+  return Math.ceil(width);
+}
+
 /**
  * Outlook's Word engine ignores padding and border-radius on a link, so a
  * CSS button paints as a highlight on the words. Word gets a VML shape.
@@ -289,11 +347,12 @@ function bulletproofButton(options: {
     borderW > 0
       ? `border:${borderW}px solid ${escapeAttr(options.borderColor)};`
       : "";
-  const height = options.padY * 2 + options.fontSize + borderW * 2;
-  const textWidth = Math.ceil(label.length * options.fontSize * 0.5);
+  const lineHeight = Math.round(options.fontSize * 1.25);
+  const height = options.padY * 2 + lineHeight + borderW * 2;
+  const textWidth = estimateButtonTextWidth(label, options.fontSize);
   const buttonWidth = options.fullWidth
     ? Math.max(120, options.contentWidth)
-    : Math.max(options.fontSize * 4, textWidth + options.padX * 2 + borderW * 2);
+    : Math.max(options.fontSize * 4, textWidth + options.padX * 2 + borderW * 2 + 16);
   const arc =
     height > 0 ? Math.min(100, Math.round((options.radius / (height / 2)) * 100)) : 0;
   const stroke =
@@ -306,14 +365,14 @@ function bulletproofButton(options: {
 <table ${PRESENTATION} width="100%" style="border-collapse:collapse;"><tr><td align="${options.align}">
 <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:office" href="${url}" style="height:${height}px;v-text-anchor:middle;width:${buttonWidth}px;" arcsize="${arc}%" ${stroke} fillcolor="${bg}">
 <w:anchorlock/>
-<center style="color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:bold;">${safeLabel}</center>
+<center style="color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:bold;line-height:${lineHeight}px;">${safeLabel}</center>
 </v:roundrect>
 </td></tr></table>
 <![endif]-->
 <!--[if !mso]><!-->
 <table ${PRESENTATION} align="${options.align}"${widthAttr} style="border-collapse:collapse;${options.fullWidth ? "width:100%;" : ""}">
 <tr><td align="center" bgcolor="${bg}" style="background-color:${bg};border-radius:${options.radius}px;${border}">
-<a href="${url}" style="display:${display};padding:${options.padY}px ${options.padX}px;background-color:${bg};color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:600;line-height:${options.fontSize}px;text-align:center;text-decoration:none;border-radius:${options.radius}px;${border}${options.fullWidth ? "width:100%;box-sizing:border-box;" : ""}">${safeLabel}</a>
+<a href="${url}" style="display:${display};padding:${options.padY}px ${options.padX}px;background-color:${bg};color:${fg};font-family:${font};font-size:${options.fontSize}px;font-weight:600;line-height:${lineHeight}px;text-align:center;text-decoration:none;border-radius:${options.radius}px;${border}${options.fullWidth ? "width:100%;box-sizing:border-box;" : ""}">${safeLabel}</a>
 </td></tr></table>
 <!--<![endif]-->`;
 }
@@ -346,17 +405,20 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
     case "heading": {
       const level = block.level === 2 || block.level === 3 ? block.level : 1;
       const tag = `h${level}`;
-      return `<${tag} style="margin:0;${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:1.2;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`;
+      const line = Math.round(block.fontSize * 1.2);
+      return `<${tag} style="${outlookGap(0, 0)}${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:${line}px;mso-line-height-rule:exactly;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`;
     }
     case "text":
-      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:1.5;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html, styles.linkColor)}</div>`;
+      const line = Math.round(block.fontSize * 1.5);
+      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:${line}px;mso-line-height-rule:exactly;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html, styles.linkColor, block.fontSize)}</div>`;
     case "image": {
       const src = emailImageSrc(block.src, true);
       if (!src) {
         return "";
       }
       const width = sizedPixelWidth(columnPx, block.widthPercent);
-      const img = `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt)}" width="${width}" style="display:inline-block;border:0;max-width:100%;height:auto;width:${block.widthPercent}%;" />`;
+      const display = block.widthPercent >= 100 ? "block" : "inline-block";
+      const img = `<img src="${escapeAttr(src)}" alt="${escapeAttr(block.alt)}" width="${width}" style="display:${display};border:0;max-width:100%;height:auto;width:${block.widthPercent}%;" />`;
       const href = safeEmailUrl(block.href);
       const linked = href ? `<a href="${escapeAttr(href)}">${img}</a>` : img;
       return `<div style="${pad}${align}">${linked}</div>`;
@@ -417,7 +479,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
       return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:13px;line-height:1.6;">${links.join("&nbsp;&nbsp;")}</div>`;
     }
     case "html":
-      return `<div class="em-html" style="${pad}font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${sanitizeHtmlBlock(block.html)}</div>`;
+      return `<div class="em-html" style="${pad}font-family:${styles.fontFamily};font-size:15px;line-height:22px;color:${escapeAttr(styles.textColor)};">${sanitizeHtmlBlock(block.html)}</div>`;
     case "footer": {
       const footerText =
         block.text.trim() === "Peters & May" ? OFFICE_FOOTER : block.text;
@@ -435,9 +497,9 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
       }
       const linkRow =
         linkParts.length > 0
-          ? `<p style="margin:8px 0 0;">${linkParts.join(" &nbsp;|&nbsp; ")}</p>`
+          ? `<p style="${outlookGap(8, 0)}">${linkParts.join(" &nbsp;|&nbsp; ")}</p>`
           : "";
-      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:1.5;color:#666666;">${sanitizeRichEmailHtml(footerText, styles.linkColor).replace(/\n/g, "<br>")}${linkRow}</div>`;
+      return `<div style="${pad}${align}font-family:${styles.fontFamily};font-size:12px;line-height:18px;mso-line-height-rule:exactly;color:#666666;">${sanitizeRichEmailHtml(footerText, styles.linkColor).replace(/\n/g, "<br>")}${linkRow}</div>`;
     }
     case "video": {
       const thumb = emailImageSrc(block.thumbnailSrc, true);
@@ -479,7 +541,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
             contentWidth: styles.contentWidth,
           })}</div>`
         : "";
-      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="margin:0 0 8px;font-family:${styles.headingFontFamily};font-size:22px;line-height:1.25;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:1.5;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml, styles.linkColor)}</div>${cta}</div>`;
+      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="${outlookGap(0, 8)}font-family:${styles.headingFontFamily};font-size:22px;line-height:28px;mso-line-height-rule:exactly;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:22px;mso-line-height-rule:exactly;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml, styles.linkColor, 15)}</div>${cta}</div>`;
     }
     default:
       return "";
@@ -576,6 +638,13 @@ export function compileEmailDesign(
   body { margin:0; padding:0; }
   table { border-collapse:collapse; }
   img { border:0; outline:none; text-decoration:none; }
+</style>
+<!--[if mso]>
+<style>
+  h1, h2, h3, p, ul, ol, li { margin: 0 !important; }
+</style>
+<![endif]-->
+<style>
   @media only screen and (max-width: 620px) {
     .em-container { width:100% !important; }
     .em-stack { display:block !important; width:100% !important; max-width:100% !important; padding-left:0 !important; direction:ltr !important; }

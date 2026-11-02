@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
-import { sendTestEmail } from "@/lib/email/send-campaign";
+import { htmlForSavedCampaign, sendTestEmail } from "@/lib/email/send-campaign";
 import { claimEmailCampaignSend, getEmailCampaign } from "@/lib/data/repos";
 import { sendCampaignWorkflow } from "@/workflows/email-campaign";
 import { start } from "workflow/api";
@@ -13,14 +13,16 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   if (body.test) {
+    const campaignId = typeof body.campaign_id === "string" ? body.campaign_id : "";
+    const saved = campaignId ? await htmlForSavedCampaign(campaignId) : null;
     const result = await sendTestEmail({
       to: user.email,
       toName: user.full_name,
       fromName: String(body.from_name ?? ""),
       fromEmail: String(body.from_email ?? ""),
       subject: String(body.subject ?? ""),
-      html: String(body.html_body ?? ""),
-      campaignId: typeof body.campaign_id === "string" ? body.campaign_id : "",
+      html: saved || String(body.html_body ?? ""),
+      campaignId,
     });
     if (!result.ok) return jsonError(result.error || "Test send failed", 502);
     return jsonOk({ ok: true, to: user.email });

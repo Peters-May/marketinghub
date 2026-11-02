@@ -191,6 +191,79 @@ function alignOf(node: ImportNode, parent: EmailAlign): EmailAlign {
   return parent;
 }
 
+/** The page cell uses align="center" to centre the 600px card, not the copy inside it. */
+function centresTheCard(node: ImportNode): boolean {
+  if ((node.attrs.align || "").toLowerCase() !== "center") return false;
+  const kids = node.children.filter((child) => !isWhitespaceText(child));
+  return kids.length === 1 && kids[0].tag === "table";
+}
+
+/** CSS text-align is copy alignment. The card wrapper's align attribute is not. */
+function textAlignContext(node: ImportNode, parent: EmailAlign): EmailAlign {
+  const fromStyle = /text-align\s*:\s*(left|center|right)/i.exec(styleOf(node));
+  if (fromStyle) return fromStyle[1].toLowerCase() as EmailAlign;
+  if (!centresTheCard(node)) {
+    const attr = (node.attrs.align || "").toLowerCase();
+    if (attr === "left" || attr === "center" || attr === "right") return attr;
+  }
+  return parent;
+}
+
+type BoxPadding = { top: number; right: number; bottom: number; left: number };
+
+function boxPadding(node: ImportNode): BoxPadding | null {
+  const match = /(?:^|;)\s*padding\s*:\s*([^;]+)/i.exec(`;${styleOf(node)};`);
+  if (!match) return null;
+  const parts = match[1]
+    .trim()
+    .split(/\s+/)
+    .map((part) => {
+      const value = Number.parseFloat(part);
+      return Number.isFinite(value) ? Math.max(0, Math.min(120, Math.round(value))) : null;
+    });
+  if (parts.some((part) => part === null) || parts.length === 0) return null;
+  const [top, right = top, bottom = top, left = right] = parts as number[];
+  if (parts.length === 1) return { top, right: top, bottom: top, left: top };
+  if (parts.length === 2) return { top, right, bottom: top, left: right };
+  if (parts.length === 3) return { top, right, bottom, left: right };
+  return { top, right, bottom, left };
+}
+
+function paddingShorthand(style: string): { x: number; y: number } | null {
+  const box = boxPadding({ tag: "", attrs: { style }, children: [], text: "" });
+  if (!box) return null;
+  return { x: box.left, y: box.top };
+}
+
+function zeroBlockPadding(block: EmailBlock): EmailBlock {
+  return { ...block, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0 };
+}
+
+function sectionHasCustomPadding(section: EmailSection): boolean {
+  return (
+    section.paddingTop !== 16 ||
+    section.paddingRight !== 24 ||
+    section.paddingBottom !== 16 ||
+    section.paddingLeft !== 24
+  );
+}
+
+function withPadding(section: EmailSection, padding: BoxPadding, add: boolean): EmailSection {
+  return {
+    ...section,
+    paddingTop: add ? section.paddingTop + padding.top : padding.top,
+    paddingRight: add ? section.paddingRight + padding.right : padding.right,
+    paddingBottom: add ? section.paddingBottom + padding.bottom : padding.bottom,
+    paddingLeft: add ? section.paddingLeft + padding.left : padding.left,
+    columns: add
+      ? section.columns
+      : section.columns.map((column) => ({
+          ...column,
+          blocks: column.blocks.map(zeroBlockPadding),
+        })),
+  };
+}
+
 function isPixel(node: ImportNode): boolean {
   const width = Number.parseInt(node.attrs.width || "", 10);
   const height = Number.parseInt(node.attrs.height || "", 10);
@@ -378,6 +451,7 @@ function buttonBlock(node: ImportNode, ctx: WalkCtx): EmailBlock | null {
     `${styleOf(node)};${styleOf(anchor)}`
   );
   const fontSize = fontSizeOf(`${styleOf(anchor)};${styleOf(node)}`, 16);
+  const padding = paddingShorthand(styleOf(anchor)) || paddingShorthand(styleOf(node));
   return createBlock("button", {
     label,
     ...(href ? { href } : {}),
@@ -386,6 +460,7 @@ function buttonBlock(node: ImportNode, ctx: WalkCtx): EmailBlock | null {
     ...(colour ? { color: colour } : {}),
     ...(radius ? { radius: Math.min(40, Math.max(0, Math.round(Number(radius[1])))) } : {}),
     fontSize,
+    ...(padding ? { paddingX: padding.x, paddingY: padding.y } : {}),
   });
 }
 
@@ -398,6 +473,10 @@ function dividerBlock(node: ImportNode): EmailBlock {
   return createBlock("divider", {
     ...(colour ? { color: colour } : {}),
     thickness,
+    paddingTop: 0,
+    paddingRight: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
   });
 }
 
@@ -501,18 +580,19 @@ function columnWidths(cells: ImportNode[]): number[] {
   return widths;
 }
 
-function paint(chunks: Chunk[], background: string): Chunk[] {
-  if (!background) return chunks;
+function paint(chunks: Chunk[], background: string, padding: BoxPadding | null = null): Chunk[] {
+  if (!background && !padding) return chunks;
   const painted: Chunk[] = [];
   let blocks: EmailBlock[] = [];
   function flush() {
     if (blocks.length === 0) return;
+    const section = createSection("1", {
+      background,
+      columns: [{ id: uid("col"), width: 100, blocks }],
+    });
     painted.push({
       kind: "section",
-      section: createSection("1", {
-        background,
-        columns: [{ id: uid("col"), width: 100, blocks }],
-      }),
+      section: padding ? withPadding(section, padding, false) : section,
     });
     blocks = [];
   }
@@ -523,7 +603,12 @@ function paint(chunks: Chunk[], background: string): Chunk[] {
     }
     flush();
     if (!chunk.section.background) chunk.section.background = background;
-    painted.push(chunk);
+    painted.push({
+      kind: "section",
+      section: padding
+        ? withPadding(chunk.section, padding, sectionHasCustomPadding(chunk.section))
+        : chunk.section,
+    });
   }
   flush();
   return painted;
@@ -564,7 +649,7 @@ function chunksFromNodes(nodes: ImportNode[], ctx: WalkCtx, depth: number): Chun
 function chunksFromNode(node: ImportNode, ctx: WalkCtx, depth: number): Chunk[] {
   if (depth > 40) return htmlChunk(node);
   if (isIgnorable(node, ctx) || isWhitespaceText(node)) return [];
-  const next: WalkCtx = { ...ctx, align: alignOf(node, ctx.align) };
+  const next: WalkCtx = { ...ctx, align: textAlignContext(node, ctx.align) };
 
   if (node.tag === "img") {
     const block = imageBlock(node, "", next);
@@ -588,7 +673,9 @@ function chunksFromNode(node: ImportNode, ctx: WalkCtx, depth: number): Chunk[] 
   if (node.tag === "table") return tableChunks(node, next, depth + 1);
   if (WRAPPER_TAGS.has(node.tag)) {
     const inner = chunksFromNodes(node.children, next, depth + 1);
-    if (node.tag === "td" || node.tag === "th") return paint(inner, solidBackground(node));
+    if (node.tag === "td" || node.tag === "th") {
+      return paint(inner, solidBackground(node), centresTheCard(node) ? null : boxPadding(node));
+    }
     return inner;
   }
   if (isTextLike(node)) {
@@ -618,7 +705,7 @@ function tableChunks(table: ImportNode, ctx: WalkCtx, depth: number): Chunk[] {
         blocks: blocksOnly(
           chunksFromNode(
             cell,
-            { ...ctx, align: alignOf(cell, ctx.align), columnShare: widths[index] },
+            { ...ctx, align: textAlignContext(cell, ctx.align), columnShare: widths[index] },
             depth
           )
         ),
@@ -641,7 +728,7 @@ function tableChunks(table: ImportNode, ctx: WalkCtx, depth: number): Chunk[] {
     }
     for (const cell of cells) {
       chunks.push(
-        ...chunksFromNode(cell, { ...ctx, align: alignOf(cell, ctx.align) }, depth)
+        ...chunksFromNode(cell, { ...ctx, align: textAlignContext(cell, ctx.align) }, depth)
       );
     }
   }
@@ -664,8 +751,12 @@ function chunksToSections(chunks: Chunk[]): EmailSection[] {
   let blocks: EmailBlock[] = [];
   function flush() {
     if (blocks.length === 0) return;
+    const accent = blocks.length === 1 && blocks[0].type === "divider";
     sections.push(
       createSection("1", {
+        ...(accent
+          ? { paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0 }
+          : {}),
         columns: [{ id: uid("col"), width: 100, blocks }],
       })
     );

@@ -794,7 +794,11 @@ function BlockView({
           <img
             src={src}
             alt={block.alt}
-            className="inline-block h-auto max-w-full"
+            className={
+              block.type === "image" && block.widthPercent >= 100
+                ? "block h-auto max-w-full"
+                : "inline-block h-auto max-w-full"
+            }
             style={{ width: frame }}
           />
         ) : (
@@ -1047,7 +1051,7 @@ function BlockView({
         ...style,
         fontFamily: design.styles.fontFamily,
         fontSize: 15,
-        lineHeight: 1.5,
+        lineHeight: "22px",
         color: design.styles.textColor,
       }}
       dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(block.html) || "<p>HTML block</p>" }}

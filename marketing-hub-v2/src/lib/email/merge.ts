@@ -163,7 +163,7 @@ function escapeFooterLabel(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const VIEW_IN_BROWSER_LINK = `<p style="margin:0 0 16px;padding:0;font-family:Arial,sans-serif;font-size:12px;line-height:1.4;text-align:center;"><a href="{{view_in_browser_url}}" style="color:#007DC5;text-decoration:underline;">View this email in your browser</a></p>`;
+const VIEW_IN_BROWSER_LINK = `<p style="margin:0 0 16px;mso-margin-top-alt:0px;mso-margin-bottom-alt:16px;padding:0;font-family:Arial,sans-serif;font-size:12px;line-height:17px;mso-line-height-rule:exactly;text-align:center;"><a href="{{view_in_browser_url}}" style="color:#007DC5;text-decoration:underline;">View this email in your browser</a></p>`;
 
 /** Place the browser preview above the email card. */
 export function ensureViewInBrowserLink(html: string): string {

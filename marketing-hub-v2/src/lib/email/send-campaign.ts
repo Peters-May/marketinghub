@@ -417,6 +417,18 @@ export async function sendEmailCampaign(
   return finishCampaignSend(campaignId, claim, errors);
 }
 
+/** Build the message from the saved design, not from HTML the browser already compiled. */
+export async function htmlForSavedCampaign(campaignId: string): Promise<string | null> {
+  const latest = await getEmailCampaign(campaignId);
+  if (!latest) return null;
+  const design = resolveEmailDesign(latest.design, latest.html_body || "");
+  const footerLinks = footerLinksFromEmailSettings(await getEmailSettings());
+  return compileEmailDesign(design, {
+    footerLinks,
+    previewText: latest.preview_text,
+  });
+}
+
 /** One copy to the signed-in sender. Does not change the campaign. */
 export async function sendTestEmail(input: {
   to: string;

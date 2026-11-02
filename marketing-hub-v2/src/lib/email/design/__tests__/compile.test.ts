@@ -48,6 +48,43 @@ describe("email design compiler", () => {
     expect(html).toContain("Read the update");
     expect(html).not.toContain("display:inline-block;background:");
 
+    const guidance = compileEmailDesign({
+      version: 1,
+      styles: newsletterDesign().styles,
+      sections: [
+        createSection("1", {
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [
+            {
+              id: "c1",
+              width: 100,
+              blocks: [
+                createBlock("button", {
+                  label: "Read HMRC's guidance",
+                  fontSize: 16,
+                  paddingX: 22,
+                  paddingY: 14,
+                  background: COLORS.pmBlue.hex,
+                  color: "#FFFFFF",
+                }),
+              ],
+            },
+          ],
+        }),
+      ],
+    });
+    const shape = /v:roundrect[^>]*style="height:(\d+)px;v-text-anchor:middle;width:(\d+)px;"/.exec(
+      guidance
+    );
+    expect(shape).toBeTruthy();
+    expect(Number(shape?.[1])).toBeGreaterThanOrEqual(48);
+    expect(Number(shape?.[2])).toBeGreaterThanOrEqual(240);
+    expect(guidance).toContain("line-height:20px");
+
     const linked = normalizeEmailDesign({
       version: 1,
       styles: newsletterDesign().styles,
@@ -89,6 +126,17 @@ describe("email design compiler", () => {
     expect(withLink).not.toContain("color:inherit");
   });
 
+  it("turns schedule rules into cells so Outlook does not add paragraph gaps", () => {
+    const html = sanitizeHtmlBlock(
+      '<hr style="border:none;border-top:1px solid #e41c23;margin:8px 0;"><hr style="border:none;border-top:1px solid #ddd;margin:30px 0;">'
+    );
+    expect(html).not.toContain("<hr");
+    expect(html.match(/<table/g)).toHaveLength(1);
+    expect(html).toContain("border-top:1px solid #e41c23");
+    expect(html.match(/height="8"/g)).toHaveLength(1);
+    expect(html.match(/height="30"/g)).toHaveLength(2);
+  });
+
   it("keeps paragraph alignment when a text block is compiled", () => {
     const design = normalizeEmailDesign({
       version: 1,
@@ -127,8 +175,13 @@ describe("email design compiler", () => {
     });
     expect(design).not.toBeNull();
     const html = compileEmailDesign(design!);
-    expect(html).toContain('<p style="text-align:center;margin:0 0 12px;">Centred line</p>');
-    expect(html).toContain('<p style="margin:0 0 12px;">Left line</p>');
+    expect(html).toContain(
+      '<p style="text-align:center;margin:0px 0 12px;mso-margin-top-alt:0px;mso-margin-bottom-alt:12px;">Centred line</p>'
+    );
+    expect(html).toContain(
+      '<p style="margin:0px 0 12px;mso-margin-top-alt:0px;mso-margin-bottom-alt:12px;">Left line</p>'
+    );
+    expect(html).toContain("h1, h2, h3, p, ul, ol, li { margin: 0 !important; }");
   });
 
   it("hides preview text, including a name variable, above the email", () => {

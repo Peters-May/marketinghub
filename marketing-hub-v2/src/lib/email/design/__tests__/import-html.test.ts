@@ -157,6 +157,34 @@ describe("paste HTML import", () => {
       href: "https://www.gov.uk/guidance/example",
       background: "#007DC5",
       color: "#FFFFFF",
+      paddingX: 26,
+      paddingY: 13,
+    });
+  });
+
+  it("keeps copy left when the page cell is only centred, and keeps that cell's padding", () => {
+    const sections = sectionsFromImportNodes(
+      parseFixture(`
+        <table width="100%"><tr>
+          <td align="center" style="padding:24px 12px;">
+            <table width="600"><tr>
+              <td style="padding:36px 40px 8px 40px;"><h1>HMRC revises the rates</h1></td>
+            </tr></table>
+          </td>
+        </tr></table>
+      `)
+    );
+    const heading = blocksOf(sections).find((block) => block.type === "heading");
+    expect(heading).toMatchObject({
+      type: "heading",
+      align: "left",
+      paddingTop: 0,
+      paddingBottom: 0,
+    });
+    expect(sections.find((section) => section.paddingTop === 36)).toMatchObject({
+      paddingRight: 40,
+      paddingBottom: 8,
+      paddingLeft: 40,
     });
   });
 
