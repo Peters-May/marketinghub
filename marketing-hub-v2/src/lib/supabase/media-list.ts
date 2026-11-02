@@ -137,11 +137,12 @@ export function categoryFromShareKey(subfolder: string): string | null {
   const raw = subfolder.trim();
   if (!raw.toLowerCase().startsWith(CATEGORY_SHARE_PREFIX)) return null;
   const name = raw.slice(CATEGORY_SHARE_PREFIX.length).trim();
-  if (!name || name.includes(":") || name.length > 80) return null;
+  if (!name || name.length > 80) return null;
+  if (/[:/\\]/.test(name) || /[\u0000-\u001f]/.test(name)) return null;
   const match = MEDIA_HUB_CATEGORIES.find(
     (category) => category.toLowerCase() === name.toLowerCase()
   );
-  return match ?? null;
+  return match ?? name;
 }
 
 export type ShareViewer = {

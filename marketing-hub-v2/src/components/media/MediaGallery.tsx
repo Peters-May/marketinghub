@@ -1285,8 +1285,11 @@ export function MediaGallery({
     }
   }
 
-  async function setCategoryShare(category: string, enabled: boolean) {
-    if (!allowManage || shareSaving) return;
+  async function setCategoryShare(
+    category: string,
+    enabled: boolean
+  ): Promise<string | null> {
+    if (!allowManage || shareSaving) return null;
     setShareSaving(category);
     try {
       const res = await fetch("/api/media", {
@@ -1298,20 +1301,28 @@ export function MediaGallery({
           enabled,
         }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        share?: { share_token?: string };
+      };
       if (!res.ok) throw new Error(json.error || "Could not update share link");
       await load();
+      return json.share?.share_token ?? null;
     } catch (e) {
       window.alert(
         e instanceof Error ? e.message : "Could not update share link"
       );
+      return null;
     } finally {
       setShareSaving(null);
     }
   }
 
-  async function setFolderShare(folderName: string, enabled: boolean) {
-    if (!allowManage || shareSaving) return;
+  async function setFolderShare(
+    folderName: string,
+    enabled: boolean
+  ): Promise<string | null> {
+    if (!allowManage || shareSaving) return null;
     setShareSaving(folderName);
     try {
       const res = await fetch("/api/media", {
@@ -1323,16 +1334,53 @@ export function MediaGallery({
           enabled,
         }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        share?: { share_token?: string };
+      };
       if (!res.ok) throw new Error(json.error || "Could not update share link");
       await load();
+      return json.share?.share_token ?? null;
     } catch (e) {
       window.alert(
         e instanceof Error ? e.message : "Could not update share link"
       );
+      return null;
     } finally {
       setShareSaving(null);
     }
+  }
+
+  async function shareNamedCategory(category: string) {
+    const canonical = categoryFromShareKey(categoryShareKey(category));
+    if (!canonical) return;
+    const existing = folderShareByName.get(categoryShareKey(canonical));
+    const token =
+      existing?.enabled && existing.share_token
+        ? existing.share_token
+        : await setCategoryShare(canonical, true);
+    if (!token) {
+      if (!allowManage) {
+        window.alert("An admin needs to turn on sharing for this category.");
+      }
+      return;
+    }
+    await copyShareLink(canonical, token);
+  }
+
+  async function shareNamedFolder(folderName: string) {
+    const folder = gallerySubfolders.find((sf) => sf.name === folderName);
+    const token =
+      folder?.shareEnabled && folder.shareToken
+        ? folder.shareToken
+        : await setFolderShare(folderName, true);
+    if (!token) {
+      if (!allowManage) {
+        window.alert("An admin needs to turn on sharing for this folder.");
+      }
+      return;
+    }
+    await copyShareLink(folderName, token);
   }
 
   async function handleMediaDownload(url: string, filename: string) {
@@ -1924,14 +1972,19 @@ export function MediaGallery({
             className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
             data-tour="media-categories"
           >
-            {collections.map((col) => (
-              <button
+            {collections.map((col) => {
+              const shareName = categoryFromShareKey(categoryShareKey(col.name));
+              return (
+              <div
                 key={col.name}
-                type="button"
                 data-tour={mediaCategoryTourId(col.name)}
-                onClick={() => openCollection(col.name)}
                 className="group overflow-hidden rounded-2xl border border-border bg-white text-left shadow-soft transition hover:-translate-y-0.5 hover:shadow-md"
               >
+                <button
+                  type="button"
+                  onClick={() => openCollection(col.name)}
+                  className="block w-full text-left"
+                >
                 <div className="relative aspect-[4/3] overflow-hidden bg-[#f0f2f3]">
                   <FolderCoverMedia
                     previews={col.previews}
@@ -1951,8 +2004,24 @@ export function MediaGallery({
                     </p>
                   </div>
                 </div>
-              </button>
-            ))}
+                </button>
+                {isInternal && shareName ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-1.5 border-t border-border px-3 py-2 text-xs font-medium text-brand transition hover:bg-sand/60"
+                    onClick={() => void shareNamedCategory(shareName)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    {shareSaving === shareName
+                      ? "…"
+                      : copiedFolder === shareName
+                        ? "Copied"
+                        : "Share"}
+                  </button>
+                ) : null}
+              </div>
+              );
+            })}
           </div>
           {collections.length === 0 ? (
             <EmptyState
@@ -2095,21 +2164,25 @@ export function MediaGallery({
                             ? "Link on"
                             : "Link share"}
                       </button>
-                      {sf.shareEnabled ? (
-                        <button
-                          type="button"
-                          className="flex flex-1 items-center justify-center gap-1.5 border-l border-border px-2 py-2 text-xs font-medium text-brand transition hover:bg-sand/60"
-                          onClick={() =>
-                            copyShareLink(sf.name, sf.shareToken)
-                          }
-                        >
-                          {copiedFolder === sf.name
-                            ? "Copied"
-                            : "Copy link"}
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="flex flex-1 items-center justify-center gap-1.5 border-l border-border px-2 py-2 text-xs font-medium text-brand transition hover:bg-sand/60"
+                        onClick={() => void shareNamedFolder(sf.name)}
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        {copiedFolder === sf.name ? "Copied" : "Share"}
+                      </button>
                     </div>
                   </div>
+                ) : isInternal ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-1.5 border-t border-border px-2 py-2 text-xs font-medium text-brand transition hover:bg-sand/60"
+                    onClick={() => void shareNamedFolder(sf.name)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    {copiedFolder === sf.name ? "Copied" : "Share"}
+                  </button>
                 ) : null}
               </div>
             ))}
@@ -2198,26 +2271,18 @@ export function MediaGallery({
                           : "Link share"}
                     </button>
                   ) : null}
-                  {categoryShare?.enabled ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
-                      onClick={() =>
-                        void copyShareLink(
-                          categoryShareName,
-                          categoryShare.share_token
-                        )
-                      }
-                    >
-                      <Link2 className="h-3.5 w-3.5" />
-                      {copiedFolder === categoryShareName ? "Copied" : "Share"}
-                    </button>
-                  ) : allowManage ? (
-                    <p className="text-xs text-muted">
-                      Turn on Link share, then copy the link. Public files stay
-                      open. Internal files ask staff to sign in.
-                    </p>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
+                    onClick={() => void shareNamedCategory(categoryShareName)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    {shareSaving === categoryShareName
+                      ? "…"
+                      : copiedFolder === categoryShareName
+                        ? "Copied"
+                        : "Share"}
+                  </button>
                 </div>
               ) : null}
               {allowManage && inGallery && activeSubfolder ? (
@@ -2282,25 +2347,28 @@ export function MediaGallery({
                               ? "Link on"
                               : "Link share"}
                         </button>
-                        {current.shareEnabled ? (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
-                            onClick={() =>
-                              copyShareLink(
-                                activeSubfolder,
-                                current.shareToken
-                              )
-                            }
-                          >
-                            {copiedFolder === activeSubfolder
-                              ? "Copied"
-                              : "Copy link"}
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
+                          onClick={() => void shareNamedFolder(activeSubfolder)}
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                          {copiedFolder === activeSubfolder ? "Copied" : "Share"}
+                        </button>
                       </>
                     );
                   })()}
+                </div>
+              ) : isInternal && inGallery && activeSubfolder ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
+                    onClick={() => void shareNamedFolder(activeSubfolder)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    {copiedFolder === activeSubfolder ? "Copied" : "Share"}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -2318,21 +2386,29 @@ export function MediaGallery({
                   key={photo.id}
                   className="group relative mb-2 break-inside-avoid overflow-hidden rounded-lg bg-[#f0f2f3] lg:mb-3"
                 >
-                  {isInternal && categoryShare?.enabled && categoryShareName && !inGallery ? (
+                  {isInternal && (categoryShareName || activeSubfolder) ? (
                     <button
                       type="button"
                       className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md bg-white/95 px-2 py-1 text-[10px] font-semibold text-brand shadow-sm hover:bg-white"
                       aria-label={`Share ${photo.itemName || photo.name}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        void copyShareLink(
-                          categoryShareName,
-                          categoryShare.share_token
-                        );
+                        if (inGallery && activeSubfolder) {
+                          void shareNamedFolder(activeSubfolder);
+                          return;
+                        }
+                        if (categoryShareName) {
+                          void shareNamedCategory(categoryShareName);
+                        }
                       }}
                     >
                       <Link2 className="h-3 w-3" />
-                      {copiedFolder === categoryShareName ? "Copied" : "Share"}
+                      {copiedFolder ===
+                      (inGallery && activeSubfolder
+                        ? activeSubfolder
+                        : categoryShareName)
+                        ? "Copied"
+                        : "Share"}
                     </button>
                   ) : null}
                   {allowManage ? (
@@ -2501,20 +2577,28 @@ export function MediaGallery({
                       </div>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      {isInternal && categoryShare?.enabled && categoryShareName ? (
+                      {isInternal && (categoryShareName || activeSubfolder) ? (
                         <button
                           type="button"
                           className="btn-secondary px-2.5 py-1.5 text-xs"
-                          aria-label={`Share ${item.name || "template"}`}
-                          onClick={() =>
-                            void copyShareLink(
-                              categoryShareName,
-                              categoryShare.share_token
-                            )
-                          }
+                          aria-label={`Share ${item.name || "file"}`}
+                          onClick={() => {
+                            if (inGallery && activeSubfolder) {
+                              void shareNamedFolder(activeSubfolder);
+                              return;
+                            }
+                            if (categoryShareName) {
+                              void shareNamedCategory(categoryShareName);
+                            }
+                          }}
                         >
                           <Link2 className="h-3.5 w-3.5" />
-                          {copiedFolder === categoryShareName ? "Copied" : "Share"}
+                          {copiedFolder ===
+                          (inGallery && activeSubfolder
+                            ? activeSubfolder
+                            : categoryShareName)
+                            ? "Copied"
+                            : "Share"}
                         </button>
                       ) : null}
                       {isInternal ? (

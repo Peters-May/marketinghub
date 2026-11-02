@@ -176,12 +176,61 @@ describe("email design compiler", () => {
     expect(design).not.toBeNull();
     const html = compileEmailDesign(design!);
     expect(html).toContain(
-      '<p style="text-align:center;margin:0px 0 12px;mso-margin-top-alt:0px;mso-margin-bottom-alt:12px;">Centred line</p>'
+      '<p style="text-align:center;margin:0;line-height:23px;mso-line-height-rule:exactly;">Centred line</p>'
     );
     expect(html).toContain(
-      '<p style="margin:0px 0 12px;mso-margin-top-alt:0px;mso-margin-bottom-alt:12px;">Left line</p>'
+      '<p style="margin:0;line-height:23px;mso-line-height-rule:exactly;">Left line</p>'
     );
+    expect(html.match(/height="12"/g)?.length).toBeGreaterThanOrEqual(2);
     expect(html).toContain("h1, h2, h3, p, ul, ol, li { margin: 0 !important; }");
+  });
+
+  it("collapses the gap between a paragraph and a heading the way the canvas does", () => {
+    const design = normalizeEmailDesign({
+      version: 1,
+      styles: newsletterDesign().styles,
+      sections: [
+        {
+          id: "s1",
+          background: "",
+          paddingTop: 0,
+          paddingRight: 0,
+          paddingBottom: 0,
+          paddingLeft: 0,
+          columnGap: 0,
+          columns: [
+            {
+              id: "c1",
+              width: 100,
+              blocks: [
+                {
+                  id: "t1",
+                  type: "text",
+                  html: "<p>Before</p><h2>What has changed?</h2><p>After</p>",
+                  color: "#23496d",
+                  fontSize: 16,
+                  align: "left",
+                  paddingTop: 0,
+                  paddingRight: 0,
+                  paddingBottom: 0,
+                  paddingLeft: 0,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const html = compileEmailDesign(design!);
+    const before = html.indexOf(">Before</p>");
+    const heading = html.indexOf(">What has changed?</h2>");
+    const after = html.indexOf(">After</p>");
+    const betweenHeading = html.slice(before, heading);
+    const betweenAfter = html.slice(heading, after);
+    expect(betweenHeading.match(/height="12"/g)).toHaveLength(1);
+    expect(betweenHeading).not.toContain('height="6"');
+    expect(betweenAfter.match(/height="6"/g)).toHaveLength(1);
+    expect(betweenAfter).not.toContain('height="12"');
   });
 
   it("hides preview text, including a name variable, above the email", () => {

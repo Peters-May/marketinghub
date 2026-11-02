@@ -147,13 +147,59 @@ function outlookGap(top: number, bottom: number): string {
   return `margin:${top}px 0 ${bottom}px;mso-margin-top-alt:${top}px;mso-margin-bottom-alt:${bottom}px;`;
 }
 
+/** A cell height survives in Word. Paragraph margins do not. */
+function gapTable(px: number): string {
+  if (px <= 0) return "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td height="${px}" style="height:${px}px;font-size:${px}px;line-height:${px}px;mso-line-height-rule:exactly;">&nbsp;</td></tr></table>`;
+}
+
+/**
+ * The canvas collapses adjacent paragraph and heading margins.
+ * Emit one spacer of the larger gap so Outlook matches that collapse.
+ */
+function spaceRichBlocks(html: string): string {
+  const re = /<(p|h2|ul|ol)\b[^>]*>[\s\S]*?<\/\1>/gi;
+  const parts: { type: string; html: string }[] = [];
+  let last = 0;
+  for (const match of html.matchAll(re)) {
+    const index = match.index ?? 0;
+    if (index > last) parts.push({ type: "raw", html: html.slice(last, index) });
+    parts.push({ type: match[1].toLowerCase(), html: match[0] });
+    last = index + match[0].length;
+  }
+  if (last < html.length) parts.push({ type: "raw", html: html.slice(last) });
+  let pending = 0;
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part.type === "raw") {
+      out.push(part.html);
+      continue;
+    }
+    const top = part.type === "h2" ? 12 : 0;
+    const bottom = part.type === "h2" ? 6 : 12;
+    const between = Math.max(pending, top);
+    if (between > 0) out.push(gapTable(between));
+    out.push(part.html);
+    pending = bottom;
+  }
+  if (pending > 0) out.push(gapTable(pending));
+  return out.join("");
+}
+
 /** Paragraph spacing shared with the canvas and the selected editor. */
 function emailRichHtml(html: string, linkColor?: string, fontSize = 16): string {
   const safe = sanitizeRichEmailHtml(html, linkColor);
+  const line = Math.round(fontSize * 1.5);
   const heading = Math.max(12, Math.round(fontSize * 1.15));
-  return withBlockStyle(withBlockStyle(safe, "p", outlookGap(0, 12)), "h2", `${outlookGap(12, 6)}font-size:${heading}px;line-height:${Math.round(heading * 1.3)}px;mso-line-height-rule:exactly;`)
-    .replace(/<ul>/g, `<ul style="${outlookGap(0, 12)}padding-left:20px;">`)
-    .replace(/<ol>/g, `<ol style="${outlookGap(0, 12)}padding-left:20px;">`);
+  const headingLine = Math.round(heading * 1.3);
+  const styled = withBlockStyle(
+    withBlockStyle(safe, "p", `margin:0;line-height:${line}px;mso-line-height-rule:exactly;`),
+    "h2",
+    `margin:0;font-size:${heading}px;line-height:${headingLine}px;mso-line-height-rule:exactly;`
+  )
+    .replace(/<ul>/g, `<ul style="margin:0;padding-left:20px;">`)
+    .replace(/<ol>/g, `<ol style="margin:0;padding-left:20px;">`);
+  return spaceRichBlocks(styled);
 }
 
 /**
@@ -301,6 +347,11 @@ function alignStyle(align: EmailBlock["align"]): string {
   return `text-align:${align};`;
 }
 
+/** Word keeps padding on a cell. It drops padding on a heading or a div. */
+function paddedCell(inner: string, block: EmailBlock): string {
+  return `<table ${PRESENTATION} width="100%" style="border-collapse:collapse;"><tr><td style="${paddingStyle(block)}${alignStyle(block.align)}">${inner}</td></tr></table>`;
+}
+
 const PRESENTATION =
   'role="presentation" cellpadding="0" cellspacing="0" border="0"';
 
@@ -406,11 +457,17 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
       const level = block.level === 2 || block.level === 3 ? block.level : 1;
       const tag = `h${level}`;
       const line = Math.round(block.fontSize * 1.2);
-      return `<${tag} style="${outlookGap(0, 0)}${pad}${align}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:${line}px;mso-line-height-rule:exactly;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`;
+      return paddedCell(
+        `<${tag} style="${outlookGap(0, 0)}font-family:${styles.headingFontFamily};font-size:${block.fontSize}px;line-height:${line}px;mso-line-height-rule:exactly;font-weight:600;color:${escapeAttr(block.color || styles.textColor)};">${escapeHtml(block.text)}</${tag}>`,
+        block
+      );
     }
     case "text":
       const line = Math.round(block.fontSize * 1.5);
-      return `<div style="margin:0;${pad}${align}font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:${line}px;mso-line-height-rule:exactly;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html, styles.linkColor, block.fontSize)}</div>`;
+      return paddedCell(
+        `<div style="margin:0;font-family:${styles.fontFamily};font-size:${block.fontSize}px;line-height:${line}px;color:${escapeAttr(block.color || styles.textColor)};">${emailRichHtml(block.html, styles.linkColor, block.fontSize)}</div>`,
+        block
+      );
     case "image": {
       const src = emailImageSrc(block.src, true);
       if (!src) {
@@ -541,7 +598,7 @@ function renderBlock(block: EmailBlock, design: EmailDesign, columnPx: number): 
             contentWidth: styles.contentWidth,
           })}</div>`
         : "";
-      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="${outlookGap(0, 8)}font-family:${styles.headingFontFamily};font-size:22px;line-height:28px;mso-line-height-rule:exactly;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:22px;mso-line-height-rule:exactly;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml, styles.linkColor, 15)}</div>${cta}</div>`;
+      return `<div style="${pad}${align}border:1px solid #E3E6E9;padding:16px;">${image}<h2 style="${outlookGap(0, 8)}font-family:${styles.headingFontFamily};font-size:22px;line-height:28px;mso-line-height-rule:exactly;color:${escapeAttr(styles.textColor)};">${escapeHtml(block.title)}</h2><div style="font-family:${styles.fontFamily};font-size:15px;line-height:22px;color:${escapeAttr(styles.textColor)};">${emailRichHtml(block.bodyHtml, styles.linkColor, 15)}</div>${cta}</div>`;
     }
     default:
       return "";

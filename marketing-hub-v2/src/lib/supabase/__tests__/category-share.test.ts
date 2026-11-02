@@ -20,12 +20,14 @@ describe("category share keys", () => {
     expect(categoryFromShareKey("category:Templates")).toBe(TEMPLATES_CATEGORY);
     expect(categoryFromShareKey("category:documents")).toBe("Documents");
     expect(categoryFromShareKey("category:logos")).toBe("Logos");
+    expect(categoryFromShareKey("category:QR Codes")).toBe("QR Codes");
   });
 
   it("does not treat gallery folders as a category share", () => {
     expect(categoryFromShareKey("Headshots")).toBeNull();
     expect(categoryFromShareKey("category:")).toBeNull();
     expect(categoryFromShareKey("")).toBeNull();
+    expect(categoryFromShareKey("category:bad/name")).toBeNull();
   });
 });
 
