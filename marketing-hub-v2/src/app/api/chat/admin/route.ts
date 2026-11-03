@@ -16,7 +16,6 @@ import {
   updateChatSession,
 } from "@/lib/chat/data";
 import { generateAssistantReply } from "@/lib/chat/rag";
-import { emailVisitorStaffReply } from "@/lib/chat/notify";
 import { syncClosedChatSessionToPortal } from "@/lib/chat/lead";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import type { ChatSessionStatus } from "@/lib/types";
@@ -222,14 +221,8 @@ export async function POST(request: Request) {
           assignee_email: gate.user.email ?? "",
         });
       }
-      const visitorEmail = session.visitor_email.trim();
-      if (visitorEmail) {
-        void emailVisitorStaffReply({
-          to: visitorEmail,
-          reply: text,
-          authorName,
-        });
-      }
+      // Do not email the visitor on live replies. When the chat ends, they get
+      // a branded transcript they can reply to by email.
       return jsonOk({ message: msg });
     }
 

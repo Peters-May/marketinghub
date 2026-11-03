@@ -10,7 +10,7 @@ Fin-style simple chatbot: WordPress plugin UI, Hub owns AI / KB / inbox / leads.
 | `CHAT_CORS_ORIGINS` | Optional CSV of origins (default: petersandmay.com + localhost) |
 | `CHAT_NOTIFY_EMAIL` | Optional fallback notify address |
 | `OPENAI_API_KEY` / `AI_GATEWAY_API_KEY` | Model access |
-| `RESEND_API_KEY` | Handoff / lead notification emails |
+| `RESEND_API_KEY` | Staff handoff/lead alerts; visitor closed-chat email (Reply-To team) |
 
 ## Database
 
@@ -31,6 +31,12 @@ Tables: `chat_settings`, `chat_kb_documents`, `chat_sessions`, `chat_messages`
 - Staff API: `/api/chat/admin`
 
 Leads upsert `web_enquiries` with `submission_id = chat:<sessionId>` and Portal mirror via existing sync. The Portal payload always includes the full chat transcript (`form_fields.Message`, `make_fields.chat_transcript`, `raw_payload.transcript`).
+
+### Email behaviour
+
+- **Staff alerts** (waiting / lead): branded Hub email with who, where, what, recent visitor lines, and inbox CTA. Not sent to the visitor.
+- **Live staff replies** while the chat is open: no visitor email (they see the widget).
+- **When the chat ends** (visitor or staff close) and an email is known: visitor gets a branded transcript with **Reply-To** set to the assignee / notify inbox so they can continue by email.
 
 ## Website knowledge
 
