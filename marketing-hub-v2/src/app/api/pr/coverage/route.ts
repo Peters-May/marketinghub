@@ -11,15 +11,23 @@ import {
   parseDomainAuthority,
   parseOptionalMetric,
 } from "@/lib/pr/coverage-channel";
-import type { PrCoverage } from "@/lib/types";
+import type { PrCoverage, PrCoverageSentiment } from "@/lib/types";
 
-function coverageFieldsFromBody(body: Record<string, unknown>) {
+function asSentiment(value: unknown): PrCoverageSentiment {
+  return value === "positive" || value === "neutral" || value === "negative"
+    ? value
+    : "";
+}
+
+function coverageFieldsFromBody(
+  body: Record<string, unknown>
+): Omit<PrCoverage, "id" | "created_at" | "updated_at"> {
   return {
     title: String(body.title ?? "Untitled clip").trim() || "Untitled clip",
     url: String(body.url ?? ""),
     outlet: String(body.outlet ?? ""),
     published_at: (body.published_at as string | null) || null,
-    sentiment: (body.sentiment as PrCoverage["sentiment"]) || "",
+    sentiment: asSentiment(body.sentiment),
     notes: String(body.notes ?? ""),
     channel: normalizePrCoverageChannel(body.channel),
     screenshot_url: String(body.screenshot_url ?? "").trim(),

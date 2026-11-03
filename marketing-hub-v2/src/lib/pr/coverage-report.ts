@@ -176,15 +176,21 @@ export function groupCoverageReportItemsByChannel(
   );
 }
 
+function formatCompact(value: number, suffix: string): string {
+  const rounded = Number(value.toFixed(1));
+  const label = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1);
+  return `${label}${suffix}`;
+}
+
 export function formatCoverageMetric(value: number | null): string {
   if (value === null) return "—";
   if (value >= 1_000_000) {
-    const m = value / 1_000_000;
-    return `${m >= 10 ? Math.round(m) : Number(m.toFixed(1))}M`;
+    return formatCompact(value / 1_000_000, "M");
   }
   if (value >= 1_000) {
-    const k = value / 1_000;
-    return `${k >= 10 ? Math.round(k) : Number(k.toFixed(1))}K`;
+    return formatCompact(value / 1_000, "K");
   }
   return String(Math.round(value));
 }

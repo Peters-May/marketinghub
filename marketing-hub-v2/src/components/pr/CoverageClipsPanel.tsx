@@ -323,13 +323,14 @@ export function CoverageClipsPanel({
           <button
             type="button"
             disabled={coverage.length === 0}
-            onClick={() =>
+            onClick={() => {
+              const day = new Date().toISOString().slice(0, 10);
               downloadTextFile(
-                "coverage.csv",
-                coverageToCsv(coverage),
+                `coverage-${day}.csv`,
+                `\uFEFF${coverageToCsv(coverage)}`,
                 "text/csv;charset=utf-8"
-              )
-            }
+              );
+            }}
             className="rounded-lg bg-mist px-3 py-1.5 text-sm text-brand disabled:opacity-50"
           >
             Export coverage

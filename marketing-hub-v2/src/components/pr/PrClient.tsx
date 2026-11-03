@@ -9,7 +9,6 @@ import type {
   MediaList,
   NewsroomSettings,
   PrCoverage,
-  PrCoverageSentiment,
   PrMonitorMention,
   PrMonitorQuery,
   PrMonitorSettings,
@@ -19,15 +18,17 @@ import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
-import { coverageToCsv } from "@/lib/pr/coverage-csv";
-import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
+import { isPressContact } from "@/lib/pr/pitch-eml";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
 import { PitchesPanel } from "@/components/pr/PitchesPanel";
 import { isPitchTabCampaign } from "@/lib/email/category";
 import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
 import { MonitoringPanel } from "@/components/pr/MonitoringPanel";
+import { CoverageClipsPanel } from "@/components/pr/CoverageClipsPanel";
+import { CoverageReportsPanel } from "@/components/pr/CoverageReportsPanel";
 import { DEFAULT_MONITOR_SETTINGS } from "@/lib/pr/monitor-settings";
+import type { PrCoverageReport } from "@/lib/types";
 
 export type PrSection =
   | "contacts"
@@ -37,6 +38,8 @@ export type PrSection =
   | "emails"
   | "pitches"
   | "coverage"
+  | "reports"
+  | "reporting"
   | "monitor"
   | "monitoring"
   | "newsroom";
@@ -47,6 +50,7 @@ type TabId =
   | "releases"
   | "pitches"
   | "coverage"
+  | "reports"
   | "monitor"
   | "newsroom";
 
@@ -56,6 +60,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "releases", label: "Releases" },
   { id: "pitches", label: "Pitches" },
   { id: "coverage", label: "Coverage" },
+  { id: "reports", label: "Reports" },
   { id: "monitor", label: "Monitoring" },
   { id: "newsroom", label: "Newsroom" },
 ];
@@ -66,6 +71,7 @@ const TAB_PATH: Record<TabId, string> = {
   releases: "/app/pr/releases",
   pitches: "/app/pr/pitches",
   coverage: "/app/pr/coverage",
+  reports: "/app/pr/reports",
   monitor: "/app/pr/monitoring",
   newsroom: "/app/pr/newsroom",
 };
@@ -91,6 +97,9 @@ function sectionToTab(section?: PrSection | null): TabId {
       return "pitches";
     case "coverage":
       return "coverage";
+    case "reports":
+    case "reporting":
+      return "reports";
     case "monitor":
     case "monitoring":
       return "monitor";
@@ -106,6 +115,7 @@ type Props = {
   initialLists: MediaList[];
   initialPitches: PrPitch[];
   initialCoverage: PrCoverage[];
+  initialCoverageReports?: PrCoverageReport[];
   initialContent: ContentItem[];
   initialCampaigns: EmailCampaign[];
   initialQueries: PrMonitorQuery[];
@@ -118,15 +128,6 @@ type Props = {
   prefillContentId?: string | null;
   openNewRelease?: boolean;
 };
-
-function exportCoverageCsv(rows: PrCoverage[]) {
-  const day = new Date().toISOString().slice(0, 10);
-  downloadTextFile(
-    `coverage-${day}.csv`,
-    `\uFEFF${coverageToCsv(rows)}`,
-    "text/csv;charset=utf-8"
-  );
-}
 
 function isPressRelease(c: ContentItem): boolean {
   const type = (c.content_type || "").toLowerCase();
@@ -145,6 +146,7 @@ export function PrClient({
   initialLists,
   initialPitches,
   initialCoverage,
+  initialCoverageReports = [],
   initialContent,
   initialCampaigns,
   initialQueries,
@@ -224,15 +226,6 @@ export function PrClient({
   });
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [listMemberSearch, setListMemberSearch] = useState("");
-
-  const [clipForm, setClipForm] = useState({
-    title: "",
-    url: "",
-    outlet: "",
-    published_at: "",
-    notes: "",
-    sentiment: "" as PrCoverageSentiment,
-  });
 
   const refreshAll = useCallback(async () => {
     try {
@@ -499,52 +492,6 @@ export function PrClient({
       }
     });
     await memberChain.current;
-  }
-
-  async function createClip() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/pr/coverage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...clipForm,
-          published_at: clipForm.published_at || null,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not log the clip");
-      setClipForm({
-        title: "",
-        url: "",
-        outlet: "",
-        published_at: "",
-        notes: "",
-        sentiment: "",
-      });
-      await refreshAll();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not log the clip");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateCoverageSentiment(
-    id: string,
-    sentiment: PrCoverageSentiment
-  ) {
-    const res = await fetch("/api/pr/coverage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update", id, patch: { sentiment } }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setMessage(data.error || "Could not update sentiment");
-      return;
-    }
-    await refreshAll();
   }
 
   async function saveNewsroom() {
@@ -972,127 +919,23 @@ export function PrClient({
       ) : null}
 
       {tab === "coverage" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="surface-card space-y-3 p-4">
-            <h2 className="font-display text-lg text-brand">Log coverage</h2>
-            {(
-              [
-                ["title", "Title"],
-                ["url", "URL"],
-                ["outlet", "Outlet"],
-                ["published_at", "Published date"],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="block text-sm">
-                <span className="text-muted">{label}</span>
-                <input
-                  type={key === "published_at" ? "date" : "text"}
-                  className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                  value={clipForm[key]}
-                  onChange={(e) =>
-                    setClipForm((f) => ({ ...f, [key]: e.target.value }))
-                  }
-                />
-              </label>
-            ))}
-            <label className="block text-sm">
-              <span className="text-muted">Sentiment</span>
-              <select
-                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
-                value={clipForm.sentiment}
-                onChange={(e) =>
-                  setClipForm((f) => ({
-                    ...f,
-                    sentiment: e.target.value as PrCoverageSentiment,
-                  }))
-                }
-              >
-                <option value="">Unset</option>
-                <option value="positive">Positive</option>
-                <option value="neutral">Neutral</option>
-                <option value="negative">Negative</option>
-              </select>
-            </label>
-            <textarea
-              className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-              aria-label="Coverage notes"
-              placeholder="Notes"
-              value={clipForm.notes}
-              onChange={(e) =>
-                setClipForm((f) => ({ ...f, notes: e.target.value }))
-              }
-            />
-            <button
-              type="button"
-              disabled={busy || !clipForm.title.trim()}
-              onClick={() => void createClip()}
-              className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Save clip
-            </button>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <button
-                type="button"
-                disabled={coverage.length === 0}
-                onClick={() => exportCoverageCsv(coverage)}
-                className="rounded-lg bg-mist px-3 py-1.5 text-sm text-brand disabled:opacity-50"
-              >
-                Export coverage
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {coverage.length === 0 ? (
-                <EmptyState
-                  title="No coverage yet"
-                  description="Log clippings manually or promote items from Monitoring."
-                />
-              ) : (
-                coverage.map((c) => (
-                  <li key={c.id} className="surface-card p-4 text-sm">
-                    <div className="font-medium text-brand">{c.title}</div>
-                    <div className="text-muted">
-                      {c.outlet}
-                      {c.published_at
-                        ? ` · ${c.published_at.slice(0, 10)}`
-                        : ""}
-                      {c.sentiment ? ` · ${c.sentiment}` : ""}
-                    </div>
-                    {c.url ? (
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-accent underline"
-                      >
-                        Open article
-                      </a>
-                    ) : null}
-                    <label className="mt-2 block text-xs text-muted">
-                      Sentiment
-                      <select
-                        className="mt-1 block w-full max-w-xs rounded-md border border-brand/15 px-2 py-1 text-sm text-brand"
-                        value={c.sentiment}
-                        onChange={(e) =>
-                          void updateCoverageSentiment(
-                            c.id,
-                            e.target.value as PrCoverageSentiment
-                          )
-                        }
-                      >
-                        <option value="">Unset</option>
-                        <option value="positive">Positive</option>
-                        <option value="neutral">Neutral</option>
-                        <option value="negative">Negative</option>
-                      </select>
-                    </label>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        </div>
+        <CoverageClipsPanel
+          coverage={coverage}
+          busy={busy}
+          onBusy={setBusy}
+          onMessage={setMessage}
+          onRefresh={refreshAll}
+        />
+      ) : null}
+
+      {tab === "reports" ? (
+        <CoverageReportsPanel
+          coverage={coverage}
+          initialReports={initialCoverageReports}
+          busy={busy}
+          onBusy={setBusy}
+          onMessage={setMessage}
+        />
       ) : null}
 
       {tab === "monitor" ? (

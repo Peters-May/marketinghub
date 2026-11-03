@@ -8,6 +8,7 @@ import {
   listEmailCampaigns,
   listMediaLists,
   listPrCoverage,
+  listPrCoverageReports,
   listPrMonitorMentions,
   listPrMonitorQueries,
   listPrPitches,
@@ -26,6 +27,8 @@ const SECTIONS = new Set<PrSection>([
   "emails",
   "pitches",
   "coverage",
+  "reports",
+  "reporting",
   "monitor",
   "monitoring",
   "newsroom",
@@ -45,8 +48,11 @@ export default async function PrSectionPage({
   }
 
   const { section: raw } = await params;
-  if (raw === "reporting" || raw === "statistics") {
+  if (raw === "statistics") {
     redirect("/app/pr/releases");
+  }
+  if (raw === "reporting") {
+    redirect("/app/pr/reports");
   }
   const section = raw as PrSection;
   if (!SECTIONS.has(section)) notFound();
@@ -59,6 +65,7 @@ export default async function PrSectionPage({
     mediaLists,
     pitches,
     coverage,
+    coverageReports,
     content,
     campaigns,
     queries,
@@ -71,6 +78,7 @@ export default async function PrSectionPage({
     listMediaLists(),
     listPrPitches(),
     listPrCoverage(),
+    listPrCoverageReports(),
     listContent(),
     listEmailCampaigns(),
     listPrMonitorQueries(),
@@ -86,6 +94,7 @@ export default async function PrSectionPage({
       initialLists={mediaLists}
       initialPitches={pitches}
       initialCoverage={coverage}
+      initialCoverageReports={coverageReports}
       initialContent={content}
       initialCampaigns={campaigns}
       initialQueries={queries}
