@@ -10,6 +10,12 @@ const TAGGED = /\[\[choices:\s*([^\]]+?)\]\]/gi;
 const OPEN_FIELD =
   /\b(name|e-?mail|company|length|loa|beam|height|weight|displacement|value|destination|port|dimension|phone|address|timeframe)\b/i;
 
+const DEFAULT_ROUTE_CHOICES = [
+  "Yacht transport",
+  "Freight or cargo",
+  "Something else",
+];
+
 export function extractReplyChoices(raw: string): {
   body: string;
   choices: string[];
@@ -56,7 +62,17 @@ function uniqueChoices(parts: string[]): string[] {
 }
 
 function inferChoices(body: string): string[] {
-  if (!body || body.length > 700) return [];
+  if (!body || body.length > 900) return [];
+
+  // Model often asks the route question without [[choices:]] — still show buttons.
+  if (looksLikeRouteClassification(body)) {
+    return [...DEFAULT_ROUTE_CHOICES];
+  }
+
+  if (looksLikeModeQuestion(body)) {
+    return ["Air", "Sea", "Road", "Not sure"];
+  }
+
   const question = body.match(/([^.!?\n]{8,220}\?)\s*$/);
   if (!question) return [];
   const sentence = question[1];
@@ -92,4 +108,38 @@ function inferChoices(body: string): string[] {
 
   if (parts.some((part) => part && OPEN_FIELD.test(part))) return [];
   return uniqueChoices(parts);
+}
+
+/** Vague “what are you shipping?” style — offer yacht / freight chips. */
+function looksLikeRouteClassification(body: string): boolean {
+  const t = body.toLowerCase();
+  if (OPEN_FIELD.test(t) && !/something else/.test(t)) {
+    // Asking for name/email/dimensions is not a route picker.
+    if (
+      /\b(name|e-?mail|length|beam|weight|value|cradle)\b/i.test(t) &&
+      !/\byacht\b.*\bfreight\b|\bfreight\b.*\byacht\b/i.test(t)
+    ) {
+      return false;
+    }
+  }
+  return (
+    /what are you looking to (ship|move|transport)/i.test(t) ||
+    /what (?:would you like|do you (?:want|need)) to (ship|move|transport)/i.test(
+      t
+    ) ||
+    /looking to (?:ship|move|transport).{0,40}from where to where/i.test(t) ||
+    /yacht.{0,40}freight|freight.{0,40}yacht/i.test(t) ||
+    /what (?:kind of )?(?:enquiry|shipment|move) is this/i.test(t) ||
+    /what can we help you with/i.test(t)
+  );
+}
+
+function looksLikeModeQuestion(body: string): boolean {
+  const t = body.toLowerCase();
+  if (!/\b(air|sea|road)\b/.test(t)) return false;
+  return (
+    /\b(air|sea|road).{0,30}\bor\b.{0,30}(air|sea|road)/i.test(t) ||
+    /prefer(?:red)? (?:mode|method|transport).{0,40}\?/i.test(t) ||
+    /by air.{0,20}by sea|air freight or sea/i.test(t)
+  );
 }

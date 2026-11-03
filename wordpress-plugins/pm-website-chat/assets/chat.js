@@ -399,7 +399,24 @@
   }
 
   function inferChoiceLabels(body) {
-    if (!body || body.length > 700) return [];
+    if (!body || body.length > 900) return [];
+    var lower = String(body).toLowerCase();
+    // Match Hub fallback: vague “what are you shipping?” still gets route chips.
+    if (
+      /what are you looking to (ship|move|transport)/i.test(lower) ||
+      /looking to (?:ship|move|transport).{0,40}from where to where/i.test(
+        lower
+      ) ||
+      /yacht.{0,40}freight|freight.{0,40}yacht/i.test(lower) ||
+      /what can we help you with/i.test(lower)
+    ) {
+      if (
+        !/\b(name|e-?mail|length|beam|weight|value|cradle)\b/i.test(lower) ||
+        /\byacht\b.*\bfreight\b|\bfreight\b.*\byacht\b/i.test(lower)
+      ) {
+        return ["Yacht transport", "Freight or cargo", "Something else"];
+      }
+    }
     var question = body.match(/([^.!?\n]{8,220}\?)\s*$/);
     if (!question) return [];
     var sentence = question[1];

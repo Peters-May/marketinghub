@@ -32,4 +32,15 @@ describe("extractReplyChoices", () => {
     expect(result.choices).toEqual([]);
     expect(result.body).toContain("Where is the yacht now");
   });
+
+  it("adds yacht/freight chips when the model asks what they want to ship", () => {
+    const result = extractReplyChoices(
+      "Thank you for your interest in a quote. Could you please let me know what you are looking to ship, and from where to where?"
+    );
+    expect(result.choices).toEqual([
+      "Yacht transport",
+      "Freight or cargo",
+      "Something else",
+    ]);
+  });
 });
