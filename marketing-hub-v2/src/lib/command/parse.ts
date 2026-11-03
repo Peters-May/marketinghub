@@ -12,6 +12,7 @@ export const COMMAND_EXAMPLES = [
   "Update event Monaco Yacht Show location Port Hercules",
   'Link post "Monaco stand setup" to event "Monaco Yacht Show"',
   "Add a public presentation ARC 2026 Seminar https://canva.link/arc",
+  "Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings ZRH–DUS–ZRH",
 ];
 
 export type CommandVerb = "Add" | "Update" | "Link";
@@ -114,6 +115,16 @@ export type HubCommand = CommandBase &
         title: string;
         url: string;
         visibility: "public" | "internal";
+      }
+    | {
+        kind: "create_event_cost";
+        event_query: string;
+        category: "travel" | "accommodation" | "marketing_materials" | "other";
+        amount: number | null;
+        currency: "GBP" | "EUR" | "USD" | "AUD";
+        staff_name: string;
+        description: string;
+        notes: string;
       }
   );
 
@@ -1168,6 +1179,166 @@ function presentationTitleFromUrl(url: string): string {
   }
 }
 
+type CostCurrency = "GBP" | "EUR" | "USD" | "AUD";
+type CostCategory = "travel" | "accommodation" | "marketing_materials" | "other";
+
+function currencyFromToken(token: string): CostCurrency | null {
+  const value = token.trim().toUpperCase();
+  if (value === "€" || value === "EUR") return "EUR";
+  if (value === "£" || value === "GBP") return "GBP";
+  if (value === "$" || value === "USD") return "USD";
+  if (value === "AUD") return "AUD";
+  return null;
+}
+
+function categoryFromToken(token: string): CostCategory | null {
+  const value = token.trim().toLowerCase().replace(/\s+/g, " ");
+  if (value === "travel") return "travel";
+  if (value === "accommodation" || value === "hotel") return "accommodation";
+  if (
+    value === "materials" ||
+    value === "marketing materials" ||
+    value === "marketing_materials"
+  ) {
+    return "marketing_materials";
+  }
+  if (value === "other") return "other";
+  return null;
+}
+
+function takeCostMoney(rest: string): {
+  amount: number;
+  currency: CostCurrency;
+  before: string;
+} | null {
+  const patterns: Array<{
+    re: RegExp;
+    currency: (match: RegExpMatchArray) => CostCurrency | null;
+    amountIndex: number;
+  }> = [
+    {
+      re: /(€|£|\$)\s*(\d{1,7}(?:,\d{3})*(?:\.\d{1,2})?)/i,
+      currency: (match) => currencyFromToken(match[1]),
+      amountIndex: 2,
+    },
+    {
+      re: /(\d{1,7}(?:,\d{3})*(?:\.\d{1,2})?)\s*(€|£|\$|EUR|GBP|USD|AUD)\b/i,
+      currency: (match) => currencyFromToken(match[2]),
+      amountIndex: 1,
+    },
+    {
+      re: /\b(EUR|GBP|USD|AUD)\s+(\d{1,7}(?:,\d{3})*(?:\.\d{1,2})?)/i,
+      currency: (match) => currencyFromToken(match[1]),
+      amountIndex: 2,
+    },
+  ];
+  for (const pattern of patterns) {
+    const match = rest.match(pattern.re);
+    if (!match || match.index == null) continue;
+    const currency = pattern.currency(match);
+    const amount = Number(String(match[pattern.amountIndex]).replace(/,/g, ""));
+    if (!currency || !Number.isFinite(amount) || amount < 0) continue;
+    return {
+      amount: Math.round(amount * 100) / 100,
+      currency,
+      before: rest.slice(0, match.index).trim(),
+    };
+  }
+  return null;
+}
+
+/**
+ * Add a line on an event costs sheet.
+ * Example: Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings flights notes times
+ */
+function parseEventCostCommand(text: string): ParseResult | null {
+  const match = text.match(
+    /^(?:add|create|new)\s+(?:an?\s+)?(?:event\s+)?cost\s+to\s+(?:(?:the\s+)?event\s+)?(.+)$/i
+  );
+  if (!match) return null;
+
+  let rest = match[1].trim();
+  let notes = "";
+  const notesMatch = rest.match(/\bnotes\b\s+(.+)$/i);
+  if (notesMatch && notesMatch.index != null) {
+    notes = notesMatch[1].trim();
+    rest = rest.slice(0, notesMatch.index).trim();
+  }
+
+  let description = "";
+  const descriptionMatch = rest.match(/\bdescription\b\s+(.+)$/i);
+  if (descriptionMatch && descriptionMatch.index != null) {
+    description = descriptionMatch[1].trim();
+    rest = rest.slice(0, descriptionMatch.index).trim();
+  }
+
+  let staffName = "";
+  const forMatch = rest.match(/\bfor\b\s+(.+)$/i);
+  if (forMatch && forMatch.index != null) {
+    staffName = forMatch[1].trim().replace(/^["“”']+|["“”']+$/g, "");
+    rest = rest.slice(0, forMatch.index).trim();
+  }
+
+  const money = takeCostMoney(rest);
+  if (!money) {
+    return fail(
+      "Include the amount and currency. For example: Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings flights"
+    );
+  }
+
+  let eventQuery = money.before;
+  let category: CostCategory = "travel";
+  const categoryMatch = eventQuery.match(
+    /^(.*?)\s+(travel|accommodation|hotel|materials|marketing\s+materials|other)$/i
+  );
+  if (categoryMatch) {
+    const taken = categoryFromToken(categoryMatch[2]);
+    if (taken) {
+      category = taken;
+      eventQuery = categoryMatch[1].trim();
+    }
+  }
+  eventQuery = unquoteTitle(eventQuery);
+  if (!eventQuery) {
+    return fail(
+      'Name the event. For example: Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings flights'
+    );
+  }
+  if (!staffName) {
+    return fail(
+      "Name the person the cost belongs to after for. For example: … for Jesper Jensen description Eurowings flights"
+    );
+  }
+  if (!description) {
+    description = category === "travel" ? "Travel" : category.replace(/_/g, " ");
+  }
+
+  const amountLabel =
+    money.currency === "EUR"
+      ? `€${money.amount}`
+      : money.currency === "GBP"
+        ? `£${money.amount}`
+        : `${money.currency} ${money.amount}`;
+
+  return {
+    ok: true,
+    command: {
+      kind: "create_event_cost",
+      event_query: eventQuery,
+      category,
+      amount: money.amount,
+      currency: money.currency,
+      staff_name: staffName,
+      description,
+      notes,
+      summary: `Add ${amountLabel} ${category.replace(/_/g, " ")} cost for ${staffName} on “${eventQuery}”.`,
+      verb: "Add",
+      href: "/app/events",
+      area: "events",
+    },
+  };
+}
+
 /** Add a Canva or other link to the Presentations library. */
 function parsePresentationCommand(text: string): ParseResult | null {
   const match = text.match(
@@ -1217,6 +1388,11 @@ function parsePresentationCommand(text: string): ParseResult | null {
 
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
+  const cost = parseEventCostCommand(text);
+  if (cost) {
+    if (!cost.ok) return cost;
+    return { ok: true, command: { ...cost.command, source: text } };
+  }
   const presentation = parsePresentationCommand(text);
   if (presentation) {
     if (!presentation.ok) return presentation;

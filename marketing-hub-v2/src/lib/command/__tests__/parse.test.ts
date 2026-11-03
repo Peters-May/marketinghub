@@ -367,6 +367,34 @@ Add an event METS in November 2027 attending FF, Racing, Kristina
     expect(shanghai.ends_at).toBe("2027-03-30");
   });
 
+  it("adds an event cost line with euro amount and person", () => {
+    const parsed = command(
+      "Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings ZRH–DUS–ZRH (EW9761 / EW9764) notes 26 Jan 08:40 ZRH→DUS; 28 Jan 19:00 DUS→ZRH"
+    );
+    expect(parsed.kind).toBe("create_event_cost");
+    if (parsed.kind !== "create_event_cost") return;
+    expect(parsed.event_query).toBe("Boot Dusseldorf");
+    expect(parsed.category).toBe("travel");
+    expect(parsed.amount).toBe(208.99);
+    expect(parsed.currency).toBe("EUR");
+    expect(parsed.staff_name).toBe("Jesper Jensen");
+    expect(parsed.description).toBe("Eurowings ZRH–DUS–ZRH (EW9761 / EW9764)");
+    expect(parsed.notes).toBe("26 Jan 08:40 ZRH→DUS; 28 Jan 19:00 DUS→ZRH");
+    expect(parsed.summary).toContain("€208.99");
+  });
+
+  it("adds an airport transport cost with EUR after the amount", () => {
+    const parsed = command(
+      "Add cost to event Boot Dusseldorf travel 40 EUR for Jesper Jensen description Airport transport notes estimate"
+    );
+    expect(parsed.kind).toBe("create_event_cost");
+    if (parsed.kind !== "create_event_cost") return;
+    expect(parsed.amount).toBe(40);
+    expect(parsed.currency).toBe("EUR");
+    expect(parsed.description).toBe("Airport transport");
+    expect(parsed.notes).toBe("estimate");
+  });
+
   it("adds a public presentation from a title and link", () => {
     const parsed = command(
       "Add a public presentation Peters & May ARC 2026 Seminar (5 min) https://canva.link/arc"

@@ -25,7 +25,9 @@ import {
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
 import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
-import { loadOwnerDirectory } from "@/lib/identity/owners";
+import { costsSheetPath, formatCostAmount } from "@/lib/events/costs";
+import { saveEventCostLine } from "@/lib/events/costs-data";
+import { loadOwnerDirectory, matchOwnerUserId } from "@/lib/identity/owners";
 import type { OwnerDirectoryEntry } from "@/lib/identity/owner-match";
 import {
   pushContentToPlanable,
@@ -60,7 +62,8 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "link_content" ||
     kind === "mark_events_we_are_attending" ||
     kind === "create_marketing_list" ||
-    kind === "create_presentation"
+    kind === "create_presentation" ||
+    kind === "create_event_cost"
   );
 }
 
@@ -275,6 +278,46 @@ export async function executeHubCommand(
       ok: true,
       message,
       href: command.href,
+      area: command.area,
+    };
+  }
+
+  if (command.kind === "create_event_cost") {
+    const found = matchByTitle(await listEvents(), command.event_query);
+    if (found.kind === "none") {
+      return { ok: false, message: `No event matches “${command.event_query}”.` };
+    }
+    if (found.kind === "many") {
+      return {
+        ok: false,
+        message: `Several events match “${command.event_query}”: ${describeMatches(found.items)}. Use the full title.`,
+      };
+    }
+    const owners = await loadOwnerDirectory();
+    const staffUserId = matchOwnerUserId(command.staff_name, owners);
+    const staffName =
+      (staffUserId
+        ? owners.find((person) => person.id === staffUserId)?.full_name
+        : null) || command.staff_name;
+    const line = await saveEventCostLine({
+      event_id: found.item.id,
+      category: command.category,
+      description: command.description,
+      amount: command.amount,
+      currency: command.currency,
+      staff_user_id: staffUserId,
+      staff_name: staffName,
+      notes: command.notes,
+    });
+    if (!line) return { ok: false, message: "That cost line could not be saved." };
+    const amountLabel =
+      line.amount == null
+        ? "a blank amount"
+        : formatCostAmount(line.amount, line.currency);
+    return {
+      ok: true,
+      message: `Added ${amountLabel} ${line.category.replace(/_/g, " ")} for ${staffName} on “${found.item.title}”.`,
+      href: costsSheetPath(found.item.id),
       area: command.area,
     };
   }
