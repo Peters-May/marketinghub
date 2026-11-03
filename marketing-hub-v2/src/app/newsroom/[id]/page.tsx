@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { NewsroomReleaseFrame } from "@/components/pr/NewsroomReleaseFrame";
-import { getNewsroomSettings, getPublishedPressRelease } from "@/lib/data/repos";
+import {
+  getNewsroomSettings,
+  getPublishedPressRelease,
+  listPublishedPressReleases,
+} from "@/lib/data/repos";
 import { releasePageMetadata } from "@/lib/pr/release-metadata";
 import {
   safeReleaseUrl,
@@ -27,9 +31,10 @@ export default async function NewsroomReleasePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [settings, release] = await Promise.all([
+  const [settings, release, published] = await Promise.all([
     getNewsroomSettings(),
     getPublishedPressRelease(id),
+    listPublishedPressReleases(),
   ]);
   if (!release) notFound();
   const document = seedReleaseDocument(release.pr_document, release.notes);
@@ -38,5 +43,9 @@ export default async function NewsroomReleasePage({
     if (target) redirect(target);
   }
 
-  return <NewsroomReleaseFrame settings={settings} release={release} />;
+  const related = published.filter((r) => r.id !== release.id).slice(0, 3);
+
+  return (
+    <NewsroomReleaseFrame settings={settings} release={release} related={related} />
+  );
 }

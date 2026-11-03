@@ -8,7 +8,7 @@ import { isVideoUrl } from "@/lib/social/platforms";
 import type { ReleaseAttachment, ReleaseBlock, ReleasePerson } from "@/lib/types";
 
 function column(className = "") {
-  return `mx-auto max-w-3xl ${className}`.trim();
+  return `max-w-[68ch] ${className}`.trim();
 }
 
 function PersonCards({
@@ -21,10 +21,10 @@ function PersonCards({
   if (!people.length) return null;
   return (
     <section className={column()}>
-      <h2 className="font-display text-lg text-brand">{title}</h2>
+      <h2 className="font-display text-lg text-[#0B2545]">{title}</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {people.map((person, index) => (
-          <div key={`${person.email}-${index}`} className="rounded-lg border border-brand/10 p-3 text-sm">
+          <div key={`${person.email}-${index}`} className="border-t border-[#E3E6E9] pt-3 text-sm">
             <p className="font-medium text-brand">{person.name}</p>
             {[person.role, person.organisation].filter(Boolean).length ? (
               <p className="text-muted">
@@ -49,13 +49,13 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
     case "text":
       return isRichTextEmpty(block.html) ? null : (
         <div className={column()}>
-          <RichTextView html={block.html} className="text-base leading-relaxed" />
+          <RichTextView html={block.html} className="text-[1.0625rem] leading-[1.75] text-[#1B2B3D]" />
         </div>
       );
     case "lead":
       return isRichTextEmpty(block.html) ? null : (
         <div className={column()}>
-          <RichTextView html={block.html} className="text-lg leading-relaxed text-brand/85" />
+          <RichTextView html={block.html} className="text-xl leading-relaxed text-[#0B2545]" />
         </div>
       );
     case "annotation":
@@ -66,11 +66,11 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
       );
     case "header":
       return block.text ? (
-        <h2 className={`${column()} font-display text-2xl text-brand`}>{block.text}</h2>
+        <h2 className={`${column()} pt-4 font-display text-2xl text-[#0B2545]`}>{block.text}</h2>
       ) : null;
     case "subheader":
       return block.text ? (
-        <h3 className={`${column()} font-display text-xl text-brand`}>{block.text}</h3>
+        <h3 className={`${column()} pt-2 font-display text-xl text-[#0B2545]`}>{block.text}</h3>
       ) : null;
     case "ul":
       return block.items.length ? (
@@ -91,10 +91,12 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
     case "quote":
       if (!block.text && !block.attribution) return null;
       return (
-        <blockquote className={`${column()} border-l-4 border-accent pl-4`}>
-          {block.text ? <p className="text-lg italic text-brand">{block.text}</p> : null}
+        <blockquote className={`${column()} border-l-2 border-[#007DC5] py-1 pl-6`}>
+          {block.text ? (
+            <p className="font-display text-2xl leading-snug text-[#0B2545]">{block.text}</p>
+          ) : null}
           {block.attribution ? (
-            <p className="mt-2 text-sm text-muted">{block.attribution}</p>
+            <p className="mt-3 text-sm text-[#4D5C6A]">{block.attribution}</p>
           ) : null}
         </blockquote>
       );
@@ -129,7 +131,7 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
           <img
             src={block.src}
             alt={block.alt}
-            className={wide ? "max-h-[36rem] w-full rounded-xl object-cover" : "max-h-[28rem] w-full rounded-xl object-cover"}
+            className={wide ? "max-h-[36rem] w-full rounded-sm object-cover" : "max-h-[28rem] w-full rounded-sm object-cover"}
           />
           {block.caption ? (
             <figcaption className="mt-2 text-sm text-muted">{block.caption}</figcaption>
@@ -152,7 +154,7 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
       }
       return (
         <video
-          className="max-h-[36rem] w-full rounded-xl bg-black"
+          className="max-h-[36rem] w-full rounded-sm bg-black"
           controls
           src={block.src}
           poster={block.poster || undefined}
@@ -164,7 +166,7 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
         <p className={column()}>
           <a
             href={block.href}
-            className="inline-flex rounded-lg bg-brand px-4 py-2 text-sm text-white"
+            className="inline-flex rounded-sm bg-[#0B2545] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#1B3A5B]"
           >
             {block.label}
           </a>
@@ -177,6 +179,31 @@ function ReleaseBlockView({ block }: { block: ReleaseBlock }) {
     default:
       return null;
   }
+}
+
+/** Release body only: blocks, or the legacy rich-text body. */
+export function ReleaseBody({
+  body,
+  blocks = [],
+}: {
+  body?: string;
+  blocks?: ReleaseBlock[];
+}) {
+  if (blocks.length) {
+    return (
+      <div className="space-y-6">
+        {blocks.map((block) => (
+          <ReleaseBlockView key={block.id} block={block} />
+        ))}
+      </div>
+    );
+  }
+  if (isRichTextEmpty(body)) return null;
+  return (
+    <div className={column()}>
+      <RichTextView html={body} className="text-[1.0625rem] leading-[1.75] text-[#1B2B3D]" />
+    </div>
+  );
 }
 
 export function ReleaseArticle({
@@ -250,7 +277,7 @@ export function ReleaseArticle({
           <img
             src={image}
             alt=""
-            className="mt-6 max-h-[28rem] w-full rounded-xl object-cover"
+            className="mt-6 max-h-[28rem] w-full rounded-sm object-cover"
           />
         ) : null}
       </header>
