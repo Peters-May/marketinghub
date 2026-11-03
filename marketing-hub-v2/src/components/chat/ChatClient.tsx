@@ -1427,125 +1427,175 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       ) : null}
 
       {tab === "test" ? (
-        <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-xl border border-[#e3e6e9] bg-white shadow-[0_12px_32px_rgba(29,30,31,0.14)]">
-          <div className="flex items-start justify-between gap-2 bg-[#0B2545] px-4 py-3 text-white">
-            <div>
+        <div className="grid max-w-5xl gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="overflow-hidden rounded-xl border border-[#e3e6e9] bg-white shadow-[0_12px_32px_rgba(29,30,31,0.14)]">
+            <div className="bg-[#0B2545] px-4 py-3 text-white">
               <div className="font-semibold">How can we help?</div>
-              <div className="text-xs text-white/80">Test · not a live visitor</div>
+              <div className="text-xs text-white/80">
+                Test · same session until Start over
+              </div>
             </div>
-            <button
-              type="button"
-              className="shrink-0 rounded-md border border-white/30 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
-              onClick={() => {
-                setTestLog([]);
-                setTestSessionId("");
-                setTestInput("");
-                setError("");
-              }}
-            >
-              New chat
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 border-b border-[#e3e6e9] px-3 py-2">
-            {[
-              "Is there a sailing for Fort Lauderdale?",
-              "I need to ship a yacht",
-              "Where are your offices?",
-            ].map((q) => (
-              <button
-                key={q}
-                type="button"
-                className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-left text-sm font-semibold text-[#005f97]"
-                onClick={() => void runTest(q)}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-          <div className="flex min-h-[320px] flex-col gap-3 bg-white p-3">
-            {testLog.length === 0 ? (
-              <p className="text-sm text-[#5b6472]">Ask a test question…</p>
-            ) : (
-              testLog.map((m, i) => (
-                <div
-                  key={`${i}-${m.role}`}
-                  className={cn(
-                    "flex max-w-[85%] flex-col gap-1",
-                    m.role === "visitor" ? "ml-auto items-end" : "mr-auto items-start"
-                  )}
-                >
-                  <div className="text-xs text-[#5b6472]">
-                    {m.role === "visitor" ? "You" : "Peters & May assistant"}
-                  </div>
-                  <div
-                    className={cn(
-                      "rounded-xl px-3 py-2 text-base",
-                      m.role === "visitor"
-                        ? "bg-[#0B2545] text-white"
-                        : "bg-[#f4f6f7] text-[#1f2937]"
-                    )}
-                  >
-                    {stripChoiceTag(m.body)}
-                  </div>
-                  {m.role === "assistant" && m.choices && m.choices.length > 1 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {m.choices.map((choice) => (
-                        <button
-                          key={choice}
-                          type="button"
-                          className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-sm font-semibold text-[#005f97]"
-                          onClick={() => void runTest(choice)}
-                        >
-                          {choice}
-                        </button>
-                      ))}
+            <div className="flex min-h-[360px] flex-col gap-3 bg-white p-3">
+              {testLog.length === 0 ? (
+                <p className="text-sm text-[#5b6472]">
+                  Ask as a visitor — choice buttons appear when the reply offers
+                  them.
+                </p>
+              ) : (
+                testLog.map((m, i) => {
+                  const isLastAssistant =
+                    m.role === "assistant" &&
+                    !testLog.slice(i + 1).some((x) => x.role === "assistant");
+                  const showChoices =
+                    isLastAssistant &&
+                    Array.isArray(m.choices) &&
+                    m.choices.length > 1;
+                  return (
+                    <div
+                      key={`${i}-${m.role}`}
+                      className={cn(
+                        "flex max-w-[85%] flex-col gap-1",
+                        m.role === "visitor"
+                          ? "ml-auto items-end"
+                          : "mr-auto items-start"
+                      )}
+                    >
+                      <div className="text-xs text-[#5b6472]">
+                        {m.role === "visitor"
+                          ? "You"
+                          : "Peters & May assistant"}
+                      </div>
+                      <div
+                        className={cn(
+                          "rounded-xl px-3 py-2 text-base",
+                          m.role === "visitor"
+                            ? "bg-[#0B2545] text-white"
+                            : "bg-[#f4f6f7] text-[#1f2937]"
+                        )}
+                      >
+                        {stripChoiceTag(m.body)}
+                      </div>
+                      {showChoices ? (
+                        <div className="flex w-full flex-col gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {m.choices!.map((choice) => (
+                              <button
+                                key={choice}
+                                type="button"
+                                className="rounded-md border border-[#c7ccd1] bg-white px-3 py-2 text-sm font-semibold text-[#005f97]"
+                                onClick={() => void runTest(choice)}
+                              >
+                                {choice}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-[#5b6472]">
+                            Or type your own answer below.
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              ))
-            )}
+                  );
+                })
+              )}
+            </div>
+            <div className="flex gap-2 border-t border-[#e3e6e9] p-3">
+              <input
+                className="field min-h-11 flex-1 text-base"
+                value={testInput}
+                onChange={(e) => setTestInput(e.target.value)}
+                placeholder="Type your message…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void runTest();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void runTest()}
+                className="btn-primary min-h-11 min-w-11 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2 border-t border-[#e3e6e9] p-3">
-            <input
-              className="field min-h-11 flex-1 text-base"
-              value={testInput}
-              onChange={(e) => setTestInput(e.target.value)}
-              placeholder="Message…"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void runTest();
-                }
-              }}
-            />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void runTest()}
-              className="btn-primary min-h-11 min-w-11 disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2 border-t border-[#e3e6e9] px-3 py-2">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setTestLog([]);
-                setTestSessionId("");
-              }}
-            >
-              Start over
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setTestUseDraft((v) => !v)}
-            >
-              {testUseDraft ? "Using unsaved guidance" : "Use unsaved guidance"}
-            </button>
-          </div>
+
+          <aside className="space-y-4">
+            <section className="rounded-xl border border-[#e3e6e9] bg-white p-4">
+              <h2 className="text-base font-semibold text-[#0B2545]">
+                Try it as a visitor
+              </h2>
+              <p className="mt-1 text-sm text-[#5b6472]">
+                One session until you start over. Choice chips match the website
+                widget.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    setTestLog([]);
+                    setTestSessionId("");
+                    setTestInput("");
+                    setError("");
+                  }}
+                >
+                  Start over
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "btn-ghost",
+                    testUseDraft && "border border-[#007DC5] text-[#007DC5]"
+                  )}
+                  onClick={() => setTestUseDraft((v) => !v)}
+                >
+                  {testUseDraft
+                    ? "Using unsaved guidance"
+                    : "Use unsaved guidance"}
+                </button>
+              </div>
+            </section>
+            <section className="rounded-xl border border-[#e3e6e9] bg-white p-4">
+              <h2 className="text-base font-semibold text-[#0B2545]">
+                Checks to run after each change
+              </h2>
+              <ul className="mt-3 space-y-3 text-sm text-[#1f2937]">
+                {[
+                  {
+                    q: "I need to move a motor yacht to Palma",
+                    expect: "Choice chips for trailer / water / ashore",
+                  },
+                  {
+                    q: "How much to ship a 15m sailing yacht to Antigua?",
+                    expect: "Never quotes a price — asks gaps or offers a call",
+                  },
+                  {
+                    q: "I need a freight forwarder for a laptop China to London by air",
+                    expect: "Forwarding team, not Commercial Marine",
+                  },
+                  {
+                    q: "Is there a sailing for Fort Lauderdale?",
+                    expect: "Published schedule plus other-options caveat",
+                  },
+                ].map((item) => (
+                  <li key={item.q} className="space-y-1">
+                    <button
+                      type="button"
+                      className="text-left font-semibold text-[#005f97] hover:underline"
+                      onClick={() => void runTest(item.q)}
+                    >
+                      {item.q}
+                    </button>
+                    <div className="text-xs text-[#5b6472]">{item.expect}</div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </aside>
         </div>
       ) : null}
 
