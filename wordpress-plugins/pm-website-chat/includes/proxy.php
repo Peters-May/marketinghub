@@ -38,39 +38,22 @@ function pm_website_chat_proxy_hub($request) {
         );
     }
 
-    // Light rate limit per IP (transient) to reduce public proxy abuse.
-    $ip = isset($_SERVER['REMOTE_ADDR'])
-        ? sanitize_text_field(wp_unslash((string) $_SERVER['REMOTE_ADDR']))
-        : 'unknown';
-    $rate_key = 'pm_chat_rl_' . md5($ip);
-    $hits = (int) get_transient($rate_key);
-    if ($hits >= 60) {
-        return new WP_Error(
-            'pm_chat_rate_limited',
-            'Too many chat requests. Please try again shortly.',
-            ['status' => 429]
-        );
-    }
-    set_transient($rate_key, $hits + 1, 60);
-
-    $referer = isset($_SERVER['HTTP_REFERER'])
-        ? (string) wp_unslash($_SERVER['HTTP_REFERER'])
-        : '';
-    $home_host = wp_parse_url(home_url(), PHP_URL_HOST);
-    $ref_host = $referer !== '' ? wp_parse_url($referer, PHP_URL_HOST) : '';
-    if (
-        is_string($home_host) &&
-        $home_host !== '' &&
-        is_string($ref_host) &&
-        $ref_host !== '' &&
-        strcasecmp($home_host, $ref_host) !== 0
-    ) {
-        // Allow empty referer (some browsers / privacy tools); block clear cross-site.
-        return new WP_Error(
-            'pm_chat_bad_origin',
-            'Chat requests must come from this site.',
-            ['status' => 403]
-        );
+    // Rate-limit POSTs only — GET polling must not exhaust the budget.
+    $method_early = strtoupper($request->get_method());
+    if ($method_early === 'POST') {
+        $ip = isset($_SERVER['REMOTE_ADDR'])
+            ? sanitize_text_field(wp_unslash((string) $_SERVER['REMOTE_ADDR']))
+            : 'unknown';
+        $rate_key = 'pm_chat_rl_' . md5($ip);
+        $hits = (int) get_transient($rate_key);
+        if ($hits >= 120) {
+            return new WP_Error(
+                'pm_chat_rate_limited',
+                'Too many chat requests. Please try again shortly.',
+                ['status' => 429]
+            );
+        }
+        set_transient($rate_key, $hits + 1, 60);
     }
 
     $path = (string) $request['path'];

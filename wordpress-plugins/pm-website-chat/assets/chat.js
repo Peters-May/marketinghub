@@ -1425,11 +1425,20 @@
         .catch(function () {});
     }
     pollOnce();
-    pollTimer = setInterval(pollOnce, 1500);
+    function scheduleNext() {
+      if (pollTimer) clearTimeout(pollTimer);
+      if (!open) return;
+      var wait = Date.now() < fastPollUntil ? 1500 : 4000;
+      pollTimer = setTimeout(function () {
+        pollOnce();
+        scheduleNext();
+      }, wait);
+    }
+    scheduleNext();
   }
 
   function stopPoll() {
-    if (pollTimer) clearInterval(pollTimer);
+    if (pollTimer) clearTimeout(pollTimer);
     pollTimer = null;
   }
 
