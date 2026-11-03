@@ -178,9 +178,10 @@ function migrateContacts(
     website: item.website ?? "",
     services: item.services ?? "",
     user_id: item.user_id ?? null,
-    is_press: item.is_press === true || item.is_press === "true",
+    is_press: item.is_press === true || (item.is_press as unknown) === "true",
     is_spokesperson:
-      item.is_spokesperson === true || item.is_spokesperson === "true",
+      item.is_spokesperson === true ||
+      (item.is_spokesperson as unknown) === "true",
     photo_url: typeof item.photo_url === "string" ? item.photo_url : "",
     beat: item.beat ?? "",
     outlet: item.outlet ?? "",
