@@ -1454,14 +1454,15 @@
     var custom = cfg.greeting && String(cfg.greeting).trim();
     return (
       custom ||
-      "Hello. I can start a yacht or freight enquiry, answer questions from our published information, or put you in touch with the team."
+      "Hi, I can help get your enquiry to the right Peters & May team. What are you looking to move, or what can we help you with?"
     );
   }
 
-  function showOpeningGreeting() {
-    if (greetingNode) return;
-    greetingNode = appendBubble("assistant", localGreeting());
+  function showOpeningGreeting(text) {
+    if (greetingNode) return greetingNode;
+    greetingNode = appendBubble("assistant", text || localGreeting());
     showStarters();
+    return greetingNode;
   }
 
   function startSession() {
@@ -1470,7 +1471,8 @@
     if (sessionPromise) {
       sessionPromise = null;
     }
-    showOpeningGreeting();
+    // Wait for the Hub greeting — do not show a placeholder that then swaps.
+    setTyping(true);
     sessionPromise = fetch(apiUrl("api/chat/sessions"), {
       method: "POST",
       headers: headers(),
@@ -1490,34 +1492,39 @@
       })
       .then(function (data) {
         rememberSession(data.session && data.session.id);
+        var serverBody =
+          (cfg.greeting && String(cfg.greeting).trim()) ||
+          (data.message && data.message.body) ||
+          localGreeting();
         if (data.message && data.message.id) {
           seenIds[data.message.id] = true;
           lastMessageAt = data.message.created_at;
-          var serverBody = data.message.body;
-          if (cfg.greeting) serverBody = cfg.greeting;
-          if (
-            greetingNode &&
-            serverBody &&
-            serverBody !== localGreeting()
-          ) {
-            var bubble = greetingNode.querySelector(".pm-chat__bubble");
-            if (bubble) bubble.textContent = serverBody;
-          }
         }
+        showOpeningGreeting(serverBody);
         if (data.office_hours_note) {
           cfg.labels.hours = data.office_hours_note;
           var sub = headerText.querySelector(".pm-chat__subtitle");
           if (sub && !teamJoined) sub.textContent = data.office_hours_note;
         }
-        showStarters();
         return sessionId;
       })
       .catch(function () {
         sessionPromise = null;
+        // Offline fallback: one stable greeting, no mid-load swap.
+        showOpeningGreeting(localGreeting());
         showUnavailableNotice(function () {
+          if (greetingNode && greetingNode.parentNode) {
+            greetingNode.parentNode.removeChild(greetingNode);
+          }
+          greetingNode = null;
+          startersShown = false;
+          hideStarters();
           startSession();
         });
         return null;
+      })
+      .finally(function () {
+        setTyping(false);
       });
     return sessionPromise;
   }

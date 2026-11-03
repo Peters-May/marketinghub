@@ -376,7 +376,7 @@ export async function createChatSession(input: {
 
   const welcomeBody =
     settings.greeting.trim() ||
-    "How can we help? Ask a question, or speak to the team.";
+    "Hi, I can help get your enquiry to the right Peters & May team. What are you looking to move, or what can we help you with?";
   const msgId = uid("cmsg");
   const { data: msgData, error: msgError } = await supabase
     .from("chat_messages")
