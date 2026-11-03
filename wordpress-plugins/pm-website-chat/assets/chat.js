@@ -485,6 +485,10 @@
       btn.type = "button";
       btn.addEventListener("click", function () {
         group.remove();
+        if (tryStartCollectFromRouteLabel(label)) {
+          appendBubble("visitor", label);
+          return;
+        }
         sendMessageText(label);
       });
       group.appendChild(btn);
@@ -527,9 +531,50 @@
     if (/make\s*\/?\s*model|make\/model/.test(t)) hits++;
     if (/\blength\b|\bloa\b/.test(t)) hits++;
     if (/\bbeam\b/.test(t)) hits++;
-    if (/transport height|overall height/.test(t)) hits++;
+    if (/transport height|overall height|(length\/beam\/height)/.test(t)) {
+      hits++;
+    }
     if (/\bweight\b|displacement/.test(t)) hits++;
+    if (/\bname\b/.test(t) && /e-?mail/.test(t) && /\bdestination\b/.test(t)) {
+      hits += 2;
+    }
     return hits >= 3;
+  }
+
+  function looksLikeFreightChecklist(text) {
+    var t = String(text || "").toLowerCase();
+    var hits = 0;
+    if (/\bcommodity\b|what are you shipping|cargo/.test(t)) hits++;
+    if (/\borigin\b|from where/.test(t)) hits++;
+    if (/\bdestination\b|to where/.test(t)) hits++;
+    if (/\bweight\b|dimensions?\b/.test(t)) hits++;
+    if (/\bname\b/.test(t) && /e-?mail/.test(t)) hits++;
+    return hits >= 3;
+  }
+
+  /** Yacht / freight route picks should open the guided form, not an AI checklist. */
+  function tryStartCollectFromRouteLabel(text) {
+    var t = String(text || "").trim().toLowerCase();
+    if (
+      t === "yacht transport" ||
+      t === "yacht" ||
+      t === "boat transport" ||
+      /^yacht\b/.test(t)
+    ) {
+      startCollect("yacht", { force: true });
+      return true;
+    }
+    if (
+      t === "freight or cargo" ||
+      t === "freight" ||
+      t === "commercial freight" ||
+      t === "cargo" ||
+      /^freight\b/.test(t)
+    ) {
+      startCollect("freight", { force: true });
+      return true;
+    }
+    return false;
   }
 
   var root = el(
@@ -1311,18 +1356,23 @@
       return;
     }
     if (collectState || suppressCollectTrigger) return;
+    // AI dumped a quote checklist — open the form instead of leaving a text list.
     if (looksLikeYachtChecklist(body)) {
-      offerGuidedCollect("yacht");
+      startCollect("yacht", { force: true });
+      return;
+    }
+    if (looksLikeFreightChecklist(body)) {
+      startCollect("freight", { force: true });
       return;
     }
   }
 
   /**
-   * Do not auto-open the guided form from free-typed messages.
-   * Collect starts only from Get a quote / yacht / freight chips.
+   * Route labels (Yacht transport / Freight) open the guided form.
+   * Free-typed detail dumps stay with the AI.
    */
-  function maybeStartCollectFromVisitor(_text) {
-    return;
+  function maybeStartCollectFromVisitor(text) {
+    tryStartCollectFromRouteLabel(text);
   }
 
   function syncSeen() {
@@ -1565,6 +1615,10 @@
       return;
     }
     hideStarters();
+    if (!opts.skipCollect && tryStartCollectFromRouteLabel(text)) {
+      appendBubble("visitor", text);
+      return;
+    }
     if (!opts.skipCollect) {
       maybeStartCollectFromVisitor(text);
     }
