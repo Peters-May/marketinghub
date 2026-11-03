@@ -89,6 +89,8 @@ import {
 import type {
   AccessRequest,
   Advertisement,
+  AssistantReview,
+  AssistantReviewOutcome,
   AwardEntry,
   BudgetLine,
   BudgetPayment,
@@ -142,6 +144,11 @@ import type {
   EmailEventKind,
   EmailGalleryImage,
 } from "@/lib/types";
+import {
+  capAssistantReviews,
+  normalizeAssistantReview,
+} from "@/lib/ai/assistant-reviews";
+import type { AssistantMode } from "@/lib/ai/assistant-shared";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 import { normalizeEmailSettings } from "@/lib/email/email-settings";
 import { normalizeMonitorMention } from "@/lib/pr/mention-normalize";
@@ -4447,4 +4454,84 @@ export async function countAudienceRecipients(
     counts.set(id, countEmailRecipients(index, { audienceId: id }));
   }
   return counts;
+}
+
+export async function listAssistantReviews(): Promise<AssistantReview[]> {
+  const store = await readStore();
+  return capAssistantReviews(
+    (store.assistant_reviews ?? []).map((row) => normalizeAssistantReview(row))
+  ).sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
+export async function createAssistantReview(input: {
+  user_id: string;
+  user_name: string;
+  mode: AssistantMode | string;
+  user_prompt?: string;
+  assistant_reply?: string;
+  command_text?: string;
+  outcome?: AssistantReviewOutcome;
+  error_message?: string;
+  rating?: "up" | "down" | null;
+  note?: string;
+  message_id?: string;
+}): Promise<AssistantReview> {
+  const stamp = nowIso();
+  const item = normalizeAssistantReview({
+    id: uid("asr"),
+    created_at: stamp,
+    updated_at: stamp,
+    user_id: input.user_id,
+    user_name: input.user_name,
+    mode: input.mode,
+    user_prompt: input.user_prompt ?? "",
+    assistant_reply: input.assistant_reply ?? "",
+    command_text: input.command_text ?? "",
+    outcome: input.outcome ?? "none",
+    error_message: input.error_message ?? "",
+    rating: input.rating ?? null,
+    note: input.note ?? "",
+    message_id: input.message_id ?? "",
+  });
+  await updateStore((s) => {
+    if (!s.assistant_reviews) s.assistant_reviews = [];
+    s.assistant_reviews = capAssistantReviews([item, ...s.assistant_reviews]);
+  });
+  return item;
+}
+
+export async function updateAssistantReview(
+  id: string,
+  patch: Partial<
+    Pick<
+      AssistantReview,
+      | "outcome"
+      | "command_text"
+      | "assistant_reply"
+      | "error_message"
+      | "rating"
+      | "note"
+      | "message_id"
+    >
+  >
+): Promise<AssistantReview | null> {
+  let updated: AssistantReview | null = null;
+  await updateStore((s) => {
+    if (!s.assistant_reviews) s.assistant_reviews = [];
+    const idx = s.assistant_reviews.findIndex((row) => row.id === id);
+    if (idx === -1) return;
+    const next = normalizeAssistantReview({
+      ...s.assistant_reviews[idx],
+      ...patch,
+      id,
+      updated_at: nowIso(),
+    });
+    s.assistant_reviews[idx] = next;
+    s.assistant_reviews = capAssistantReviews(s.assistant_reviews);
+    updated = next;
+  });
+  return updated;
 }

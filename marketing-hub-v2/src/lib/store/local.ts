@@ -31,6 +31,10 @@ import { normalizeMonitorSettings } from "@/lib/pr/monitor-settings";
 import { normalizeEmailSettings } from "@/lib/email/email-settings";
 import { normalizeAiKeySettings } from "@/lib/ai/ai-key-status";
 import {
+  capAssistantReviews,
+  normalizeAssistantReview,
+} from "@/lib/ai/assistant-reviews";
+import {
   applyReleaseLibrary,
   needsReleaseLibrary,
 } from "@/lib/pr/release-library";
@@ -316,6 +320,11 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       store.email_settings ?? seed.email_settings
     ),
     ai_settings: normalizeAiKeySettings(store.ai_settings ?? seed.ai_settings),
+    assistant_reviews: capAssistantReviews(
+      (store.assistant_reviews ?? seed.assistant_reviews ?? []).map((row) =>
+        normalizeAssistantReview(row)
+      )
+    ),
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -392,6 +401,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_gallery ||
     !store.email_settings ||
     !store.ai_settings ||
+    !store.assistant_reviews ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );

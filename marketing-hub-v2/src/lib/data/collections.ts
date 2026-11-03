@@ -26,6 +26,7 @@ export type CollectionKey = Exclude<
   | "email_events"
   | "email_gallery"
   | "email_settings"
+  | "assistant_reviews"
   | "newsroom_settings"
 >;
 

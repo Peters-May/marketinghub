@@ -18,6 +18,8 @@ import {
   Loader2,
   PanelRightClose,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   X,
 } from "lucide-react";
@@ -27,6 +29,13 @@ import {
   type AssistantAttachment,
   type AssistantMode,
 } from "@/lib/ai/assistant-shared";
+import {
+  clearAssistantSession,
+  readAssistantSession,
+  writeAssistantSession,
+  type AssistantSessionDraft,
+  type AssistantSessionMessage,
+} from "@/lib/ai/assistant-session";
 import { notifyHubDataChanged, type HubDataArea } from "@/lib/command/refresh";
 import { uploadAssetDirect } from "@/lib/upload/client-upload";
 import {
@@ -34,6 +43,7 @@ import {
   MAX_UPLOAD_BYTES,
   UPLOAD_ACCEPT,
 } from "@/lib/upload/allowed-types";
+import type { AssistantReviewOutcome } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** Keep in step with the dock width class on the assistant aside. */
@@ -41,36 +51,11 @@ export const ASSISTANT_DOCK_WIDTH = "22rem";
 
 type ChatRole = "user" | "assistant";
 
-type ThreadMessage = {
-  id: string;
+type ThreadMessage = AssistantSessionMessage & {
   role: ChatRole;
-  content: string;
-  commandText?: string | null;
 };
 
-type DraftResult =
-  | {
-      kind: "email";
-      subject: string;
-      preview: string;
-      heading: string;
-      html: string;
-      buttonLabel: string;
-    }
-  | {
-      kind: "social";
-      caption: string;
-      channels: string[];
-      notes: string;
-      suggestedCommand?: string;
-    }
-  | { kind: "rewrite"; text: string }
-  | {
-      kind: "summarise";
-      summary: string;
-      keyPoints: string[];
-      openQuestions: string[];
-    };
+type DraftResult = AssistantSessionDraft;
 
 type PreviewAction = {
   summary: string;
@@ -166,6 +151,7 @@ export function AiAssistantPanel({
   const router = useRouter();
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [mode, setMode] = useState<AssistantMode>("chat");
   const [composer, setComposer] = useState("");
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
@@ -185,9 +171,47 @@ export function AiAssistantPanel({
     href?: string;
   } | null>(null);
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
+  const [noteForMessageId, setNoteForMessageId] = useState<string | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState("");
   const confirmingRef = useRef(false);
+  const activeReviewIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const saved = readAssistantSession();
+    setMode(saved.mode);
+    setComposer(saved.composer);
+    setMessages(saved.messages);
+    setAttachments(saved.attachments);
+    setDraft(saved.draft);
+    setPendingCommand(saved.pendingCommand);
+    setCommandPreview(saved.commandPreview);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeAssistantSession({
+      mode,
+      composer,
+      messages,
+      attachments,
+      draft,
+      pendingCommand,
+      commandPreview,
+    });
+  }, [
+    hydrated,
+    mode,
+    composer,
+    messages,
+    attachments,
+    draft,
+    pendingCommand,
+    commandPreview,
+  ]);
 
   const clearSession = useCallback(() => {
+    clearAssistantSession();
     setMessages([]);
     setDraft(null);
     setAttachments([]);
@@ -197,7 +221,73 @@ export function AiAssistantPanel({
     setCommandNotice(null);
     setPendingCommand(null);
     setCopied(false);
+    setNoteForMessageId(null);
+    setFeedbackNote("");
+    activeReviewIdRef.current = null;
   }, []);
+
+  async function logReview(input: {
+    id?: string | null;
+    mode?: AssistantMode;
+    user_prompt?: string;
+    assistant_reply?: string;
+    command_text?: string;
+    outcome?: AssistantReviewOutcome;
+    error_message?: string;
+    rating?: "up" | "down" | null;
+    note?: string;
+    message_id?: string;
+  }): Promise<string | null> {
+    try {
+      const res = await fetch("/api/ai/assistant/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return null;
+      const reviewId =
+        typeof data.review?.id === "string" ? data.review.id : null;
+      if (reviewId) activeReviewIdRef.current = reviewId;
+      return reviewId;
+    } catch {
+      return null;
+    }
+  }
+
+  async function rateMessage(
+    message: ThreadMessage,
+    rating: "up" | "down",
+    note = ""
+  ) {
+    if (message.role !== "assistant") return;
+    const reviewId =
+      message.reviewId ||
+      (await logReview({
+        mode,
+        user_prompt: "",
+        assistant_reply: message.content,
+        command_text: message.commandText || "",
+        outcome: message.commandText ? "previewed" : "none",
+        message_id: message.id,
+      }));
+    if (!reviewId) return;
+    await logReview({
+      id: reviewId,
+      rating,
+      note,
+      message_id: message.id,
+    });
+    setMessages((prev) =>
+      prev.map((row) =>
+        row.id === message.id ? { ...row, reviewId, rating } : row
+      )
+    );
+    if (rating === "down") {
+      setNoteForMessageId(null);
+      setFeedbackNote("");
+    }
+  }
 
   async function addFiles(files: File[]) {
     if (!files.length || busy || uploading) return;
@@ -333,9 +423,16 @@ export function AiAssistantPanel({
       const data = await res.json();
       if (!res.ok || data.error) {
         setCommandPreview(null);
-        setCommandNotice({
-          message: data.error || "The hub could not read that command.",
-        });
+        const message = data.error || "The hub could not read that command.";
+        setCommandNotice({ message });
+        if (activeReviewIdRef.current) {
+          await logReview({
+            id: activeReviewIdRef.current,
+            command_text: text,
+            outcome: "failed",
+            error_message: message,
+          });
+        }
         return;
       }
       if (data.preview) {
@@ -368,9 +465,24 @@ export function AiAssistantPanel({
             ? data.preview.skipped
             : [],
         });
+        if (activeReviewIdRef.current) {
+          await logReview({
+            id: activeReviewIdRef.current,
+            command_text: text,
+            outcome: "previewed",
+          });
+        }
       }
     } catch {
       setCommandNotice({ message: "The hub could not preview that command." });
+      if (activeReviewIdRef.current) {
+        await logReview({
+          id: activeReviewIdRef.current,
+          command_text: text,
+          outcome: "failed",
+          error_message: "The hub could not preview that command.",
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -411,9 +523,16 @@ export function AiAssistantPanel({
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setCommandNotice({
-          message: data.error || "The hub could not save that.",
-        });
+        const message = data.error || "The hub could not save that.";
+        setCommandNotice({ message });
+        if (activeReviewIdRef.current) {
+          await logReview({
+            id: activeReviewIdRef.current,
+            command_text: commandText,
+            outcome: "failed",
+            error_message: message,
+          });
+        }
         return;
       }
       if (data.done) {
@@ -435,6 +554,14 @@ export function AiAssistantPanel({
         for (const area of areas) {
           notifyHubDataChanged(area as HubDataArea);
         }
+        if (activeReviewIdRef.current) {
+          await logReview({
+            id: activeReviewIdRef.current,
+            command_text: commandText,
+            outcome: "confirmed",
+            assistant_reply: String(data.done.message),
+          });
+        }
         setMessages((prev) => [
           ...prev.map((message) =>
             message.commandText === commandText
@@ -445,12 +572,21 @@ export function AiAssistantPanel({
             id: newId(),
             role: "assistant",
             content: String(data.done.message),
+            reviewId: activeReviewIdRef.current,
           },
         ]);
         router.refresh();
       }
     } catch {
       setCommandNotice({ message: "The hub could not save that. Try again." });
+      if (activeReviewIdRef.current) {
+        await logReview({
+          id: activeReviewIdRef.current,
+          command_text: commandText,
+          outcome: "failed",
+          error_message: "The hub could not save that. Try again.",
+        });
+      }
     } finally {
       confirmingRef.current = false;
       setBusy(false);
@@ -506,12 +642,19 @@ export function AiAssistantPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setError(
+        const errMsg =
           typeof data.error === "string"
             ? data.error
-            : "The assistant could not respond."
-        );
+            : "The assistant could not respond.";
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        setError(errMsg);
+        await logReview({
+          mode: "chat",
+          user_prompt: userMsg.content,
+          outcome: "failed",
+          error_message: errMsg,
+          message_id: assistantId,
+        });
         return;
       }
 
@@ -520,23 +663,38 @@ export function AiAssistantPanel({
       const commandText = readOnly ? null : extracted.commandText;
       const displayText = readOnly ? extracted.displayText || raw.trim() : extracted.displayText;
       if (!displayText && !commandText) {
+        const errMsg =
+          "The assistant returned an empty reply. If this keeps happening, check OpenAI billing credits.";
         setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-        setError(
-          "The assistant returned an empty reply. If this keeps happening, check OpenAI billing credits."
-        );
+        setError(errMsg);
+        await logReview({
+          mode: "chat",
+          user_prompt: userMsg.content,
+          outcome: "failed",
+          error_message: errMsg,
+          message_id: assistantId,
+        });
         return;
       }
+      const replyContent =
+        displayText ||
+        (commandText ? "Proposed action ready — confirm below." : "Done.");
+      const reviewId = await logReview({
+        mode: "chat",
+        user_prompt: userMsg.content,
+        assistant_reply: replyContent,
+        command_text: commandText || "",
+        outcome: commandText ? "previewed" : "none",
+        message_id: assistantId,
+      });
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
             ? {
                 ...m,
-                content:
-                  displayText ||
-                  (commandText
-                    ? "Proposed action ready — confirm below."
-                    : "Done."),
+                content: replyContent,
                 commandText,
+                reviewId,
               }
             : m
         )
@@ -548,6 +706,13 @@ export function AiAssistantPanel({
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== assistantId));
       setError("The assistant could not respond. Try again.");
+      await logReview({
+        mode: "chat",
+        user_prompt: userMsg.content,
+        outcome: "failed",
+        error_message: "The assistant could not respond. Try again.",
+        message_id: assistantId,
+      });
     } finally {
       setBusy(false);
     }
@@ -556,6 +721,7 @@ export function AiAssistantPanel({
   async function submitDraftMode() {
     const text = composer.trim();
     if ((!text && !attachments.length) || busy) return;
+    const userPrompt = text || "(attachments only)";
     setBusy(true);
     setError(null);
     setDraft(null);
@@ -573,16 +739,24 @@ export function AiAssistantPanel({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "The assistant could not respond.");
+        const errMsg = data.error || "The assistant could not respond.";
+        setError(errMsg);
+        await logReview({
+          mode,
+          user_prompt: userPrompt,
+          outcome: "failed",
+          error_message: errMsg,
+        });
         return;
       }
 
+      let command = "";
       if (mode === "draft_email" && data.draft) {
         setDraft({ kind: "email", ...data.draft });
       } else if (mode === "draft_social" && data.draft) {
         setDraft({ kind: "social", ...data.draft });
         if (data.draft.suggestedCommand) {
-          const command = String(data.draft.suggestedCommand);
+          command = String(data.draft.suggestedCommand);
           setPendingCommand(command);
           await previewCommand(command);
         }
@@ -592,24 +766,42 @@ export function AiAssistantPanel({
         setDraft({ kind: "summarise", ...data.draft });
       }
 
+      const assistantId = newId();
+      const replyContent =
+        mode === "draft_email"
+          ? "Draft email ready — copy or open Email to continue."
+          : mode === "draft_social"
+            ? "Draft social post ready."
+            : mode === "rewrite"
+              ? "Rewrite ready."
+              : "Summary ready.";
+      const reviewId = await logReview({
+        mode,
+        user_prompt: userPrompt,
+        assistant_reply: replyContent,
+        command_text: command,
+        outcome: command ? "previewed" : "none",
+        message_id: assistantId,
+      });
       setMessages((prev) => [
         ...prev,
-        { id: newId(), role: "user", content: text || "(attachments only)" },
+        { id: newId(), role: "user", content: userPrompt },
         {
-          id: newId(),
+          id: assistantId,
           role: "assistant",
-          content:
-            mode === "draft_email"
-              ? "Draft email ready — copy or open Email to continue."
-              : mode === "draft_social"
-                ? "Draft social post ready."
-                : mode === "rewrite"
-                  ? "Rewrite ready."
-                  : "Summary ready.",
+          content: replyContent,
+          reviewId,
+          commandText: command || null,
         },
       ]);
     } catch {
       setError("The assistant could not respond. Try again.");
+      await logReview({
+        mode,
+        user_prompt: userPrompt,
+        outcome: "failed",
+        error_message: "The assistant could not respond. Try again.",
+      });
     } finally {
       setBusy(false);
     }
@@ -833,6 +1025,84 @@ export function AiAssistantPanel({
               )}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "assistant" && msg.content !== "…" ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition",
+                      msg.rating === "up"
+                        ? "bg-brand/10 text-brand"
+                        : "text-muted hover:text-foreground"
+                    )}
+                    aria-label="Helpful reply"
+                    disabled={busy}
+                    onClick={() => void rateMessage(msg, "up")}
+                  >
+                    <ThumbsUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition",
+                      msg.rating === "down"
+                        ? "bg-red-50 text-red-700"
+                        : "text-muted hover:text-foreground"
+                    )}
+                    aria-label="Unhelpful reply"
+                    disabled={busy}
+                    onClick={() => {
+                      if (msg.rating === "down") return;
+                      setNoteForMessageId(msg.id);
+                      setFeedbackNote("");
+                    }}
+                  >
+                    <ThumbsDown className="h-3 w-3" />
+                  </button>
+                  {msg.rating === "up" ? (
+                    <span className="text-[11px] text-muted">Marked helpful</span>
+                  ) : null}
+                  {msg.rating === "down" ? (
+                    <span className="text-[11px] text-muted">Marked unhelpful</span>
+                  ) : null}
+                </div>
+              ) : null}
+              {noteForMessageId === msg.id ? (
+                <form
+                  className="mt-2 space-y-1.5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void rateMessage(msg, "down", feedbackNote.trim());
+                  }}
+                >
+                  <input
+                    value={feedbackNote}
+                    onChange={(e) => setFeedbackNote(e.target.value)}
+                    placeholder="What went wrong? (optional)"
+                    className="w-full rounded-lg border border-border bg-white px-2 py-1.5 text-[11px] outline-none ring-brand/30 focus:ring-2"
+                    autoFocus
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      type="submit"
+                      className="btn-primary px-2 py-1 text-[11px]"
+                      disabled={busy}
+                    >
+                      Send feedback
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost px-2 py-1 text-[11px]"
+                      onClick={() => {
+                        setNoteForMessageId(null);
+                        setFeedbackNote("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : null}
               {msg.commandText &&
               !readOnly &&
               !(
@@ -973,6 +1243,13 @@ export function AiAssistantPanel({
                       const dropped = pendingCommand;
                       setCommandPreview(null);
                       setPendingCommand(null);
+                      if (activeReviewIdRef.current) {
+                        void logReview({
+                          id: activeReviewIdRef.current,
+                          command_text: dropped || "",
+                          outcome: "dismissed",
+                        });
+                      }
                       if (!dropped) return;
                       setMessages((prev) =>
                         prev.map((message) =>

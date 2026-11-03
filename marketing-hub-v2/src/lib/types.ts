@@ -1359,6 +1359,33 @@ export type AiKeySettings = {
   updated_by: string;
 };
 
+/** Outcome of a hub-command proposal from the assistant. */
+export type AssistantReviewOutcome =
+  | "none"
+  | "previewed"
+  | "confirmed"
+  | "failed"
+  | "dismissed";
+
+/** Logged assistant ask for admin review / prompt improvement. */
+export type AssistantReview = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  user_name: string;
+  mode: string;
+  user_prompt: string;
+  assistant_reply: string;
+  command_text: string;
+  outcome: AssistantReviewOutcome;
+  error_message: string;
+  rating: "up" | "down" | null;
+  note: string;
+  /** Client message id so thumbs can update the matching log row. */
+  message_id: string;
+};
+
 /** Global email marketing defaults (footer links, preference centre). */
 export type EmailSettings = {
   show_unsubscribe_link: boolean;
@@ -1488,6 +1515,8 @@ export type HubStore = {
   email_settings: EmailSettings;
   /** OpenAI key and expiry, managed under Admin → AI key. */
   ai_settings: AiKeySettings;
+  /** Logged assistant asks for admin review (capped). */
+  assistant_reviews: AssistantReview[];
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };

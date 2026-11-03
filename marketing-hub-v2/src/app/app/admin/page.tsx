@@ -1,4 +1,4 @@
-import { Database, KeyRound, Users, Wallet } from "lucide-react";
+import { Database, KeyRound, MessageSquareText, Users, Wallet } from "lucide-react";
 import { ModuleCard, PageHeader } from "@/components/ui/PageHeader";
 import { requireAdminPage } from "@/lib/auth/require-admin-page";
 import { getAiKeyPublicStatus } from "@/lib/ai/ai-key";
@@ -34,6 +34,12 @@ export default async function AdminPage() {
           title="AI key"
           description={aiKeyDescription(ai.days_remaining, ai.expires_on)}
           icon={KeyRound}
+        />
+        <ModuleCard
+          href="/app/admin/assistant"
+          title="Assistant review"
+          description="What people asked the hub assistant, whether commands worked, and thumbs feedback."
+          icon={MessageSquareText}
         />
         <ModuleCard
           href="/app/admin/data"
