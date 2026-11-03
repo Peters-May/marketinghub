@@ -6,6 +6,7 @@ import { isAssistantMode } from "@/lib/ai/assistant-shared";
 import { jsonError, jsonOk, requireAdmin, requireStaff } from "@/lib/api";
 import {
   createAssistantReview,
+  getAssistantReview,
   listAssistantReviews,
   updateAssistantReview,
 } from "@/lib/data/repos";
@@ -48,6 +49,12 @@ export async function POST(request: NextRequest) {
     : undefined;
 
   if (id) {
+    const existing = await getAssistantReview(id);
+    if (!existing) return jsonError("Review not found", 404);
+    if (user.role !== "admin" && existing.user_id !== user.id) {
+      return jsonError("You can only update your own assistant reviews.", 403);
+    }
+
     const patch: Parameters<typeof updateAssistantReview>[1] = {};
     if (outcome) patch.outcome = outcome;
     if (typeof body.command_text === "string") {

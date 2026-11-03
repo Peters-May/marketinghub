@@ -11,6 +11,7 @@ import {
   parseSitemapLocs,
   siteDocumentId,
 } from "@/lib/chat/site-knowledge";
+import { contentHash } from "@/lib/knowledge/chunk";
 
 const FETCH_HEADERS = {
   Accept: "text/html,application/xml,text/xml",
@@ -25,6 +26,7 @@ export type SiteKnowledgeSyncResult = {
   discovered: number;
   updated: number;
   skipped: number;
+  unchanged: number;
   failed: number;
   deactivated: number;
   error?: string;
@@ -85,11 +87,14 @@ async function existingInactiveIds(ids: string[]): Promise<Set<string>> {
 
 export async function syncSitePageBatch(
   urls: string[]
-): Promise<Pick<SiteKnowledgeSyncResult, "updated" | "skipped" | "failed">> {
+): Promise<
+  Pick<SiteKnowledgeSyncResult, "updated" | "skipped" | "unchanged" | "failed">
+> {
   const supabase = createServiceClient();
   const now = new Date().toISOString();
   let updated = 0;
   let skipped = 0;
+  let unchanged = 0;
   let failed = 0;
 
   const fetched = await Promise.all(
@@ -98,6 +103,18 @@ export async function syncSitePageBatch(
       return { url, html };
     })
   );
+
+  const ids = fetched.map(({ url }) => siteDocumentId(url));
+  const existingHashes = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data } = await supabase
+      .from("chat_kb_documents")
+      .select("id,content_hash")
+      .in("id", ids);
+    for (const row of data ?? []) {
+      existingHashes.set(String(row.id), String(row.content_hash ?? ""));
+    }
+  }
 
   const rows: Array<Record<string, unknown>> = [];
   const thinIds: string[] = [];
@@ -114,11 +131,17 @@ export async function syncSitePageBatch(
       thinIds.push(id);
       continue;
     }
+    const hash = contentHash(body);
+    if (existingHashes.get(id) === hash) {
+      unchanged += 1;
+      continue;
+    }
     rows.push({
       id,
       title: pageTitleFromHtml(html, url),
       source_url: url,
       body,
+      content_hash: hash,
       active: true,
       sort_order: 500,
       updated_at: now,
@@ -146,7 +169,41 @@ export async function syncSitePageBatch(
     updated = rows.length;
   }
 
-  return { updated, skipped, failed };
+  return { updated, skipped, unchanged, failed };
+}
+
+/**
+ * Refuse mass-deactivation when sitemap discovery looks incomplete.
+ * Empty or tiny discovery sets previously wiped the whole site KB.
+ */
+export const SITE_KB_DEACTIVATE_MIN_DISCOVERED = 40;
+/** Skip deactivation if more than this fraction of active pages would go inactive. */
+export const SITE_KB_DEACTIVATE_MAX_FRACTION = 0.35;
+
+export function shouldSkipSiteKbDeactivation(input: {
+  discoveredCount: number;
+  activeCount: number;
+  staleCount: number;
+}): { skip: true; reason: string } | { skip: false } {
+  if (input.discoveredCount <= 0) {
+    return { skip: true, reason: "no urls discovered" };
+  }
+  if (input.discoveredCount < SITE_KB_DEACTIVATE_MIN_DISCOVERED) {
+    return {
+      skip: true,
+      reason: `only ${input.discoveredCount} urls discovered (need ${SITE_KB_DEACTIVATE_MIN_DISCOVERED})`,
+    };
+  }
+  if (input.activeCount > 0) {
+    const fraction = input.staleCount / input.activeCount;
+    if (fraction > SITE_KB_DEACTIVATE_MAX_FRACTION) {
+      return {
+        skip: true,
+        reason: `would deactivate ${input.staleCount}/${input.activeCount} active pages`,
+      };
+    }
+  }
+  return { skip: false };
 }
 
 export async function deactivateMissingSitePages(
@@ -161,10 +218,25 @@ export async function deactivateMissingSitePages(
     .eq("active", true)
     .limit(2000);
   if (error) throw new Error(error.message);
-  const stale = (data ?? [])
+  const active = data ?? [];
+  const stale = active
     .filter((row) => !keep.has(String(row.source_url ?? "")))
     .map((row) => String(row.id));
   if (stale.length === 0) return 0;
+
+  const guard = shouldSkipSiteKbDeactivation({
+    discoveredCount: liveUrls.length,
+    activeCount: active.length,
+    staleCount: stale.length,
+  });
+  if (guard.skip) {
+    console.warn(
+      "[chat-site-kb] skipping mass deactivate:",
+      guard.reason
+    );
+    return 0;
+  }
+
   const { error: updateError } = await supabase
     .from("chat_kb_documents")
     .update({ active: false, updated_at: new Date().toISOString() })

@@ -39,12 +39,14 @@ export async function POST(request: Request) {
       body?.utm && typeof body.utm === "object" && !Array.isArray(body.utm)
         ? (body.utm as Record<string, unknown>)
         : {};
+    // Public widget must never mark sessions as test (hides from inbox / analytics).
+    // Hub Test playground creates sessions via /api/chat/admin only.
     const { session, welcome } = await createChatSession({
       page_url: typeof body?.page_url === "string" ? body.page_url : "",
       page_title: typeof body?.page_title === "string" ? body.page_title : "",
       referrer: typeof body?.referrer === "string" ? body.referrer : "",
       utm,
-      is_test: body?.is_test === true,
+      is_test: false,
     });
     return chatJson(request, {
       session,

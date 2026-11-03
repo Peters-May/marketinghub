@@ -154,6 +154,62 @@ describe("formatHubCatalogue", () => {
     expect(text).toContain("Monaco Yacht Show | Stand photo");
   });
 
+  it("omits budget lines and partner values by default", () => {
+    const text = formatHubCatalogue(
+      {
+        events: [],
+        sponsorships: [
+          {
+            id: "s1",
+            partner: "Metstrade",
+            package_name: "Stand",
+            status: "active",
+            starts_at: "2026-01-01",
+            ends_at: "2026-12-31",
+            value: "€50,000",
+            notes: "",
+            created_at: "",
+            updated_at: "",
+          } as never,
+        ],
+        budget_lines: [
+          {
+            id: "b1",
+            name: "Events",
+            group: "Shows",
+            planned: 12000,
+            sort_order: 1,
+          } as never,
+        ],
+      },
+      "2026-10-26"
+    );
+    expect(text).toContain("value withheld");
+    expect(text).not.toContain("€50,000");
+    expect(text).toContain("Budget lines: not included");
+    expect(text).not.toContain("Budget lines (");
+  });
+
+  it("includes budget when explicitly allowed", () => {
+    const text = formatHubCatalogue(
+      {
+        events: [],
+        budget_lines: [
+          {
+            id: "b1",
+            name: "Events",
+            group: "Shows",
+            planned: 12000,
+            sort_order: 1,
+          } as never,
+        ],
+      },
+      { today: "2026-10-26", includeBudget: true }
+    );
+    expect(text).toContain("Budget lines (1, complete)");
+    expect(text).toContain("Events | Shows | 12000");
+  });
+
   it("keeps the member catalogue to titles and enquiry totals", () => {
     const text = formatMemberCatalogue({
       today: "2026-10-26",

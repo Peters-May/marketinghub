@@ -1,4 +1,9 @@
-import { generateObject, generateText, type ModelMessage } from "ai";
+import {
+  generateObject,
+  generateText,
+  stepCountIs,
+  type ModelMessage,
+} from "ai";
 import { z } from "zod";
 import { getHubOpenAIModel } from "@/lib/ai/openai";
 import {
@@ -7,6 +12,11 @@ import {
   type AssistantAttachment,
   type AssistantChatMessage,
 } from "@/lib/ai/assistant-shared";
+import {
+  buildAssistantTools,
+  type AssistantToolUser,
+} from "@/lib/ai/assistant-tools";
+import { formatHubHowToContext } from "@/lib/ai/hub-how-to";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
 
 export type {
@@ -28,7 +38,11 @@ Never invent clients, quotes, case studies, statistics, office counts, or certif
 Leave factsheet placeholders if a figure would otherwise be needed.
 Do not use emoji, exclamation marks, or hype words.
 
-You can help with drafting marketing copy, summarising uploads, and proposing hub record actions.
+You can help with drafting marketing copy, summarising uploads, answering live hub questions via tools, and proposing hub record actions.
+
+Use the read tools to look up events, tasks, content, costs, campaigns, contacts, budget (when allowed), awards, enquiry aggregates, and how-to guidance. Prefer tools over memory. Never invent counts. When quoting statistics, mention the tool source field. Include href links from tool results when helpful.
+
+When the user asks how to use the Hub or what they can do on the current page, call hub_how_to and answer with the real /app/... paths.
 
 When the user asks you to create or update hub records (tasks, events, or social/content posts), including a proposed attendance list, end your reply with exactly one block. Put one command per line. Do not number the lines.
 
@@ -96,11 +110,12 @@ Never invent clients, quotes, case studies, statistics, office counts, or certif
 Leave factsheet placeholders if a figure would otherwise be needed.
 Do not use emoji, exclamation marks, or hype words.
 
-Answer questions about enquiry statistics, the library, scheduled and published content, events, and the member's own tasks.
-Use only the figures and titles in the catalogue. If a figure is not listed, say you do not have it.
+Answer questions using the read tools (events, your tasks, scheduled content, enquiry aggregates, hub_how_to).
+Cite the tool source when giving counts. If a tool returns denied or empty, say you do not have that figure.
 Do not quote enquiry messages, customer names, emails, or phone numbers.
 Do not mention budget, logins, contacts, or unpublished drafts.
-Do not emit a hub-command block. You cannot save or change records. Tell the member to use the page in the hub when they want to add or edit something.`;
+Do not emit a hub-command block. You cannot save or change records. Tell the member to use the page in the hub when they want to add or edit something.
+When asked how to use the Hub or what the current page is for, call hub_how_to and include the path links.`;
 
 function isImageMime(mime: string) {
   return mime.startsWith("image/");
@@ -163,34 +178,48 @@ export function buildChatMessages(input: {
   return out;
 }
 
+export type AssistantPageContext = {
+  pathname?: string | null;
+  selectedRecordId?: string | null;
+  selectedRecordType?: string | null;
+};
+
 /** Non-streaming chat so OpenAI billing/quota errors return as normal HTTP errors. */
 export async function generateAssistantChat(input: {
   messages: AssistantChatMessage[];
   attachments?: AssistantAttachment[];
+  /** @deprecated Full catalogue stuffing — prefer tools. Kept as optional fallback. */
   readContext?: string;
   readOnly?: boolean;
+  toolUser?: AssistantToolUser;
+  pageContext?: AssistantPageContext;
 }) {
-  const snapshot = input.readContext?.trim();
   const today = new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
     timeZone: "Europe/London",
   }).format(new Date());
+  const howTo = formatHubHowToContext(input.pageContext);
+  const toolUser: AssistantToolUser = input.toolUser ?? {
+    id: "unknown",
+    readOnly: Boolean(input.readOnly),
+    includeBudget: false,
+  };
+  const tools = buildAssistantTools(toolUser);
   const { text } = await generateText({
     model: await getHubOpenAIModel(),
     system: [
       input.readOnly ? MEMBER_ASSISTANT_SYSTEM : HUB_ASSISTANT_SYSTEM,
       `Today is ${today}.`,
-      snapshot
-        ? input.readOnly
-          ? `${snapshot}\n\nThis is a read-only catalogue. Answer from it. Do not say a record was saved, and do not propose a hub command.`
-          : `${snapshot}\n\nThis catalogue is the live hub data for events, tasks, posts, partners, budget lines, resources, and which posts are already linked to events. Use it to extract, compare, choose the exact record to edit, and propose links from existing posts to an event. Writes still need a hub-command block and a confirmation in the hub. Do not say a record was saved.`
-        : "",
+      howTo,
+      "Live data comes from tools. Do not invent records. Writes still need a hub-command block and confirmation. Do not say a record was saved.",
     ]
       .filter(Boolean)
       .join("\n\n"),
     messages: buildChatMessages(input),
+    tools,
+    stopWhen: stepCountIs(6),
   });
   if (!input.readOnly) {
     const lastUser = [...input.messages]

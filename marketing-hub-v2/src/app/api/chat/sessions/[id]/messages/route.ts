@@ -195,6 +195,9 @@ export async function POST(request: Request, ctx: Ctx) {
       const reply = await generateAssistantReply({
         visitorMessage,
         history: historyForAi,
+        pageUrl: session.page_url,
+        pageTitle: session.page_title,
+        sessionId: id,
       });
       const saved = await addChatMessage({
         session_id: id,
@@ -217,6 +220,9 @@ export async function POST(request: Request, ctx: Ctx) {
     const streamed = await streamAssistantReply({
       visitorMessage,
       history: historyForAi,
+      pageUrl: session.page_url,
+      pageTitle: session.page_title,
+      sessionId: id,
     });
 
     const encoder = new TextEncoder();

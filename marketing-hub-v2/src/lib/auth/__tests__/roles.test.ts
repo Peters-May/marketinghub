@@ -23,6 +23,7 @@ describe("SEO role", () => {
     expect(isSeoAllowedAppPath("/app/enquiries")).toBe(true);
     expect(isSeoAllowedAppPath("/app/enquiries/export")).toBe(true);
     expect(isSeoAllowedAppPath("/app/chat")).toBe(true);
+    expect(isSeoAllowedAppPath("/app/knowledge")).toBe(true);
     expect(isSeoAllowedAppPath("/app/me")).toBe(true);
     expect(isSeoAllowedAppPath("/app")).toBe(false);
     expect(isSeoAllowedAppPath("/app/events")).toBe(false);
@@ -31,6 +32,6 @@ describe("SEO role", () => {
 
   it("shows Enquiries and Website chat in SEO nav", () => {
     const hrefs = navForView("seo").map((item) => item.href);
-    expect(hrefs).toEqual(["/app/enquiries", "/app/chat"]);
+    expect(hrefs).toEqual(["/app/enquiries", "/app/chat", "/app/knowledge"]);
   });
 });

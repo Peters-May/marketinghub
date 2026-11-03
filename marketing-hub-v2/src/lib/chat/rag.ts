@@ -6,34 +6,36 @@ import { extractReplyChoices } from "@/lib/chat/reply-choices";
 import { fetchRelevantSitePages } from "@/lib/chat/site-pages";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
 import { searchKbDocuments, getChatSettings } from "@/lib/chat/data";
+import {
+  retrieveKnowledgeChunks,
+  KNOWLEDGE_MIN_SCORE,
+} from "@/lib/knowledge/retrieve";
+import { recordChatKbMiss } from "@/lib/chat/kb-suggestions";
 
-function scoreDoc(query: string, doc: ChatKbDocument): number {
-  const q = query.toLowerCase();
-  const words = q.split(/\W+/).filter((w) => w.length > 2);
-  const hay = `${doc.title}\n${doc.body}`.toLowerCase();
-  let score = 0;
-  for (const w of words) {
-    if (hay.includes(w)) score += 1;
-  }
-  if (doc.title.toLowerCase().split(/\W+/).some((t) => q.includes(t) && t.length > 3)) {
-    score += 2;
-  }
-  return score;
-}
-
+/** @deprecated Prefer retrieveKnowledgeChunks — kept for tests that assert threshold behaviour. */
 export function retrieveKb(
   query: string,
   docs: ChatKbDocument[],
   limit = 4
 ): ChatKbDocument[] {
-  const scored = docs
-    .map((d) => ({ d, score: scoreDoc(query, d) }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score);
-  if (scored.length === 0) {
-    return docs.slice(0, Math.min(2, docs.length));
+  const chunks = retrieveKnowledgeChunks(
+    query,
+    docs.map((d) => ({
+      id: d.id,
+      title: d.title,
+      body: d.body,
+      source_url: d.source_url,
+      audience: "public",
+    })),
+    { audience: "public", limit, minScore: KNOWLEDGE_MIN_SCORE }
+  );
+  const byId = new Map(docs.map((d) => [d.id, d]));
+  const out: ChatKbDocument[] = [];
+  for (const chunk of chunks) {
+    const doc = byId.get(chunk.docId);
+    if (doc && !out.includes(doc)) out.push(doc);
   }
-  return scored.slice(0, limit).map((x) => x.d);
+  return out;
 }
 
 async function model() {
@@ -66,6 +68,10 @@ export async function streamAssistantReply(input: {
   history: ChatMessage[];
   /** Playground only. Saved guidance is used when this is omitted. */
   guidanceOverride?: string;
+  /** Current website page URL from the widget / Test tab. */
+  pageUrl?: string;
+  pageTitle?: string;
+  sessionId?: string;
 }): Promise<{
   textStream: AsyncIterable<string>;
   sources: ChatMessage["sources"];
@@ -76,11 +82,27 @@ export async function streamAssistantReply(input: {
     searchKbDocuments(input.visitorMessage),
     fetchRelevantSitePages(input.visitorMessage),
   ]);
-  const retrieved = retrieveKb(input.visitorMessage, docs);
-  const sources: ChatMessage["sources"] = [
-    ...retrieved.map((d) => ({
+  const chunks = retrieveKnowledgeChunks(
+    input.visitorMessage,
+    docs.map((d) => ({
+      id: d.id,
       title: d.title,
-      ...(d.source_url ? { source_url: d.source_url } : {}),
+      body: d.body,
+      source_url: d.source_url,
+      audience: "public" as const,
+    })),
+    { audience: "public", limit: 4 }
+  );
+  if (chunks.length === 0 && sitePages.length === 0 && input.sessionId) {
+    void recordChatKbMiss({
+      question: input.visitorMessage,
+      sessionId: input.sessionId,
+    }).catch((err) => console.warn("[chat-kb-miss]", err));
+  }
+  const sources: ChatMessage["sources"] = [
+    ...chunks.map((c) => ({
+      title: c.title,
+      ...(c.source_url ? { source_url: c.source_url } : {}),
     })),
     ...sitePages.map((p) => ({
       title: p.title,
@@ -91,9 +113,9 @@ export async function streamAssistantReply(input: {
   const forceHandoff = shouldForceHandoff(input.visitorMessage);
 
   const kbParts: string[] = [];
-  retrieved.forEach((d, i) => {
+  chunks.forEach((c, i) => {
     kbParts.push(
-      `[KB ${i + 1}] ${d.title}${d.source_url ? ` (${d.source_url})` : ""}\n${d.body}`
+      `[KB ${i + 1}] ${c.title}${c.source_url ? ` (${c.source_url})` : ""}\n${c.text}`
     );
   });
   sitePages.forEach((p, i) => {
@@ -104,8 +126,12 @@ export async function streamAssistantReply(input: {
 
   const kbBlock =
     kbParts.length === 0
-      ? "(No knowledge base or website excerpts matched this message. Continue qualifying from Guidance. For factual extras such as careers URLs or referral contacts, say you will pass the enquiry to the team if unsure.)"
+      ? "(No knowledge base or website excerpts cleared the relevance threshold. Do not invent services, routes, or facts. Continue qualifying from Guidance only, or invite Speak to the team.)"
       : kbParts.join("\n\n");
+  const pageContext =
+    input.pageUrl || input.pageTitle
+      ? `Visitor page context: ${input.pageTitle || "page"} ${input.pageUrl || ""}`.trim()
+      : "";
 
   const guidance = resolveChatGuidance(
     input.guidanceOverride ?? settings.guidance
@@ -132,6 +158,8 @@ You are the Peters & May website enquiry assistant for anonymous visitors.
 
 Guidance:
 ${guidance}
+
+${pageContext}
 
 Hard rules:
 - Follow Guidance for qualification flows, specialist replies (careers, personal effects, suppliers, existing bookings), and what never to promise.
@@ -185,6 +213,9 @@ export async function generateAssistantReply(input: {
   visitorMessage: string;
   history: ChatMessage[];
   guidanceOverride?: string;
+  pageUrl?: string;
+  pageTitle?: string;
+  sessionId?: string;
 }): Promise<{
   body: string;
   choices: string[];

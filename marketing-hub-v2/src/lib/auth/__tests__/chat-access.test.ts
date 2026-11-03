@@ -37,6 +37,7 @@ describe("website chat access", () => {
     expect(navForView("seo").map((item) => item.href)).toEqual([
       "/app/enquiries",
       "/app/chat",
+      "/app/knowledge",
     ]);
   });
 });

@@ -43,6 +43,8 @@ export function isSeoAllowedAppPath(pathname: string) {
     pathname.startsWith("/app/enquiries/") ||
     pathname === "/app/chat" ||
     pathname.startsWith("/app/chat/") ||
+    pathname === "/app/knowledge" ||
+    pathname.startsWith("/app/knowledge/") ||
     pathname === "/app/me" ||
     pathname.startsWith("/app/me/")
   );

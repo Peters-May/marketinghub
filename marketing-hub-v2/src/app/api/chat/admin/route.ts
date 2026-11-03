@@ -171,6 +171,9 @@ export async function POST(request: Request) {
           .filter((m) => m.id !== welcomeId)
           .slice(0, -1),
         guidanceOverride,
+        pageUrl: session.page_url,
+        pageTitle: session.page_title,
+        sessionId: session.id,
       });
       const saved = await addChatMessage({
         session_id: session.id,
@@ -183,6 +186,7 @@ export async function POST(request: Request) {
         reply: saved,
         choices: reply.choices,
         handoff: reply.forceHandoff,
+        sources: reply.sources,
       });
     }
 

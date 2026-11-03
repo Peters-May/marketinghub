@@ -9,7 +9,29 @@ export const ASSISTANT_MODES = [
   "summarise",
 ] as const;
 
+/** Modes staff/members may call. Draft email/social stay admin-only. */
+export const MEMBER_ASSISTANT_MODES = [
+  "chat",
+  "rewrite",
+  "summarise",
+] as const;
+
 export type AssistantMode = (typeof ASSISTANT_MODES)[number];
+
+export function isMemberAssistantMode(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    (MEMBER_ASSISTANT_MODES as readonly string[]).includes(value)
+  );
+}
+
+export function assistantModeAllowedForRole(
+  mode: AssistantMode,
+  role: string | null | undefined
+): boolean {
+  if (role === "admin") return true;
+  return isMemberAssistantMode(mode);
+}
 
 export type AssistantAttachment = {
   name: string;

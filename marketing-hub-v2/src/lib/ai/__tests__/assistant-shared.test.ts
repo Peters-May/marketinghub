@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assistantModeAllowedForRole,
   ensureNamedAttendanceCommand,
   extractHubCommand,
   isAssistantMode,
@@ -33,6 +34,17 @@ describe("extractHubCommand", () => {
     expect(result.commandText).toBe(
       "Update event Boot Düsseldorf travel notes Flight cost"
     );
+  });
+});
+
+describe("assistantModeAllowedForRole", () => {
+  it("allows admins every mode and restricts members", () => {
+    expect(assistantModeAllowedForRole("draft_email", "admin")).toBe(true);
+    expect(assistantModeAllowedForRole("draft_social", "admin")).toBe(true);
+    expect(assistantModeAllowedForRole("chat", "staff")).toBe(true);
+    expect(assistantModeAllowedForRole("rewrite", "staff")).toBe(true);
+    expect(assistantModeAllowedForRole("draft_email", "staff")).toBe(false);
+    expect(assistantModeAllowedForRole("draft_social", "staff")).toBe(false);
   });
 });
 

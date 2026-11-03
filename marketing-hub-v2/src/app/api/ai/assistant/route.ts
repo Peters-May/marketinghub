@@ -11,15 +11,14 @@ import {
   type AssistantChatMessage,
   type AssistantMode,
 } from "@/lib/ai/assistant";
+import { assistantModeAllowedForRole } from "@/lib/ai/assistant-shared";
 import {
   AI_NOT_CONFIGURED_MESSAGE,
   isHubAiConfigured,
 } from "@/lib/ai/openai";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
-import {
-  assistantReadContext,
-  memberAssistantReadContext,
-} from "@/lib/ai/read-context";
+import { canAccessBudget } from "@/lib/auth/budget-access";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -68,6 +67,13 @@ export async function POST(request: NextRequest) {
   if (error || !user) return error;
   const readOnly = user.role !== "admin";
 
+  const limited = checkRateLimit(
+    `ai-assistant:${user.id}`,
+    40,
+    60_000
+  );
+  if (!limited.ok) return limited.response;
+
   if (!(await isHubAiConfigured())) {
     return jsonError(AI_NOT_CONFIGURED_MESSAGE, 503);
   }
@@ -80,6 +86,12 @@ export async function POST(request: NextRequest) {
   }
 
   const mode: AssistantMode = isAssistantMode(body.mode) ? body.mode : "chat";
+  if (!assistantModeAllowedForRole(mode, user.role)) {
+    return jsonError(
+      "That assistant mode is only available to admins.",
+      403
+    );
+  }
   const attachments = parseAttachments(body.attachments);
   const brief =
     typeof body.brief === "string"
@@ -94,16 +106,49 @@ export async function POST(request: NextRequest) {
       if (!messages.length) {
         return jsonError("Add a message for the assistant.", 400);
       }
+      const includeBudget = canAccessBudget({
+        role: user.role,
+        email: user.email,
+      });
+      const page =
+        body.page && typeof body.page === "object" && !Array.isArray(body.page)
+          ? (body.page as Record<string, unknown>)
+          : {};
+      const pathname =
+        typeof page.pathname === "string"
+          ? page.pathname
+          : typeof body.pathname === "string"
+            ? body.pathname
+            : null;
+      const selectedRecordId =
+        typeof page.selectedRecordId === "string"
+          ? page.selectedRecordId
+          : typeof body.selectedRecordId === "string"
+            ? body.selectedRecordId
+            : null;
+      const selectedRecordType =
+        typeof page.selectedRecordType === "string"
+          ? page.selectedRecordType
+          : typeof body.selectedRecordType === "string"
+            ? body.selectedRecordType
+            : null;
       const reply = await generateAssistantChat({
         messages,
         attachments,
         readOnly,
-        readContext: readOnly
-          ? await memberAssistantReadContext({
-              id: user.id,
-              fullName: user.full_name,
-            })
-          : await assistantReadContext(),
+        toolUser: {
+          id: user.id,
+          fullName: user.full_name,
+          email: user.email,
+          role: user.role,
+          includeBudget,
+          readOnly,
+        },
+        pageContext: {
+          pathname,
+          selectedRecordId,
+          selectedRecordType,
+        },
       });
       return jsonOk({ mode, reply });
     }

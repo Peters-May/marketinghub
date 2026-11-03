@@ -45,12 +45,34 @@ function section(title: string, rows: string[]) {
   return [`${title} (${rows.length}, complete):`, ...rows.map((row) => `- ${row}`)];
 }
 
-/** Every event, task, post, partner, and budget line. Not a sample. */
+export type HubCatalogueOptions = {
+  today?: string;
+  contactCount?: number;
+  /** When false, budget lines are omitted. Default false. */
+  includeBudget?: boolean;
+  /** When false, partner sponsorship value is redacted. Default false. */
+  includePartnerValues?: boolean;
+};
+
+/** Every event, task, post, partner, and (optionally) budget line. Not a sample. */
 export function formatHubCatalogue(
   store: Catalogue,
-  today?: string,
-  contactCount?: number
+  todayOrOptions?: string | HubCatalogueOptions,
+  contactCountArg?: number
 ) {
+  const options: HubCatalogueOptions =
+    typeof todayOrOptions === "object" && todayOrOptions
+      ? todayOrOptions
+      : {
+          today: typeof todayOrOptions === "string" ? todayOrOptions : undefined,
+          contactCount: contactCountArg,
+          includeBudget: false,
+          includePartnerValues: false,
+        };
+  const today = options.today;
+  const contactCount = options.contactCount;
+  const includeBudget = Boolean(options.includeBudget);
+  const includePartnerValues = Boolean(options.includePartnerValues);
   const asOf = today ?? new Date().toISOString().slice(0, 10);
   const attendance = new Map<string, string[]>();
   for (const row of store.event_attendance ?? []) {
@@ -138,13 +160,15 @@ export function formatHubCatalogue(
       cell(item.package_name),
       cell(item.status),
       [day(item.starts_at), day(item.ends_at)].filter(Boolean).join(" to ") || "no dates",
-      cell(item.value),
+      includePartnerValues ? cell(item.value) : "value withheld",
     ].join(" | ")
   );
 
-  const budget = [...(store.budget_lines ?? [])].sort(
-    (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
-  );
+  const budget = includeBudget
+    ? [...(store.budget_lines ?? [])].sort(
+        (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+      )
+    : [];
   const budgetLines = budget.map((line) =>
     [cell(line.name), cell(line.group), String(line.planned ?? "")].join(" | ")
   );
@@ -171,21 +195,27 @@ export function formatHubCatalogue(
     ...section("Content", contentLines),
     ...section("Content linked to events", linkLines),
     ...section("Partners", partnerLines),
-    ...section("Budget lines", budgetLines),
+    ...(includeBudget
+      ? section("Budget lines", budgetLines)
+      : [
+          "Budget lines: not included (no budget access for this user).",
+        ]),
     ...section("Resources", resourceLines),
   ].join("\n");
 }
 
 /** Full catalogue for the admin assistant. It cannot change records by itself. */
-export async function assistantReadContext() {
+export async function assistantReadContext(input?: {
+  includeBudget?: boolean;
+}) {
   const store = await readStore();
   const { countContactRecords } = await import("@/lib/data/contact-records");
   const contactCount = await countContactRecords();
-  return formatHubCatalogue(
-    store,
-    undefined,
-    contactCount ?? store.contacts.length
-  );
+  return formatHubCatalogue(store, {
+    contactCount: contactCount ?? store.contacts.length,
+    includeBudget: Boolean(input?.includeBudget),
+    includePartnerValues: false,
+  });
 }
 
 function enquirySummaryLines(

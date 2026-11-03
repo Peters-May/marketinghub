@@ -11,6 +11,7 @@ export async function siteKnowledgeSyncWorkflow(): Promise<SiteKnowledgeSyncResu
       discovered: 0,
       updated: 0,
       skipped: 0,
+      unchanged: 0,
       failed: 0,
       deactivated: 0,
       error: "Chat storage is not configured",
@@ -18,11 +19,12 @@ export async function siteKnowledgeSyncWorkflow(): Promise<SiteKnowledgeSyncResu
   }
 
   const urls = await discoverStep();
-  const totals = { updated: 0, skipped: 0, failed: 0 };
+  const totals = { updated: 0, skipped: 0, unchanged: 0, failed: 0 };
   for (let index = 0; index < urls.length; index += BATCH) {
     const page = await syncBatchStep(urls.slice(index, index + BATCH));
     totals.updated += page.updated;
     totals.skipped += page.skipped;
+    totals.unchanged += page.unchanged;
     totals.failed += page.failed;
     console.log(
       "[workflow] site knowledge batch",

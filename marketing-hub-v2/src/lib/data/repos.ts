@@ -4466,6 +4466,14 @@ export async function listAssistantReviews(): Promise<AssistantReview[]> {
   );
 }
 
+export async function getAssistantReview(
+  id: string
+): Promise<AssistantReview | null> {
+  const store = await readStore();
+  const row = (store.assistant_reviews ?? []).find((item) => item.id === id);
+  return row ? normalizeAssistantReview(row) : null;
+}
+
 export async function createAssistantReview(input: {
   user_id: string;
   user_name: string;

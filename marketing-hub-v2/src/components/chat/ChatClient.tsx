@@ -193,7 +193,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
   const [insightRange, setInsightRange] = useState<"30" | "90" | "all">("30");
   const [inboxQuery, setInboxQuery] = useState("");
   const [testLog, setTestLog] = useState<
-    Array<{ role: string; body: string; choices?: string[] }>
+    Array<{
+      role: string;
+      body: string;
+      choices?: string[];
+      sources?: Array<{ title: string; source_url?: string }>;
+    }>
   >([]);
   const [kbOpen, setKbOpen] = useState(false);
   const [kbForm, setKbForm] = useState({
@@ -558,6 +563,11 @@ export function ChatClient({ configured, initialSessionId }: Props) {
           role: "assistant",
           body: stripChoiceTag(data.reply?.body ?? ""),
           choices: Array.isArray(data.choices) ? data.choices : [],
+          sources: Array.isArray(data.sources)
+            ? data.sources
+            : Array.isArray(data.reply?.sources)
+              ? data.reply.sources
+              : [],
         },
       ]);
     } catch (e) {
@@ -1245,7 +1255,15 @@ export function ChatClient({ configured, initialSessionId }: Props) {
               </h2>
               <p className="mt-1 text-sm text-[#5b6472]">
                 Documents the assistant may quote. Public pages from petersandmay.com
-                are copied in on the first day of each month.
+                are copied in on the first day of each month. Manage indexed pages,
+                gaps, and public vs internal audiences in{" "}
+                <a
+                  href="/app/knowledge"
+                  className="font-semibold text-[#007DC5] underline-offset-2 hover:underline"
+                >
+                  Knowledge
+                </a>
+                .
               </p>
             </div>
             <div className="space-y-4 px-6 py-5">
@@ -1475,6 +1493,30 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                       >
                         {stripChoiceTag(m.body)}
                       </div>
+                      {m.role === "assistant" &&
+                      Array.isArray(m.sources) &&
+                      m.sources.length > 0 ? (
+                        <div className="text-xs text-[#5b6472]">
+                          Sources:{" "}
+                          {m.sources.map((s, si) =>
+                            s.source_url ? (
+                              <a
+                                key={`${si}-${s.title}`}
+                                href={s.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mr-2 text-[#007DC5] underline-offset-2 hover:underline"
+                              >
+                                {s.title}
+                              </a>
+                            ) : (
+                              <span key={`${si}-${s.title}`} className="mr-2">
+                                {s.title}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      ) : null}
                       {showChoices ? (
                         <div className="flex w-full flex-col gap-2">
                           <div className="flex flex-wrap gap-2">

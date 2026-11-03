@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -149,6 +149,7 @@ export function AiAssistantPanel({
   className?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const panelRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -628,6 +629,22 @@ export function AiAssistantPanel({
     ]);
 
     try {
+      const params =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : null;
+      const selectedRecordId =
+        params?.get("open") ||
+        params?.get("event") ||
+        params?.get("id") ||
+        null;
+      const selectedRecordType = pathname?.includes("/events")
+        ? "event"
+        : pathname?.includes("/content")
+          ? "content"
+          : pathname?.includes("/tasks")
+            ? "task"
+            : null;
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -638,6 +655,11 @@ export function AiAssistantPanel({
             content: m.content,
           })),
           attachments,
+          page: {
+            pathname,
+            selectedRecordId,
+            selectedRecordType,
+          },
         }),
       });
       const data = await res.json().catch(() => ({}));
