@@ -81,29 +81,98 @@ export function releaseSummary(item: ContentItem, max = 200): string {
   return `${cut.slice(0, lastSpace > 120 ? lastSpace : max).trimEnd()}…`;
 }
 
-/** Preferred order on the public press contacts list (by email). */
-const SPOKESPERSON_ORDER = [
-  "simon@petersandmay.com",
-  "craig@petersandmay.com",
-  "richard@petersandmay.com",
-  "peverley@petersandmay.com",
-  "robert@petersandmay.com",
-  "marketing@petersandmay.com",
+/**
+ * Public newsroom press contacts. Always shown in this order.
+ * Contact records enrich phone/photo when present; roster supplies the rest.
+ */
+const NEWSROOM_SPOKESPERSON_ROSTER: Array<{
+  email: string;
+  name: string;
+  role: string;
+  organisation: string;
+  photo_url: string;
+}> = [
+  {
+    email: "simon@petersandmay.com",
+    name: "Simon Judson",
+    role: "Chief Executive Officer",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/simon-judson.jpg",
+  },
+  {
+    email: "craig@petersandmay.com",
+    name: "Craig Stanbury",
+    role: "Global Operations Director - Racing",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/craig-stanbury.jpg",
+  },
+  {
+    email: "richard@petersandmay.com",
+    name: "Richard Howatt",
+    role: "UK Marine Senior Sales Manager",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/richard-howatt.jpg",
+  },
+  {
+    email: "peverley@petersandmay.com",
+    name: "Paul Everley",
+    role: "Global Head of Forwarding",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/paul-everley.jpg",
+  },
+  {
+    email: "robert@petersandmay.com",
+    name: "Robert Blades",
+    role: "Global Commercial Sales Manager",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/robert-blades.jpg",
+  },
+  {
+    email: "marketing@petersandmay.com",
+    name: "Sophie Edgerley",
+    role: "Marketing Manager",
+    organisation: "Peters & May",
+    photo_url: "/newsroom/spokespeople/sophie-edgerley.jpg",
+  },
 ];
 
 export function newsroomSpokespeople(contacts: Contact[]): Contact[] {
-  const rank = new Map(
-    SPOKESPERSON_ORDER.map((email, index) => [email, index])
-  );
-  return contacts
-    .filter((c) => c.is_spokesperson && !isPressContact(c))
-    .filter((c) => c.email || c.phone)
-    .sort((a, b) => {
-      const aRank = rank.get(a.email.trim().toLowerCase()) ?? 100;
-      const bRank = rank.get(b.email.trim().toLowerCase()) ?? 100;
-      if (aRank !== bRank) return aRank - bRank;
-      return a.name.localeCompare(b.name);
-    });
+  const byEmail = new Map<string, Contact>();
+  for (const contact of contacts) {
+    const email = contact.email.trim().toLowerCase();
+    if (!email || isPressContact(contact)) continue;
+    byEmail.set(email, contact);
+  }
+
+  return NEWSROOM_SPOKESPERSON_ROSTER.map((person, index) => {
+    const match = byEmail.get(person.email);
+    return {
+      id: match?.id ?? `newsroom-spokesperson-${index}`,
+      kind: "person" as const,
+      name: person.name,
+      organisation: person.organisation,
+      role: person.role,
+      email: person.email,
+      phone: match?.phone ?? "",
+      website: "",
+      services: "",
+      tags: [],
+      notes: "",
+      user_id: match?.user_id ?? null,
+      is_press: false,
+      is_spokesperson: true,
+      photo_url: match?.photo_url?.trim() || person.photo_url,
+      beat: "",
+      outlet: "",
+      country: "",
+      preferred_topics: "",
+      last_contacted_at: null,
+      marketing_consent: null,
+      portal_contact_id: match?.portal_contact_id ?? null,
+      created_at: match?.created_at ?? "",
+      updated_at: match?.updated_at ?? "",
+    };
+  });
 }
 
 export function releaseUrl(id: string): string {

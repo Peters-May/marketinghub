@@ -916,6 +916,10 @@ export async function listContacts() {
   return store.contacts.map(normalizeContact);
 }
 
+function asBoolFlag(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
 function normalizeContact(c: Contact): Contact {
   return {
     ...c,
@@ -923,8 +927,8 @@ function normalizeContact(c: Contact): Contact {
     website: c.website ?? "",
     services: c.services ?? "",
     user_id: c.user_id ?? null,
-    is_press: Boolean(c.is_press),
-    is_spokesperson: Boolean(c.is_spokesperson),
+    is_press: asBoolFlag(c.is_press),
+    is_spokesperson: asBoolFlag(c.is_spokesperson),
     photo_url: typeof c.photo_url === "string" ? c.photo_url.trim() : "",
     beat: c.beat ?? "",
     outlet: c.outlet ?? "",

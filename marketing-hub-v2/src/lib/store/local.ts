@@ -178,8 +178,9 @@ function migrateContacts(
     website: item.website ?? "",
     services: item.services ?? "",
     user_id: item.user_id ?? null,
-    is_press: Boolean(item.is_press),
-    is_spokesperson: Boolean(item.is_spokesperson),
+    is_press: item.is_press === true || item.is_press === "true",
+    is_spokesperson:
+      item.is_spokesperson === true || item.is_spokesperson === "true",
     photo_url: typeof item.photo_url === "string" ? item.photo_url : "",
     beat: item.beat ?? "",
     outlet: item.outlet ?? "",
