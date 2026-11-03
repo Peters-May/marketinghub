@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useHubDataRefresh } from "@/lib/command/refresh";
 import { useHubView } from "@/lib/hub-view";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -64,7 +64,7 @@ export function EmailMarketingHub({
     ? `${visibleCampaigns.length} sent email${visibleCampaigns.length === 1 ? "" : "s"}`
     : `${initialCampaigns.length} marketing email${initialCampaigns.length === 1 ? "" : "s"}`;
 
-  useHubDataRefresh("email", () => {
+  const refreshAudiences = useCallback(() => {
     if (sentOnly) return;
     void fetch("/api/email/audiences")
       .then((res) => (res.ok ? res.json() : null))
@@ -76,7 +76,14 @@ export function EmailMarketingHub({
       .catch(() => {
         /* keep the lists already on screen */
       });
-  });
+  }, [sentOnly]);
+
+  useHubDataRefresh("email", refreshAudiences);
+
+  const openAudiences = useCallback(() => {
+    setAudiencesOpen(true);
+    refreshAudiences();
+  }, [refreshAudiences]);
 
   const section = sentOnly ? "emails" : tab;
 
@@ -122,7 +129,7 @@ export function EmailMarketingHub({
       {section === "emails" && (!audiencesOpen || sentOnly) ? (
         <EmailCampaignsPanel
           campaigns={visibleCampaigns}
-          onOpenAudiences={() => setAudiencesOpen(true)}
+          onOpenAudiences={openAudiences}
           readOnly={sentOnly}
         />
       ) : null}

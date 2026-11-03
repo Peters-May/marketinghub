@@ -5,15 +5,12 @@ import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
 import { queueDueCampaignSends } from "@/lib/workflow/queue-campaign-sends";
 import {
-  countAudienceRecipients,
   listContentTitles,
   listEmailAudiences,
   listEmailCampaigns,
-  listEmailStatEvents,
   listEmailTemplates,
   listMediaLists,
 } from "@/lib/data/repos";
-import { withLiveEmailStats } from "@/lib/email/stats-projector";
 import { isMarketingList, toAudienceListOption } from "@/lib/email/audience-list";
 import {
   isMarketingInboxCampaign,
@@ -23,7 +20,7 @@ import {
 import type { EmailCampaign, EmailTemplate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 export default async function EmailPage({
   searchParams,
@@ -42,22 +39,17 @@ export default async function EmailPage({
   }
 
   if (isAdmin) {
-    try {
-      await queueDueCampaignSends(1, { resumeInterrupted: false });
-    } catch (err) {
+    // Do not hold the list open for scheduled-send claims.
+    void queueDueCampaignSends(1, { resumeInterrupted: false }).catch((err) => {
       console.error("[email] scheduled send", err);
-    }
+    });
   }
 
   if (!isAdmin) {
-    const [campaigns, statEvents] = await Promise.all([
-      listEmailCampaigns(),
-      listEmailStatEvents(),
-    ]);
-    const liveCampaigns = withLiveEmailStats(campaigns, statEvents);
+    const campaigns = await listEmailCampaigns();
     const requested = searchParams?.campaign;
     if (requested) {
-      const match = liveCampaigns.find((campaign) => campaign.id === requested);
+      const match = campaigns.find((campaign) => campaign.id === requested);
       if (match && isMemberVisibleCampaign(match)) {
         redirect(`/app/email/campaign/${encodeURIComponent(match.id)}`);
       }
@@ -65,7 +57,7 @@ export default async function EmailPage({
     return (
       <EmailMarketingHub
         memberView
-        initialCampaigns={liveCampaigns
+        initialCampaigns={campaigns
           .filter(isMemberVisibleCampaign)
           .map(withoutEmailDocument)}
         initialTemplates={[]}
@@ -75,26 +67,25 @@ export default async function EmailPage({
     );
   }
 
-  const [campaigns, templates, audiences, lists, contentTitles, statEvents] =
+  const [campaigns, templates, audiences, lists, contentTitles] =
     await Promise.all([
       listEmailCampaigns(),
       listEmailTemplates(),
       listEmailAudiences(),
       listMediaLists(),
       listContentTitles(),
-      listEmailStatEvents(),
     ]);
-  const liveCampaigns = withLiveEmailStats(campaigns, statEvents);
-  const marketingCampaigns = liveCampaigns
+  const marketingCampaigns = campaigns
     .filter(isMarketingInboxCampaign)
     .map(withoutEmailDocument);
-  const pitchCampaigns = liveCampaigns
+  const pitchCampaigns = campaigns
     .filter(isPitchTabCampaign)
     .map(withoutEmailDocument);
-  const counts = await countAudienceRecipients(audiences.map((audience) => audience.id));
+  // Recipient totals are filled when Audiences opens — counting every contact
+  // here was holding the inbox behind a full contact index rebuild.
   const audiencesWithCounts = audiences.map((audience) => ({
     ...audience,
-    recipient_count: counts.get(audience.id) ?? 0,
+    recipient_count: 0,
   }));
   const marketingLists = lists.filter(isMarketingList).map(toAudienceListOption);
 
