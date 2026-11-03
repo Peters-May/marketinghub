@@ -112,13 +112,27 @@ export async function POST(request: Request, ctx: Ctx) {
       attachments,
     });
 
-    // Human / waiting: store only; staff replies from Hub.
-    if (session.status === "waiting" || session.status === "human") {
+    // Staff has taken over: store only; they reply from Hub.
+    if (session.status === "human") {
       return chatJson(request, {
         mode: "human",
         message:
           "Thanks — the team has your message and will reply here shortly.",
       });
+    }
+
+    // Waiting with no staff yet: keep the AI qualifying (do not freeze on the canned line).
+    if (session.status === "waiting") {
+      const prior = await listChatMessages(id);
+      const hasStaff = prior.some((m) => m.role === "staff");
+      if (hasStaff) {
+        return chatJson(request, {
+          mode: "human",
+          message:
+            "Thanks — the team has your message and will reply here shortly.",
+        });
+      }
+      await updateChatSession(id, { status: "ai" });
     }
 
     // Wait briefly so visitors who send thoughts in several short messages

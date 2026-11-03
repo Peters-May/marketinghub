@@ -1428,9 +1428,23 @@ export function ChatClient({ configured, initialSessionId }: Props) {
 
       {tab === "test" ? (
         <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-xl border border-[#e3e6e9] bg-white shadow-[0_12px_32px_rgba(29,30,31,0.14)]">
-          <div className="bg-[#0B2545] px-4 py-3 text-white">
-            <div className="font-semibold">How can we help?</div>
-            <div className="text-xs text-white/80">Test · not a live visitor</div>
+          <div className="flex items-start justify-between gap-2 bg-[#0B2545] px-4 py-3 text-white">
+            <div>
+              <div className="font-semibold">How can we help?</div>
+              <div className="text-xs text-white/80">Test · not a live visitor</div>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-white/30 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10"
+              onClick={() => {
+                setTestLog([]);
+                setTestSessionId("");
+                setTestInput("");
+                setError("");
+              }}
+            >
+              New chat
+            </button>
           </div>
           <div className="flex flex-wrap gap-2 border-b border-[#e3e6e9] px-3 py-2">
             {[

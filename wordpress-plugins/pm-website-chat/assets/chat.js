@@ -1430,7 +1430,10 @@
 
   function startSession() {
     if (sessionId) return Promise.resolve(sessionId);
-    if (sessionPromise) return sessionPromise;
+    // Stale promise after End chat must not reopen the old session.
+    if (sessionPromise) {
+      sessionPromise = null;
+    }
     showOpeningGreeting();
     sessionPromise = fetch(apiUrl("api/chat/sessions"), {
       method: "POST",
@@ -1750,6 +1753,10 @@
   });
   function resetChatUi() {
     rememberSession(null);
+    sessionPromise = null;
+    teamJoined = false;
+    greetingNode = null;
+    lastCollectKind = "";
     lastMessageAt = null;
     seenIds = {};
     startersShown = false;
@@ -1761,10 +1768,15 @@
     if (lead.parentNode) lead.parentNode.removeChild(lead);
     clearNode(messagesEl);
     messagesEl.appendChild(typingEl);
+    if (cfg.labels && cfg.labels.hours) {
+      var sub = headerText.querySelector(".pm-chat__subtitle");
+      if (sub) sub.textContent = cfg.labels.hours;
+    }
   }
 
   closeBtn.addEventListener("click", function () {
     if (!sessionId) {
+      resetChatUi();
       setOpen(false);
       return;
     }
@@ -1800,10 +1812,20 @@
     end.type = "button";
     end.addEventListener("click", function () {
       scrim.remove();
-      closeSessionOnHub().finally(function () {
-        resetChatUi();
-        setOpen(false);
-      });
+      // Clear the widget first so the next open cannot resume this thread.
+      var idToClose = sessionId;
+      resetChatUi();
+      setOpen(false);
+      if (!idToClose) return;
+      fetch(
+        apiUrl("api/chat/sessions/" + encodeURIComponent(idToClose) + "/close"),
+        {
+          method: "POST",
+          headers: headers(),
+          credentials: useProxy ? "same-origin" : "omit",
+          body: "{}",
+        }
+      ).catch(function () {});
     });
     row.appendChild(keep);
     row.appendChild(end);

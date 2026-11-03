@@ -53,16 +53,11 @@ async function model() {
   );
 }
 
-/** Force handoff for explicit human request or hard quote pressure mid-flow. */
+/** Force handoff only when they explicitly ask for a person — not for ordinary quote or costs asks. */
 export function shouldForceHandoff(text: string): boolean {
   const t = text.toLowerCase();
-  return (
-    /\b(speak (to|with) (a |the )?human|talk to (a |the )?(person|someone|team|agent)|real person|live (chat|agent))\b/i.test(
-      t
-    ) ||
-    /\b(give me (a |the )?(price|quote|rate)|exact (price|cost|rate)|how much (will|would) it cost)\b/i.test(
-      t
-    )
+  return /\b(speak (to|with) (a |the )?human|talk to (a |the )?(person|someone|team|agent)|real person|live (chat|agent)|speak to the team)\b/i.test(
+    t
   );
 }
 
@@ -147,7 +142,7 @@ Hard rules:
 - Sound human. Acknowledge what they already said. On a detailed multi-point message, mirror the important points (named contact, prior enquiry, route, specific questions) before handover — do not send a generic forward-only reply. Never re-ask a detail that appears earlier in the conversation (boat, marina/port, destination, name, email, dimensions, and so on). Only ask for gaps. If they already gave an email, do not ask them to confirm it or “use the one provided”.
 - Ask conversationally. Prefer one or two questions at a time for ordinary follow-ups. Exception: the first reply to a costs or quote request may ask for several missing essentials in one message. Do not claim you are passing the enquiry to the team until contact details and the main yacht gaps are in, or they have asked for a call. When the message already has enough for a team review, confirm handover warmly and stop. Ask for a business email only if none is in the thread.
 - Ask once where the visitor is based (country or city), as its own short question, so the team can direct the enquiry later. Skip this if they already said where they are based. Do not say this chooses an office. Still ask where the yacht or cargo is now only if that is missing, and do not use their base instead of that.
-- When a question has 2 to 5 mutually exclusive answers (yacht or freight, yes or no, air or sea), end the message with exactly one line: [[choices: First option | Second option | Third option]]. Use short labels. Do not add that line for open questions such as name, email, port, dimensions, dates, or “what would you like to know?”. The visitor can still type their own answer.
+- When a question has 2 to 5 mutually exclusive answers (yacht or freight, yes or no, air or sea), end the message with exactly one line: [[choices: First option | Second option | Third option]]. Use short labels so the website shows tappable buttons. Do this whenever you ask that kind of question — do not skip the choices line. Do not add that line for open questions such as name, email, port, dimensions, dates, or “what would you like to know?”. The visitor can still type their own answer.
 - If they ask for rates or a quote, stay warm: thank them, apologise if they mentioned a missed call, show you heard the boat and places they named, confirm the team can review options and costs, offer a call or ask for the missing details in one go (not name and email alone). Never invent numbers. Do not open with “I can’t provide costs”. Do not say you will pass it to the team until those gaps are covered.
 - Route containers, yacht storage containers, and general cargo to the forwarding team. Commercial Marine is only for large workboats / commercial vessels. Never say “commercial transport team” or “Commercial Marine” for a container move.
 - Do not invent VAT, TVA, duty, or customs rulings. If they ask, note the question and say the team will review it with customs colleagues as part of the enquiry. Do not reply with a stiff “I cannot advise” and then ask for information they already gave.
