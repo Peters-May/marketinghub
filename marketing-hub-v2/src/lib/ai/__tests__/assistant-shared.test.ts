@@ -5,6 +5,7 @@ import {
   isAssistantMode,
   isHubRunConfirmation,
   parseAddAttendeesRequest,
+  stripConfirmPromptNoise,
 } from "@/lib/ai/assistant-shared";
 
 describe("extractHubCommand", () => {
@@ -21,6 +22,24 @@ describe("extractHubCommand", () => {
     expect(result.displayText).toBe("I can add that for you.");
     expect(result.commandText).toBe(
       "Add a task to call the organiser, due Friday"
+    );
+  });
+
+  it("strips redundant confirm wording from display text", () => {
+    const result = extractHubCommand(
+      `I will update the travel details.\n\nHere's the command:\n\n:::hub-command\nUpdate event Boot Düsseldorf travel notes Flight cost\n:::\n\nPress Confirm, or type do it.`
+    );
+    expect(result.displayText).toBe("I will update the travel details.");
+    expect(result.commandText).toBe(
+      "Update event Boot Düsseldorf travel notes Flight cost"
+    );
+  });
+});
+
+describe("stripConfirmPromptNoise", () => {
+  it("removes here's the command lines", () => {
+    expect(stripConfirmPromptNoise("Here's the command:\nReady.")).toBe(
+      "Ready."
     );
   });
 });

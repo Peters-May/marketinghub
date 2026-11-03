@@ -66,10 +66,7 @@ import { RelatedTasksPanel } from "@/components/tasks/RelatedTasksPanel";
 import { EventContentLinks } from "@/components/events/EventContentLinks";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { createPersonContact } from "@/lib/contacts/create-person";
-import {
-  emptyPlannerForm,
-  EventPlannerFields,
-} from "@/components/events/EventPlannerFields";
+import { emptyPlannerForm } from "@/components/events/EventPlannerFields";
 import { LinkedSailings } from "@/components/events/LinkedSailings";
 import {
   ATTENDANCE_CHECKLIST_KEYS,
@@ -657,7 +654,6 @@ function EventFields({
           minHeight="88px"
         />
       </div>
-      <EventPlannerFields form={form} onChange={onChange} />
       {showAdminChecks ? (
         <div className="md:col-span-2">
           <AttendanceOpsPanel

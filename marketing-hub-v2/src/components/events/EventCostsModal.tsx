@@ -17,13 +17,14 @@ import {
   COST_CURRENCIES,
   canEditCostLine,
   costTotalsByCurrency,
+  defaultCostsRequestDraft,
   formatCostAmount,
   parseCostAmount,
 } from "@/lib/events/costs";
 import type { EventCostCategory, EventCostLine } from "@/lib/types";
 
 type Staff = { id: string; name: string };
-type Viewer = { id: string; isAdmin: boolean };
+type Viewer = { id: string; isAdmin: boolean; name?: string };
 /** Amount is kept as typed text while editing; parsed on save. */
 type Draft = EventCostLine & { amountText: string };
 
@@ -76,7 +77,9 @@ export function EventCostsModal({
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [requestTo, setRequestTo] = useState("");
-  const [requestNote, setRequestNote] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [requestSubject, setRequestSubject] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [requestMsg, setRequestMsg] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
 
@@ -111,11 +114,16 @@ export function EventCostsModal({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (composeOpen) {
+        if (!requesting) setComposeOpen(false);
+        return;
+      }
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [composeOpen, onClose, requesting]);
 
   const totals = useMemo(() => costTotalsByCurrency(rows), [rows]);
   const tbc = rows.filter((row) => row.amount === null).length;
@@ -218,9 +226,38 @@ export function EventCostsModal({
     publish(rows.filter((row) => row.id !== id));
   }
 
+  function openCompose() {
+    if (!requestTo) {
+      setRequestMsg({ tone: "error", text: "Choose someone first" });
+      return;
+    }
+    const person = staff.find((item) => item.id === requestTo);
+    if (!person) {
+      setRequestMsg({ tone: "error", text: "Choose someone first" });
+      return;
+    }
+    const draft = defaultCostsRequestDraft({
+      eventTitle,
+      recipientName: person.name,
+      requestedBy: viewer?.name || "Marketing",
+    });
+    setRequestSubject(draft.subject);
+    setRequestMessage(draft.message);
+    setRequestMsg(null);
+    setComposeOpen(true);
+  }
+
   async function sendRequest() {
     if (!requestTo) {
       setRequestMsg({ tone: "error", text: "Choose someone first" });
+      return;
+    }
+    if (!requestSubject.trim()) {
+      setRequestMsg({ tone: "error", text: "Add a subject" });
+      return;
+    }
+    if (!requestMessage.trim()) {
+      setRequestMsg({ tone: "error", text: "Add a message" });
       return;
     }
     setRequesting(true);
@@ -232,7 +269,8 @@ export function EventCostsModal({
         action: "request",
         event_id: eventId,
         staff_user_id: requestTo,
-        note: requestNote,
+        subject: requestSubject.trim(),
+        message: requestMessage.trim(),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -245,16 +283,18 @@ export function EventCostsModal({
       return;
     }
     const name = staff.find((person) => person.id === requestTo)?.name ?? "them";
+    setComposeOpen(false);
     setRequestMsg(
       data.emailed
-        ? { tone: "ok", text: `Emailed ${name} and added a Hub reminder` }
+        ? { tone: "ok", text: `Request sent to ${name} — Hub reminder added` }
         : {
             tone: "warn",
             text: `Added a Hub reminder for ${name}. The email wasn't sent (${data.emailSkipped ?? "email not configured"}).`,
           }
     );
     setRequestTo("");
-    setRequestNote("");
+    setRequestSubject("");
+    setRequestMessage("");
   }
 
   const staffOptions = (row: Draft) =>
@@ -501,23 +541,16 @@ export function EventCostsModal({
                 </option>
               ))}
             </select>
-            <input
-              aria-label="Note for the request"
-              className="field !h-9 min-w-[180px] flex-[2] !py-1.5"
-              placeholder="Add a note (optional)"
-              value={requestNote}
-              onChange={(e) => setRequestNote(e.target.value)}
-            />
             <button
               type="button"
               className="btn-primary !py-1.5"
               disabled={requesting}
-              onClick={() => void sendRequest()}
+              onClick={openCompose}
             >
-              {requesting ? "Sending…" : "Request"}
+              Draft email
             </button>
           </div>
-          {requestMsg ? (
+          {!composeOpen && requestMsg ? (
             <p
               className={`mt-2 text-xs ${
                 requestMsg.tone === "ok"
@@ -532,6 +565,100 @@ export function EventCostsModal({
           ) : null}
         </div>
       </div>
+
+      {composeOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/50 p-4 md:left-sidebar md:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="costs-request-title"
+          onClick={() => {
+            if (!requesting) setComposeOpen(false);
+          }}
+        >
+          <div
+            className="surface-card w-full max-w-lg p-5 shadow-xl md:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4 id="costs-request-title" className="font-display text-lg text-brand">
+                  Request costs
+                </h4>
+                <p className="truncate text-sm text-muted">
+                  To{" "}
+                  {staff.find((person) => person.id === requestTo)?.name ?? "staff member"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-ghost !p-1.5"
+                aria-label="Close"
+                disabled={requesting}
+                onClick={() => setComposeOpen(false)}
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+
+            <label className="mb-3 block">
+              <span className="mb-1 block text-xs text-muted">Subject</span>
+              <input
+                className="field"
+                value={requestSubject}
+                onChange={(e) => setRequestSubject(e.target.value)}
+                disabled={requesting}
+              />
+            </label>
+
+            <label className="mb-2 block">
+              <span className="mb-1 block text-xs text-muted">Message</span>
+              <textarea
+                className="field min-h-[220px] resize-y font-sans leading-relaxed"
+                value={requestMessage}
+                onChange={(e) => setRequestMessage(e.target.value)}
+                disabled={requesting}
+              />
+            </label>
+            <p className="mb-4 text-xs text-muted">
+              The email will include a link to this costs sheet under your message.
+            </p>
+
+            {requestMsg ? (
+              <p
+                className={`mb-3 text-xs ${
+                  requestMsg.tone === "ok"
+                    ? "text-success"
+                    : requestMsg.tone === "warn"
+                      ? "text-muted"
+                      : "text-danger"
+                }`}
+              >
+                {requestMsg.text}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={requesting}
+                onClick={() => setComposeOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={requesting}
+                onClick={() => void sendRequest()}
+              >
+                {requesting ? "Sending…" : "Send request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

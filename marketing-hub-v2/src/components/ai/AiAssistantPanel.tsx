@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type ClipboardEvent,
   type DragEvent,
   type FormEvent,
 } from "react";
@@ -231,19 +232,37 @@ export function AiAssistantPanel({
     void addFiles(files);
   }
 
-  function dragHasFiles(event: DragEvent<HTMLDivElement>) {
-    return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  function dragLooksLikeFiles(event: DragEvent<HTMLDivElement>) {
+    const types = Array.from(event.dataTransfer?.types ?? []);
+    if (types.includes("Files")) return true;
+    // Outlook / browsers sometimes omit "Files" until drop.
+    return types.some((type) =>
+      /file|image|application\//i.test(type)
+    );
+  }
+
+  function filesFromDataTransfer(data: DataTransfer | null): File[] {
+    if (!data) return [];
+    const fromList = Array.from(data.files ?? []);
+    if (fromList.length) return fromList;
+    const fromItems: File[] = [];
+    for (const item of Array.from(data.items ?? [])) {
+      if (item.kind !== "file") continue;
+      const file = item.getAsFile();
+      if (file) fromItems.push(file);
+    }
+    return fromItems;
   }
 
   function onAssistantDragEnter(event: DragEvent<HTMLDivElement>) {
-    if (busy || uploading || !dragHasFiles(event)) return;
+    if (busy || uploading || !dragLooksLikeFiles(event)) return;
     event.preventDefault();
     event.stopPropagation();
     setDragActive(true);
   }
 
   function onAssistantDragOver(event: DragEvent<HTMLDivElement>) {
-    if (busy || uploading || !dragHasFiles(event)) return;
+    if (busy || uploading || !dragLooksLikeFiles(event)) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "copy";
@@ -251,7 +270,7 @@ export function AiAssistantPanel({
   }
 
   function onAssistantDragLeave(event: DragEvent<HTMLDivElement>) {
-    if (!dragHasFiles(event)) return;
+    if (!dragLooksLikeFiles(event) && !dragActive) return;
     event.preventDefault();
     event.stopPropagation();
     const next = event.relatedTarget;
@@ -260,12 +279,46 @@ export function AiAssistantPanel({
   }
 
   function onAssistantDrop(event: DragEvent<HTMLDivElement>) {
-    if (!dragHasFiles(event)) return;
     event.preventDefault();
     event.stopPropagation();
     setDragActive(false);
     if (busy || uploading) return;
-    void addFiles(Array.from(event.dataTransfer.files));
+    const files = filesFromDataTransfer(event.dataTransfer);
+    if (!files.length) {
+      setError(
+        "That drop did not include a file. Paste a screenshot (Ctrl+V) or use Upload."
+      );
+      return;
+    }
+    void addFiles(files);
+  }
+
+  function onComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (busy || uploading) return;
+    const files = filesFromDataTransfer(event.clipboardData);
+    const images = files.filter(
+      (file) =>
+        file.type.startsWith("image/") ||
+        isAllowedUpload(file.name || "pasted.png", file.type)
+    );
+    if (!images.length) return;
+    event.preventDefault();
+    void addFiles(
+      images.map((file, index) => {
+        if (file.name && file.name !== "image.png") return file;
+        const ext =
+          file.type === "image/jpeg"
+            ? "jpg"
+            : file.type === "image/webp"
+              ? "webp"
+              : file.type === "image/gif"
+                ? "gif"
+                : "png";
+        return new File([file], `screenshot-${Date.now()}-${index}.${ext}`, {
+          type: file.type || "image/png",
+        });
+      })
+    );
   }
 
   async function previewCommand(text: string) {
@@ -406,8 +459,8 @@ export function AiAssistantPanel({
 
   async function submitChat() {
     const text = composer.trim();
-    if (!text || busy) return;
-    if (!readOnly && pendingCommand && isHubRunConfirmation(text)) {
+    if ((!text && !attachments.length) || busy) return;
+    if (!readOnly && text && pendingCommand && isHubRunConfirmation(text)) {
       setMessages((prev) => [
         ...prev,
         { id: newId(), role: "user", content: text },
@@ -417,10 +470,11 @@ export function AiAssistantPanel({
       await confirmCommand(pendingCommand);
       return;
     }
+    if (!text && !attachments.length) return;
     const userMsg: ThreadMessage = {
       id: newId(),
       role: "user",
-      content: text,
+      content: text || "(attachments only)",
     };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
@@ -477,7 +531,11 @@ export function AiAssistantPanel({
           m.id === assistantId
             ? {
                 ...m,
-                content: displayText || "Proposed action ready. Press Confirm, or type do it.",
+                content:
+                  displayText ||
+                  (commandText
+                    ? "Proposed action ready — confirm below."
+                    : "Done."),
                 commandText,
               }
             : m
@@ -775,20 +833,18 @@ export function AiAssistantPanel({
               )}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
-              {msg.commandText && !readOnly ? (
+              {msg.commandText &&
+              !readOnly &&
+              !(
+                commandPreview &&
+                (msg.commandText === commandPreview.text ||
+                  msg.commandText === pendingCommand)
+              ) ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     className="btn-primary px-2.5 py-1 text-[11px] disabled:opacity-50"
-                    disabled={
-                      busy ||
-                      (isLinkPreview(commandPreview) &&
-                        (msg.commandText === commandPreview?.text ||
-                          msg.commandText === pendingCommand) &&
-                        !commandPreview?.actions.some(
-                          (action) => action.kind === "link_content" && action.checked
-                        ))
-                    }
+                    disabled={busy}
                     onClick={() => void confirmCommand(msg.commandText)}
                   >
                     Confirm
@@ -892,7 +948,9 @@ export function AiAssistantPanel({
                     Not included: {commandPreview.skipped.join("; ")}
                   </p>
                 ) : null}
-                <p className="mt-1 text-muted">Press Confirm, or type do it.</p>
+                <p className="mt-1 text-muted">
+                  Nothing is saved until you confirm. You can also type do it.
+                </p>
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
@@ -968,6 +1026,7 @@ export function AiAssistantPanel({
               <textarea
                 value={composer}
                 onChange={(e) => setComposer(e.target.value)}
+                onPaste={onComposerPaste}
                 rows={3}
                 placeholder={placeholder}
                 className="w-full resize-none rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none ring-brand/30 placeholder:text-muted focus:ring-2"
@@ -1001,13 +1060,7 @@ export function AiAssistantPanel({
                   disabled={
                     busy ||
                     uploading ||
-                    (!composer.trim() &&
-                      !(
-                        (mode === "summarise" ||
-                          mode === "draft_email" ||
-                          mode === "draft_social") &&
-                        attachments.length
-                      ))
+                    (!composer.trim() && !attachments.length)
                   }
                 >
                   {busy ? (
@@ -1019,7 +1072,7 @@ export function AiAssistantPanel({
                 </button>
               </div>
               <p className="text-[11px] text-muted">
-                Drop files here, or use Upload · images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
+                Paste a screenshot (Ctrl+V), drop a file, or use Upload · images, PDF, Word, Excel, CSV or short video · max {MAX_MB}MB each
               </p>
             </form>
           </div>

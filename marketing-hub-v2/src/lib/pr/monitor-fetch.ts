@@ -16,8 +16,12 @@ export type MonitorFetchResult = {
   outlet: string;
   published_at: string | null;
   snippet: string;
+  language: string;
   external_id: string;
 };
+
+const PAGE_SIZE = 100;
+const MAX_PAGES = 3;
 
 function splitTerms(raw: string): string[] {
   return splitKeywordTerms(raw);
@@ -44,31 +48,63 @@ export function newsApiExternalId(link: string): string {
   return `newsapi:${createHash("sha256").update(link).digest("hex")}`;
 }
 
-export async function fetchMentionsForQuery(input: {
-  keywords: string;
-  exclusions: string;
-}): Promise<MonitorFetchResult[]> {
-  const apiKey = process.env.NEWS_API_KEY?.trim();
-  const keywords = splitTerms(input.keywords);
-  if (!keywords.length) return [];
+/** First language code from a comma-separated list, or empty for all languages. */
+export function newsApiLanguageParam(languages: string): string {
+  const first = languages
+    .split(/[,;\s]+/)
+    .map((x) => x.trim().toLowerCase())
+    .find(Boolean);
+  return first && /^[a-z]{2}$/.test(first) ? first : "";
+}
 
-  const exclusions = splitTerms(input.exclusions).map((e) => e.toLowerCase());
-
-  if (!apiKey) {
-    return [];
+/**
+ * NewsAPI `from` ISO date. Uses last_run_at when present, otherwise a 7-day
+ * lookback so the first run is bounded.
+ */
+export function newsApiFromDate(
+  lastRunAt: string | null | undefined,
+  now = new Date()
+): string {
+  if (lastRunAt) {
+    const parsed = new Date(lastRunAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
   }
+  const lookback = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return lookback.toISOString();
+}
 
-  const q = newsApiKeywordQuery(input.keywords);
+type NewsApiArticle = {
+  title?: string;
+  url?: string;
+  description?: string;
+  content?: string;
+  publishedAt?: string;
+  source?: { name?: string };
+};
+
+async function fetchNewsApiPage(input: {
+  apiKey: string;
+  q: string;
+  language: string;
+  from: string;
+  page: number;
+}): Promise<NewsApiArticle[]> {
   const url = new URL("https://newsapi.org/v2/everything");
-  url.searchParams.set("q", q);
-  url.searchParams.set("language", "en");
+  url.searchParams.set("q", input.q);
   url.searchParams.set("sortBy", "publishedAt");
-  url.searchParams.set("pageSize", "25");
+  url.searchParams.set("pageSize", String(PAGE_SIZE));
+  url.searchParams.set("page", String(input.page));
+  url.searchParams.set("from", input.from);
+  if (input.language) {
+    url.searchParams.set("language", input.language);
+  }
 
   let res: Response;
   try {
     res = await fetch(url.toString(), {
-      headers: { "X-Api-Key": apiKey },
+      headers: { "X-Api-Key": input.apiKey },
       signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
@@ -83,34 +119,66 @@ export async function fetchMentionsForQuery(input: {
     throw new Error("News monitoring is unavailable right now.");
   }
 
-  const data = (await res.json()) as {
-    articles?: {
-      title?: string;
-      url?: string;
-      description?: string;
-      content?: string;
-      publishedAt?: string;
-      source?: { name?: string };
-    }[];
-  };
+  const data = (await res.json()) as { articles?: NewsApiArticle[] };
+  return data.articles ?? [];
+}
 
-  const out: MonitorFetchResult[] = [];
-  for (const article of data.articles ?? []) {
-    const title = (article.title || "").trim();
-    const link = (article.url || "").trim();
-    if (!title || !link) continue;
-    const description = (article.description || "").trim();
-    const hay = `${title} ${description} ${article.content || ""}`;
-    if (exclusions.some((ex) => hay.toLowerCase().includes(ex))) continue;
-    if (!textContainsKeywordPhrase(hay, input.keywords)) continue;
-    out.push({
-      title,
-      url: link,
-      outlet: article.source?.name?.trim() || "",
-      published_at: article.publishedAt || null,
-      snippet: description,
-      external_id: newsApiExternalId(link),
-    });
+export async function fetchMentionsForQuery(input: {
+  keywords: string;
+  exclusions: string;
+  languages?: string;
+  last_run_at?: string | null;
+}): Promise<MonitorFetchResult[]> {
+  const apiKey = process.env.NEWS_API_KEY?.trim();
+  const keywords = splitTerms(input.keywords);
+  if (!keywords.length) return [];
+
+  const exclusions = splitTerms(input.exclusions).map((e) => e.toLowerCase());
+
+  if (!apiKey) {
+    return [];
   }
+
+  const q = newsApiKeywordQuery(input.keywords);
+  const language = newsApiLanguageParam(input.languages ?? "");
+  const from = newsApiFromDate(input.last_run_at);
+  const out: MonitorFetchResult[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const articles = await fetchNewsApiPage({
+      apiKey,
+      q,
+      language,
+      from,
+      page,
+    });
+    if (!articles.length) break;
+
+    for (const article of articles) {
+      const title = (article.title || "").trim();
+      const link = (article.url || "").trim();
+      if (!title || !link) continue;
+      const externalId = newsApiExternalId(link);
+      if (seen.has(externalId)) continue;
+      const description = (article.description || "").trim();
+      const hay = `${title} ${description} ${article.content || ""}`;
+      if (exclusions.some((ex) => hay.toLowerCase().includes(ex))) continue;
+      if (!textContainsKeywordPhrase(hay, input.keywords)) continue;
+      seen.add(externalId);
+      out.push({
+        title,
+        url: link,
+        outlet: article.source?.name?.trim() || "",
+        published_at: article.publishedAt || null,
+        snippet: description,
+        language,
+        external_id: externalId,
+      });
+    }
+
+    if (articles.length < PAGE_SIZE) break;
+  }
+
   return out;
 }

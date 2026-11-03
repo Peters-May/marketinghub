@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import {
   getNewsroomSettings,
+  getPrMonitorSettings,
   listContacts,
   listEmailSuppressions,
   listContent,
@@ -62,6 +63,7 @@ export default async function PrSectionPage({
     campaigns,
     queries,
     mentions,
+    monitorSettings,
     newsroom,
     suppressions,
   ] = await Promise.all([
@@ -73,6 +75,7 @@ export default async function PrSectionPage({
     listEmailCampaigns(),
     listPrMonitorQueries(),
     listPrMonitorMentions(),
+    getPrMonitorSettings(),
     getNewsroomSettings(),
     listEmailSuppressions(),
   ]);
@@ -87,6 +90,7 @@ export default async function PrSectionPage({
       initialCampaigns={campaigns}
       initialQueries={queries}
       initialMentions={mentions}
+      initialMonitorSettings={monitorSettings}
       initialNewsroom={newsroom}
       newsApiConfigured={Boolean(process.env.NEWS_API_KEY?.trim())}
       suppressedEmails={suppressions.map((row) => row.email)}

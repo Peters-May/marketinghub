@@ -13,6 +13,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/pr/monitor/cron",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/chat/sync-site",
       "schedule": "0 6 1 * *"
     }

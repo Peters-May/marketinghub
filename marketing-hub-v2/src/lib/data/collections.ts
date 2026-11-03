@@ -699,10 +699,52 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
           { value: "negative", label: "Negative" },
         ],
       }),
+      f("channel", {
+        type: "select",
+        options: [
+          { value: "", label: "Auto" },
+          { value: "online", label: "Online" },
+          { value: "linkedin", label: "LinkedIn" },
+          { value: "social", label: "Social" },
+          { value: "offline", label: "Offline" },
+        ],
+      }),
+      f("screenshot_url", { type: "url", label: "Screenshot URL" }),
+      f("audience", { type: "number", label: "Audience" }),
+      f("estimated_views", { type: "number", label: "Estimated views" }),
+      f("domain_authority", { type: "number", label: "Domain authority" }),
       f("notes", { type: "longtext" }),
       f("pitch_id", { label: "Pitch ID" }),
       f("content_id", { label: "Content ID" }),
       f("event_id", { label: "Event ID" }),
+      f("monitor_mention_id", { label: "Monitor mention ID" }),
+      f("created_at", { type: "readonly", locked: true }),
+      f("updated_at", { type: "readonly", locked: true }),
+    ],
+  },
+  {
+    key: "pr_coverage_reports",
+    label: "PR coverage reports",
+    description: "Shareable coverage books built from clips",
+    fields: [
+      f("id", { type: "readonly", locked: true }),
+      f("title"),
+      f("summary", { type: "longtext" }),
+      f("status", {
+        type: "select",
+        options: [
+          { value: "draft", label: "Draft" },
+          { value: "published", label: "Published" },
+        ],
+      }),
+      f("share_enabled", {
+        type: "select",
+        options: [
+          { value: "true", label: "On" },
+          { value: "false", label: "Off" },
+        ],
+      }),
+      f("share_token", { type: "readonly", locked: true }),
       f("created_at", { type: "readonly", locked: true }),
       f("updated_at", { type: "readonly", locked: true }),
     ],
@@ -716,6 +758,10 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
       f("name"),
       f("keywords", { type: "longtext" }),
       f("exclusions", { type: "longtext" }),
+      f("languages", {
+        label: "Languages",
+        type: "text",
+      }),
       f("active", {
         type: "select",
         options: [
@@ -747,6 +793,32 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
           { value: "new", label: "New" },
           { value: "promoted", label: "Promoted" },
           { value: "dismissed", label: "Dismissed" },
+        ],
+      }),
+      f("sentiment", {
+        type: "select",
+        options: [
+          { value: "", label: "Unset" },
+          { value: "positive", label: "Positive" },
+          { value: "neutral", label: "Neutral" },
+          { value: "negative", label: "Negative" },
+        ],
+      }),
+      f("language"),
+      f("country"),
+      f("favorite", {
+        type: "select",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+      }),
+      f("source", {
+        type: "select",
+        options: [
+          { value: "newsapi", label: "NewsAPI" },
+          { value: "import", label: "Import" },
+          { value: "manual", label: "Manual" },
         ],
       }),
       f("external_id", { label: "External ID" }),

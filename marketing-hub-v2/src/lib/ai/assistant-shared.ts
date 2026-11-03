@@ -35,6 +35,15 @@ export function isAssistantMode(value: unknown): value is AssistantMode {
   );
 }
 
+/** Remove redundant confirm prompts the model sometimes echoes into the chat. */
+export function stripConfirmPromptNoise(text: string): string {
+  return text
+    .replace(/^\s*here'?s the command:?\s*/gim, "")
+    .replace(/^\s*press confirm(?:\s*,?\s*or type do it)?\.?\s*$/gim, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 /** Strip the hub-command fence for display; return the command text if present. */
 export function extractHubCommand(reply: string): {
   displayText: string;
@@ -42,10 +51,12 @@ export function extractHubCommand(reply: string): {
 } {
   const match = reply.match(HUB_COMMAND_FENCE);
   if (!match) {
-    return { displayText: reply.trim(), commandText: null };
+    return { displayText: stripConfirmPromptNoise(reply), commandText: null };
   }
   const commandText = match[1].trim() || null;
-  const displayText = reply.replace(HUB_COMMAND_FENCE, "").trim();
+  const displayText = stripConfirmPromptNoise(
+    reply.replace(HUB_COMMAND_FENCE, "")
+  );
   return { displayText, commandText };
 }
 

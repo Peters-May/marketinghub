@@ -20,6 +20,11 @@ export function mentionsToCsv(
     "url",
     "published_at",
     "snippet",
+    "sentiment",
+    "country",
+    "language",
+    "favorite",
+    "source",
     "status",
     "query",
   ];
@@ -32,6 +37,11 @@ export function mentionsToCsv(
         m.url,
         m.published_at ? m.published_at.slice(0, 10) : "",
         m.snippet,
+        m.sentiment || "",
+        m.country || "",
+        m.language || "",
+        m.favorite ? "yes" : "no",
+        m.source || "newsapi",
         m.status,
         queryName.get(m.query_id) ?? "",
       ]

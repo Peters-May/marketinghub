@@ -5,10 +5,12 @@
  *   node scripts/import-prowly-releases.mjs
  *   node scripts/import-prowly-releases.mjs --apply
  *   node scripts/import-prowly-releases.mjs --apply --overwrite
+ *   node scripts/import-prowly-releases.mjs --only=475447 --apply
  *
  * Dry-run prints what would be saved. --apply creates releases that are not
  * already in the hub. --overwrite updates a matching release and leaves its
- * status unchanged. Images go into the media gallery (Gallery / Press releases).
+ * status unchanged. --only=<prowlyId> limits the run to one release.
+ * Images go into the media gallery (Gallery / Press releases).
  */
 import fs from "fs";
 import path from "path";
@@ -507,6 +509,8 @@ function toContentItem(release, urls, newsroomTitle, now) {
 
 const apply = process.argv.includes("--apply");
 const overwrite = process.argv.includes("--overwrite");
+const onlyArg = process.argv.find((arg) => arg.startsWith("--only="));
+const onlyId = onlyArg ? onlyArg.slice("--only=".length).trim() : "";
 const env = { ...loadEnv(path.join(ROOT, ".env.local")), ...process.env };
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -518,7 +522,13 @@ const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false },
 });
 
-const urls = await listReleaseUrls();
+let urls = await listReleaseUrls();
+if (onlyId) {
+  urls = urls.filter((url) => releaseIdFromUrl(url) === onlyId);
+  if (!urls.length) {
+    throw new Error(`No Prowly release found for --only=${onlyId}`);
+  }
+}
 const releases = [];
 for (const url of urls) {
   const html = await fetchText(url);

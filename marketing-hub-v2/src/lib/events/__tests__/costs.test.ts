@@ -3,6 +3,7 @@ import {
   canEditCostLine,
   costTotalsByCurrency,
   costsSheetPath,
+  defaultCostsRequestDraft,
   parseCostAmount,
 } from "@/lib/events/costs";
 
@@ -60,5 +61,19 @@ describe("costTotalsByCurrency", () => {
 describe("costsSheetPath", () => {
   it("opens the event with the sheet", () => {
     expect(costsSheetPath("evt_1")).toBe("/app/events?open=evt_1&costs=1");
+  });
+});
+
+describe("defaultCostsRequestDraft", () => {
+  it("builds a personalised subject and message", () => {
+    const draft = defaultCostsRequestDraft({
+      eventTitle: "Boot Düsseldorf",
+      recipientName: "Jesper Jensen",
+      requestedBy: "Sophie Edgerley",
+    });
+    expect(draft.subject).toBe("Boot Düsseldorf");
+    expect(draft.message).toContain("Hi Jesper,");
+    expect(draft.message).toContain("Boot Düsseldorf");
+    expect(draft.message).toContain("Sophie Edgerley");
   });
 });

@@ -66,3 +66,27 @@ export function formatCostAmount(amount: number, currency: EventCostCurrency) {
 export function costsSheetPath(eventId: string) {
   return `/app/events?open=${encodeURIComponent(eventId)}&costs=1`;
 }
+
+/** Editable email draft shown before sending a costs request. */
+export function defaultCostsRequestDraft(params: {
+  eventTitle: string;
+  recipientName: string;
+  requestedBy: string;
+}) {
+  const first =
+    params.recipientName.trim().split(/\s+/).filter(Boolean)[0] || "there";
+  const by = params.requestedBy.trim() || "Marketing";
+  return {
+    subject: params.eventTitle.trim() || "Event costs",
+    message: [
+      `Hi ${first},`,
+      "",
+      `Please add your costs for ${params.eventTitle.trim() || "this event"} in Marketing Hub.`,
+      "",
+      "Add a line for each cost — travel, accommodation, print, or anything else. Leave the amount blank if you don't know it yet.",
+      "",
+      "Thanks,",
+      by,
+    ].join("\n"),
+  };
+}

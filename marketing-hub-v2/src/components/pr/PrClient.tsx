@@ -9,23 +9,25 @@ import type {
   MediaList,
   NewsroomSettings,
   PrCoverage,
+  PrCoverageSentiment,
   PrMonitorMention,
   PrMonitorQuery,
+  PrMonitorSettings,
   PrPitch,
 } from "@/lib/types";
 import { PageHeader, EmptyState } from "@/components/ui/PageHeader";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { useHubView } from "@/lib/hub-view";
 import { cn } from "@/lib/utils";
-import { mentionsToCsv } from "@/lib/pr/mentions-csv";
-import { mentionMatchNote } from "@/lib/pr/mention-match";
-import { HighlightedKeywords } from "@/components/pr/HighlightedKeywords";
+import { coverageToCsv } from "@/lib/pr/coverage-csv";
 import { downloadTextFile, isPressContact } from "@/lib/pr/pitch-eml";
 import { isContactSegment } from "@/lib/contacts/segments";
 import { EmailsClient } from "@/components/pr/emails/EmailsClient";
 import { PitchesPanel } from "@/components/pr/PitchesPanel";
 import { isPitchTabCampaign } from "@/lib/email/category";
 import { ReleasesPanel } from "@/components/pr/ReleasesPanel";
+import { MonitoringPanel } from "@/components/pr/MonitoringPanel";
+import { DEFAULT_MONITOR_SETTINGS } from "@/lib/pr/monitor-settings";
 
 export type PrSection =
   | "contacts"
@@ -108,6 +110,7 @@ type Props = {
   initialCampaigns: EmailCampaign[];
   initialQueries: PrMonitorQuery[];
   initialMentions: PrMonitorMention[];
+  initialMonitorSettings?: PrMonitorSettings;
   initialNewsroom: NewsroomSettings;
   newsApiConfigured: boolean;
   suppressedEmails?: string[];
@@ -116,14 +119,11 @@ type Props = {
   openNewRelease?: boolean;
 };
 
-function exportMentionsCsv(
-  rows: PrMonitorMention[],
-  queries: PrMonitorQuery[]
-) {
+function exportCoverageCsv(rows: PrCoverage[]) {
   const day = new Date().toISOString().slice(0, 10);
   downloadTextFile(
-    `mentions-${day}.csv`,
-    `\uFEFF${mentionsToCsv(rows, queries)}`,
+    `coverage-${day}.csv`,
+    `\uFEFF${coverageToCsv(rows)}`,
     "text/csv;charset=utf-8"
   );
 }
@@ -149,6 +149,7 @@ export function PrClient({
   initialCampaigns,
   initialQueries,
   initialMentions,
+  initialMonitorSettings,
   initialNewsroom,
   newsApiConfigured: initialNewsApi,
   suppressedEmails = [],
@@ -168,6 +169,12 @@ export function PrClient({
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [queries, setQueries] = useState(initialQueries);
   const [mentions, setMentions] = useState(initialMentions);
+  const [monitorSettings, setMonitorSettings] = useState<PrMonitorSettings>(
+    initialMonitorSettings ?? {
+      ...DEFAULT_MONITOR_SETTINGS,
+      updated_at: new Date().toISOString(),
+    }
+  );
   const [newsroom, setNewsroom] = useState(initialNewsroom);
   const [newsApiConfigured, setNewsApiConfigured] = useState(initialNewsApi);
   const [search, setSearch] = useState("");
@@ -224,12 +231,7 @@ export function PrClient({
     outlet: "",
     published_at: "",
     notes: "",
-  });
-
-  const [queryForm, setQueryForm] = useState({
-    name: "",
-    keywords: "Peters & May",
-    exclusions: "",
+    sentiment: "" as PrCoverageSentiment,
   });
 
   const refreshAll = useCallback(async () => {
@@ -261,6 +263,9 @@ export function PrClient({
       setContent(cont.content ?? cont.items ?? []);
       setQueries(Array.isArray(mon.queries) ? mon.queries : []);
       setMentions(Array.isArray(mon.mentions) ? mon.mentions : []);
+      if (mon.settings) {
+        setMonitorSettings(mon.settings);
+      }
       setNewsApiConfigured(Boolean(mon.news_api_configured));
       if (nr.settings) {
         setNewsroom(nr.settings);
@@ -515,6 +520,7 @@ export function PrClient({
         outlet: "",
         published_at: "",
         notes: "",
+        sentiment: "",
       });
       await refreshAll();
     } catch (e) {
@@ -524,75 +530,18 @@ export function PrClient({
     }
   }
 
-  async function createQuery() {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/pr/monitor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create_query", ...queryForm }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Could not save the search");
-      setQueryForm({ name: "", keywords: "Peters & May", exclusions: "" });
-      await refreshAll();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not save the search");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function runQuery(id: string) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const res = await fetch("/api/pr/monitor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "run_query", id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Run failed");
-      await refreshAll();
-      if (!data.news_api_configured) {
-        setMessage(
-          "No NEWS_API_KEY configured — add it to env to fetch live mentions. Coverage can still be logged manually."
-        );
-      } else {
-        setMessage(`Added ${data.added} new mention(s).`);
-      }
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Run failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function promoteMention(id: string) {
-    const res = await fetch("/api/pr/monitor", {
+  async function updateCoverageSentiment(
+    id: string,
+    sentiment: PrCoverageSentiment
+  ) {
+    const res = await fetch("/api/pr/coverage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "promote_mention", id }),
+      body: JSON.stringify({ action: "update", id, patch: { sentiment } }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setMessage(data.error || "Could not log that mention as coverage");
-      return;
-    }
-    await refreshAll();
-    openTab("coverage");
-  }
-
-  async function dismissMention(id: string) {
-    const res = await fetch("/api/pr/monitor", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "dismiss_mention", id }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setMessage(data.error || "Could not dismiss that mention");
+      setMessage(data.error || "Could not update sentiment");
       return;
     }
     await refreshAll();
@@ -1046,6 +995,24 @@ export function PrClient({
                 />
               </label>
             ))}
+            <label className="block text-sm">
+              <span className="text-muted">Sentiment</span>
+              <select
+                className="mt-1 w-full rounded-md border border-brand/15 px-3 py-2"
+                value={clipForm.sentiment}
+                onChange={(e) =>
+                  setClipForm((f) => ({
+                    ...f,
+                    sentiment: e.target.value as PrCoverageSentiment,
+                  }))
+                }
+              >
+                <option value="">Unset</option>
+                <option value="positive">Positive</option>
+                <option value="neutral">Neutral</option>
+                <option value="negative">Negative</option>
+              </select>
+            </label>
             <textarea
               className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
               aria-label="Coverage notes"
@@ -1064,201 +1031,82 @@ export function PrClient({
               Save clip
             </button>
           </div>
-          <ul className="space-y-2">
-            {coverage.length === 0 ? (
-              <EmptyState
-                title="No coverage yet"
-                description="Log clippings manually or promote items from Monitoring."
-              />
-            ) : (
-              coverage.map((c) => (
-                <li key={c.id} className="surface-card p-4 text-sm">
-                  <div className="font-medium text-brand">{c.title}</div>
-                  <div className="text-muted">
-                    {c.outlet}
-                    {c.published_at ? ` · ${c.published_at.slice(0, 10)}` : ""}
-                  </div>
-                  {c.url ? (
-                    <a
-                      href={c.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-accent underline"
-                    >
-                      Open article
-                    </a>
-                  ) : null}
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      ) : null}
-
-      {tab === "monitor" ? (
-        <div className="space-y-6">
-          {!newsApiConfigured ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand">
-              Set <code className="font-mono">NEWS_API_KEY</code> in the
-              environment to fetch live news. Until then, use Coverage to log
-              clips by hand.
-            </p>
-          ) : null}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="surface-card space-y-3 p-4">
-              <h2 className="font-display text-lg text-brand">New query</h2>
-              <input
-                className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-                aria-label="Search name"
-                placeholder="Name"
-                value={queryForm.name}
-                onChange={(e) =>
-                  setQueryForm((f) => ({ ...f, name: e.target.value }))
-                }
-              />
-              <textarea
-                className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-                aria-label="Keywords"
-                placeholder="Keywords (comma-separated)"
-                value={queryForm.keywords}
-                onChange={(e) =>
-                  setQueryForm((f) => ({ ...f, keywords: e.target.value }))
-                }
-              />
-              <textarea
-                className="w-full rounded-md border border-brand/15 px-3 py-2 text-sm"
-                aria-label="Exclusions"
-                placeholder="Exclusions (optional)"
-                value={queryForm.exclusions}
-                onChange={(e) =>
-                  setQueryForm((f) => ({ ...f, exclusions: e.target.value }))
-                }
-              />
+          <div className="space-y-3">
+            <div className="flex justify-end">
               <button
                 type="button"
-                disabled={busy || !queryForm.name.trim()}
-                onClick={() => void createQuery()}
-                className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
-              >
-                Save query
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {queries.map((q) => (
-                <li
-                  key={q.id}
-                  className="surface-card flex flex-wrap items-center justify-between gap-2 p-4"
-                >
-                  <div>
-                    <div className="font-medium text-brand">{q.name}</div>
-                    <div className="text-xs text-muted">{q.keywords}</div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void runQuery(q.id)}
-                    className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white disabled:opacity-50"
-                  >
-                    Run now
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="font-display text-lg text-brand">Inbox</h2>
-                <p className="text-xs text-muted">
-                  Highlighted text is the keyword that brought the article in.
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={mentions.length === 0}
-                onClick={() => exportMentionsCsv(mentions, queries)}
+                disabled={coverage.length === 0}
+                onClick={() => exportCoverageCsv(coverage)}
                 className="rounded-lg bg-mist px-3 py-1.5 text-sm text-brand disabled:opacity-50"
               >
-                Export mentions
+                Export coverage
               </button>
             </div>
             <ul className="space-y-2">
-              {mentions.filter((m) => m.status === "new").length === 0 ? (
-                <p className="text-sm text-muted">No new mentions.</p>
+              {coverage.length === 0 ? (
+                <EmptyState
+                  title="No coverage yet"
+                  description="Log clippings manually or promote items from Monitoring."
+                />
               ) : (
-                mentions
-                  .filter((m) => m.status === "new")
-                  .map((m) => {
-                    const keywords =
-                      queries.find((q) => q.id === m.query_id)?.keywords ?? "";
-                    const matchNote = mentionMatchNote(
-                      keywords,
-                      m.title,
-                      m.snippet
-                    );
-                    return (
-                    <li
-                      key={m.id}
-                      className="surface-card flex flex-wrap items-start justify-between gap-3 p-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-brand">
-                          <HighlightedKeywords
-                            text={m.title}
-                            keywords={keywords}
-                          />
-                        </div>
-                        <div className="text-xs text-muted">
-                          {m.outlet}
-                          {m.published_at
-                            ? ` · ${m.published_at.slice(0, 10)}`
-                            : ""}
-                        </div>
-                        {m.snippet ? (
-                          <p className="mt-1 text-sm text-muted">
-                            <HighlightedKeywords
-                              text={m.snippet}
-                              keywords={keywords}
-                            />
-                          </p>
-                        ) : null}
-                        {matchNote ? (
-                          <p className="mt-1 text-xs text-brand">{matchNote}</p>
-                        ) : null}
-                        {m.url ? (
-                          <a
-                            href={m.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sm text-accent underline"
-                          >
-                            View
-                          </a>
-                        ) : null}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void promoteMention(m.id)}
-                          className="rounded-lg bg-brand px-2 py-1 text-xs text-white"
-                        >
-                          Promote
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void dismissMention(m.id)}
-                          className="rounded-lg bg-mist px-2 py-1 text-xs text-brand"
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </li>
-                    );
-                  })
+                coverage.map((c) => (
+                  <li key={c.id} className="surface-card p-4 text-sm">
+                    <div className="font-medium text-brand">{c.title}</div>
+                    <div className="text-muted">
+                      {c.outlet}
+                      {c.published_at
+                        ? ` · ${c.published_at.slice(0, 10)}`
+                        : ""}
+                      {c.sentiment ? ` · ${c.sentiment}` : ""}
+                    </div>
+                    {c.url ? (
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent underline"
+                      >
+                        Open article
+                      </a>
+                    ) : null}
+                    <label className="mt-2 block text-xs text-muted">
+                      Sentiment
+                      <select
+                        className="mt-1 block w-full max-w-xs rounded-md border border-brand/15 px-2 py-1 text-sm text-brand"
+                        value={c.sentiment}
+                        onChange={(e) =>
+                          void updateCoverageSentiment(
+                            c.id,
+                            e.target.value as PrCoverageSentiment
+                          )
+                        }
+                      >
+                        <option value="">Unset</option>
+                        <option value="positive">Positive</option>
+                        <option value="neutral">Neutral</option>
+                        <option value="negative">Negative</option>
+                      </select>
+                    </label>
+                  </li>
+                ))
               )}
             </ul>
           </div>
         </div>
+      ) : null}
+
+      {tab === "monitor" ? (
+        <MonitoringPanel
+          queries={queries}
+          mentions={mentions}
+          settings={monitorSettings}
+          newsApiConfigured={newsApiConfigured}
+          busy={busy}
+          onBusy={setBusy}
+          onMessage={setMessage}
+          onRefresh={refreshAll}
+          onPromoted={() => openTab("coverage")}
+        />
       ) : null}
 
       {tab === "newsroom" ? (

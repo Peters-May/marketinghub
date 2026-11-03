@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
 import { listEvents, listHubUsers } from "@/lib/data/repos";
@@ -42,7 +43,11 @@ export async function GET(request: NextRequest) {
   const staff = await listCostStaff();
   return jsonOk({
     lines,
-    viewer: { id: user.id, isAdmin: user.role === "admin" },
+    viewer: {
+      id: user.id,
+      isAdmin: user.role === "admin",
+      name: user.full_name || user.email,
+    },
     staff: staff.map((u) => ({ id: u.id, name: u.full_name || u.email })),
   });
 }
@@ -122,33 +127,48 @@ export async function POST(request: NextRequest) {
     );
     if (!person) return jsonError("Choose a Hub staff member", 400);
 
-    const note = String(body.note ?? "").trim().slice(0, 1000);
-    const path = costsSheetPath(event.id);
     const requestedBy = user.full_name || user.email;
+    const subject = String(body.subject ?? event.title).trim().slice(0, 200);
+    const message = String(body.message ?? body.note ?? "").trim().slice(0, 4000);
+    if (!subject) return jsonError("Add a subject", 400);
+    if (!message) return jsonError("Add a message", 400);
+
+    const path = costsSheetPath(event.id);
+    const notificationBody =
+      message.split(/\n+/).map((line) => line.trim()).find(Boolean) ||
+      `${requestedBy} asked you to add your costs for this event.`;
 
     await addHubNotification({
       user_id: person.id,
       title: `Add your costs: ${event.title}`,
-      body: note || `${requestedBy} asked you to add your costs for this event.`,
+      body: notificationBody.slice(0, 280),
       href: path,
     });
 
     const email = person.email?.trim();
     if (!email) {
-      return jsonOk({ reminder: true, emailed: false, emailSkipped: "No email address on their Hub record" });
+      return jsonOk({
+        reminder: true,
+        emailed: false,
+        emailSkipped: "No email address on their Hub record",
+      });
     }
-    const sent = await sendEventCostsRequest({
-      to: email,
-      eventName: event.title,
-      path,
-      requestedBy,
-      note,
-    });
-    return jsonOk({
-      reminder: true,
-      emailed: sent.success,
-      emailSkipped: sent.success ? null : sent.error ?? "Email not sent",
-    });
+
+    // Return once the Hub reminder is saved; Resend continues in the background.
+    waitUntil(
+      sendEventCostsRequest({
+        to: email,
+        subject,
+        message,
+        path,
+      }).then((sent) => {
+        if (!sent.success) {
+          console.error("[events/costs] background email failed:", sent.error);
+        }
+      })
+    );
+
+    return jsonOk({ reminder: true, emailed: true, emailQueued: true });
   }
 
   return jsonError("Unknown action", 400);

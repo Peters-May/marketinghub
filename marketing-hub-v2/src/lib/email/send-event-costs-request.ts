@@ -5,17 +5,24 @@ function appOrigin() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 }
 
+function messageToHtml(message: string) {
+  return escapeHtml(message.trim())
+    .split(/\n{2,}/)
+    .map((block) => `<p>${block.replace(/\n/g, "<br/>")}</p>`)
+    .join("\n");
+}
+
 /**
  * Ask one staff member to add their costs for an event.
  * Never includes other people's amounts. Skips gracefully if Resend is not configured.
  */
 export async function sendEventCostsRequest(params: {
   to: string;
-  eventName: string;
+  subject: string;
+  /** Plain-text body the requester personalised in the Hub. */
+  message: string;
   /** Hub path, e.g. /app/events?open=…&costs=1 */
   path: string;
-  requestedBy: string;
-  note?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
@@ -27,7 +34,11 @@ export async function sendEventCostsRequest(params: {
     process.env.RESEND_FROM_EMAIL?.trim() || "marketing@petersandmay.com";
   const origin = appOrigin();
   const href = origin ? `${origin}${params.path}` : params.path;
-  const note = params.note?.trim();
+  const subject = params.subject.trim() || "Event costs";
+  const message = params.message.trim();
+  if (!message) {
+    return { success: false, error: "Message is empty" };
+  }
 
   const html = `
 <!DOCTYPE html>
@@ -37,9 +48,7 @@ export async function sendEventCostsRequest(params: {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <p>${escapeHtml(params.requestedBy || "Marketing")} has asked you to add your costs for <strong>${escapeHtml(params.eventName)}</strong> in Marketing Hub.</p>
-  <p>Add a line for each cost — travel, accommodation, print, or anything else. Leave the amount blank if you don't know it yet.</p>
-  ${note ? `<p style="border-left: 3px solid #ddd; padding-left: 12px; color: #555;">${escapeHtml(note).replace(/\n/g, "<br/>")}</p>` : ""}
+  ${messageToHtml(message)}
   <p><a href="${escapeHtml(href)}" style="color: #0f766e; text-decoration: none;">Add your costs →</a></p>
   <p style="color: #666; font-size: 12px;">Automated notification from Marketing Hub.</p>
 </body>
@@ -51,7 +60,7 @@ export async function sendEventCostsRequest(params: {
     const { error } = await resend.emails.send({
       from,
       to: params.to,
-      subject: params.eventName,
+      subject,
       html,
     });
     if (error) {

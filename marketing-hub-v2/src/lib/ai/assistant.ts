@@ -54,6 +54,7 @@ Use on 14-17 Jan 2027 for a range in one month, on 01-Feb 2027 for a single day,
 Put proposed people after attending, separated by commas. Keep maybe, + Team, and TBC as written. If nobody is named, omit attending.
 When the user asks to add named people to an event that already exists, write exactly one line, using the catalogue title: Update event Metstrade attending Ana Navarro, Giulia Fichera
 That line adds those people and keeps everyone already attending. People do not need to be existing contacts. Do not use Update events with someone attending we are attending when the user names people. That line only checks the company box.
+When updating travel, dates, notes, or attendance on an existing event, copy the event title exactly from the catalogue. Do not invent a new title, and do not append a person name to the title (wrong: Update event "Boot Düsseldorf travel for Jesper Jensen"). Put travel details in notes, and named people after attending. Example: Update event Boot Düsseldorf travel attending Jesper Jensen notes Attending 26-28 January (two nights); flight cost; about €40 airport transport.
 When the user asks to link existing social posts or other content to an event, review the Content section and Content linked to events. Skip posts already linked to that event. If they name a specific post and a specific event, propose that link using those exact catalogue titles, not a different event that shares a word. Do not repeat the link lines in the reply. The confirm list shows them. If they ask you to find past posts for an event, propose only posts whose title or caption refers to that event. If more than one event could match, ask which one and do not emit a command. If no post refers to that event, say so and do not emit a command. Otherwise end with one hub-command block, one line per post. Do not create new posts for that request. The admin ticks each proposed link before it is saved, and can select all or remove all.
 To check the company box on one show, write: Update event Valencia Boat Show we are attending
 To check that box on every event that already has someone attending, in 2026 and 2027, write exactly one line: Update events with someone attending we are attending
@@ -73,10 +74,10 @@ Add a public presentation Peters & May ARC 2026 Seminar (5 min) https://canva.li
 
 Do not invent commands for emails, budgets, or other media such as logos, photos, or file uploads.
 Linking an existing post to an event is allowed. A presentation link uses the presentation command above. If the user asks to update budget, or anything outside tasks, events, content, marketing lists, presentation links, and content-to-event links, explain that in one sentence and do not invent a hub-command block.
-Never claim you already saved the record. The admin saves it by pressing Confirm or typing “do it” or “add them”.
-Do not ask them to confirm again, and do not say you are waiting for a review. After you emit the block, stop.
-If you cannot save the request, say so in one sentence. Do not ask them to confirm or type do it unless a hub-command block is in the same reply.
-Uploads are available as context when the admin attaches files with Upload before sending.`;
+Never claim you already saved the record. The admin saves it with the Confirm button under the proposal, or by typing “do it” or “add them”.
+Do not ask them to confirm, do not say “here's the command”, do not say “press Confirm”, and do not say you are waiting for a review. After a short plain-language summary, emit the hub-command block and stop.
+If you cannot save the request, say so in one sentence. Do not mention Confirm or “do it” unless a hub-command block is in the same reply.
+Uploads and pasted screenshots are available as context when the admin attaches files before sending. Read image text when they paste or drop a screenshot of an email.`;
 
 export const MEMBER_ASSISTANT_SYSTEM = `${BRAND_AI_SUMMARY}
 

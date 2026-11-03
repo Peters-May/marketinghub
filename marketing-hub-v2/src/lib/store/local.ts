@@ -27,6 +27,7 @@ import { allowDemoAuth } from "@/lib/auth/config";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { cache } from "react";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
+import { normalizeMonitorSettings } from "@/lib/pr/monitor-settings";
 import { normalizeEmailSettings } from "@/lib/email/email-settings";
 import { normalizeAiKeySettings } from "@/lib/ai/ai-key-status";
 import {
@@ -293,10 +294,15 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     media_lists: store.media_lists ?? seed.media_lists ?? [],
     pr_pitches: store.pr_pitches ?? seed.pr_pitches ?? [],
     pr_coverage: store.pr_coverage ?? seed.pr_coverage ?? [],
+    pr_coverage_reports:
+      store.pr_coverage_reports ?? seed.pr_coverage_reports ?? [],
     pr_monitor_queries:
       store.pr_monitor_queries ?? seed.pr_monitor_queries ?? [],
     pr_monitor_mentions:
       store.pr_monitor_mentions ?? seed.pr_monitor_mentions ?? [],
+    pr_monitor_settings: normalizeMonitorSettings(
+      store.pr_monitor_settings ?? seed.pr_monitor_settings
+    ),
     email_templates: store.email_templates ?? seed.email_templates ?? [],
     email_audiences: store.email_audiences ?? seed.email_audiences ?? [],
     email_campaigns: store.email_campaigns ?? seed.email_campaigns ?? [],
@@ -372,8 +378,10 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.media_lists ||
     !store.pr_pitches ||
     !store.pr_coverage ||
+    !store.pr_coverage_reports ||
     !store.pr_monitor_queries ||
     !store.pr_monitor_mentions ||
+    !store.pr_monitor_settings ||
     !store.email_templates ||
     !store.email_audiences ||
     !store.email_campaigns ||

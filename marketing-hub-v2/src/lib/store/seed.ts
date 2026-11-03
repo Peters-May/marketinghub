@@ -1456,12 +1456,14 @@ export function createSeedStore(): HubStore {
     pr_pitches: [],
     // marketing list placeholder filled below
     pr_coverage: [],
+    pr_coverage_reports: [],
     pr_monitor_queries: [
       {
         id: "pmq_seed_brand",
         name: "Peters & May brand",
         keywords: "Peters & May, Peters and May",
         exclusions: "",
+        languages: "",
         active: true,
         last_run_at: null,
         notes: "Primary brand monitoring",
@@ -1470,6 +1472,10 @@ export function createSeedStore(): HubStore {
       },
     ],
     pr_monitor_mentions: [],
+    pr_monitor_settings: {
+      digest_emails: "",
+      updated_at: now,
+    },
     email_templates: [
       {
         id: "etpl_seed_newsletter",

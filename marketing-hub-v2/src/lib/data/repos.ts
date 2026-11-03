@@ -11,6 +11,19 @@ import {
 } from "@/lib/events/planner";
 import { isPressRelease } from "@/lib/pr/pipeline";
 import {
+  normalizePrCoverageChannel,
+  parseDomainAuthority,
+  parseOptionalMetric,
+} from "@/lib/pr/coverage-channel";
+import {
+  ensureCoverageReportShareToken,
+  normalizePrCoverageReport,
+  normalizePrCoverageReportItem,
+  omitCoverageReportSharePatch,
+  snapshotCoverageItem,
+} from "@/lib/pr/coverage-report";
+import { isShareToken } from "@/lib/social/post-share";
+import {
   isNewsroomIndexRelease,
   isPublicReleasePage,
   type ReleaseEditorStatus,
@@ -107,10 +120,14 @@ import type {
   PrPitch,
   PrPitchStatus,
   PrCoverage,
+  PrCoverageChannel,
+  PrCoverageReport,
+  PrCoverageReportItem,
   PrCoverageSentiment,
   PrMonitorQuery,
   PrMonitorMention,
   PrMonitorMentionStatus,
+  PrMonitorSettings,
   NewsroomSettings,
   EmailSettings,
   EmailTemplate,
@@ -127,6 +144,8 @@ import type {
 } from "@/lib/types";
 import { normalizeNewsroomSettings } from "@/lib/pr/newsroom-settings";
 import { normalizeEmailSettings } from "@/lib/email/email-settings";
+import { normalizeMonitorMention } from "@/lib/pr/mention-normalize";
+import { normalizeMonitorSettings } from "@/lib/pr/monitor-settings";
 
 export const EMPTY_EMAIL_CAMPAIGN_STATS: EmailCampaignStats = {
   recipients: 0,
@@ -2968,29 +2987,55 @@ export async function deletePrPitch(id: string) {
   });
 }
 
+function normalizePrCoverage(item: Partial<PrCoverage> & { id: string }): PrCoverage {
+  return {
+    id: item.id,
+    title: String(item.title ?? "").trim() || "Untitled clip",
+    url: String(item.url ?? ""),
+    outlet: String(item.outlet ?? ""),
+    published_at: item.published_at || null,
+    sentiment: (item.sentiment as PrCoverageSentiment) || "",
+    notes: String(item.notes ?? ""),
+    channel: normalizePrCoverageChannel(item.channel) as PrCoverageChannel,
+    screenshot_url: String(item.screenshot_url ?? "").trim(),
+    audience: parseOptionalMetric(item.audience),
+    estimated_views: parseOptionalMetric(item.estimated_views),
+    domain_authority: parseDomainAuthority(item.domain_authority),
+    pitch_id: item.pitch_id ?? null,
+    content_id: item.content_id ?? null,
+    event_id: item.event_id ?? null,
+    monitor_mention_id: item.monitor_mention_id ?? null,
+    created_at: item.created_at ?? nowIso(),
+    updated_at: item.updated_at ?? nowIso(),
+  };
+}
+
 export async function listPrCoverage() {
   const store = await readStore();
-  return [...(store.pr_coverage ?? [])].sort((a, b) => {
-    const da = a.published_at || a.created_at;
-    const db = b.published_at || b.created_at;
-    return new Date(db).getTime() - new Date(da).getTime();
-  });
+  return [...(store.pr_coverage ?? [])]
+    .map((row) => normalizePrCoverage(row))
+    .sort((a, b) => {
+      const da = a.published_at || a.created_at;
+      const db = b.published_at || b.created_at;
+      return new Date(db).getTime() - new Date(da).getTime();
+    });
+}
+
+export async function getPrCoverage(id: string): Promise<PrCoverage | null> {
+  const store = await readStore();
+  const row = (store.pr_coverage ?? []).find((x) => x.id === id);
+  return row ? normalizePrCoverage(row) : null;
 }
 
 export async function createPrCoverage(
   input: Omit<PrCoverage, "id" | "created_at" | "updated_at">
 ) {
-  const item: PrCoverage = {
+  const item = normalizePrCoverage({
     ...input,
-    sentiment: (input.sentiment as PrCoverageSentiment) || "",
-    pitch_id: input.pitch_id ?? null,
-    content_id: input.content_id ?? null,
-    event_id: input.event_id ?? null,
-    monitor_mention_id: input.monitor_mention_id ?? null,
     id: uid("cov"),
     created_at: nowIso(),
     updated_at: nowIso(),
-  };
+  });
   await updateStore((s) => {
     if (!s.pr_coverage) s.pr_coverage = [];
     s.pr_coverage.push(item);
@@ -3007,13 +3052,14 @@ export async function updatePrCoverage(
     if (!s.pr_coverage) s.pr_coverage = [];
     const idx = s.pr_coverage.findIndex((x) => x.id === id);
     if (idx === -1) return;
-    s.pr_coverage[idx] = {
+    const next = normalizePrCoverage({
       ...s.pr_coverage[idx],
       ...patch,
       id,
       updated_at: nowIso(),
-    };
-    updated = s.pr_coverage[idx];
+    });
+    s.pr_coverage[idx] = next;
+    updated = next;
   });
   return updated;
 }
@@ -3024,11 +3070,293 @@ export async function deletePrCoverage(id: string) {
   });
 }
 
+export async function listPrCoverageReports() {
+  const store = await readStore();
+  return [...(store.pr_coverage_reports ?? [])]
+    .map((row) => normalizePrCoverageReport(row))
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
+}
+
+export async function getPrCoverageReport(
+  id: string
+): Promise<PrCoverageReport | null> {
+  const store = await readStore();
+  const row = (store.pr_coverage_reports ?? []).find((x) => x.id === id);
+  return row ? normalizePrCoverageReport(row) : null;
+}
+
+export async function createPrCoverageReport(input: {
+  title?: string;
+  summary?: string;
+  status?: PrCoverageReport["status"];
+  coverage_ids?: string[];
+}): Promise<PrCoverageReport> {
+  const coverage = await listPrCoverage();
+  const byId = new Map(coverage.map((c) => [c.id, c]));
+  const ids = Array.isArray(input.coverage_ids) ? input.coverage_ids : [];
+  const items: PrCoverageReportItem[] = [];
+  ids.forEach((coverageId, index) => {
+    const clip = byId.get(coverageId);
+    if (!clip) return;
+    items.push(snapshotCoverageItem(clip, index));
+  });
+  const item = normalizePrCoverageReport({
+    id: uid("cvr"),
+    title: String(input.title ?? "").trim() || "Untitled coverage report",
+    summary: String(input.summary ?? ""),
+    status: input.status === "published" ? "published" : "draft",
+    items,
+    share_token: "",
+    share_enabled: false,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    s.pr_coverage_reports.push(item);
+  });
+  return item;
+}
+
+export async function updatePrCoverageReport(
+  id: string,
+  patch: Partial<PrCoverageReport>
+): Promise<PrCoverageReport | null> {
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const safePatch = omitCoverageReportSharePatch(
+      patch
+    ) as Partial<PrCoverageReport>;
+    const next = normalizePrCoverageReport({
+      ...prev,
+      ...safePatch,
+      id,
+      share_token: prev.share_token,
+      share_enabled: prev.share_enabled,
+      items: Array.isArray(safePatch.items) ? safePatch.items : prev.items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function deletePrCoverageReport(id: string) {
+  await updateStore((s) => {
+    s.pr_coverage_reports = (s.pr_coverage_reports ?? []).filter(
+      (x) => x.id !== id
+    );
+  });
+}
+
+export async function addItemsToPrCoverageReport(
+  id: string,
+  coverageIds: string[]
+): Promise<PrCoverageReport | null> {
+  const coverage = await listPrCoverage();
+  const byId = new Map(coverage.map((c) => [c.id, c]));
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const existing = new Set(prev.items.map((item) => item.coverage_id));
+    const items = [...prev.items];
+    let order =
+      items.reduce((max, item) => Math.max(max, item.sort_order), -1) + 1;
+    for (const coverageId of coverageIds) {
+      if (existing.has(coverageId)) continue;
+      const clip = byId.get(coverageId);
+      if (!clip) continue;
+      items.push(snapshotCoverageItem(clip, order));
+      existing.add(coverageId);
+      order += 1;
+    }
+    const next = normalizePrCoverageReport({
+      ...prev,
+      items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function removeItemFromPrCoverageReport(
+  id: string,
+  coverageId: string
+): Promise<PrCoverageReport | null> {
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const items = prev.items
+      .filter((item) => item.coverage_id !== coverageId)
+      .map((item, index) => ({ ...item, sort_order: index }));
+    const next = normalizePrCoverageReport({
+      ...prev,
+      items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function reorderPrCoverageReportItems(
+  id: string,
+  coverageIds: string[]
+): Promise<PrCoverageReport | null> {
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const byId = new Map(prev.items.map((item) => [item.coverage_id, item]));
+    const items: PrCoverageReportItem[] = [];
+    coverageIds.forEach((coverageId, index) => {
+      const item = byId.get(coverageId);
+      if (!item) return;
+      items.push({ ...item, sort_order: index });
+      byId.delete(coverageId);
+    });
+    [...byId.values()]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .forEach((item) => {
+        items.push({ ...item, sort_order: items.length });
+      });
+    const next = normalizePrCoverageReport({
+      ...prev,
+      items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function refreshPrCoverageReportItem(
+  id: string,
+  coverageId: string
+): Promise<PrCoverageReport | null> {
+  const clip = await getPrCoverage(coverageId);
+  if (!clip) return null;
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const items = prev.items.map((item) =>
+      item.coverage_id === coverageId
+        ? snapshotCoverageItem(clip, item.sort_order)
+        : item
+    );
+    const next = normalizePrCoverageReport({
+      ...prev,
+      items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function updatePrCoverageReportItem(
+  id: string,
+  coverageId: string,
+  patch: Partial<PrCoverageReportItem>
+): Promise<PrCoverageReport | null> {
+  let updated: PrCoverageReport | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const items = prev.items.map((item) =>
+      item.coverage_id === coverageId
+        ? normalizePrCoverageReportItem({ ...item, ...patch }, item.sort_order)
+        : item
+    );
+    const next = normalizePrCoverageReport({
+      ...prev,
+      items,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
+export async function setPrCoverageReportShare(
+  id: string,
+  enabled: boolean
+): Promise<{ share_token: string; share_enabled: boolean } | null> {
+  let result: { share_token: string; share_enabled: boolean } | null = null;
+  await updateStore((s) => {
+    if (!s.pr_coverage_reports) s.pr_coverage_reports = [];
+    const idx = s.pr_coverage_reports.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizePrCoverageReport(s.pr_coverage_reports[idx]);
+    const share_token = ensureCoverageReportShareToken(prev.share_token);
+    const next = normalizePrCoverageReport({
+      ...prev,
+      share_token,
+      share_enabled: enabled,
+      status: enabled ? "published" : prev.status,
+      updated_at: nowIso(),
+    });
+    s.pr_coverage_reports[idx] = next;
+    result = { share_token, share_enabled: enabled };
+  });
+  return result;
+}
+
+export async function getPublicCoverageReportByShareToken(token: string) {
+  const trimmed = token.trim();
+  if (!isShareToken(trimmed)) return null;
+  const store = await readStore();
+  const row = (store.pr_coverage_reports ?? []).find(
+    (report) =>
+      report.share_enabled === true &&
+      (report.share_token ?? "").trim() === trimmed
+  );
+  return row ? normalizePrCoverageReport(row) : null;
+}
+
+function normalizeMonitorQuery(q: PrMonitorQuery): PrMonitorQuery {
+  return {
+    ...q,
+    languages: String(q.languages ?? "").trim(),
+    exclusions: String(q.exclusions ?? ""),
+    active: q.active !== false,
+    last_run_at: q.last_run_at ?? null,
+    notes: String(q.notes ?? ""),
+  };
+}
+
 export async function listPrMonitorQueries() {
   const store = await readStore();
-  return [...(store.pr_monitor_queries ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  return [...(store.pr_monitor_queries ?? [])]
+    .map(normalizeMonitorQuery)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function createPrMonitorQuery(
@@ -3036,6 +3364,7 @@ export async function createPrMonitorQuery(
 ) {
   const item: PrMonitorQuery = {
     ...input,
+    languages: String(input.languages ?? "").trim(),
     active: input.active !== false,
     last_run_at: input.last_run_at ?? null,
     id: uid("pmq"),
@@ -3079,10 +3408,13 @@ export async function deletePrMonitorQuery(id: string) {
 
 export async function listPrMonitorMentions() {
   const store = await readStore();
-  return [...(store.pr_monitor_mentions ?? [])].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+  return [...(store.pr_monitor_mentions ?? [])]
+    .map((m) => normalizeMonitorMention(m))
+    .sort((a, b) => {
+      const da = a.published_at || a.created_at;
+      const db = b.published_at || b.created_at;
+      return new Date(db).getTime() - new Date(da).getTime();
+    });
 }
 
 export async function upsertPrMonitorMentions(
@@ -3096,13 +3428,13 @@ export async function upsertPrMonitorMentions(
     );
     for (const input of mentions) {
       if (input.external_id && byExternal.has(input.external_id)) continue;
-      const item: PrMonitorMention = {
+      const item = normalizeMonitorMention({
         ...input,
         status: (input.status as PrMonitorMentionStatus) || "new",
         id: uid("pmm"),
         created_at: nowIso(),
         updated_at: nowIso(),
-      };
+      });
       s.pr_monitor_mentions.push(item);
       byExternal.set(item.external_id, item);
       created.push(item);
@@ -3120,15 +3452,35 @@ export async function updatePrMonitorMention(
     if (!s.pr_monitor_mentions) s.pr_monitor_mentions = [];
     const idx = s.pr_monitor_mentions.findIndex((x) => x.id === id);
     if (idx === -1) return;
-    s.pr_monitor_mentions[idx] = {
+    s.pr_monitor_mentions[idx] = normalizeMonitorMention({
       ...s.pr_monitor_mentions[idx],
       ...patch,
       id,
       updated_at: nowIso(),
-    };
+    });
     updated = s.pr_monitor_mentions[idx];
   });
   return updated;
+}
+
+export async function getPrMonitorSettings(): Promise<PrMonitorSettings> {
+  const store = await readStore();
+  return normalizeMonitorSettings(store.pr_monitor_settings);
+}
+
+export async function updatePrMonitorSettings(
+  patch: Partial<PrMonitorSettings>
+): Promise<PrMonitorSettings> {
+  let next = normalizeMonitorSettings(patch);
+  await updateStore((s) => {
+    next = normalizeMonitorSettings({
+      ...s.pr_monitor_settings,
+      ...patch,
+      updated_at: nowIso(),
+    });
+    s.pr_monitor_settings = next;
+  });
+  return next;
 }
 
 export async function deletePrMonitorMention(id: string) {

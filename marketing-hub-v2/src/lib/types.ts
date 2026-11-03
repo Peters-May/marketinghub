@@ -508,6 +508,14 @@ export type PrPitch = {
 
 export type PrCoverageSentiment = "positive" | "neutral" | "negative" | "";
 
+/** Channel used to group clips in coverage books. */
+export type PrCoverageChannel =
+  | "online"
+  | "social"
+  | "linkedin"
+  | "offline"
+  | "";
+
 /** Manual or promoted media coverage / clipping. */
 export type PrCoverage = {
   id: string;
@@ -517,11 +525,52 @@ export type PrCoverage = {
   published_at: string | null;
   sentiment: PrCoverageSentiment;
   notes: string;
+  /** Online / social / LinkedIn / offline. Empty = infer from URL when needed. */
+  channel: PrCoverageChannel;
+  /** Public screenshot or article preview image URL. */
+  screenshot_url: string;
+  /** Publication-wide audience / reach figure (manual). */
+  audience: number | null;
+  /** Estimated lifetime views (manual). */
+  estimated_views: number | null;
+  /** Moz-style domain authority 0–100 (manual). */
+  domain_authority: number | null;
   pitch_id: string | null;
   content_id: string | null;
   event_id: string | null;
   /** Set when promoted from a monitor mention. */
   monitor_mention_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Snapshot of a coverage clip inside a shareable coverage book. */
+export type PrCoverageReportItem = {
+  coverage_id: string;
+  title: string;
+  url: string;
+  outlet: string;
+  published_at: string | null;
+  channel: PrCoverageChannel;
+  screenshot_url: string;
+  audience: number | null;
+  estimated_views: number | null;
+  domain_authority: number | null;
+  notes: string;
+  sort_order: number;
+};
+
+export type PrCoverageReportStatus = "draft" | "published";
+
+/** Curated CoverageBook-style report over promoted/logged clips. */
+export type PrCoverageReport = {
+  id: string;
+  title: string;
+  summary: string;
+  status: PrCoverageReportStatus;
+  items: PrCoverageReportItem[];
+  share_token: string;
+  share_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -533,6 +582,11 @@ export type PrMonitorQuery = {
   keywords: string;
   /** Comma-separated terms to exclude. */
   exclusions: string;
+  /**
+   * Comma-separated NewsAPI language codes (e.g. en,nl,de).
+   * Empty = all languages (no language filter).
+   */
+  languages: string;
   active: boolean;
   last_run_at: string | null;
   notes: string;
@@ -543,6 +597,8 @@ export type PrMonitorQuery = {
 /** Ingested mention awaiting promote-to-coverage or dismiss. */
 export type PrMonitorMentionStatus = "new" | "promoted" | "dismissed";
 
+export type PrMonitorMentionSource = "newsapi" | "import" | "manual";
+
 export type PrMonitorMention = {
   id: string;
   query_id: string;
@@ -552,8 +608,20 @@ export type PrMonitorMention = {
   published_at: string | null;
   snippet: string;
   status: PrMonitorMentionStatus;
+  sentiment: PrCoverageSentiment;
+  language: string;
+  country: string;
+  favorite: boolean;
+  source: PrMonitorMentionSource;
   external_id: string;
   created_at: string;
+  updated_at: string;
+};
+
+/** Monitoring digest / cutover settings. */
+export type PrMonitorSettings = {
+  /** Comma-separated recipient emails for the daily new-mention digest. */
+  digest_emails: string;
   updated_at: string;
 };
 
@@ -1396,10 +1464,14 @@ export type HubStore = {
   pr_pitches: PrPitch[];
   /** Coverage / clippings. */
   pr_coverage: PrCoverage[];
+  /** Shareable coverage books built from clips. */
+  pr_coverage_reports: PrCoverageReport[];
   /** Media monitoring queries. */
   pr_monitor_queries: PrMonitorQuery[];
   /** Monitoring inbox mentions. */
   pr_monitor_mentions: PrMonitorMention[];
+  /** Monitoring digest recipients and related settings. */
+  pr_monitor_settings: PrMonitorSettings;
   /** Email marketing templates. */
   email_templates: EmailTemplate[];
   /** Email marketing audiences. */
