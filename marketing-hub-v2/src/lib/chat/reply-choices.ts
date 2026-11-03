@@ -69,6 +69,10 @@ function inferChoices(body: string): string[] {
     return [...DEFAULT_ROUTE_CHOICES];
   }
 
+  if (looksLikeYachtStatusQuestion(body)) {
+    return ["Trailer", "In the water", "Ashore in a yard"];
+  }
+
   if (looksLikeModeQuestion(body)) {
     return ["Air", "Sea", "Road", "Not sure"];
   }
@@ -131,6 +135,15 @@ function looksLikeRouteClassification(body: string): boolean {
     /yacht.{0,40}freight|freight.{0,40}yacht/i.test(t) ||
     /what (?:kind of )?(?:enquiry|shipment|move) is this/i.test(t) ||
     /what can we help you with/i.test(t)
+  );
+}
+
+function looksLikeYachtStatusQuestion(body: string): boolean {
+  const t = body.toLowerCase();
+  return (
+    /\btrailer\b/.test(t) &&
+    /\b(water|afloat)\b/.test(t) &&
+    /\b(ashore|yard|hardstanding|hard standing)\b/.test(t)
   );
 }
 

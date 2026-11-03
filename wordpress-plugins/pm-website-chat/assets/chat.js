@@ -54,11 +54,11 @@
       label: "Where is the yacht now? (country or port)",
       placeholder: "e.g. Southampton, UK",
     },
-    { key: "make_model", label: "Yacht make / model" },
-    { key: "length", label: "Length (LOA)" },
-    { key: "beam", label: "Beam" },
-    { key: "height", label: "Overall transport height" },
-    { key: "weight", label: "Approximate weight / displacement" },
+    { key: "make_model", label: "Make and model" },
+    { key: "length", label: "Length (LOA)", placeholder: "e.g. 18.2 m" },
+    { key: "beam", label: "Beam", placeholder: "e.g. 4.8 m" },
+    { key: "height", label: "Transport height" },
+    { key: "weight", label: "Approx. weight" },
     {
       key: "value",
       label: "Approximate value (include currency)",
@@ -320,6 +320,7 @@
   function noteTeamJoined(authorName) {
     if (teamJoined) return;
     teamJoined = true;
+    stopCollect();
     hideStarters();
     var chips = messagesEl.querySelectorAll(".pm-chat__choices");
     for (var i = 0; i < chips.length; i++) chips[i].parentNode.removeChild(chips[i]);
@@ -328,7 +329,7 @@
     var when = clockNow();
     appendBubble(
       "system",
-      who + " from the team joined" + (when ? " · " + when : "")
+      first + " from the team joined" + (when ? " · " + when : "")
     );
     var title = headerText.querySelector(".pm-chat__title");
     var sub = headerText.querySelector(".pm-chat__subtitle");
@@ -339,6 +340,7 @@
           ? "Freight forwarding team"
           : "Yacht transport team";
     }
+    input.placeholder = "Type your message…";
   }
 
   function setTyping(on) {
@@ -416,6 +418,13 @@
       ) {
         return ["Yacht transport", "Freight or cargo", "Something else"];
       }
+    }
+    if (
+      /\btrailer\b/.test(lower) &&
+      /\b(water|afloat)\b/.test(lower) &&
+      /\b(ashore|yard|hardstanding|hard standing)\b/.test(lower)
+    ) {
+      return ["Trailer", "In the water", "Ashore in a yard"];
     }
     var question = body.match(/([^.!?\n]{8,220}\?)\s*$/);
     if (!question) return [];
@@ -758,14 +767,17 @@
   }
 
   function showUnavailableNotice(onRetry) {
+    hideStarters();
+    var sub = headerText.querySelector(".pm-chat__subtitle");
+    if (sub && !teamJoined) sub.textContent = "Connection lost";
     var notice = el("div", "pm-chat__notice");
     notice.setAttribute("role", "alert");
-    notice.appendChild(el("strong", "", "Chat isn't available right now"));
+    notice.appendChild(el("strong", "", "Chat isn't available right now."));
     notice.appendChild(
       el(
         "span",
         "",
-        "Try again in a moment, or contact your nearest office directly."
+        "Your message is saved above. Try again in a moment, or contact your nearest office directly."
       )
     );
     var actions = el("div", "pm-chat__notice-actions");
@@ -773,6 +785,12 @@
     retry.type = "button";
     retry.addEventListener("click", function () {
       if (notice.parentNode) notice.parentNode.removeChild(notice);
+      if (sub && !teamJoined) {
+        sub.textContent =
+          (cfg.labels && cfg.labels.hours) ||
+          (cfg.labels && cfg.labels.subtitle) ||
+          "Replies in UK business hours";
+      }
       onRetry();
     });
     var office = el("a", "", "Find an office");
@@ -783,6 +801,7 @@
     actions.appendChild(office);
     notice.appendChild(actions);
     messagesEl.insertBefore(notice, typingEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
     return notice;
   }
 
@@ -1129,7 +1148,7 @@
 
     var actions = el("div", "pm-chat__card-actions");
     if (collectState.index > 0) {
-      var backStep = el("button", "pm-chat__btn-ghost", "Back");
+      var backStep = el("button", "pm-chat__btn-secondary", "Back");
       backStep.type = "button";
       backStep.addEventListener("click", function () {
         inputs.forEach(function (item) {
@@ -1542,7 +1561,13 @@
     if (!opts.skipCollect) {
       maybeStartCollectFromVisitor(text);
     }
-    var visitorWrap = appendBubble("visitor", text, null, null, attachments);
+    var visitorWrap = opts.reuseWrap || null;
+    if (!visitorWrap) {
+      visitorWrap = appendBubble("visitor", text, null, null, attachments);
+    } else {
+      var oldMark = visitorWrap.querySelector(".pm-chat__not-sent");
+      if (oldMark) oldMark.parentNode.removeChild(oldMark);
+    }
     inflightSends += 1;
     setTyping(true);
 
@@ -1591,10 +1616,15 @@
       })
       .catch(function (err) {
         if (visitorWrap) {
-          visitorWrap.appendChild(el("div", "pm-chat__not-sent", "Not sent"));
+          if (!visitorWrap.querySelector(".pm-chat__not-sent")) {
+            visitorWrap.appendChild(el("div", "pm-chat__not-sent", "Not sent"));
+          }
           showUnavailableNotice(function () {
-            if (visitorWrap.parentNode) visitorWrap.parentNode.removeChild(visitorWrap);
-            sendMessageText(text, opts);
+            sendMessageText(text, {
+              skipCollect: true,
+              reuseWrap: visitorWrap,
+              attachments: attachments,
+            });
           });
         } else {
           appendBubble(

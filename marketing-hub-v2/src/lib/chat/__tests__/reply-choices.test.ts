@@ -43,4 +43,15 @@ describe("extractReplyChoices", () => {
       "Something else",
     ]);
   });
+
+  it("adds trailer/water/ashore chips for yacht status questions", () => {
+    const result = extractReplyChoices(
+      "Thanks, I can help get this to the right team. Is the yacht on a trailer, in the water, or ashore in a yard?"
+    );
+    expect(result.choices).toEqual([
+      "Trailer",
+      "In the water",
+      "Ashore in a yard",
+    ]);
+  });
 });
