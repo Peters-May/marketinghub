@@ -456,8 +456,8 @@
 }
 
 #pm-website-chat-root .pm-chat__chip--choice {
-  height: 40px;
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--pm-line);
   border-radius: 8px;

@@ -19,6 +19,30 @@ export async function OPTIONS(request: Request) {
 
 type Ctx = { params: { id: string } };
 
+/** 0ms for complete messages; ~800ms only for short fragments that may still be typing. */
+function visitorReplyDebounceMs(text: string): number {
+  const t = String(text || "").trim();
+  if (!t) return 0;
+  if (
+    /^(yacht transport|freight or cargo|yacht|freight|cargo|something else)$/i.test(
+      t
+    )
+  ) {
+    return 0;
+  }
+  if (t.length >= 40) return 0;
+  if (/[.?!]|@|\n/.test(t)) return 0;
+  if (
+    /\b(from|to|yacht|boat|freight|cargo|container|quote|ship|transport)\b/i.test(
+      t
+    ) &&
+    t.length >= 24
+  ) {
+    return 0;
+  }
+  return 800;
+}
+
 /** Public: poll new messages (staff replies). */
 export async function GET(request: Request, ctx: Ctx) {
   const limited = rateLimitPublic(request, "chat-messages-get", 120);
@@ -135,12 +159,12 @@ export async function POST(request: Request, ctx: Ctx) {
       await updateChatSession(id, { status: "ai" });
     }
 
-    // Wait briefly so visitors who send thoughts in several short messages
-    // get one reply that covers the full batch.
-    const VISITOR_REPLY_DEBOUNCE_MS = 3500;
-    await new Promise((resolve) =>
-      setTimeout(resolve, VISITOR_REPLY_DEBOUNCE_MS)
-    );
+    // Short debounce only when the message looks like a fragment they may still be typing.
+    // Complete messages (route picks, long text, punctuation) reply immediately.
+    const debounceMs = visitorReplyDebounceMs(text);
+    if (debounceMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, debounceMs));
+    }
 
     const history = await listChatMessages(id);
     const last = history[history.length - 1];

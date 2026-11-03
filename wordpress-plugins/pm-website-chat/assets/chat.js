@@ -510,6 +510,20 @@
     var parsed = splitReplyChoices(body);
     var labels =
       choices && choices.length >= 2 ? choices : parsed.choices;
+    var yachtList = looksLikeYachtChecklist(parsed.body);
+    var freightList = looksLikeFreightChecklist(parsed.body);
+    // Prefer the step form over a long AI field dump.
+    if (!collectState && !teamJoined && !suppressCollectTrigger) {
+      if (yachtList || freightList) {
+        var shortAck =
+          freightList
+            ? "Thank you — I’ll take a few freight details in short steps."
+            : "Thank you — I’ll take a few yacht details in short steps.";
+        appendBubble("assistant", shortAck, id, authorName);
+        startCollect(freightList ? "freight" : "yacht", { force: true });
+        return;
+      }
+    }
     var wrap = appendBubble(
       "assistant",
       parsed.body,
@@ -538,17 +552,32 @@
     if (/\bname\b/.test(t) && /e-?mail/.test(t) && /\bdestination\b/.test(t)) {
       hits += 2;
     }
+    if (/\d\.\s+/.test(t) && /yacht|boat/.test(t) && hits >= 2) hits += 1;
     return hits >= 3;
   }
 
   function looksLikeFreightChecklist(text) {
     var t = String(text || "").toLowerCase();
     var hits = 0;
-    if (/\bcommodity\b|what are you shipping|cargo/.test(t)) hits++;
-    if (/\borigin\b|from where/.test(t)) hits++;
-    if (/\bdestination\b|to where/.test(t)) hits++;
-    if (/\bweight\b|dimensions?\b/.test(t)) hits++;
+    if (
+      /\bcommodity\b|what are you (looking to )?ship|freight or cargo|cargo/.test(
+        t
+      )
+    ) {
+      hits++;
+    }
+    if (
+      /\borigin\b|from where|shipping from|pickup|collection/.test(t)
+    ) {
+      hits++;
+    }
+    if (/\bdestination\b|to where|shipping to|deliver/.test(t)) hits++;
+    if (/\bweight\b|dimensions?\b|size\b/.test(t)) hits++;
+    if (/\bvalue\b|timeframe|preferred timing/.test(t)) hits++;
     if (/\bname\b/.test(t) && /e-?mail/.test(t)) hits++;
+    if (/\d\.\s+/.test(t) && /freight|cargo|ship/.test(t) && hits >= 2) {
+      hits += 1;
+    }
     return hits >= 3;
   }
 
@@ -569,7 +598,8 @@
       t === "freight" ||
       t === "commercial freight" ||
       t === "cargo" ||
-      /^freight\b/.test(t)
+      /^freight\b/.test(t) ||
+      /^cargo\b/.test(t)
     ) {
       startCollect("freight", { force: true });
       return true;
@@ -767,10 +797,22 @@
   root.appendChild(launcher);
   document.body.appendChild(root);
 
+  function setComposerEnabled(on) {
+    input.disabled = !on;
+    sendBtn.disabled = !on;
+    attachBtn.disabled = !on;
+    if (!on) {
+      input.placeholder = "Connecting…";
+    } else if (!teamJoined) {
+      input.placeholder = cfg.labels.placeholder || "Message…";
+    }
+  }
+
   function setOpen(next) {
     open = next;
     root.classList.toggle("pm-chat--open", open);
     if (open && !sessionId) {
+      setComposerEnabled(false);
       var remembered = readRememberedSession();
       if (remembered) resumeSession(remembered);
       else startSession();
@@ -779,7 +821,10 @@
       startPoll();
       document.body.classList.add("pm-chat-lock");
       panel.setAttribute("tabindex", "-1");
-      input.focus();
+      if (sessionId) {
+        setComposerEnabled(true);
+        input.focus();
+      }
     } else {
       stopPoll();
       document.body.classList.remove("pm-chat-lock");
@@ -915,18 +960,13 @@
   function detectQuoteKindFromText(text) {
     var t = String(text || "").toLowerCase();
     if (
-      /\b(yacht|boat|sailboat|motor.?yacht|catamaran|loa|berth)\b/.test(t)
-    ) {
-      return "yacht";
-    }
-    if (
-      /\b(freight|cargo|pallet|container|forwarding|air freight|customs)\b/.test(
-        t
-      )
+      /\b(freight|cargo|pallet|container|forwarding|air freight)\b/.test(t)
     ) {
       return "freight";
     }
-    if (/\b(quote|quotat|ship(ping)?|transport)\b/.test(t)) {
+    if (
+      /\b(yacht|boat|sailboat|motor.?yacht|catamaran|loa|berth)\b/.test(t)
+    ) {
       return "yacht";
     }
     return null;
@@ -946,33 +986,6 @@
       ensureComposerVisible();
       input.focus();
     });
-    placeInThread(startersEl);
-  }
-
-  function offerGuidedCollect(kind) {
-    clearNode(startersEl);
-    startersEl.classList.add("is-on");
-    var btn = el(
-      "button",
-      "pm-chat__chip",
-      kind === "freight"
-        ? "Answer step by step"
-        : "Answer step by step"
-    );
-    btn.type = "button";
-    btn.addEventListener("click", function () {
-      hideStarters();
-      startCollect(kind || "yacht", { force: true });
-    });
-    startersEl.appendChild(btn);
-
-    var paste = el("button", "pm-chat__chip", "Paste all details");
-    paste.type = "button";
-    paste.addEventListener("click", function () {
-      hideStarters();
-      startCollect(kind || "yacht", { pasteFirst: true, force: true });
-    });
-    startersEl.appendChild(paste);
     placeInThread(startersEl);
   }
 
@@ -1244,29 +1257,6 @@
     if (inputs[0]) inputs[0].input.focus();
   }
 
-  function advanceCollect(inputEl) {
-    if (!collectState) return;
-    var field = collectState.fields[collectState.index];
-    var value = (inputEl.value || "").trim();
-    if (!value && !field.optional) {
-      inputEl.focus();
-      return;
-    }
-    if (field.type === "email" && value) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        inputEl.focus();
-        return;
-      }
-    }
-    collectState.values[field.key] = value;
-    collectState.index += 1;
-    if (collectState.index >= collectState.fields.length) {
-      finishCollectFromFields();
-    } else {
-      renderCollectStep();
-    }
-  }
-
   function formatCollectValues(kind, values) {
     var lines = [
       kind === "freight"
@@ -1356,7 +1346,6 @@
       return;
     }
     if (collectState || suppressCollectTrigger) return;
-    // AI dumped a quote checklist — open the form instead of leaving a text list.
     if (looksLikeYachtChecklist(body)) {
       startCollect("yacht", { force: true });
       return;
@@ -1368,43 +1357,39 @@
   }
 
   /**
-   * Route labels (Yacht transport / Freight) open the guided form.
+   * Route labels and clear yacht/freight intent open the guided form.
    * Free-typed detail dumps stay with the AI.
    */
   function maybeStartCollectFromVisitor(text) {
-    tryStartCollectFromRouteLabel(text);
+    if (tryStartCollectFromRouteLabel(text)) return true;
+    var kind = detectQuoteKindFromText(text);
+    if (kind === "yacht" || kind === "freight") {
+      // Only auto-form for short intent lines, not full pasted enquiries.
+      if (String(text || "").trim().length <= 80) {
+        startCollect(kind, { force: true });
+        return true;
+      }
+    }
+    return false;
   }
 
-  function syncSeen() {
-    if (!sessionId) return Promise.resolve();
-    return fetch(
-      apiUrl(
-        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/messages"
-      ),
-      {
-        headers: headers(),
-        credentials: useProxy ? "same-origin" : "omit",
-      }
-    )
-      .then(parseBody)
-      .then(function (data) {
-        (data.messages || []).forEach(function (m) {
-          if (m.id) seenIds[m.id] = true;
-          if (m.created_at) lastMessageAt = m.created_at;
-        });
-      })
-      .catch(function () {});
-  }
+  var awaitingDeferredReply = false;
+  var fastPollUntil = 0;
 
   function startPoll() {
     stopPoll();
     function pollOnce() {
       if (!sessionId || !open) return;
+      if (typeof document !== "undefined" && document.hidden) return;
       var path =
         "api/chat/sessions/" +
         encodeURIComponent(sessionId) +
-        "/messages?t=" +
-        Date.now();
+        "/messages";
+      if (lastMessageAt) {
+        path += "?after=" + encodeURIComponent(lastMessageAt);
+      } else {
+        path += "?t=" + Date.now();
+      }
       fetch(apiUrl(path), {
         headers: headers(),
         credentials: useProxy ? "same-origin" : "omit",
@@ -1413,6 +1398,7 @@
         .then(parseBody)
         .then(function (data) {
           if (!data.messages) return;
+          var gotAssistant = false;
           data.messages.forEach(function (m) {
             if (m.id && seenIds[m.id]) return;
             if (m.role === "visitor") {
@@ -1424,17 +1410,22 @@
               if (m.role === "staff") noteTeamJoined(m.author_name);
               appendBubble(m.role, m.body, m.id, m.author_name, m.attachments);
             } else if (m.role === "assistant") {
+              gotAssistant = true;
               presentAssistant(m.body, m.id);
             } else if (m.id) {
               seenIds[m.id] = true;
             }
             if (m.created_at) lastMessageAt = m.created_at;
           });
+          if (gotAssistant && awaitingDeferredReply) {
+            awaitingDeferredReply = false;
+            setTyping(false);
+          }
         })
         .catch(function () {});
     }
     pollOnce();
-    pollTimer = setInterval(pollOnce, 4000);
+    pollTimer = setInterval(pollOnce, 1500);
   }
 
   function stopPoll() {
@@ -1483,13 +1474,18 @@
         var last = (data.messages || [])[(data.messages || []).length - 1];
         if (last && last.role === "assistant") {
           var resumed = splitReplyChoices(last.body);
-          if (
+          if (looksLikeFreightChecklist(resumed.body)) {
+            startCollect("freight", { force: true });
+          } else if (looksLikeYachtChecklist(resumed.body)) {
+            startCollect("yacht", { force: true });
+          } else if (
             !looksLikeHandover(resumed.body) &&
             !isGuidedEnquiryPayload(resumed.body)
           ) {
             offerChoiceChips(resumed.choices);
           }
         }
+        setComposerEnabled(true);
       })
       .catch(function () {
         rememberSession(null);
@@ -1556,12 +1552,15 @@
           var sub = headerText.querySelector(".pm-chat__subtitle");
           if (sub && !teamJoined) sub.textContent = data.office_hours_note;
         }
+        setComposerEnabled(true);
+        input.focus();
         return sessionId;
       })
       .catch(function () {
         sessionPromise = null;
         // Offline fallback: one stable greeting, no mid-load swap.
         showOpeningGreeting(localGreeting());
+        setComposerEnabled(true);
         showUnavailableNotice(function () {
           if (greetingNode && greetingNode.parentNode) {
             greetingNode.parentNode.removeChild(greetingNode);
@@ -1569,6 +1568,7 @@
           greetingNode = null;
           startersShown = false;
           hideStarters();
+          setComposerEnabled(false);
           startSession();
         });
         return null;
@@ -1615,12 +1615,9 @@
       return;
     }
     hideStarters();
-    if (!opts.skipCollect && tryStartCollectFromRouteLabel(text)) {
+    if (!opts.skipCollect && maybeStartCollectFromVisitor(text)) {
       appendBubble("visitor", text);
       return;
-    }
-    if (!opts.skipCollect) {
-      maybeStartCollectFromVisitor(text);
     }
     var visitorWrap = opts.reuseWrap || null;
     if (!visitorWrap) {
@@ -1631,6 +1628,7 @@
     }
     inflightSends += 1;
     setTyping(true);
+    fastPollUntil = Date.now() + 15000;
 
     fetch(
       apiUrl(
@@ -1650,7 +1648,12 @@
       .then(function (r) {
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Send failed");
-          if (data.deferred) return;
+          if (data.deferred) {
+            awaitingDeferredReply = true;
+            fastPollUntil = Date.now() + 20000;
+            return;
+          }
+          awaitingDeferredReply = false;
           if (data.message && data.message.body) {
             lastMessageAt = data.message.created_at;
             if ((data.message.role || "assistant") === "assistant") {
@@ -1676,6 +1679,7 @@
         });
       })
       .catch(function (err) {
+        awaitingDeferredReply = false;
         if (visitorWrap) {
           if (!visitorWrap.querySelector(".pm-chat__not-sent")) {
             visitorWrap.appendChild(el("div", "pm-chat__not-sent", "Not sent"));
@@ -1696,7 +1700,7 @@
       })
       .finally(function () {
         inflightSends = Math.max(0, inflightSends - 1);
-        if (inflightSends === 0) setTyping(false);
+        if (inflightSends === 0 && !awaitingDeferredReply) setTyping(false);
       });
   }
 
@@ -1869,6 +1873,7 @@
     seenIds = {};
     startersShown = false;
     suppressCollectTrigger = false;
+    awaitingDeferredReply = false;
     transcriptLines = [];
     stopCollect();
     hideStarters();
@@ -1876,10 +1881,15 @@
     if (lead.parentNode) lead.parentNode.removeChild(lead);
     clearNode(messagesEl);
     messagesEl.appendChild(typingEl);
-    if (cfg.labels && cfg.labels.hours) {
-      var sub = headerText.querySelector(".pm-chat__subtitle");
-      if (sub) sub.textContent = cfg.labels.hours;
+    var title = headerText.querySelector(".pm-chat__title");
+    var sub = headerText.querySelector(".pm-chat__subtitle");
+    if (title) title.textContent = (cfg.labels && cfg.labels.title) || "How can we help?";
+    if (sub) {
+      sub.textContent =
+        (cfg.labels && (cfg.labels.hours || cfg.labels.subtitle)) ||
+        "Replies in UK business hours";
     }
+    setComposerEnabled(true);
   }
 
   closeBtn.addEventListener("click", function () {
@@ -1896,6 +1906,7 @@
     var scrim = el("div", "pm-chat__scrim");
     var sheet = el("div", "pm-chat__sheet");
     sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
     sheet.setAttribute("aria-label", "End this chat?");
     sheet.appendChild(el("h2", "pm-chat__sheet-title", "End this chat?"));
     sheet.appendChild(
