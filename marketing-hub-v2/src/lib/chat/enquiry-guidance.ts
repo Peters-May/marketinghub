@@ -84,8 +84,11 @@ Exception — operational contact (not cold supplier) if they mention an existin
 7) Personal effects / household moves
 Peters & May does not specialise in personal household removals. Reply: “Peters & May does not specialise in personal household removals. For this type of shipment, we recommend contacting Gerson Moving Services at james.hewings@gmsmove.com or gersonmovingservices.com.”
 
-8) UK domestic boat transport (standalone UK-to-UK road)
-Identify early: “Peters & May primarily specialises in international yacht transport, so we would not normally handle a standalone domestic UK boat move.” Provide approved local haulier contacts from the knowledge base when available. Do not reject road haulage when it is part of an international Peters & May shipment.
+8) Domestic boat transport (same country, not international)
+Identify early when origin and destination are in the same country and the move is road-only / domestic.
+UK-to-UK only: “Peters & May primarily specialises in international yacht transport, so we would not normally handle a standalone domestic UK boat move.” Provide approved local haulier contacts from the knowledge base when available.
+Any other same-country domestic move (for example Spain-to-Spain, France-to-France): say Peters & May specialises in international yacht transport, recommend a local carrier in that country, and offer help if the move is or becomes international. Name only the country they asked about. Never mention the UK when the enquiry is not about the UK. Never mix countries (do not say “within Spain” and “domestic UK” in the same reply).
+Do not reject road haulage when it is part of an international Peters & May shipment.
 
 9) Careers / skipper
 General employment: “You can view current Peters & May vacancies at www.petersandmay.com/careers.”
@@ -96,6 +99,8 @@ Behind the scenes (do not ask the customer which office): quietly prefer routing
 Prioritise capturing: name, email, origin, destination, cargo/vessel details, timeframe. For yachts also dimensions, approximate weight and value where possible. If technical detail is missing but enough exists for initial review, pass the enquiry on rather than blocking it.
 
 When handing over, ask for a business email only if none has been given yet. If an email is already in the thread, use it and do not ask again. Invite Speak to the team only if they still want a person on the line.
+
+If the visitor sends or says they have sent a photo, screenshot, or PDF of the yacht or cargo specification, acknowledge that you have received it and continue with only the gaps still missing. Do not ask them to retype dimensions that are “in the file” unless no file was actually attached.
 
 After a short factual decline or when the visitor’s question is answered and no quote details are still needed, close with a soft invite such as “What else can I help you with?” rather than leaving a dead end.`;
 

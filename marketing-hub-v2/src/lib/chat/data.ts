@@ -83,6 +83,23 @@ function rowToSession(row: Record<string, unknown>): ChatSession {
   };
 }
 
+function rowToAttachments(
+  value: unknown
+): ChatMessage["attachments"] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const r = asRecord(item);
+      const url = asString(r.url);
+      const name = asString(r.name);
+      const content_type = asString(r.content_type);
+      const size = Number(r.size) || 0;
+      if (!url || !name) return null;
+      return { url, name, content_type, size };
+    })
+    .filter((item): item is ChatMessage["attachments"][number] => item != null);
+}
+
 function rowToMessage(row: Record<string, unknown>): ChatMessage {
   const role = asString(row.role, "assistant") as ChatMessageRole;
   const sourcesRaw = row.sources;
@@ -106,6 +123,7 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     body: asString(row.body),
     author_name: asString(row.author_name),
     sources,
+    attachments: rowToAttachments(row.attachments),
     created_at: asString(row.created_at),
   };
 }
@@ -506,11 +524,21 @@ export async function addChatMessage(input: {
   role: ChatMessageRole;
   body: string;
   sources?: ChatMessage["sources"];
+  attachments?: ChatMessage["attachments"];
   author_name?: string;
 }): Promise<ChatMessage> {
   const supabase = requireService();
   const now = new Date().toISOString();
   const id = uid("cmsg");
+  const attachments = (input.attachments ?? [])
+    .filter((a) => a.url && a.name)
+    .slice(0, 5)
+    .map((a) => ({
+      url: a.url.slice(0, 2000),
+      name: a.name.slice(0, 200),
+      content_type: (a.content_type || "application/octet-stream").slice(0, 120),
+      size: Math.max(0, Math.min(Number(a.size) || 0, 10 * 1024 * 1024)),
+    }));
   const { data, error } = await supabase
     .from("chat_messages")
     .insert({
@@ -520,6 +548,7 @@ export async function addChatMessage(input: {
       body: input.body.trim(),
       author_name: (input.author_name ?? "").trim().slice(0, 80),
       sources: input.sources ?? [],
+      attachments,
       created_at: now,
     })
     .select("*")

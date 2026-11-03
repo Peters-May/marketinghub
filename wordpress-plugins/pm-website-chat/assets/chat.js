@@ -134,8 +134,11 @@
     );
   }
 
-  function headers() {
-    var h = { "Content-Type": "application/json" };
+  function headers(opts) {
+    var h = {};
+    if (!(opts && opts.multipart)) {
+      h["Content-Type"] = "application/json";
+    }
     if (!useProxy && cfg.siteKey) {
       h["X-Chat-Site-Key"] = cfg.siteKey;
     }
@@ -203,10 +206,46 @@
     return n ? n.charAt(0).toUpperCase() : "P";
   }
 
-  function appendBubble(role, body, id, authorName) {
+  function isImageAttachment(att) {
+    var t = String((att && att.content_type) || "").toLowerCase();
+    var n = String((att && att.name) || "").toLowerCase();
+    return (
+      t.indexOf("image/") === 0 ||
+      /\.(jpe?g|png|webp)$/.test(n)
+    );
+  }
+
+  function renderAttachments(parent, attachments) {
+    if (!attachments || !attachments.length) return;
+    var row = el("div", "pm-chat__attachments");
+    attachments.forEach(function (att) {
+      if (!att || !att.url) return;
+      if (isImageAttachment(att)) {
+        var link = el("a", "pm-chat__attach-image");
+        link.href = att.url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        var img = document.createElement("img");
+        img.src = att.url;
+        img.alt = att.name || "Attached image";
+        link.appendChild(img);
+        row.appendChild(link);
+      } else {
+        var pdf = el("a", "pm-chat__attach-file", att.name || "PDF");
+        pdf.href = att.url;
+        pdf.target = "_blank";
+        pdf.rel = "noreferrer";
+        row.appendChild(pdf);
+      }
+    });
+    parent.appendChild(row);
+  }
+
+  function appendBubble(role, body, id, authorName, attachments) {
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
     var text = String(body || "").trim();
+    var files = Array.isArray(attachments) ? attachments : [];
     if (role === "system") {
       if (/asked to speak to the team/i.test(text)) return null;
       var line = el("div", "pm-chat__system", text);
@@ -218,7 +257,12 @@
     }
     var wrap = el("div", "pm-chat__msg pm-chat__msg--" + role);
     var label = senderLabel(role, authorName);
-    var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role, body);
+    var bubble = el("div", "pm-chat__bubble pm-chat__bubble--" + role);
+    if (text) bubble.appendChild(document.createTextNode(text));
+    renderAttachments(bubble, files);
+    if (!text && !files.length) {
+      bubble.appendChild(document.createTextNode(""));
+    }
     if (role === "staff") {
       var avatar = el("span", "pm-chat__avatar", initialOf(authorName));
       avatar.setAttribute("aria-hidden", "true");
@@ -236,6 +280,16 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
     var who = label || (role === "visitor" ? "You" : role);
     if (text) transcriptLines.push("[" + who + "] " + text);
+    if (files.length) {
+      transcriptLines.push(
+        "[Attachments] " +
+          files
+            .map(function (f) {
+              return (f.name || "file") + " (" + f.url + ")";
+            })
+            .join("; ")
+      );
+    }
     return wrap;
   }
 
@@ -522,7 +576,24 @@
   );
   footer.appendChild(speakBtn);
 
+  var pendingFiles = [];
+  var MAX_PENDING = 5;
+  var MAX_FILE_BYTES = 10 * 1024 * 1024;
+
   var composer = el("div", "pm-chat__composer");
+  var pendingEl = el("div", "pm-chat__pending");
+  pendingEl.hidden = true;
+  var composerRow = el("div", "pm-chat__composer-row");
+  var fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf";
+  fileInput.multiple = true;
+  fileInput.hidden = true;
+  var attachBtn = el("button", "pm-chat__attach");
+  attachBtn.type = "button";
+  attachBtn.setAttribute("aria-label", "Attach image or PDF");
+  attachBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6l-8.5 8.5a5 5 0 0 1-7.1-7.1l8.5-8.5a3.2 3.2 0 0 1 4.5 4.5L10 17.3a1.4 1.4 0 1 1-2-2l7.1-7.1"/></svg>';
   var input = el("input", "");
   input.type = "text";
   input.placeholder = cfg.labels.placeholder || "Message…";
@@ -531,10 +602,85 @@
   sendBtn.setAttribute("aria-label", "Send");
   sendBtn.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-  composer.appendChild(input);
-  composer.appendChild(sendBtn);
+  composerRow.appendChild(attachBtn);
+  composerRow.appendChild(input);
+  composerRow.appendChild(sendBtn);
+  composer.appendChild(pendingEl);
+  composer.appendChild(composerRow);
+  composer.appendChild(fileInput);
   panel.appendChild(composer);
   panel.appendChild(footer);
+
+  function renderPendingFiles() {
+    clearNode(pendingEl);
+    if (!pendingFiles.length) {
+      pendingEl.hidden = true;
+      return;
+    }
+    pendingEl.hidden = false;
+    pendingFiles.forEach(function (item, index) {
+      var chip = el("div", "pm-chat__pending-chip");
+      if (item.previewUrl) {
+        var thumb = document.createElement("img");
+        thumb.src = item.previewUrl;
+        thumb.alt = "";
+        chip.appendChild(thumb);
+      } else {
+        chip.appendChild(el("span", "pm-chat__pending-name", item.file.name));
+      }
+      var remove = el("button", "pm-chat__pending-remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", "Remove " + item.file.name);
+      remove.addEventListener("click", function () {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        pendingFiles.splice(index, 1);
+        renderPendingFiles();
+      });
+      chip.appendChild(remove);
+      pendingEl.appendChild(chip);
+    });
+  }
+
+  function addPendingFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    files.forEach(function (file) {
+      if (pendingFiles.length >= MAX_PENDING) return;
+      var type = (file.type || "").toLowerCase();
+      var ok =
+        type === "image/jpeg" ||
+        type === "image/png" ||
+        type === "image/webp" ||
+        type === "application/pdf" ||
+        /\.(jpe?g|png|webp|pdf)$/i.test(file.name || "");
+      if (!ok || file.size <= 0 || file.size > MAX_FILE_BYTES) return;
+      var previewUrl = type.indexOf("image/") === 0 ? URL.createObjectURL(file) : "";
+      pendingFiles.push({ file: file, previewUrl: previewUrl });
+    });
+    renderPendingFiles();
+  }
+
+  attachBtn.addEventListener("click", function () {
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", function () {
+    addPendingFiles(fileInput.files);
+    fileInput.value = "";
+  });
+  input.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    var images = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.indexOf("image/") === 0) {
+        var f = items[i].getAsFile();
+        if (f) images.push(f);
+      }
+    }
+    if (images.length) {
+      e.preventDefault();
+      addPendingFiles(images);
+    }
+  });
 
   var launcher = el("button", "pm-chat__launcher");
   launcher.type = "button";
@@ -1190,7 +1336,7 @@
             }
             if (m.role === "staff" || m.role === "system") {
               if (m.role === "staff") noteTeamJoined(m.author_name);
-              appendBubble(m.role, m.body, m.id, m.author_name);
+              appendBubble(m.role, m.body, m.id, m.author_name, m.attachments);
             } else if (m.role === "assistant") {
               presentAssistant(m.body, m.id);
             } else if (m.id) {
@@ -1239,10 +1385,10 @@
         lastMessageAt = null;
         (data.messages || []).forEach(function (m) {
           if (m.role === "visitor") {
-            appendBubble("visitor", m.body, m.id);
+            appendBubble("visitor", m.body, m.id, null, m.attachments);
           } else {
             if (m.role === "staff") noteTeamJoined(m.author_name);
-            appendBubble(m.role, m.body, m.id, m.author_name);
+            appendBubble(m.role, m.body, m.id, m.author_name, m.attachments);
           }
           if (m.created_at) lastMessageAt = m.created_at;
         });
@@ -1337,10 +1483,35 @@
     return sessionPromise;
   }
 
+  function uploadPendingFile(file) {
+    var form = new FormData();
+    form.append("file", file, file.name || "file");
+    return fetch(
+      apiUrl(
+        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/attachments"
+      ),
+      {
+        method: "POST",
+        headers: headers({ multipart: true }),
+        credentials: useProxy ? "same-origin" : "omit",
+        body: form,
+      }
+    ).then(function (r) {
+      return parseBody(r).then(function (data) {
+        if (!r.ok) throw new Error(data.error || "Upload failed");
+        if (!data.attachment || !data.attachment.url) {
+          throw new Error("Upload failed");
+        }
+        return data.attachment;
+      });
+    });
+  }
+
   function sendMessageText(text, opts) {
     opts = opts || {};
     text = (text || "").trim();
-    if (!text) return;
+    var attachments = Array.isArray(opts.attachments) ? opts.attachments : [];
+    if (!text && !attachments.length) return;
     if (!sessionId) {
       startSession().then(function () {
         if (sessionId) sendMessageText(text, opts);
@@ -1351,7 +1522,7 @@
     if (!opts.skipCollect) {
       maybeStartCollectFromVisitor(text);
     }
-    var visitorWrap = appendBubble("visitor", text);
+    var visitorWrap = appendBubble("visitor", text, null, null, attachments);
     inflightSends += 1;
     setTyping(true);
 
@@ -1363,7 +1534,11 @@
         method: "POST",
         headers: headers(),
         credentials: useProxy ? "same-origin" : "omit",
-        body: JSON.stringify({ body: text, stream: false }),
+        body: JSON.stringify({
+          body: text,
+          attachments: attachments,
+          stream: false,
+        }),
       }
     )
       .then(function (r) {
@@ -1384,7 +1559,8 @@
                 data.message.role,
                 data.message.body,
                 data.message.id,
-                data.message.author_name
+                data.message.author_name,
+                data.message.attachments
               );
             }
           } else if (typeof data.message === "string") {
@@ -1415,9 +1591,54 @@
 
   function sendMessage() {
     var text = (input.value || "").trim();
-    if (!text) return;
+    var queued = pendingFiles.slice();
+    if (!text && !queued.length) return;
     input.value = "";
-    sendMessageText(text);
+    pendingFiles = [];
+    renderPendingFiles();
+    queued.forEach(function (item) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+
+    function afterSession() {
+      if (!sessionId) return;
+      if (!queued.length) {
+        sendMessageText(text);
+        return;
+      }
+      setTyping(true);
+      var chain = Promise.resolve([]);
+      queued.forEach(function (item) {
+        chain = chain.then(function (list) {
+          return uploadPendingFile(item.file).then(function (att) {
+            list.push(att);
+            return list;
+          });
+        });
+      });
+      chain
+        .then(function (attachments) {
+          sendMessageText(text, { attachments: attachments });
+        })
+        .catch(function (err) {
+          setTyping(false);
+          showUnavailableNotice(function () {
+            pendingFiles = queued.slice();
+            renderPendingFiles();
+            input.value = text;
+          });
+          appendBubble(
+            "system",
+            (err && err.message) || "Could not upload the file."
+          );
+        });
+    }
+
+    if (!sessionId) {
+      startSession().then(afterSession);
+    } else {
+      afterSession();
+    }
   }
 
   function handoff() {

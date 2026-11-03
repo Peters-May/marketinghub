@@ -28,7 +28,12 @@ export function formatChatTranscript(messages: ChatMessage[]): string {
               ? "Assistant"
               : "System";
       const body = (m.body ?? "").trim();
-      if (!body) return "";
+      const files = (m.attachments ?? [])
+        .map((a) => `${a.name} (${a.url})`)
+        .join("; ");
+      if (!body && !files) return "";
+      if (body && files) return `[${who}] ${body}\n[Attachments] ${files}`;
+      if (files) return `[${who}] [Attachments] ${files}`;
       return `[${who}] ${body}`;
     })
     .filter(Boolean)
@@ -155,13 +160,18 @@ export async function bridgeChatSessionToEnquiry(
     enquiry_id: enquiry.id,
   };
 
-  if (transcript.trim() && (email || session.assignee_email.trim())) {
-    void emailChatTranscript({
-      session: sessionForMail,
-      transcript,
-      reason: opts?.closed ? "closed" : "lead",
-    });
+  if (opts?.closed) {
+    // One full transcript when the chat ends — visitor + staff inbox.
+    if (transcript.trim()) {
+      void emailChatTranscript({
+        session: sessionForMail,
+        transcript,
+        reason: "closed",
+      });
+    }
   } else if (opts?.notify !== false && email) {
+    // Lead capture: short staff alert only. Do not email the visitor a
+    // transcript they did not ask for (close / download covers that).
     void notifyChatStaff({
       kind: "lead",
       sessionId: session.id,

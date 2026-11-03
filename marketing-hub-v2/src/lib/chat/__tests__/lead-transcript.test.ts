@@ -14,6 +14,7 @@ function msg(
     body,
     author_name: "",
     sources: [],
+    attachments: [],
     created_at: "2026-10-20T12:00:00.000Z",
   };
 }

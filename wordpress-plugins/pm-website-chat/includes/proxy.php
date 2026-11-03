@@ -48,7 +48,7 @@ function pm_website_chat_proxy_hub($request) {
         strpos($path, '%2e') !== false ||
         strpos($path, '//') !== false ||
         !preg_match(
-            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff|close))?)?$#',
+            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff|close|attachments))?)?$#',
             $path
         )
     ) {
@@ -108,11 +108,18 @@ function pm_website_chat_proxy_hub($request) {
         return new WP_REST_Response(null, 204);
     }
 
+    $req_ctype = (string) $request->get_header('content_type');
+    if ($req_ctype === '') {
+        $req_ctype = isset($_SERVER['CONTENT_TYPE'])
+            ? (string) wp_unslash($_SERVER['CONTENT_TYPE'])
+            : 'application/json';
+    }
+    $is_multipart = stripos($req_ctype, 'multipart/form-data') !== false;
+
     $args = [
         'method' => $method === 'GET' ? 'GET' : 'POST',
         'timeout' => 60,
         'headers' => [
-            'Content-Type' => 'application/json',
             'X-Chat-Site-Key' => $site_key,
             'Accept' => '*/*',
             'X-PM-Client-IP' => isset($_SERVER['REMOTE_ADDR'])
@@ -123,12 +130,51 @@ function pm_website_chat_proxy_hub($request) {
     ];
 
     if ($method !== 'GET') {
-        $body = $request->get_body();
-        if ($body === '' || $body === null) {
-            $json = $request->get_json_params();
-            $body = wp_json_encode(is_array($json) ? $json : new stdClass());
+        if ($is_multipart) {
+            // Rebuild multipart so Hub receives the file (WP REST may have parsed it).
+            $boundary = 'pmchat' . wp_generate_password(16, false, false);
+            $parts = '';
+            $files = $request->get_file_params();
+            foreach ($files as $field => $file) {
+                if (!is_array($file) || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+                    continue;
+                }
+                $filename = isset($file['name']) ? (string) $file['name'] : 'file';
+                $ftype = isset($file['type']) && $file['type'] !== ''
+                    ? (string) $file['type']
+                    : 'application/octet-stream';
+                $blob = file_get_contents($file['tmp_name']);
+                if ($blob === false) {
+                    continue;
+                }
+                $parts .= "--{$boundary}\r\n";
+                $parts .= 'Content-Disposition: form-data; name="' . $field . '"; filename="' . $filename . "\"\r\n";
+                $parts .= 'Content-Type: ' . $ftype . "\r\n\r\n";
+                $parts .= $blob . "\r\n";
+            }
+            $params = $request->get_body_params();
+            if (is_array($params)) {
+                foreach ($params as $key => $value) {
+                    if (!is_scalar($value)) {
+                        continue;
+                    }
+                    $parts .= "--{$boundary}\r\n";
+                    $parts .= 'Content-Disposition: form-data; name="' . $key . "\"\r\n\r\n";
+                    $parts .= (string) $value . "\r\n";
+                }
+            }
+            $parts .= "--{$boundary}--\r\n";
+            $args['headers']['Content-Type'] = 'multipart/form-data; boundary=' . $boundary;
+            $args['body'] = $parts;
+        } else {
+            $args['headers']['Content-Type'] = 'application/json';
+            $body = $request->get_body();
+            if ($body === '' || $body === null) {
+                $json = $request->get_json_params();
+                $body = wp_json_encode(is_array($json) ? $json : new stdClass());
+            }
+            $args['body'] = $body;
         }
-        $args['body'] = $body;
     }
 
     $response = wp_remote_request($url, $args);

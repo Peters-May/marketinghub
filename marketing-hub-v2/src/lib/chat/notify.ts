@@ -106,10 +106,10 @@ export async function notifyChatStaff(params: {
 }
 
 /**
- * Email the full transcript to:
- * - the visitor (if email supplied)
- * - the staff assignee (if someone took over / replied)
- * - the chat notify inbox (when configured)
+ * Email the full transcript.
+ * - closed: visitor (if known) + assignee + notify inbox
+ * - lead: staff only (assignee + notify). Visitors are not emailed a
+ *   transcript on lead capture — only when the chat closes, or via download.
  */
 export async function emailChatTranscript(params: {
   session: ChatSession;
@@ -130,11 +130,11 @@ export async function emailChatTranscript(params: {
 
   const visitorEmail = params.session.visitor_email.trim();
   const assigneeEmail = params.session.assignee_email.trim();
-  const recipients = uniqueEmails([
-    visitorEmail,
-    assigneeEmail,
-    notifyInbox,
-  ]);
+  const recipients = uniqueEmails(
+    params.reason === "closed"
+      ? [visitorEmail, assigneeEmail, notifyInbox]
+      : [assigneeEmail, notifyInbox]
+  );
 
   if (recipients.length === 0) {
     return { sent: [], errors: ["no_recipients"] };

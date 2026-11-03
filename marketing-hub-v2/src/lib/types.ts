@@ -1012,6 +1012,13 @@ export type ChatSession = {
   updated_at: string;
 };
 
+export type ChatAttachment = {
+  url: string;
+  name: string;
+  content_type: string;
+  size: number;
+};
+
 export type ChatMessage = {
   id: string;
   session_id: string;
@@ -1020,6 +1027,7 @@ export type ChatMessage = {
   /** Staff first name for visitor widget; empty for bot/system. */
   author_name: string;
   sources: Array<{ title: string; source_url?: string }>;
+  attachments: ChatAttachment[];
   created_at: string;
 };
 

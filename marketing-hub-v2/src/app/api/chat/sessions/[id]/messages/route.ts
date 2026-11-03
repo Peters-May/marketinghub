@@ -65,10 +65,33 @@ export async function POST(request: Request, ctx: Ctx) {
   const body = (await request.json().catch(() => null)) as {
     body?: string;
     stream?: boolean;
+    attachments?: Array<{
+      url?: string;
+      name?: string;
+      content_type?: string;
+      size?: number;
+    }>;
   } | null;
   const text = typeof body?.body === "string" ? body.body.trim() : "";
-  if (!text || text.length > 4000) {
-    return chatError(request, "Message required (max 4000 characters)");
+  const attachments = Array.isArray(body?.attachments)
+    ? body.attachments
+        .map((a) => ({
+          url: typeof a?.url === "string" ? a.url.trim() : "",
+          name: typeof a?.name === "string" ? a.name.trim() : "",
+          content_type:
+            typeof a?.content_type === "string"
+              ? a.content_type.trim()
+              : "application/octet-stream",
+          size: Number(a?.size) || 0,
+        }))
+        .filter((a) => a.url && a.name)
+        .slice(0, 5)
+    : [];
+  if ((!text && attachments.length === 0) || text.length > 4000) {
+    return chatError(
+      request,
+      "Message or attachment required (max 4000 characters)"
+    );
   }
 
   try {
@@ -81,7 +104,12 @@ export async function POST(request: Request, ctx: Ctx) {
     const visitorMsg = await addChatMessage({
       session_id: id,
       role: "visitor",
-      body: text,
+      body:
+        text ||
+        (attachments.length === 1
+          ? `Sent a file: ${attachments[0].name}`
+          : `Sent ${attachments.length} files`),
+      attachments,
     });
 
     // Human / waiting: store only; staff replies from Hub.

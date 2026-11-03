@@ -799,6 +799,13 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                                     ? "Assistant"
                                     : "System";
                             const body = (m.body ?? "").trim();
+                            const files = (m.attachments ?? [])
+                              .map((a) => `${a.name} (${a.url})`)
+                              .join("; ");
+                            if (body && files) {
+                              return `[${who}] ${body}\n[Attachments] ${files}`;
+                            }
+                            if (files) return `[${who}] [Attachments] ${files}`;
                             return body ? `[${who}] ${body}` : "";
                           })
                           .filter(Boolean);
@@ -909,6 +916,44 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                             )}
                           >
                             {stripChoiceTag(m.body)}
+                            {(m.attachments ?? []).length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {(m.attachments ?? []).map((a) =>
+                                  /image\//i.test(a.content_type) ||
+                                  /\.(jpe?g|png|webp)$/i.test(a.name) ? (
+                                    <a
+                                      key={a.url}
+                                      href={a.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="block overflow-hidden rounded-md border border-white/20"
+                                    >
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={a.url}
+                                        alt={a.name}
+                                        className="h-24 w-auto max-w-[160px] object-cover"
+                                      />
+                                    </a>
+                                  ) : (
+                                    <a
+                                      key={a.url}
+                                      href={a.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={cn(
+                                        "inline-flex min-h-10 items-center rounded-md border px-2.5 text-sm font-semibold underline-offset-2 hover:underline",
+                                        m.role === "visitor"
+                                          ? "border-white/30 text-white"
+                                          : "border-[#c7ccd1] text-[#005f97]"
+                                      )}
+                                    >
+                                      {a.name || "PDF"}
+                                    </a>
+                                  )
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>

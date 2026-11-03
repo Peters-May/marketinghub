@@ -27,11 +27,16 @@ export async function POST(request: Request, ctx: Ctx) {
     const session = await getChatSession(id);
     if (!session) return chatError(request, "Not found", 404);
 
-    const updated =
-      session.status === "closed"
-        ? session
-        : await updateChatSession(id, { status: "closed" });
+    // Already closed: do not re-email the transcript on every retry.
+    if (session.status === "closed") {
+      return chatJson(request, {
+        ok: true,
+        session,
+        portal_sync: { ok: true, skipped: true, reason: "already_closed" },
+      });
+    }
 
+    const updated = await updateChatSession(id, { status: "closed" });
     const portal_sync = await syncClosedChatSessionToPortal(id);
 
     return chatJson(request, {
