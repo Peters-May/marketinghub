@@ -593,6 +593,7 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
           { value: "false", label: "No" },
         ],
       }),
+      f("photo_url", { label: "Newsroom photo URL" }),
       f("beat", { label: "Beat" }),
       f("outlet", { label: "Outlet" }),
       f("country"),

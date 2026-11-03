@@ -906,6 +906,7 @@ function normalizeContact(c: Contact): Contact {
     user_id: c.user_id ?? null,
     is_press: Boolean(c.is_press),
     is_spokesperson: Boolean(c.is_spokesperson),
+    photo_url: typeof c.photo_url === "string" ? c.photo_url.trim() : "",
     beat: c.beat ?? "",
     outlet: c.outlet ?? "",
     country: c.country ?? "",
@@ -1048,6 +1049,8 @@ export async function createContact(
     user_id: input.user_id ?? null,
     is_press: Boolean(input.is_press),
     is_spokesperson: Boolean(input.is_spokesperson),
+    photo_url:
+      typeof input.photo_url === "string" ? input.photo_url.trim() : "",
     beat: input.beat ?? "",
     outlet: input.outlet ?? "",
     country: input.country ?? "",

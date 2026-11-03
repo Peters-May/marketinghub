@@ -34,6 +34,7 @@ const emptyForm = {
   user_id: "",
   is_press: false,
   is_spokesperson: false,
+  photo_url: "",
   beat: "",
   outlet: "",
   country: "",
@@ -57,6 +58,7 @@ function toForm(c: Contact): ContactForm {
     user_id: c.user_id ?? "",
     is_press: Boolean(c.is_press),
     is_spokesperson: Boolean(c.is_spokesperson),
+    photo_url: c.photo_url ?? "",
     beat: c.beat ?? "",
     outlet: c.outlet ?? "",
     country: c.country ?? "",
@@ -284,6 +286,8 @@ export function ContactsClient({
             : form.organisation,
           user_id: isCompany(form.kind) ? null : form.user_id || null,
           is_press: form.is_press,
+          is_spokesperson: form.is_spokesperson && !form.is_press,
+          photo_url: form.photo_url.trim(),
           beat: form.beat,
           outlet: form.outlet,
           country: form.country,
@@ -348,6 +352,7 @@ export function ContactsClient({
             user_id: isCompany(edit.kind) ? null : edit.user_id || null,
             is_press: edit.is_press,
             is_spokesperson: edit.is_spokesperson && !edit.is_press,
+            photo_url: edit.photo_url.trim(),
             beat: edit.beat,
             outlet: edit.outlet,
             country: edit.country,
@@ -997,6 +1002,17 @@ function ContactFields({
           Peters &amp; May spokesperson (shown on the newsroom)
         </label>
       </div>
+      {form.is_spokesperson ? (
+        <div className="md:col-span-2">
+          <label className="label">Newsroom photo URL</label>
+          <input
+            className="field"
+            value={form.photo_url}
+            placeholder="/newsroom/spokespeople/name.jpg"
+            onChange={(e) => onChange({ ...form, photo_url: e.target.value })}
+          />
+        </div>
+      ) : null}
       {form.is_press ? (
         <>
           <div>

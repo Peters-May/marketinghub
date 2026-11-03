@@ -297,26 +297,41 @@ export default async function NewsroomPage({
               </a>
             </div>
             {spokespeople.map((c) => (
-              <div key={c.id} className="mt-4 border-t border-[#E3E6E9] pt-4 text-sm">
-                <p className="font-medium">{c.name}</p>
-                {[c.role, c.organisation].filter(Boolean).length ? (
-                  <p className="text-[#4D5C6A]">
-                    {[c.role, c.organisation].filter(Boolean).join(", ")}
-                  </p>
+              <div
+                key={c.id}
+                className="mt-4 flex gap-3 border-t border-[#E3E6E9] pt-4 text-sm"
+              >
+                {c.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- local staff headshots
+                  <img
+                    src={c.photo_url}
+                    alt=""
+                    width={64}
+                    height={64}
+                    className="h-16 w-16 shrink-0 object-cover object-top"
+                  />
                 ) : null}
-                {c.email ? (
-                  <a
-                    href={`mailto:${c.email}`}
-                    className="mt-1 block break-words text-[#007DC5] underline underline-offset-4"
-                  >
-                    {c.email}
-                  </a>
-                ) : null}
-                {c.phone ? (
-                  <a href={`tel:${c.phone}`} className="mt-1 block text-[#4D5C6A]">
-                    {c.phone}
-                  </a>
-                ) : null}
+                <div className="min-w-0">
+                  <p className="font-medium">{c.name}</p>
+                  {[c.role, c.organisation].filter(Boolean).length ? (
+                    <p className="text-[#4D5C6A]">
+                      {[c.role, c.organisation].filter(Boolean).join(", ")}
+                    </p>
+                  ) : null}
+                  {c.email ? (
+                    <a
+                      href={`mailto:${c.email}`}
+                      className="mt-1 block break-words text-[#007DC5] underline underline-offset-4"
+                    >
+                      {c.email}
+                    </a>
+                  ) : null}
+                  {c.phone ? (
+                    <a href={`tel:${c.phone}`} className="mt-1 block text-[#4D5C6A]">
+                      {c.phone}
+                    </a>
+                  ) : null}
+                </div>
               </div>
             ))}
           </section>

@@ -81,10 +81,29 @@ export function releaseSummary(item: ContentItem, max = 200): string {
   return `${cut.slice(0, lastSpace > 120 ? lastSpace : max).trimEnd()}…`;
 }
 
+/** Preferred order on the public press contacts list (by email). */
+const SPOKESPERSON_ORDER = [
+  "simon@petersandmay.com",
+  "craig@petersandmay.com",
+  "richard@petersandmay.com",
+  "peverley@petersandmay.com",
+  "robert@petersandmay.com",
+  "marketing@petersandmay.com",
+];
+
 export function newsroomSpokespeople(contacts: Contact[]): Contact[] {
+  const rank = new Map(
+    SPOKESPERSON_ORDER.map((email, index) => [email, index])
+  );
   return contacts
     .filter((c) => c.is_spokesperson && !isPressContact(c))
-    .filter((c) => c.email || c.phone);
+    .filter((c) => c.email || c.phone)
+    .sort((a, b) => {
+      const aRank = rank.get(a.email.trim().toLowerCase()) ?? 100;
+      const bRank = rank.get(b.email.trim().toLowerCase()) ?? 100;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.name.localeCompare(b.name);
+    });
 }
 
 export function releaseUrl(id: string): string {

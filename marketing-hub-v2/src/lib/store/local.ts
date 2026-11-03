@@ -179,6 +179,7 @@ function migrateContacts(
     user_id: item.user_id ?? null,
     is_press: Boolean(item.is_press),
     is_spokesperson: Boolean(item.is_spokesperson),
+    photo_url: typeof item.photo_url === "string" ? item.photo_url : "",
     beat: item.beat ?? "",
     outlet: item.outlet ?? "",
     country: item.country ?? "",

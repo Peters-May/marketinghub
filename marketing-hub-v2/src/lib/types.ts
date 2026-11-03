@@ -417,6 +417,8 @@ export type Contact = {
   is_press: boolean;
   /** Peters & May spokesperson shown on the public newsroom. */
   is_spokesperson?: boolean;
+  /** Optional headshot URL for the public newsroom press contacts. */
+  photo_url?: string;
   /** Coverage beat — e.g. yachting, freight, logistics. */
   beat: string;
   /** Publication / outlet name when distinct from organisation. */
