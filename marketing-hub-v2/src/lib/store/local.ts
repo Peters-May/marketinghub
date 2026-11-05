@@ -818,7 +818,7 @@ export async function writeStore(
 }
 
 /** One attempt can sit on the 120s statement timeout. A longer loop hits the 300s platform kill. */
-const MAX_STORE_WRITE_ATTEMPTS = 2;
+const MAX_STORE_WRITE_ATTEMPTS = 4;
 
 /** Serialize store mutations on this process so concurrent writes can't clobber each other. */
 let updateStoreChain: Promise<unknown> = Promise.resolve();

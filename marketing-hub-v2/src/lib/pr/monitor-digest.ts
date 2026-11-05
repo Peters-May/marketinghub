@@ -83,15 +83,13 @@ export async function sendMonitorDigest(input: {
 }
 
 /**
- * Ops cutover checklist (Owly → Hub). Kept in code so deploy docs stay in sync.
+ * Ops checklist for Hub PR Monitoring. Kept in code so deploy docs stay in sync.
  */
 export const MONITOR_CUTOVER_CHECKLIST = [
-  "Confirm NEWS_API_KEY is set on Vercel production for marketinghub",
+  "Confirm NEWS_API_KEY is set on Vercel production for marketinghub (paid NewsAPI plan for production servers)",
   "Confirm RESEND_API_KEY / RESEND_FROM_EMAIL for digest mail",
   "Set digest recipients under PR → Monitoring → Digest settings",
-  "Export mentions CSV from Owly and import via Mentions → Import Owly CSV",
-  "Verify imported count and spot-check sentiment / outlets",
   "Tune brand query keywords and exclusions (e.g. market-report spam domains)",
+  "Run a query from Mentions and confirm new items land in the inbox",
   "Trigger /api/pr/monitor/cron once with CRON_SECRET and confirm digest",
-  "Cancel Owly subscription once the Hub inbox is trusted for daily review",
 ] as const;

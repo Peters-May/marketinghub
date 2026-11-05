@@ -3454,6 +3454,47 @@ export async function upsertPrMonitorMentions(
   return created;
 }
 
+/**
+ * Persist a monitoring run in one hub-store write: new mentions + query last_run_at.
+ * Avoids a second CAS that commonly hit StoreConflictError under load.
+ */
+export async function saveMonitorQueryRun(
+  queryId: string,
+  mentions: Omit<PrMonitorMention, "id" | "created_at" | "updated_at">[]
+) {
+  const created: PrMonitorMention[] = [];
+  const ranAt = nowIso();
+  await updateStore((s) => {
+    if (!s.pr_monitor_mentions) s.pr_monitor_mentions = [];
+    if (!s.pr_monitor_queries) s.pr_monitor_queries = [];
+    const byExternal = new Map(
+      s.pr_monitor_mentions.map((m) => [m.external_id, m])
+    );
+    for (const input of mentions) {
+      if (input.external_id && byExternal.has(input.external_id)) continue;
+      const item = normalizeMonitorMention({
+        ...input,
+        status: (input.status as PrMonitorMentionStatus) || "new",
+        id: uid("pmm"),
+        created_at: ranAt,
+        updated_at: ranAt,
+      });
+      s.pr_monitor_mentions.push(item);
+      byExternal.set(item.external_id, item);
+      created.push(item);
+    }
+    const idx = s.pr_monitor_queries.findIndex((x) => x.id === queryId);
+    if (idx !== -1) {
+      s.pr_monitor_queries[idx] = {
+        ...s.pr_monitor_queries[idx],
+        last_run_at: ranAt,
+        updated_at: ranAt,
+      };
+    }
+  });
+  return created;
+}
+
 export async function updatePrMonitorMention(
   id: string,
   patch: Partial<PrMonitorMention>

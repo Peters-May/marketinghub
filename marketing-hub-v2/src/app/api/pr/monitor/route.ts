@@ -15,7 +15,6 @@ import {
 } from "@/lib/data/repos";
 import { normalizeSentiment } from "@/lib/pr/mention-normalize";
 import { runMonitorQuery } from "@/lib/pr/monitor-run";
-import { parseOwlyMentionsCsv } from "@/lib/pr/owly-import";
 import type {
   PrCoverageSentiment,
   PrMonitorQuery,
@@ -196,43 +195,6 @@ export async function POST(request: NextRequest) {
       return jsonError("That mention is already in the inbox", 409);
     }
     return jsonOk({ item: created[0] }, { status: 201 });
-  }
-
-  if (action === "import_mentions") {
-    const csvText = String(body.csv ?? "");
-    if (!csvText.trim()) return jsonError("CSV text is required", 400);
-    const queries = await listPrMonitorQueries();
-    const queryId =
-      String(body.query_id ?? "").trim() || queries[0]?.id || "";
-    if (!queryId) {
-      return jsonError("Create a monitoring query before importing", 400);
-    }
-    const rows = parseOwlyMentionsCsv(csvText);
-    if (!rows.length) {
-      return jsonError("No usable mention rows found in that CSV", 400);
-    }
-    const created = await upsertPrMonitorMentions(
-      rows.map((row) => ({
-        query_id: queryId,
-        title: row.title,
-        url: row.url,
-        outlet: row.outlet,
-        published_at: row.published_at,
-        snippet: row.snippet,
-        status: "new" as const,
-        sentiment: row.sentiment,
-        language: row.language,
-        country: row.country,
-        favorite: false,
-        source: "import" as const,
-        external_id: row.external_id,
-      }))
-    );
-    return jsonOk({
-      parsed: rows.length,
-      added: created.length,
-      skipped: rows.length - created.length,
-    });
   }
 
   if (action === "update_settings") {

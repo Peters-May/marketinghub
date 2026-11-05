@@ -80,7 +80,6 @@ export function MonitoringPanel({
   useEffect(() => {
     setDigestEmails(settings.digest_emails);
   }, [settings.digest_emails]);
-  const [importText, setImportText] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     PrMonitorMentionStatus | "all"
   >("new");
@@ -178,6 +177,10 @@ export function MonitoringPanel({
       if (!data.news_api_configured) {
         onMessage(
           "No NEWS_API_KEY configured — add it to env to fetch live mentions. Coverage can still be logged manually."
+        );
+      } else if (data.added === 0) {
+        onMessage(
+          "No new mentions — nothing matched the keywords in this window, or they are already in the inbox."
         );
       } else {
         onMessage(`Added ${data.added} new mention(s).`);
@@ -344,32 +347,6 @@ export function MonitoringPanel({
     }
   }
 
-  async function importCsv() {
-    onBusy(true);
-    try {
-      const res = await fetch("/api/pr/monitor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "import_mentions",
-          csv: importText,
-          query_id: queries[0]?.id || "",
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Import failed");
-      setImportText("");
-      await onRefresh();
-      onMessage(
-        `Imported ${data.added} mention(s) (${data.skipped} skipped as duplicates).`
-      );
-    } catch (e) {
-      onMessage(e instanceof Error ? e.message : "Import failed");
-    } finally {
-      onBusy(false);
-    }
-  }
-
   async function saveDigest() {
     onBusy(true);
     try {
@@ -406,8 +383,8 @@ export function MonitoringPanel({
       {!newsApiConfigured ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-brand">
           Set <code className="font-mono">NEWS_API_KEY</code> in the environment
-          to fetch live news. Until then, use Add mention, Owly CSV import, or
-          Coverage to log clips by hand.
+          to fetch live news. Until then, use Add mention or Coverage to log
+          clips by hand.
         </p>
       ) : null}
 
@@ -636,7 +613,7 @@ export function MonitoringPanel({
         ))}
       </ul>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="max-w-xl">
         <div className="surface-card space-y-3 p-4">
           <h2 className="font-display text-lg text-brand">Add mention</h2>
           {(
@@ -700,27 +677,6 @@ export function MonitoringPanel({
           </button>
         </div>
 
-        <div className="surface-card space-y-3 p-4">
-          <h2 className="font-display text-lg text-brand">Import Owly CSV</h2>
-          <p className="text-xs text-muted">
-            Paste an Owly / Prowly export. Rows dedupe on URL.
-          </p>
-          <textarea
-            className="h-40 w-full rounded-md border border-brand/15 px-3 py-2 font-mono text-xs"
-            aria-label="Owly CSV"
-            placeholder="title,outlet,url,published_at,snippet,sentiment,country"
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-          />
-          <button
-            type="button"
-            disabled={busy || !importText.trim()}
-            onClick={() => void importCsv()}
-            className="rounded-lg bg-brand px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Import mentions
-          </button>
-        </div>
       </div>
 
       <div>
@@ -849,7 +805,7 @@ export function MonitoringPanel({
         {filtered.length === 0 ? (
           <EmptyState
             title="No mentions match"
-            description="Adjust filters, run a query, import an Owly CSV, or add a mention."
+            description="Adjust filters, run a query, or add a mention."
           />
         ) : (
           <ul className="space-y-2">

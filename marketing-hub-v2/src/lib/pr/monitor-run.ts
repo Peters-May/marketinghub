@@ -1,7 +1,6 @@
 import {
   listPrMonitorQueries,
-  updatePrMonitorQuery,
-  upsertPrMonitorMentions,
+  saveMonitorQueryRun,
 } from "@/lib/data/repos";
 import { fetchMentionsForQuery } from "@/lib/pr/monitor-fetch";
 import type { PrMonitorMention, PrMonitorQuery } from "@/lib/types";
@@ -25,7 +24,8 @@ export async function runMonitorQuery(
       languages: query.languages,
       last_run_at: query.last_run_at,
     });
-    const created = await upsertPrMonitorMentions(
+    const created = await saveMonitorQueryRun(
+      query.id,
       fetched.map((m) => ({
         query_id: query.id,
         title: m.title,
@@ -42,9 +42,6 @@ export async function runMonitorQuery(
         external_id: m.external_id,
       }))
     );
-    await updatePrMonitorQuery(query.id, {
-      last_run_at: new Date().toISOString(),
-    });
     return {
       query_id: query.id,
       query_name: query.name,

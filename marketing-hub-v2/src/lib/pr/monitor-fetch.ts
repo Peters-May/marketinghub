@@ -21,6 +21,7 @@ export type MonitorFetchResult = {
 };
 
 const PAGE_SIZE = 100;
+/** Developer plans often reject page 2+; keep fetching until empty or plan limit. */
 const MAX_PAGES = 3;
 
 function splitTerms(raw: string): string[] {
@@ -84,13 +85,73 @@ type NewsApiArticle = {
   source?: { name?: string };
 };
 
+type NewsApiPageResult =
+  | { ok: true; articles: NewsApiArticle[] }
+  | { ok: false; softStop: boolean; message: string };
+
+/** Map NewsAPI error codes to short staff-facing messages. */
+export function newsApiErrorMessage(
+  status: number,
+  body: { code?: string; message?: string } | null
+): { softStop: boolean; message: string } {
+  const code = String(body?.code ?? "").toLowerCase();
+  if (
+    code === "maximumresultsreached" ||
+    code === "pagerequired" ||
+    /maximum results|page.*not allowed|developer accounts/i.test(
+      String(body?.message ?? "")
+    )
+  ) {
+    return { softStop: true, message: "NewsAPI page limit reached" };
+  }
+  if (code === "ratelimited" || status === 429) {
+    return {
+      softStop: false,
+      message: "NewsAPI rate limit hit — try again in a minute.",
+    };
+  }
+  if (code === "apikeyinvalid" || code === "apikeymissing" || status === 401) {
+    return {
+      softStop: false,
+      message: "NEWS_API_KEY is invalid — check the key on newsapi.org.",
+    };
+  }
+  if (code === "apikeydisabled") {
+    return {
+      softStop: false,
+      message: "NEWS_API_KEY is disabled on newsapi.org.",
+    };
+  }
+  if (
+    code === "apikeyexhausted" ||
+    /upgrade|paid plans only|production/i.test(String(body?.message ?? ""))
+  ) {
+    return {
+      softStop: false,
+      message:
+        "NewsAPI plan cannot run this request from the Hub server. A paid NewsAPI plan is required for production monitoring.",
+    };
+  }
+  if (status === 426 || status === 403) {
+    return {
+      softStop: false,
+      message:
+        "NewsAPI blocked this request — developer keys cannot be used from production servers. Upgrade the NewsAPI plan or use a server-capable key.",
+    };
+  }
+  return {
+    softStop: false,
+    message: "News monitoring is unavailable right now.",
+  };
+}
+
 async function fetchNewsApiPage(input: {
   apiKey: string;
   q: string;
   language: string;
   from: string;
   page: number;
-}): Promise<NewsApiArticle[]> {
+}): Promise<NewsApiPageResult> {
   const url = new URL("https://newsapi.org/v2/everything");
   url.searchParams.set("q", input.q);
   url.searchParams.set("sortBy", "publishedAt");
@@ -113,14 +174,33 @@ async function fetchNewsApiPage(input: {
     throw new Error("News monitoring is unavailable right now.");
   }
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error("[pr/monitor] NewsAPI error", res.status, text.slice(0, 200));
-    throw new Error("News monitoring is unavailable right now.");
+  const text = await res.text().catch(() => "");
+  let parsed: {
+    status?: string;
+    code?: string;
+    message?: string;
+    articles?: NewsApiArticle[];
+  } | null = null;
+  try {
+    parsed = text ? (JSON.parse(text) as typeof parsed) : null;
+  } catch {
+    parsed = null;
   }
 
-  const data = (await res.json()) as { articles?: NewsApiArticle[] };
-  return data.articles ?? [];
+  if (!res.ok || parsed?.status === "error") {
+    console.error(
+      "[pr/monitor] NewsAPI error",
+      res.status,
+      text.slice(0, 200)
+    );
+    const mapped = newsApiErrorMessage(res.status, parsed);
+    if (mapped.softStop) {
+      return { ok: false, softStop: true, message: mapped.message };
+    }
+    throw new Error(mapped.message);
+  }
+
+  return { ok: true, articles: parsed?.articles ?? [] };
 }
 
 export async function fetchMentionsForQuery(input: {
@@ -146,13 +226,19 @@ export async function fetchMentionsForQuery(input: {
   const seen = new Set<string>();
 
   for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const articles = await fetchNewsApiPage({
+    const pageResult = await fetchNewsApiPage({
       apiKey,
       q,
       language,
       from,
       page,
     });
+    if (!pageResult.ok) {
+      // Plan limit on later pages — keep whatever we already collected.
+      if (pageResult.softStop) break;
+      throw new Error(pageResult.message);
+    }
+    const articles = pageResult.articles;
     if (!articles.length) break;
 
     for (const article of articles) {
