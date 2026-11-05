@@ -90,8 +90,38 @@ describe("parseHubCommand", () => {
     if (parsed.kind !== "create_content") return;
     expect(parsed.title).toBe("autumn yacht moves");
     expect(parsed.channel).toEqual(["LinkedIn"]);
+    expect(parsed.content_type).toBe("Social");
+    expect(parsed.asset_url).toBe("");
     expect(parsed.due_date).toBe("2026-10-06");
     expect(parsed.status).toBe("idea");
+  });
+
+  it("adds editorial content with an attached PDF link", () => {
+    const parsed = command(
+      "Add editorial content Peters & May Bahri Shipment with link https://example.supabase.co/storage/v1/object/public/attachments/hub-content/bahri.pdf"
+    );
+    expect(parsed.kind).toBe("create_content");
+    if (parsed.kind !== "create_content") return;
+    expect(parsed.title).toBe("Peters & May Bahri Shipment");
+    expect(parsed.content_type).toBe("Editorial");
+    expect(parsed.channel).toEqual(["Editorial"]);
+    expect(parsed.asset_url).toBe(
+      "https://example.supabase.co/storage/v1/object/public/attachments/hub-content/bahri.pdf"
+    );
+    expect(parsed.summary).toContain("Editorial content");
+    expect(parsed.summary).not.toContain("LinkedIn");
+  });
+
+  it("adds PR content with a file URL and does not default to LinkedIn", () => {
+    const parsed = command(
+      "Add PR content Peters & May Bahri Shipment with link https://cdn.example.com/Peters-May.pdf"
+    );
+    expect(parsed.kind).toBe("create_content");
+    if (parsed.kind !== "create_content") return;
+    expect(parsed.title).toBe("Peters & May Bahri Shipment");
+    expect(parsed.content_type).toBe("PR");
+    expect(parsed.channel).toEqual(["PR"]);
+    expect(parsed.asset_url).toBe("https://cdn.example.com/Peters-May.pdf");
   });
 
   it("updates a task status", () => {

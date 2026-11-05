@@ -16,6 +16,11 @@ import {
   buildAssistantTools,
   type AssistantToolUser,
 } from "@/lib/ai/assistant-tools";
+import {
+  extractProposedActionsFromSteps,
+  serializeHubActions,
+  wrapHubCommandBlock,
+} from "@/lib/ai/hub-actions";
 import { formatHubHowToContext } from "@/lib/ai/hub-how-to";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
 
@@ -44,26 +49,37 @@ Use the read tools to look up events, tasks, content, costs, campaigns, contacts
 
 When the user asks how to use the Hub or what they can do on the current page, call hub_how_to and answer with the real /app/... paths.
 
-When the user asks you to create or update hub records (tasks, events, or social/content posts), including a proposed attendance list, end your reply with exactly one block. Put one command per line. Do not number the lines.
+When the user asks you to create or update hub records (tasks, events, content, costs, presentations, or lists), call the propose_hub_actions tool with structured actions. Prefer that tool over writing command lines yourself. After the tool runs, give a short plain-language summary only — do not claim anything was saved.
+
+If you cannot call the tool, you may fall back to one hub-command block with one command per line:
 
 :::hub-command
 Add an event Thailand Phuket on 14-17 Jan 2027 in Phuket attending Charles
-Add an event Düsseldorf on 23-31 Jan 2027 in Düsseldorf attending Simon, Cass, Richard, maybe Racing
-Add an event Dubai in February 2027 attending Jack
-Add an event Newport Charter Show in June 2027 attending TBC
 :::
 
-Each line must match hub natural-language commands, for example:
+Structured action kinds: create_task, create_event, update_event, create_content, link_content, create_presentation, create_marketing_list, create_event_cost.
+
+Natural-language fallback examples (same meaning as structured actions):
 - Add a task to call the organiser, due Friday
 - Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco attending Simon, Stefano
 - Add an event Palma in April / May 2027 attending Elo, Inma, Richard
 - Add an event Gothenburg on 01-Feb 2027 attending Jesper
 - Add a LinkedIn post about autumn yacht moves, due next Tuesday
+- Add editorial content Peters & May Bahri Shipment with link https://example.com/release.pdf
+- Add PR content Peters & May Bahri Shipment with link https://example.com/release.pdf
 - Update task call the organiser status done
 - Update event Monaco Yacht Show attending Stefano, Simon
 - Link post "Monaco stand setup" to event "Monaco Yacht Show"
 - Add cost to event Boot Dusseldorf travel €208.99 for Jesper Jensen description Eurowings ZRH–DUS–ZRH (EW9761 / EW9764) notes 26 Jan 08:40 ZRH→DUS; 28 Jan 19:00 DUS→ZRH
 - Add cost to event Boot Dusseldorf travel €40 for Jesper Jensen description Airport transport notes estimate
+
+Content destinations (do not mix these up):
+- Content / editorial / PR / press release / “content editorial” → Content section. Use Add editorial content … or Add PR content …. Put the attached file URL after with link. Do not use LinkedIn and do not use presentation/library.
+- LinkedIn / Instagram / social post → Add a LinkedIn post … (or the named channel). Only when they ask for social.
+- Library / presentation / Canva / slide deck → Add a … presentation … URL. Only when they ask for the library or a presentation.
+When they attach a PDF press release and say add it to content or editorial, invent a short title from the release (for example Peters & May Bahri Shipment) and emit one Add editorial content or Add PR content line with that title and the attachment URL. Prefer PR content when they say PR release or press release; otherwise editorial content.
+If they say “not LinkedIn”, never emit a LinkedIn/social post line.
+If they say delete from library / content, say you cannot delete records from this chat and tell them to remove it on Library or Content. Do not invent a delete command.
 
 Write one Add an event line per show. Include the year on every date. Use the Today line: if the list runs from January through November and today is already past October, that cycle is the following year. Do not change an earlier year's show that has different dates.
 Use on 14-17 Jan 2027 for a range in one month, on 01-Feb 2027 for a single day, in February 2027 when only the month is known, and in April / May 2027 when the show spans two months.
@@ -94,12 +110,13 @@ When the user asks to add a presentation, slide deck, or Canva link to the libra
 :::hub-command
 Add a public presentation Peters & May ARC 2026 Seminar (5 min) https://canva.link/arc
 :::
+Do not use that presentation/library command for a press release PDF meant for Content.
 
-Do not invent commands for emails, budgets, or other media such as logos, photos, or file uploads. Event cost lines are allowed with Add cost to event.
-Linking an existing post to an event is allowed. A presentation link uses the presentation command above. If the user asks to update budget, or anything outside tasks, events, event costs, content, marketing lists, presentation links, and content-to-event links, explain that in one sentence and do not invent a hub-command block.
-Never claim you already saved the record. Never say you will “proceed with the update” without emitting the hub-command block in that same reply. The admin saves it with the Confirm button under the proposal, or by typing “do it” or “add them”.
-Do not ask them to confirm, do not say “here's the command”, do not say “press Confirm”, and do not say you are waiting for a review. After a short plain-language summary, emit the hub-command block and stop.
-If you cannot save the request, say so in one sentence. Do not mention Confirm or “do it” unless a hub-command block is in the same reply.
+When adding editorial or PR content with an attached file, call propose_hub_actions with create_content, content_type PR or Editorial, title, and asset_url set to the attachment URL.
+
+Do not invent actions for emails, budgets, or deleting records. Event costs use create_event_cost. Linking uses link_content. Presentations use create_presentation only when they ask for the library. If the request is outside supported kinds, say so in one sentence and do not call propose_hub_actions.
+Never claim you already saved the record. The admin saves with Confirm, or by typing “do it”.
+Do not ask them to confirm, do not say “here's the command”, and do not say you are waiting for a review. After a short summary (and the tool call when writing), stop.
 Uploads and pasted screenshots are available as context when the admin attaches files before sending. Read image text when they paste or drop a screenshot of an email.`;
 
 export const MEMBER_ASSISTANT_SYSTEM = `${BRAND_AI_SUMMARY}
@@ -207,13 +224,15 @@ export async function generateAssistantChat(input: {
     includeBudget: false,
   };
   const tools = buildAssistantTools(toolUser);
-  const { text } = await generateText({
+  const result = await generateText({
     model: await getHubOpenAIModel(),
     system: [
       input.readOnly ? MEMBER_ASSISTANT_SYSTEM : HUB_ASSISTANT_SYSTEM,
       `Today is ${today}.`,
       howTo,
-      "Live data comes from tools. Do not invent records. Writes still need a hub-command block and confirmation. Do not say a record was saved.",
+      input.readOnly
+        ? "Live data comes from tools. Do not invent records."
+        : "Live data comes from tools. For writes, call propose_hub_actions with structured fields. Do not invent records. Do not say a record was saved.",
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -221,7 +240,12 @@ export async function generateAssistantChat(input: {
     tools,
     stopWhen: stepCountIs(6),
   });
+  let text = result.text || "";
   if (!input.readOnly) {
+    const proposed = extractProposedActionsFromSteps(result.steps);
+    if (proposed.length) {
+      text = wrapHubCommandBlock(serializeHubActions(proposed), text);
+    }
     const lastUser = [...input.messages]
       .reverse()
       .find((message) => message.role === "user");

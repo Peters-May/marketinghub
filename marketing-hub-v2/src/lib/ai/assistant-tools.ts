@@ -1,6 +1,10 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import { searchHubHowTo, howToForPath } from "@/lib/ai/hub-how-to";
+import {
+  proposeHubActionsSchema,
+  serializeHubActions,
+} from "@/lib/ai/hub-actions";
 import { ownerMatchesViewer } from "@/lib/identity/owners";
 import { contentVisibleToMember } from "@/lib/social/suggest";
 import { costTotalsByCurrency, costsSheetPath } from "@/lib/events/costs";
@@ -617,5 +621,23 @@ export function buildAssistantTools(user: AssistantToolUser): ToolSet {
       }),
       execute: async (input) => toolHubHowTo(input),
     }),
+    ...(user.readOnly
+      ? {}
+      : {
+          propose_hub_actions: tool({
+            description:
+              "Propose hub writes for the admin to Confirm. Use for add/update tasks, events, content (Social/Editorial/PR), presentations, marketing lists, event costs, and linking posts to events. Prefer this over inventing free-text command lines. Never claim records were saved. For a PR/press PDF into Content, use create_content with content_type PR or Editorial and asset_url from the attachment — never LinkedIn or create_presentation unless asked.",
+            inputSchema: proposeHubActionsSchema,
+            execute: async (input) => {
+              const lines = serializeHubActions(input.actions);
+              return {
+                ok: true,
+                count: input.actions.length,
+                preview_lines: lines.split("\n").filter(Boolean),
+                note: "Not saved yet. The Confirm button in chat applies these actions.",
+              };
+            },
+          }),
+        }),
   };
 }

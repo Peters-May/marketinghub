@@ -531,15 +531,16 @@ export async function executeHubCommand(
   }
 
   if (command.kind === "create_content") {
+    const contentType = (command.content_type || "Social").trim() || "Social";
     const created = await createContent({
       title: command.title,
       channel: normalizeChannels(command.channel),
-      content_type: "Social",
+      content_type: contentType,
       owner: "",
       due_date: command.due_date,
       deadline_date: null,
       status: command.status,
-      category: "",
+      category: contentType === "PR" ? "Press release" : "",
       priority: "",
       website: "",
       caption: command.caption,
@@ -550,13 +551,15 @@ export async function executeHubCommand(
       planable_page_ids: [],
       last_synced_at: null,
       sync_source: "hub",
-      asset_url: "",
+      asset_url: command.asset_url || "",
       notes: command.notes,
     });
     const synced = await syncContent(created);
+    const label =
+      contentType === "Social" ? "post" : `${contentType.toLowerCase()} content`;
     return {
       ok: true,
-      message: `Added post “${synced.item.title}”.${synced.note}`,
+      message: `Added ${label} “${synced.item.title}”.${synced.note}`,
       href: command.href,
       area: command.area,
     };

@@ -8,6 +8,8 @@ export const COMMAND_EXAMPLES = [
   "Add an event Monaco Yacht Show on 12 Oct 2026 in Monaco",
   "Add an event Düsseldorf on 23-31 Jan 2027 in Düsseldorf attending Simon, Cass, maybe Racing",
   "Add a LinkedIn post about autumn yacht moves, due next Tuesday",
+  "Add editorial content Peters & May Bahri Shipment with link https://example.com/release.pdf",
+  "Add PR content Peters & May Bahri Shipment with link https://example.com/release.pdf",
   "Update task call the organiser status done",
   "Update event Monaco Yacht Show location Port Hercules",
   'Link post "Monaco stand setup" to event "Monaco Yacht Show"',
@@ -83,10 +85,14 @@ export type HubCommand = CommandBase &
         kind: "create_content";
         title: string;
         channel: string[];
+        /** Social, Editorial, PR, Newsletter, etc. */
+        content_type: string;
         due_date: string | null;
         caption: string;
         notes: string;
         status: ContentStatus;
+        /** File or page URL attached to the content row. */
+        asset_url: string;
       }
     | {
         kind: "update_content";
@@ -146,6 +152,8 @@ type Fields = {
   channel?: string[];
   type?: string;
   title?: string;
+  content_type?: string;
+  asset_url?: string;
   /** Proposed attendance, kept as written. */
   attending?: string;
   /** Company checkbox, separate from named people. */
@@ -167,7 +175,16 @@ const CHANNEL_PATTERN =
   "linkedin|instagram|facebook|tiktok|youtube|newsletter|twitter|x";
 
 const TARGET_PATTERN =
-  "social media post|social post|to-do|to do|todo|task|event|content|post";
+  "social media post|social post|editorial content|pr content|press release|press content|to-do|to do|todo|task|event|content|post|editorial";
+
+const SOCIAL_CHANNELS = new Set([
+  "LinkedIn",
+  "Instagram",
+  "Facebook",
+  "TikTok",
+  "YouTube",
+  "X",
+]);
 
 const KEYWORD =
   "due|deadline|owner|status|location|notes|details|caption|channel|type|title|called|named|attending|until|on|by|for|in|at|as|to";
@@ -225,12 +242,73 @@ function targetOf(word: string): Target {
   if (
     value === "post" ||
     value === "content" ||
+    value === "editorial" ||
+    value === "editorial content" ||
+    value === "pr content" ||
+    value === "press release" ||
+    value === "press content" ||
     value === "social post" ||
     value === "social media post"
   ) {
     return "content";
   }
   return "task";
+}
+
+function contentTypeFromTarget(word: string): string | null {
+  const value = word.toLowerCase();
+  if (value === "editorial" || value === "editorial content") return "Editorial";
+  if (
+    value === "pr content" ||
+    value === "press release" ||
+    value === "press content"
+  ) {
+    return "PR";
+  }
+  if (value === "social post" || value === "social media post") return "Social";
+  return null;
+}
+
+function peelAssetUrl(text: string): { text: string; url: string } {
+  const labelled = text.match(
+    /\b(?:with\s+)?(?:link|asset|file|url|pdf)\s+(https?:\/\/[^\s<>]+)/i
+  );
+  const match = labelled ?? text.match(/(https?:\/\/[^\s<>]+)/i);
+  if (!match || match.index == null) return { text, url: "" };
+  const url = match[1].replace(/[),.;]+$/g, "");
+  const next = `${text.slice(0, match.index)} ${text.slice(match.index + match[0].length)}`
+    .replace(/\s+/g, " ")
+    .trim();
+  return { text: next, url };
+}
+
+function defaultChannelsForContent(
+  contentType: string,
+  channelHint: string | null,
+  fields: Fields
+): string[] {
+  if (fields.channel?.length) return fields.channel;
+  if (channelHint) return [channelHint];
+  if (contentType === "Editorial") return ["Editorial"];
+  if (contentType === "PR" || contentType === "Press") return ["PR"];
+  if (contentType === "Newsletter") return ["Newsletter"];
+  if (contentType === "Sponsorship") return ["Sponsorship"];
+  return ["LinkedIn"];
+}
+
+function resolveContentType(
+  targetWord: string,
+  channelHint: string | null,
+  fields: Fields
+): string {
+  const fromTarget = contentTypeFromTarget(targetWord);
+  if (fromTarget) return fromTarget;
+  if (fields.content_type) return fields.content_type;
+  if (channelHint && SOCIAL_CHANNELS.has(channelHint)) return "Social";
+  if (fields.channel?.some((channel) => SOCIAL_CHANNELS.has(channel))) {
+    return "Social";
+  }
+  return "Social";
 }
 
 function ymd(year: number, monthIndex: number, day: number): string | null {
@@ -872,11 +950,19 @@ function contentSummary(
   title: string,
   fields: Fields
 ): string {
-  const channels = fields.channel?.length ? fields.channel.join(" and ") : "LinkedIn";
-  const bits = [`${verb} ${channels} post ${quote(title)}`];
+  const contentType = fields.content_type || "Social";
+  const isSocial = contentType === "Social";
+  const channels = fields.channel?.length
+    ? fields.channel.join(" and ")
+    : isSocial
+      ? "LinkedIn"
+      : contentType;
+  const label = isSocial ? `${channels} post` : `${contentType} content`;
+  const bits = [`${verb} ${label} ${quote(title)}`];
   if (fields.due) bits.push(`due ${formatWhen(fields.due)}`);
   if (fields.status && fields.status !== "idea") bits.push(`status ${fields.status}`);
   if (fields.caption) bits.push("with caption");
+  if (fields.asset_url) bits.push("with attached file");
   return `${bits.join(", ")}.`;
 }
 
@@ -895,14 +981,17 @@ function fromFields(
   target: Target,
   title: string,
   fields: Fields,
-  channelHint: string | null
+  channelHint: string | null,
+  targetWord = ""
 ): ParseResult {
   if (channelHint) {
     fields.channel = fields.channel ?? [channelHint];
   }
 
   if (verb === "Add") {
-    title = cleanTitle(fields.title || title);
+    const peeled = peelAssetUrl(fields.title || title);
+    title = cleanTitle(peeled.text);
+    if (peeled.url) fields.asset_url = peeled.url;
     if (!title) {
       return fail("Add a name. For example: Add a task to call the organiser, due Friday.");
     }
@@ -936,20 +1025,27 @@ function fromFields(
       return { ok: true, command };
     }
     const status = (fields.status as ContentStatus | undefined) ?? "idea";
+    const contentType = resolveContentType(targetWord, channelHint, fields);
+    const channel = defaultChannelsForContent(contentType, channelHint, fields);
+    const summaryFields: Fields = {
+      ...fields,
+      channel,
+      content_type: contentType,
+      status,
+      asset_url: fields.asset_url ?? "",
+    };
     const command: HubCommand = {
       ...baseFor(target, verb),
       kind: "create_content",
       title,
-      channel: fields.channel ?? ["LinkedIn"],
+      channel,
+      content_type: contentType,
       due_date: fields.due ?? null,
       caption: fields.caption ?? "",
       notes: fields.notes ?? "",
       status,
-      summary: contentSummary(verb, title, {
-        ...fields,
-        channel: fields.channel ?? ["LinkedIn"],
-        status,
-      }),
+      asset_url: fields.asset_url ?? "",
+      summary: contentSummary(verb, title, summaryFields),
     };
     return { ok: true, command };
   }
@@ -1449,7 +1545,14 @@ function parseHubCommandBody(text: string, now: Date): ParseResult {
         "Publish in Planable. In the hub, set the post to draft, review, approved, or scheduled."
       );
     }
-    return fromFields("Update", target, cleanTitle(mark[1]), { status: status.status }, null);
+    return fromFields(
+      "Update",
+      target,
+      cleanTitle(mark[1]),
+      { status: status.status },
+      null,
+      mark[2]
+    );
   }
 
   const update = text.match(
@@ -1466,7 +1569,8 @@ function parseHubCommandBody(text: string, now: Date): ParseResult {
       targetOf(update[2]),
       extracted.title,
       extracted.fields,
-      update[1] ? channelFrom(update[1]) : null
+      update[1] ? channelFrom(update[1]) : null,
+      update[2]
     );
   }
 
@@ -1484,7 +1588,8 @@ function parseHubCommandBody(text: string, now: Date): ParseResult {
       targetOf(create[2]),
       extracted.title,
       extracted.fields,
-      create[1] ? channelFrom(create[1]) : null
+      create[1] ? channelFrom(create[1]) : null,
+      create[2]
     );
   }
 
@@ -1503,7 +1608,8 @@ function parseHubCommandBody(text: string, now: Date): ParseResult {
       targetOf(createAs[3]),
       extracted.title,
       extracted.fields,
-      createAs[2] ? channelFrom(createAs[2]) : null
+      createAs[2] ? channelFrom(createAs[2]) : null,
+      createAs[3]
     );
   }
 
