@@ -3629,11 +3629,17 @@ function normalizeAudienceFilter(
 function normalizeEmailStats(
   stats?: Partial<EmailCampaignStats> | null
 ): EmailCampaignStats {
+  const recipients = Number(stats?.recipients) || 0;
+  const delivered = Number(stats?.delivered) || 0;
+  const whole = delivered || recipients;
+  const opened = Number(stats?.opened) || 0;
+  const clicked = Number(stats?.clicked) || 0;
+  // Unique engagement cannot exceed the audience. Cap raced / prefetch counters.
   return {
-    recipients: Number(stats?.recipients) || 0,
-    delivered: Number(stats?.delivered) || 0,
-    opened: Number(stats?.opened) || 0,
-    clicked: Number(stats?.clicked) || 0,
+    recipients,
+    delivered,
+    opened: whole > 0 ? Math.min(opened, whole) : opened,
+    clicked: whole > 0 ? Math.min(clicked, whole) : clicked,
     bounced: Number(stats?.bounced) || 0,
     complained: Number(stats?.complained) || 0,
     unsubscribed: Number(stats?.unsubscribed) || 0,
@@ -4453,7 +4459,12 @@ export async function bumpEmailCampaignStat(
     const idx = s.email_campaigns.findIndex((x) => x.id === campaignId);
     if (idx === -1) return;
     const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
-    const stats = { ...prev.stats, [field]: (prev.stats[field] || 0) + delta };
+    let next = (prev.stats[field] || 0) + delta;
+    if (field === "opened" || field === "clicked") {
+      const whole = prev.stats.delivered || prev.stats.recipients;
+      if (whole > 0) next = Math.min(next, whole);
+    }
+    const stats = { ...prev.stats, [field]: next };
     s.email_campaigns[idx] = normalizeEmailCampaign({
       ...prev,
       stats,

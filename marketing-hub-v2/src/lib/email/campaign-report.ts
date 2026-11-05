@@ -294,7 +294,8 @@ export function mailClientFromUserAgent(userAgent: string): string | null {
 }
 
 function formatRate(value: number): string {
-  const rounded = Math.round(value * 100) / 100;
+  const capped = Math.min(100, Math.max(0, value));
+  const rounded = Math.round(capped * 100) / 100;
   return `${rounded}%`;
 }
 

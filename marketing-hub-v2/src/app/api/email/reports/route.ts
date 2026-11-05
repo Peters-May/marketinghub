@@ -87,11 +87,25 @@ export async function GET(request: NextRequest) {
       stats: c.stats,
       open_rate:
         c.stats.delivered > 0
-          ? Math.round((c.stats.opened / c.stats.delivered) * 1000) / 10
+          ? Math.min(
+              100,
+              Math.round(
+                (Math.min(c.stats.opened, c.stats.delivered) /
+                  c.stats.delivered) *
+                  1000
+              ) / 10
+            )
           : null,
       click_rate:
         c.stats.delivered > 0
-          ? Math.round((c.stats.clicked / c.stats.delivered) * 1000) / 10
+          ? Math.min(
+              100,
+              Math.round(
+                (Math.min(c.stats.clicked, c.stats.delivered) /
+                  c.stats.delivered) *
+                  1000
+              ) / 10
+            )
           : null,
     })),
     events: filteredEvents.slice(0, 200),

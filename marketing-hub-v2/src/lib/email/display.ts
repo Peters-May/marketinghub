@@ -120,23 +120,33 @@ export function formatLondonUpdated(iso: string): { date: string; time: string }
   };
 }
 
+/**
+ * Unique open/click rate as a 0–100 percentage.
+ * Prefetch and raced webhooks can inflate stored counters above the audience
+ * size; rates still cannot exceed 100% of delivered (or sent).
+ */
+export function engagementRatePercent(count: number, whole: number): number {
+  if (!whole || whole <= 0) return 0;
+  const unique = Math.min(Math.max(0, Number(count) || 0), whole);
+  return (unique / whole) * 100;
+}
+
 function formatPercent(value: number): string {
-  const rounded = Math.round(value * 100) / 100;
+  const capped = Math.min(100, Math.max(0, value));
+  const rounded = Math.round(capped * 100) / 100;
   return `${rounded}%`;
 }
 
 export function campaignOpenRateLabel(c: EmailCampaign): string {
   if (c.adj_open_rate != null) return formatPercent(c.adj_open_rate);
   const whole = c.stats.delivered || c.stats.recipients;
-  if (!whole) return "0%";
-  return formatPercent((c.stats.opened / whole) * 100);
+  return formatPercent(engagementRatePercent(c.stats.opened, whole));
 }
 
 export function campaignClickRateLabel(c: EmailCampaign): string {
   if (c.adj_click_rate != null) return formatPercent(c.adj_click_rate);
   const whole = c.stats.delivered || c.stats.recipients;
-  if (!whole) return "0%";
-  return formatPercent((c.stats.clicked / whole) * 100);
+  return formatPercent(engagementRatePercent(c.stats.clicked, whole));
 }
 
 /** "Created 22 days ago" / "Created 3 months ago" / "Created a year ago". */
