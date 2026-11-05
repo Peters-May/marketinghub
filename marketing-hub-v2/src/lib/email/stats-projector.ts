@@ -126,3 +126,18 @@ export function withLiveEmailStats<T extends Pick<EmailCampaign, "id" | "stats">
     return { ...campaign, stats: campaignStatsFromEvents(rows, campaign.stats) };
   });
 }
+
+export function emailStatsEqual(
+  a: EmailCampaignStats,
+  b: EmailCampaignStats
+): boolean {
+  return (
+    a.recipients === b.recipients &&
+    a.delivered === b.delivered &&
+    a.opened === b.opened &&
+    a.clicked === b.clicked &&
+    a.bounced === b.bounced &&
+    a.complained === b.complained &&
+    a.unsubscribed === b.unsubscribed
+  );
+}

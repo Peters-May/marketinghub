@@ -11,7 +11,12 @@ import {
   listEmailAudiences,
   listEmailEvents,
   listEmailSuppressions,
+  syncEmailCampaignStats,
 } from "@/lib/data/repos";
+import {
+  campaignStatsFromEvents,
+  emailStatsEqual,
+} from "@/lib/email/stats-projector";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +47,19 @@ export default async function EmailCampaignSummaryPage({
     redirect(`/app/email/design/campaign/${encodeURIComponent(campaign.id)}`);
   }
 
+  const liveStats = campaignStatsFromEvents(events, campaign.stats);
+  let campaignWithStats = campaign;
+  if (!emailStatsEqual(liveStats, campaign.stats)) {
+    const healed = await syncEmailCampaignStats(campaign.id, liveStats);
+    if (healed) campaignWithStats = healed;
+    else campaignWithStats = { ...campaign, stats: liveStats };
+  }
+
   const audienceName =
     audiences.find((audience) => audience.id === campaign.audience_id)?.name ??
     "";
   const report = buildCampaignReport({
-    campaign,
+    campaign: campaignWithStats,
     events,
     contacts,
     suppressions,
@@ -54,11 +67,11 @@ export default async function EmailCampaignSummaryPage({
 
   return (
     <EmailCampaignSummary
-      campaign={campaign}
+      campaign={campaignWithStats}
       audienceName={audienceName}
       report={report}
       sentCount={events.filter((event) => event.kind === "sent").length}
-      backHref={isAdmin ? emailCampaignHome(campaign) : "/app/email"}
+      backHref={isAdmin ? emailCampaignHome(campaignWithStats) : "/app/email"}
       allowCopy={isAdmin}
     />
   );

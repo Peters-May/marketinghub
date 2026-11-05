@@ -8,6 +8,7 @@ import {
   listContentTitles,
   listEmailAudiences,
   listEmailCampaigns,
+  listEmailStatEvents,
   listEmailTemplates,
   listMediaLists,
 } from "@/lib/data/repos";
@@ -17,10 +18,11 @@ import {
   isMemberVisibleCampaign,
   isPitchTabCampaign,
 } from "@/lib/email/category";
+import { withLiveEmailStats } from "@/lib/email/stats-projector";
 import type { EmailCampaign, EmailTemplate } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 export default async function EmailPage({
   searchParams,
@@ -46,10 +48,14 @@ export default async function EmailPage({
   }
 
   if (!isAdmin) {
-    const campaigns = await listEmailCampaigns();
+    const [campaigns, statEvents] = await Promise.all([
+      listEmailCampaigns(),
+      listEmailStatEvents(),
+    ]);
+    const liveCampaigns = withLiveEmailStats(campaigns, statEvents);
     const requested = searchParams?.campaign;
     if (requested) {
-      const match = campaigns.find((campaign) => campaign.id === requested);
+      const match = liveCampaigns.find((campaign) => campaign.id === requested);
       if (match && isMemberVisibleCampaign(match)) {
         redirect(`/app/email/campaign/${encodeURIComponent(match.id)}`);
       }
@@ -57,7 +63,7 @@ export default async function EmailPage({
     return (
       <EmailMarketingHub
         memberView
-        initialCampaigns={campaigns
+        initialCampaigns={liveCampaigns
           .filter(isMemberVisibleCampaign)
           .map(withoutEmailDocument)}
         initialTemplates={[]}
@@ -67,18 +73,20 @@ export default async function EmailPage({
     );
   }
 
-  const [campaigns, templates, audiences, lists, contentTitles] =
+  const [campaigns, templates, audiences, lists, contentTitles, statEvents] =
     await Promise.all([
       listEmailCampaigns(),
       listEmailTemplates(),
       listEmailAudiences(),
       listMediaLists(),
       listContentTitles(),
+      listEmailStatEvents(),
     ]);
-  const marketingCampaigns = campaigns
+  const liveCampaigns = withLiveEmailStats(campaigns, statEvents);
+  const marketingCampaigns = liveCampaigns
     .filter(isMarketingInboxCampaign)
     .map(withoutEmailDocument);
-  const pitchCampaigns = campaigns
+  const pitchCampaigns = liveCampaigns
     .filter(isPitchTabCampaign)
     .map(withoutEmailDocument);
   // Recipient totals are filled when Audiences opens — counting every contact

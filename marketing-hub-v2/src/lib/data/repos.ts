@@ -4033,6 +4033,28 @@ export async function updateEmailCampaign(
   return updated;
 }
 
+/** Persist event-projected counters without moving Last updated. */
+export async function syncEmailCampaignStats(
+  id: string,
+  stats: EmailCampaignStats
+): Promise<EmailCampaign | null> {
+  let updated: EmailCampaign | null = null;
+  await updateStore((s) => {
+    if (!s.email_campaigns) s.email_campaigns = [];
+    const idx = s.email_campaigns.findIndex((x) => x.id === id);
+    if (idx === -1) return;
+    const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
+    const next = normalizeEmailCampaign({
+      ...prev,
+      stats,
+      updated_at: prev.updated_at,
+    });
+    s.email_campaigns[idx] = next;
+    updated = next;
+  });
+  return updated;
+}
+
 /** Turn the unlisted draft link on or off. The token stays so the same link can be restored. */
 export async function setEmailCampaignShare(
   id: string,
