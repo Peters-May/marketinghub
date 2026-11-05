@@ -89,6 +89,13 @@ type NewsApiPageResult =
   | { ok: true; articles: NewsApiArticle[] }
   | { ok: false; softStop: boolean; message: string };
 
+type NewsApiResponseBody = {
+  status?: string;
+  code?: string;
+  message?: string;
+  articles?: NewsApiArticle[];
+};
+
 /** Map NewsAPI error codes to short staff-facing messages. */
 export function newsApiErrorMessage(
   status: number,
@@ -175,14 +182,9 @@ async function fetchNewsApiPage(input: {
   }
 
   const text = await res.text().catch(() => "");
-  let parsed: {
-    status?: string;
-    code?: string;
-    message?: string;
-    articles?: NewsApiArticle[];
-  } | null = null;
+  let parsed: NewsApiResponseBody | null = null;
   try {
-    parsed = text ? (JSON.parse(text) as typeof parsed) : null;
+    parsed = text ? (JSON.parse(text) as NewsApiResponseBody) : null;
   } catch {
     parsed = null;
   }
