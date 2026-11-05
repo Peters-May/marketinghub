@@ -2,8 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Download, FileText, Lock, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  FileText,
+  Lock,
+  X,
+} from "lucide-react";
 import { downloadMediaFile } from "@/lib/media/download-file";
+import {
+  classifySharePresentation,
+  type ShareAction,
+  type ShareHeroImage,
+} from "@/lib/media/share-presentation";
 import type { MediaListItem } from "@/lib/supabase/media-list";
 import { cn } from "@/lib/utils";
 
@@ -16,36 +29,6 @@ type ShareResponse = {
   items?: MediaListItem[];
   error?: string;
 };
-
-type Photo = {
-  id: string;
-  url: string;
-  name: string;
-  itemName: string;
-};
-
-type SharedFile = {
-  id: string;
-  url: string;
-  name: string;
-  itemName: string;
-  kind: "file" | "link";
-};
-
-function linkLabel(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "Link";
-  }
-}
-
-function isImageFile(file: { type?: string; name?: string; url?: string }) {
-  const type = (file.type || "").toLowerCase();
-  if (type.startsWith("image/")) return true;
-  const name = (file.name || file.url || "").toLowerCase();
-  return /\.(jpe?g|png|gif|webp|avif|bmp|svg)(\?|$)/i.test(name);
-}
 
 export function ShareFolderClient({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
@@ -71,7 +54,10 @@ export function ShareFolderClient({ token }: { token: string }) {
         }
         if (cancelled) return;
         setSingleFile(json.shareKind === "item");
-        setFolderName(json.folderName || (json.shareKind === "item" ? "Shared file" : "Shared folder"));
+        setFolderName(
+          json.folderName ||
+            (json.shareKind === "item" ? "Shared file" : "Shared folder")
+        );
         setItems(json.items || []);
         setNeedsSignIn(json.needsSignIn === true);
         setLoginPath(json.loginPath || "/login");
@@ -90,54 +76,29 @@ export function ShareFolderClient({ token }: { token: string }) {
     };
   }, [token]);
 
-  const photos = useMemo(() => {
-    const next: Photo[] = [];
-    for (const item of items) {
-      for (const file of item.files) {
-        if (!isImageFile(file) || !file.url) continue;
-        next.push({
-          id: `${item.id}__${file.url}`,
-          url: file.url,
-          name: file.name || "Image",
-          itemName: item.display_name || item.public_title || item.name,
-        });
-      }
-    }
-    return next;
-  }, [items]);
-
-  const files = useMemo(() => {
-    const next: SharedFile[] = [];
-    for (const item of items) {
-      const itemName = item.display_name || item.public_title || item.name;
-      for (const file of item.files) {
-        if (!file.url || isImageFile(file)) continue;
-        next.push({
-          id: `${item.id}__${file.url}`,
-          url: file.url,
-          name: file.name || itemName,
-          itemName,
-          kind: "file",
-        });
-      }
-      const link = item.document_link?.trim();
-      if (link) {
-        next.push({
-          id: `${item.id}__link`,
-          url: link,
-          name: linkLabel(link),
-          itemName,
-          kind: "link",
-        });
-      }
-    }
-    return next;
-  }, [items]);
-
+  const presentation = useMemo(
+    () => classifySharePresentation(items),
+    [items]
+  );
+  const { files, links, heroImages, galleryImages } = presentation;
+  const actions: ShareAction[] = useMemo(
+    () => [...files, ...links],
+    [files, links]
+  );
+  const hero = heroImages[0] ?? null;
   const lightboxPhoto =
-    lightboxIndex != null ? photos[lightboxIndex] ?? null : null;
+    lightboxIndex != null ? galleryImages[lightboxIndex] ?? null : null;
+  const isEmpty =
+    files.length === 0 &&
+    links.length === 0 &&
+    heroImages.length === 0 &&
+    galleryImages.length === 0;
 
-  async function handleDownload(file: { id: string; url: string; name: string }) {
+  async function handleDownload(file: {
+    id: string;
+    url: string;
+    name: string;
+  }) {
     if (downloadingId) return;
     setDownloadingId(file.id);
     try {
@@ -161,33 +122,58 @@ export function ShareFolderClient({ token }: { token: string }) {
       if (event.key === "ArrowRight") {
         setLightboxIndex((current) => {
           if (current == null) return current;
-          return current >= photos.length - 1 ? current : current + 1;
+          return current >= galleryImages.length - 1 ? current : current + 1;
         });
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxIndex, photos.length]);
+  }, [lightboxIndex, galleryImages.length]);
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-foreground">
-      <header className="border-b border-border bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5 md:px-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">
+      {hero ? (
+        <div className="relative isolate overflow-hidden border-b border-border bg-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={hero.url}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-40"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-brand via-brand/70 to-brand/30" />
+          <div className="relative mx-auto max-w-6xl px-4 py-10 md:px-6 md:py-14">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/70">
               Peters &amp; May
             </p>
-            <h1 className="mt-1 font-display text-3xl text-brand md:text-4xl">
+            <h1 className="mt-2 max-w-3xl font-display text-3xl text-white md:text-5xl">
               {folderName}
             </h1>
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-2 max-w-2xl text-sm text-white/80">
               {singleFile
-                ? "This link is for this file only. Public files are open. Internal files need a staff sign-in."
-                : "Public files are open. Internal files need a staff sign-in."}
+                ? "Choose how you want to open or download this asset."
+                : "Download files or open links from this shared folder."}
             </p>
           </div>
         </div>
-      </header>
+      ) : (
+        <header className="border-b border-border bg-white/80 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5 md:px-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">
+                Peters &amp; May
+              </p>
+              <h1 className="mt-1 font-display text-3xl text-brand md:text-4xl">
+                {folderName}
+              </h1>
+              <p className="mt-1 text-sm text-muted">
+                {singleFile
+                  ? "This link is for this file only. Public files are open. Internal files need a staff sign-in."
+                  : "Public files are open. Internal files need a staff sign-in."}
+              </p>
+            </div>
+          </div>
+        </header>
+      )}
 
       <main className="mx-auto max-w-6xl px-4 py-8 md:px-6">
         {loading ? (
@@ -199,7 +185,7 @@ export function ShareFolderClient({ token }: { token: string }) {
             <h2 className="font-display text-2xl text-brand">Link unavailable</h2>
             <p className="mt-2 text-sm text-muted">{error}</p>
           </div>
-        ) : photos.length === 0 && files.length === 0 && needsSignIn ? (
+        ) : isEmpty && needsSignIn ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <Lock className="mx-auto h-5 w-5 text-brand" />
             <h2 className="mt-3 font-display text-2xl text-brand">
@@ -216,7 +202,7 @@ export function ShareFolderClient({ token }: { token: string }) {
               Sign in
             </Link>
           </div>
-        ) : photos.length === 0 && files.length === 0 ? (
+        ) : isEmpty ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <h2 className="font-display text-2xl text-brand">Nothing here yet</h2>
             <p className="mt-2 text-sm text-muted">
@@ -241,29 +227,36 @@ export function ShareFolderClient({ token }: { token: string }) {
                 </Link>
               </div>
             ) : null}
-            {files.length > 0 ? (
+
+            {actions.length > 0 ? (
               <section className="mb-8">
                 <p className="mb-3 text-sm text-muted">
-                  {files.length} item{files.length === 1 ? "" : "s"}
+                  {actions.length} option{actions.length === 1 ? "" : "s"}
                 </p>
                 <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
-                  {files.map((file) => (
+                  {actions.map((action) => (
                     <li
-                      key={file.id}
+                      key={action.id}
                       className="flex items-center justify-between gap-3 px-4 py-3"
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                        {action.kind === "link" ? (
+                          <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                        ) : (
+                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                        )}
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-foreground">
-                            {file.itemName}
+                            {action.itemName}
                           </p>
-                          <p className="truncate text-xs text-muted">{file.name}</p>
+                          <p className="truncate text-xs text-muted">
+                            {action.name}
+                          </p>
                         </div>
                       </div>
-                      {file.kind === "link" ? (
+                      {action.kind === "link" ? (
                         <a
-                          href={file.url}
+                          href={action.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60"
@@ -274,11 +267,11 @@ export function ShareFolderClient({ token }: { token: string }) {
                         <button
                           type="button"
                           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-sand/60 disabled:opacity-60"
-                          disabled={downloadingId === file.id}
-                          onClick={() => void handleDownload(file)}
+                          disabled={downloadingId === action.id}
+                          onClick={() => void handleDownload(action)}
                         >
                           <Download className="h-3.5 w-3.5" />
-                          {downloadingId === file.id ? "…" : "Download"}
+                          {downloadingId === action.id ? "…" : "Download"}
                         </button>
                       )}
                     </li>
@@ -286,45 +279,25 @@ export function ShareFolderClient({ token }: { token: string }) {
                 </ul>
               </section>
             ) : null}
-            {photos.length > 0 ? (
+
+            {galleryImages.length > 0 ? (
               <>
-            <p className="mb-4 text-sm text-muted">
-              {photos.length} image{photos.length === 1 ? "" : "s"} · click to
-              view or download
-            </p>
-            <div className="columns-2 gap-2 sm:columns-3 lg:columns-4 lg:gap-3">
-              {photos.map((photo, index) => (
-                <div
-                  key={photo.id}
-                  className="group relative mb-2 break-inside-avoid overflow-hidden rounded-lg bg-[#f0f2f3] lg:mb-3"
-                >
-                  <button
-                    type="button"
-                    className="block w-full text-left"
-                    onClick={() => setLightboxIndex(index)}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.itemName || photo.name}
-                      className="w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                <p className="mb-4 text-sm text-muted">
+                  {galleryImages.length} image
+                  {galleryImages.length === 1 ? "" : "s"} · click to view or
+                  download
+                </p>
+                <div className="columns-2 gap-2 sm:columns-3 lg:columns-4 lg:gap-3">
+                  {galleryImages.map((photo, index) => (
+                    <GalleryTile
+                      key={photo.id}
+                      photo={photo}
+                      downloading={downloadingId === photo.id}
+                      onOpen={() => setLightboxIndex(index)}
+                      onDownload={() => void handleDownload(photo)}
                     />
-                  </button>
-                  <button
-                    type="button"
-                    className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg bg-black/70 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
-                    disabled={downloadingId === photo.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleDownload(photo);
-                    }}
-                  >
-                    <Download className="h-3 w-3" />
-                    {downloadingId === photo.id ? "…" : "Download"}
-                  </button>
+                  ))}
                 </div>
-              ))}
-            </div>
               </>
             ) : null}
           </>
@@ -357,7 +330,8 @@ export function ShareFolderClient({ token }: { token: string }) {
               <ChevronLeft className="h-6 w-6" />
             </button>
           ) : null}
-          {lightboxIndex != null && lightboxIndex < photos.length - 1 ? (
+          {lightboxIndex != null &&
+          lightboxIndex < galleryImages.length - 1 ? (
             <button
               type="button"
               className="absolute right-3 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 md:right-6"
@@ -391,12 +365,51 @@ export function ShareFolderClient({ token }: { token: string }) {
                 onClick={() => void handleDownload(lightboxPhoto)}
               >
                 <Download className="h-4 w-4" />
-                {downloadingId === lightboxPhoto.id ? "Downloading…" : "Download"}
+                {downloadingId === lightboxPhoto.id
+                  ? "Downloading…"
+                  : "Download"}
               </button>
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function GalleryTile({
+  photo,
+  downloading,
+  onOpen,
+  onDownload,
+}: {
+  photo: ShareHeroImage;
+  downloading: boolean;
+  onOpen: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="group relative mb-2 break-inside-avoid overflow-hidden rounded-lg bg-[#f0f2f3] lg:mb-3">
+      <button type="button" className="block w-full text-left" onClick={onOpen}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={photo.url}
+          alt={photo.itemName || photo.name}
+          className="w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+        />
+      </button>
+      <button
+        type="button"
+        className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg bg-black/70 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-60"
+        disabled={downloading}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDownload();
+        }}
+      >
+        <Download className="h-3 w-3" />
+        {downloading ? "…" : "Download"}
+      </button>
     </div>
   );
 }

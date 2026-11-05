@@ -173,7 +173,7 @@ export const ANONYMOUS_SHARE_VIEWER: ShareViewer = {
   admin: false,
 };
 
-/** Public files are open. Internal files need a staff sign-in. Admin files need an admin. */
+/** Public share links are open. Internal files need a staff sign-in. Admin files need an admin. */
 export function shareItemVisibleTo(
   item: {
     category: string;

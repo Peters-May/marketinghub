@@ -1360,6 +1360,17 @@ export function MediaGallery({
   async function shareNamedCategory(category: string) {
     const canonical = categoryFromShareKey(categoryShareKey(category));
     if (!canonical) return;
+    const categoryItems = items.filter(
+      (item) => item.category.trim().toLowerCase() === canonical.toLowerCase()
+    );
+    const hasPublic = categoryItems.some(
+      (item) => effectiveMediaVisibility(item) === "public"
+    );
+    if (categoryItems.length > 0 && !hasPublic) {
+      window.alert(
+        "Only Public files open on a share link without signing in. Set files to Public first for an external link, or recipients will need a staff login."
+      );
+    }
     const existing = folderShareByName.get(categoryShareKey(canonical));
     const token =
       existing?.enabled && existing.share_token
@@ -1376,6 +1387,11 @@ export function MediaGallery({
 
   async function shareNamedFolder(folderName: string) {
     const folder = gallerySubfolders.find((sf) => sf.name === folderName);
+    if (folder && folder.visibility !== "public") {
+      window.alert(
+        "Only Public folders open on a share link without signing in. Set this folder to Public first for an external link, or recipients will need a staff login."
+      );
+    }
     const token =
       folder?.shareEnabled && folder.shareToken
         ? folder.shareToken
@@ -1421,6 +1437,12 @@ export function MediaGallery({
   }
 
   async function shareItem(id: string) {
+    const item = items.find((entry) => entry.id === id);
+    if (item && effectiveMediaVisibility(item) !== "public") {
+      window.alert(
+        "Only Public files open on a share link without signing in. Set this file to Public first for an external link, or recipients will need a staff login."
+      );
+    }
     const key = itemShareKey(id);
     const existing = folderShareByName.get(key);
     const token =
@@ -2103,7 +2125,7 @@ export function MediaGallery({
             <p className="mt-1 text-sm text-muted">
               Choose a subfolder to browse images
               {allowManage
-                ? " — set each folder Public, Internal, or Admin, and optionally add a Link share. Public files stay open. Internal files need a staff sign-in."
+                ? " — set each folder Public, Internal, or Admin, and optionally add a Link share. Only Public files open without signing in. Internal files need a staff sign-in."
                 : ". Headshots live here for staff portraits."}
             </p>
           </div>
