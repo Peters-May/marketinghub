@@ -22,6 +22,7 @@ describe("public email share route", () => {
     const csp = res.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("script-src 'none'");
     expect(csp).toMatch(/sandbox(?![^;]*allow-scripts)/);
+    expect(csp).toContain("allow-downloads");
     expect(await res.text()).toContain("not available");
   });
 

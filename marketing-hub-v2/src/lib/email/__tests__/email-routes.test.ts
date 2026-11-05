@@ -95,6 +95,7 @@ describe("view in browser", () => {
     const csp = res.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("script-src 'none'");
     expect(csp).toMatch(/sandbox(?![^;]*allow-scripts)/);
+    expect(csp).toContain("allow-downloads");
     expect(csp).toContain("base-uri 'none'");
     const html = await res.text();
     expect(html).not.toContain("<script>");

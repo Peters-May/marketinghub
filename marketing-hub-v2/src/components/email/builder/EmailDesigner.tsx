@@ -1461,7 +1461,7 @@ export function EmailDesigner({
               />
               <iframe
                 title="Email preview"
-                sandbox=""
+                sandbox="allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
                 className="mx-auto block border border-border bg-white"
                 style={{ width: frameWidth, maxWidth: "100%", height: 720 }}
                 srcDoc={previewMerge(compiled)}

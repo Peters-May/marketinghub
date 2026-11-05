@@ -130,7 +130,7 @@ export function EmailCampaignSummary({
           {previewHtml ? (
             <iframe
               title="Sent email"
-              sandbox=""
+              sandbox="allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
               className="block h-[720px] w-full bg-white"
               srcDoc={previewHtml}
             />

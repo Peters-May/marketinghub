@@ -9,6 +9,8 @@ function isEmailShareToken(token: string): boolean {
  * The email is served on the app's own origin, so it must not be able to
  * run script there. The sandbox also gives the page an opaque origin, so
  * nothing in it can read the hub's cookies or storage. Links still open.
+ * allow-downloads is required: gallery share CTAs redirect to a forced
+ * attachment download, and Chromium blocks that from sandboxed docs without it.
  */
 export const EMAIL_DOCUMENT_HEADERS = {
   "content-security-policy": [
@@ -20,7 +22,7 @@ export const EMAIL_DOCUMENT_HEADERS = {
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'self'",
-    "sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation",
+    "sandbox allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation",
   ].join("; "),
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
