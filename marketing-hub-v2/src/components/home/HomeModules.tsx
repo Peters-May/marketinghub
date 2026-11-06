@@ -4,7 +4,7 @@ import { ModuleCard } from "@/components/ui/PageHeader";
 import { useHubView } from "@/lib/hub-view";
 import { navForView } from "@/lib/nav";
 
-export function HomeModules({ supabaseReady }: { supabaseReady: boolean }) {
+export function HomeModules() {
   const { view, canAccessBudget, budgetInMemberNav, chatInMemberNav } =
     useHubView();
   const modules = navForView(view, {
@@ -14,30 +14,17 @@ export function HomeModules({ supabaseReady }: { supabaseReady: boolean }) {
   }).filter((n) => n.href !== "/app");
 
   return (
-    <>
-      <p className="mb-6 text-sm text-muted">
-        {view === "member"
-          ? "Member view — events, content and social, email, tasks, partners, awards, library, requests, and enquiries."
-          : view === "seo"
-            ? "SEO view — Enquiries only (web and WhatsApp), including source and campaign attribution."
-          : view === "external"
-            ? "External view — preview the public library (logos, presentations, and gallery) that media guests see."
-            : supabaseReady
-              ? "Admin view — data is linked to Core Data tables in Supabase (including Tasks)."
-              : "Admin view — add Supabase keys to .env.local to use live data."}
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {modules.map((item) => (
-          <ModuleCard
-            key={item.href}
-            href={item.href}
-            title={item.label}
-            description={item.description}
-            icon={item.icon}
-          />
-        ))}
-      </div>
-    </>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {modules.map((item) => (
+        <ModuleCard
+          key={item.href}
+          href={item.href}
+          title={item.label}
+          description={item.description}
+          icon={item.icon}
+          compact
+        />
+      ))}
+    </div>
   );
 }

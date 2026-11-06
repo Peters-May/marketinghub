@@ -27,20 +27,27 @@ export function HomeNotifications() {
   if (items.length === 0) return null;
 
   return (
-    <section className="surface-card mb-6">
-      <div className="border-b border-border px-5 py-3 md:px-6">
+    <section className="surface-card mb-6 overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-sky-100 bg-accent-soft/70 px-5 py-3 md:px-6">
+        <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
         <h2 className="font-display text-lg text-brand">Reminders</h2>
+        <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-brand">
+          {items.length}
+        </span>
       </div>
-      <ul className="divide-y divide-border">
+      <ul className="grid gap-2 p-3 sm:p-4">
         {items.map((item) => (
-          <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 md:px-6">
+          <li
+            key={item.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-background px-3 py-2.5"
+          >
             <Link href={item.href} className="min-w-0">
               <span className="block font-medium">{item.title}</span>
-              <span className="text-xs text-muted">{item.body}</span>
+              <span className="line-clamp-1 text-xs text-muted">{item.body}</span>
             </Link>
             <button
               type="button"
-              className="text-xs text-muted underline"
+              className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-border hover:text-foreground"
               onClick={() => {
                 void fetch("/api/notifications", {
                   method: "POST",

@@ -23,7 +23,7 @@ import { pickCurrentTheme } from "@/lib/themes/calendar";
 import { listWebEnquiries } from "@/lib/data/web-enquiries";
 import { computeBudgetTotals } from "@/lib/budget/totals";
 import { backfillOwnerUserIds } from "@/lib/identity/owners";
-import { allowDemoAuth, DEMO_STAFF, hasSupabaseConfig } from "@/lib/auth/config";
+import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { canAccessBudget } from "@/lib/auth/budget-access";
 import { getSessionUser } from "@/lib/auth/session";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
@@ -102,18 +102,19 @@ export default async function AppHomePage() {
       {aiKey ? <AiKeyReminder status={aiKey} /> : null}
 
       {currentTheme ? (
-        <div className="surface-card mb-8 overflow-hidden">
-          <div className="border-b border-border bg-accent-soft/40 px-5 py-4 md:px-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Current theme · {currentTheme.quarter} {currentTheme.year}
+        <div className="surface-card mb-8 flex overflow-hidden">
+          <div className="w-1.5 shrink-0 bg-accent" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4 md:px-6">
+              <div className="min-w-0">
+                <p className="inline-flex rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-brand">
+                  {currentTheme.quarter} {currentTheme.year}
                 </p>
-                <h2 className="mt-1 font-display text-2xl text-brand md:text-3xl">
+                <h2 className="mt-2 font-display text-2xl text-brand md:text-3xl">
                   {currentTheme.title}
                 </h2>
                 {currentTheme.summary ? (
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted md:text-base">
+                  <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-relaxed text-muted">
                     {currentTheme.summary}
                   </p>
                 ) : null}
@@ -124,26 +125,31 @@ export default async function AppHomePage() {
                 </Link>
               ) : null}
             </div>
+            {themeMains.length > 0 ? (
+              <ul className="flex flex-wrap gap-2 px-5 pb-5 md:px-6">
+                {themeMains.map((item) => (
+                  <li
+                    key={item.id}
+                    className="inline-flex max-w-full items-center gap-2 rounded-full bg-background px-3 py-1.5 text-sm ring-1 ring-border"
+                  >
+                    <span className="truncate font-medium">{item.title}</span>
+                    {item.channel ? (
+                      <span className="text-xs text-muted">{item.channel}</span>
+                    ) : null}
+                    {item.status ? (
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium capitalize text-brand">
+                        {item.status}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 pb-5 text-sm text-muted md:px-6">
+                No main pieces yet.
+              </p>
+            )}
           </div>
-          {themeMains.length > 0 ? (
-            <ul className="divide-y divide-border px-5 md:px-6">
-              {themeMains.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
-                >
-                  <span className="font-medium">{item.title}</span>
-                  <span className="text-xs capitalize text-muted">
-                    {[item.channel, item.status].filter(Boolean).join(" · ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="px-5 py-4 text-sm text-muted md:px-6">
-              No main content pieces yet — add them on Themes.
-            </p>
-          )}
         </div>
       ) : null}
 
@@ -151,7 +157,7 @@ export default async function AppHomePage() {
       <HomeDashboard mine={mine} everyone={everyone} canToggle={isAdmin} />
 
       <div className="mt-8">
-        <HomeModules supabaseReady={hasSupabaseConfig()} />
+        <HomeModules />
       </div>
     </div>
   );
