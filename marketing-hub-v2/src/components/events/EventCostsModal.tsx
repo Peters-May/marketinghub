@@ -654,7 +654,7 @@ export function EventCostsModal({
                 }}
               />
               <p className="text-xs text-muted sm:col-span-2">
-                They'll be added as a Hub member when you send, using their Peters & May email.
+                They will be added as a Hub member when you send, using their Peters & May email.
               </p>
             </div>
           ) : null}
