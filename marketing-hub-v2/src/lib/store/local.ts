@@ -251,6 +251,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     event_offices: store.event_offices ?? [],
     event_bookings: store.event_bookings ?? [],
     event_cost_lines: store.event_cost_lines ?? [],
+    event_cost_requests: store.event_cost_requests ?? [],
     event_attendance_requests: store.event_attendance_requests ?? [],
     event_attendance_request_lines: store.event_attendance_request_lines ?? [],
     profile_offices: store.profile_offices ?? [],

@@ -67,6 +67,23 @@ export function costsSheetPath(eventId: string) {
   return `/app/events?open=${encodeURIComponent(eventId)}&costs=1`;
 }
 
+const COST_STAFF_ROLES = new Set(["admin", "member"]);
+
+/**
+ * Match a costs-request email against the Hub directory.
+ * `onList` is true when they can already be picked in the costs dropdown.
+ */
+export function findCostRequestRecipient<T extends { email: string; role: string }>(
+  users: T[],
+  email: string
+): { person: T; onList: boolean } | null {
+  const needle = email.trim().toLowerCase();
+  if (!needle) return null;
+  const person = users.find((user) => user.email.trim().toLowerCase() === needle);
+  if (!person) return null;
+  return { person, onList: COST_STAFF_ROLES.has(person.role) };
+}
+
 /** Editable email draft shown before sending a costs request. */
 export function defaultCostsRequestDraft(params: {
   eventTitle: string;

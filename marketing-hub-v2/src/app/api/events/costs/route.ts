@@ -1,30 +1,106 @@
 import { waitUntil } from "@vercel/functions";
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
-import { listEvents, listHubUsers } from "@/lib/data/repos";
+import { isAutoMemberEmail, memberEmailDomains } from "@/lib/auth/member-domain";
+import { createHubUser, listEvents, listHubUsers } from "@/lib/data/repos";
 import { sendEventCostsRequest } from "@/lib/email/send-event-costs-request";
 import {
   canEditCostLine,
   costsSheetPath,
+  findCostRequestRecipient,
   isCostCategory,
   isCostCurrency,
   parseCostAmount,
 } from "@/lib/events/costs";
 import {
+  addEventCostRequest,
   addHubNotification,
   getEventCostLine,
   listEventCostLines,
+  listEventCostRequests,
   removeEventCostLine,
   saveEventCostLine,
 } from "@/lib/events/costs-data";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
-import { listSupabaseHubUsers } from "@/lib/supabase/hub-users";
+import { inviteSupabaseHubUser, listSupabaseHubUsers } from "@/lib/supabase/hub-users";
 import type { HubUser } from "@/lib/types";
+
+async function listHubDirectory(): Promise<HubUser[]> {
+  return hasServiceRoleKey() ? await listSupabaseHubUsers() : await listHubUsers();
+}
 
 /** Admin and member Hub users — the people a cost line can belong to. */
 async function listCostStaff(): Promise<HubUser[]> {
-  const users = hasServiceRoleKey() ? await listSupabaseHubUsers() : await listHubUsers();
+  const users = await listHubDirectory();
   return users.filter((u) => u.role === "admin" || u.role === "member");
+}
+
+function roleLabel(role: string) {
+  if (role === "admin") return "Admin";
+  if (role === "seo") return "SEO";
+  if (role === "external") return "External";
+  return "Member";
+}
+
+/**
+ * Use an existing admin/member, or add a company email as a Member
+ * so they can sign in and enter their costs.
+ */
+async function resolveCostsRecipient(input: {
+  staffUserId: string;
+  email: string;
+  fullName: string;
+}): Promise<
+  | { person: HubUser; added: boolean; invited: boolean }
+  | { error: string }
+> {
+  if (input.staffUserId) {
+    const person = (await listCostStaff()).find((user) => user.id === input.staffUserId);
+    if (!person) return { error: "Choose a Hub staff member" };
+    return { person, added: false, invited: false };
+  }
+
+  if (!input.email.trim()) return { error: "Choose a Hub staff member" };
+
+  const email = input.email.trim().toLowerCase();
+  const fullName = input.fullName.trim();
+  if (!email || !email.includes("@")) return { error: "A valid email is required" };
+  if (!fullName) return { error: "Enter their name" };
+  if (!isAutoMemberEmail(email)) {
+    return { error: "Use their Peters & May email address" };
+  }
+
+  const existing = findCostRequestRecipient(await listHubDirectory(), email);
+  if (existing?.onList) {
+    return { person: existing.person, added: false, invited: false };
+  }
+  if (existing) {
+    return {
+      error: `That email is already in the Hub as ${roleLabel(existing.person.role)}. An admin can change their role in Users.`,
+    };
+  }
+
+  try {
+    const invited = hasServiceRoleKey();
+    const person = invited
+      ? await inviteSupabaseHubUser({
+          email,
+          full_name: fullName,
+          role: "member",
+          notes: "Added from an event costs request",
+        })
+      : await createHubUser({
+          email,
+          full_name: fullName,
+          role: "member",
+          notes: "Added from an event costs request",
+        });
+    return { person, added: true, invited };
+  } catch (err) {
+    const again = findCostRequestRecipient(await listHubDirectory(), email);
+    if (again?.onList) return { person: again.person, added: false, invited: false };
+    return { error: err instanceof Error ? err.message : "Could not add them" };
+  }
 }
 
 async function findEvent(eventId: string) {
@@ -40,15 +116,20 @@ export async function GET(request: NextRequest) {
   const lines = await listEventCostLines(eventId);
   // The header button only needs the lines; skip the user directory lookup.
   if (request.nextUrl.searchParams.get("summary") === "1") return jsonOk({ lines });
-  const staff = await listCostStaff();
+  const [staff, requests] = await Promise.all([
+    listCostStaff(),
+    listEventCostRequests(eventId),
+  ]);
   return jsonOk({
     lines,
+    requests,
     viewer: {
       id: user.id,
       isAdmin: user.role === "admin",
       name: user.full_name || user.email,
     },
     staff: staff.map((u) => ({ id: u.id, name: u.full_name || u.email })),
+    memberDomains: memberEmailDomains(),
   });
 }
 
@@ -122,10 +203,13 @@ export async function POST(request: NextRequest) {
   if (action === "request") {
     const event = await findEvent(String(body.event_id ?? "").trim());
     if (!event) return jsonError("Event not found", 404);
-    const person = (await listCostStaff()).find(
-      (u) => u.id === String(body.staff_user_id ?? "").trim()
-    );
-    if (!person) return jsonError("Choose a Hub staff member", 400);
+    const resolved = await resolveCostsRecipient({
+      staffUserId: String(body.staff_user_id ?? "").trim(),
+      email: String(body.email ?? ""),
+      fullName: String(body.full_name ?? ""),
+    });
+    if ("error" in resolved) return jsonError(resolved.error, 400);
+    const { person, added, invited } = resolved;
 
     const requestedBy = user.full_name || user.email;
     const subject = String(body.subject ?? event.title).trim().slice(0, 200);
@@ -145,12 +229,28 @@ export async function POST(request: NextRequest) {
       href: path,
     });
 
+    const costRequest = await addEventCostRequest({
+      event_id: event.id,
+      staff_user_id: person.id,
+      staff_name: person.full_name || person.email,
+      requested_by_user_id: user.id,
+      requested_by_name: requestedBy,
+    });
+
     const email = person.email?.trim();
+    const staff = {
+      id: person.id,
+      name: person.full_name || person.email,
+    };
     if (!email) {
       return jsonOk({
         reminder: true,
         emailed: false,
         emailSkipped: "No email address on their Hub record",
+        added,
+        invited,
+        staff,
+        request: costRequest,
       });
     }
 
@@ -168,7 +268,15 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    return jsonOk({ reminder: true, emailed: true, emailQueued: true });
+    return jsonOk({
+      reminder: true,
+      emailed: true,
+      emailQueued: true,
+      added,
+      invited,
+      staff,
+      request: costRequest,
+    });
   }
 
   return jsonError("Unknown action", 400);

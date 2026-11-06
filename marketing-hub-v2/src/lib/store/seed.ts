@@ -52,6 +52,7 @@ export function createSeedStore(): HubStore {
     event_offices: [],
     event_bookings: [],
     event_cost_lines: [],
+    event_cost_requests: [],
     event_attendance_requests: [],
     event_attendance_request_lines: [],
     profile_offices: [],

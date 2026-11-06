@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BedDouble,
+  Check,
   Lock,
   MoreHorizontal,
   Plane,
@@ -24,6 +25,12 @@ import {
 import type { EventCostCategory, EventCostLine } from "@/lib/types";
 
 type Staff = { id: string; name: string };
+type CostRequest = {
+  id: string;
+  staff_name: string;
+  requested_by_name: string;
+  created_at: string;
+};
 type Viewer = { id: string; isAdmin: boolean; name?: string };
 /** Amount is kept as typed text while editing; parsed on save. */
 type Draft = EventCostLine & { amountText: string };
@@ -40,6 +47,8 @@ const CATEGORY_STYLE: Record<
 
 const CELL =
   "h-8 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 text-sm outline-none transition group-hover:border-border focus:border-accent focus:bg-white";
+
+const ADD_SOMEONE = "__add__";
 
 function toDraft(line: EventCostLine): Draft {
   return { ...line, amountText: line.amount === null ? "" : String(line.amount) };
@@ -71,12 +80,16 @@ export function EventCostsModal({
 }) {
   const [rows, setRows] = useState<Draft[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [requests, setRequests] = useState<CostRequest[]>([]);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState(false);
   const [requestTo, setRequestTo] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [memberDomains, setMemberDomains] = useState<string[]>(["petersandmay.com"]);
   const [composeOpen, setComposeOpen] = useState(false);
   const [requestSubject, setRequestSubject] = useState("");
   const [requestMessage, setRequestMessage] = useState("");
@@ -104,7 +117,11 @@ export function EventCostsModal({
         return;
       }
       setStaff(data.staff ?? []);
+      setRequests(Array.isArray(data.requests) ? data.requests : []);
       setViewer(data.viewer ?? null);
+      if (Array.isArray(data.memberDomains) && data.memberDomains.length) {
+        setMemberDomains(data.memberDomains.filter((domain: unknown) => typeof domain === "string"));
+      }
       publish(((data.lines ?? []) as EventCostLine[]).map(toDraft));
     })();
     return () => {
@@ -226,19 +243,40 @@ export function EventCostsModal({
     publish(rows.filter((row) => row.id !== id));
   }
 
-  function openCompose() {
-    if (!requestTo) {
-      setRequestMsg({ tone: "error", text: "Choose someone first" });
-      return;
+  const addingSomeone = requestTo === ADD_SOMEONE;
+
+  function companyEmail(email: string) {
+    const domain = email.trim().toLowerCase().split("@")[1] ?? "";
+    return !!domain && memberDomains.includes(domain);
+  }
+
+  function requestRecipient(): { name: string; email?: string } | null {
+    if (addingSomeone) {
+      const name = newName.trim();
+      const email = newEmail.trim();
+      if (!name || !email.includes("@")) return null;
+      return { name, email };
     }
     const person = staff.find((item) => item.id === requestTo);
-    if (!person) {
-      setRequestMsg({ tone: "error", text: "Choose someone first" });
+    return person ? { name: person.name } : null;
+  }
+
+  function openCompose() {
+    const recipient = requestRecipient();
+    if (!recipient) {
+      setRequestMsg({
+        tone: "error",
+        text: addingSomeone ? "Enter their name and email" : "Choose someone first",
+      });
+      return;
+    }
+    if (addingSomeone && recipient.email && !companyEmail(recipient.email)) {
+      setRequestMsg({ tone: "error", text: "Use their Peters & May email address" });
       return;
     }
     const draft = defaultCostsRequestDraft({
       eventTitle,
-      recipientName: person.name,
+      recipientName: recipient.name,
       requestedBy: viewer?.name || "Marketing",
     });
     setRequestSubject(draft.subject);
@@ -247,9 +285,31 @@ export function EventCostsModal({
     setComposeOpen(true);
   }
 
+  function sentCopy(
+    name: string,
+    data: { emailed?: boolean; emailSkipped?: string; added?: boolean; invited?: boolean }
+  ) {
+    const skipped = data.emailSkipped ?? "email not configured";
+    if (data.added && data.invited && data.emailed) {
+      return `Added ${name} and sent the request. They'll also get an email to set their Hub password.`;
+    }
+    if (data.added && data.emailed) {
+      return `Added ${name} and sent the request.`;
+    }
+    if (data.added) {
+      return `Added ${name}. The email wasn't sent (${skipped}).`;
+    }
+    if (data.emailed) return `Request sent to ${name} — Hub reminder added`;
+    return `Added a Hub reminder for ${name}. The email wasn't sent (${skipped}).`;
+  }
+
   async function sendRequest() {
-    if (!requestTo) {
-      setRequestMsg({ tone: "error", text: "Choose someone first" });
+    const recipient = requestRecipient();
+    if (!recipient) {
+      setRequestMsg({
+        tone: "error",
+        text: addingSomeone ? "Enter their name and email" : "Choose someone first",
+      });
       return;
     }
     if (!requestSubject.trim()) {
@@ -268,7 +328,9 @@ export function EventCostsModal({
       body: JSON.stringify({
         action: "request",
         event_id: eventId,
-        staff_user_id: requestTo,
+        ...(addingSomeone
+          ? { email: recipient.email, full_name: recipient.name }
+          : { staff_user_id: requestTo }),
         subject: requestSubject.trim(),
         message: requestMessage.trim(),
       }),
@@ -282,17 +344,27 @@ export function EventCostsModal({
       });
       return;
     }
-    const name = staff.find((person) => person.id === requestTo)?.name ?? "them";
+    const name =
+      (typeof data.staff?.name === "string" && data.staff.name) || recipient.name || "them";
+    if (data.request?.id) {
+      setRequests((prev) => [data.request, ...prev.filter((item) => item.id !== data.request.id)]);
+    }
+    if (data.staff?.id && data.staff?.name) {
+      setStaff((prev) => {
+        if (prev.some((person) => person.id === data.staff.id)) return prev;
+        return [...prev, { id: data.staff.id, name: data.staff.name }].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+      });
+    }
     setComposeOpen(false);
-    setRequestMsg(
-      data.emailed
-        ? { tone: "ok", text: `Request sent to ${name} — Hub reminder added` }
-        : {
-            tone: "warn",
-            text: `Added a Hub reminder for ${name}. The email wasn't sent (${data.emailSkipped ?? "email not configured"}).`,
-          }
-    );
+    setRequestMsg({
+      tone: data.emailed ? "ok" : "warn",
+      text: sentCopy(name, data),
+    });
     setRequestTo("");
+    setNewName("");
+    setNewEmail("");
     setRequestSubject("");
     setRequestMessage("");
   }
@@ -326,8 +398,14 @@ export function EventCostsModal({
                 : ""}
             </p>
           </div>
-          <button type="button" className="btn-ghost !p-1.5" aria-label="Close" onClick={onClose}>
-            <X className="h-5 w-5" aria-hidden />
+          <button
+            type="button"
+            className="btn-primary !h-8 !w-8 !p-0"
+            aria-label="Done"
+            title="Done"
+            onClick={onClose}
+          >
+            <Check className="h-4 w-4" aria-hidden />
           </button>
         </div>
 
@@ -540,6 +618,7 @@ export function EventCostsModal({
                   {person.name}
                 </option>
               ))}
+              <option value={ADD_SOMEONE}>Add someone…</option>
             </select>
             <button
               type="button"
@@ -550,6 +629,55 @@ export function EventCostsModal({
               Draft email
             </button>
           </div>
+          {addingSomeone ? (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <input
+                className="field !h-9"
+                aria-label="Name"
+                placeholder="Name"
+                value={newName}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  setRequestMsg(null);
+                }}
+              />
+              <input
+                className="field !h-9"
+                aria-label="Email"
+                type="email"
+                placeholder="name@petersandmay.com"
+                autoComplete="off"
+                value={newEmail}
+                onChange={(e) => {
+                  setNewEmail(e.target.value);
+                  setRequestMsg(null);
+                }}
+              />
+              <p className="text-xs text-muted sm:col-span-2">
+                They'll be added as a Hub member when you send, using their Peters & May email.
+              </p>
+            </div>
+          ) : null}
+          {requests.length ? (
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="mb-1.5 text-xs text-muted">Requested</p>
+              <ul className="max-h-28 space-y-1 overflow-y-auto">
+                {requests.map((item) => (
+                  <li key={item.id} className="text-xs text-muted">
+                    <span className="text-foreground">{item.staff_name}</span>
+                    {", asked by "}
+                    {item.requested_by_name}
+                    {" · "}
+                    {new Intl.DateTimeFormat("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    }).format(new Date(item.created_at))}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {!composeOpen && requestMsg ? (
             <p
               className={`mt-2 text-xs ${
@@ -587,7 +715,9 @@ export function EventCostsModal({
                 </h4>
                 <p className="truncate text-sm text-muted">
                   To{" "}
-                  {staff.find((person) => person.id === requestTo)?.name ?? "staff member"}
+                  {addingSomeone
+                    ? `${newName.trim()}${newEmail.trim() ? ` · ${newEmail.trim()}` : ""}`
+                    : (staff.find((person) => person.id === requestTo)?.name ?? "staff member")}
                 </p>
               </div>
               <button

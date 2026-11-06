@@ -166,6 +166,19 @@ export type EventCostLine = {
   updated_at: string;
 };
 
+/** A sent "please add your costs" request, kept on the sheet for the team. */
+export type EventCostRequest = {
+  id: string;
+  event_id: string;
+  staff_user_id: string;
+  /** Name at the time the request was sent. */
+  staff_name: string;
+  requested_by_user_id: string;
+  /** Name at the time the request was sent. */
+  requested_by_name: string;
+  created_at: string;
+};
+
 export type AttendanceRequestStatus = "draft" | "open" | "closed";
 export type AttendanceRequestLineStatus = "requested" | "approved" | "declined";
 
@@ -1452,6 +1465,7 @@ export type HubStore = {
   event_offices: EventOffice[];
   event_bookings: EventBooking[];
   event_cost_lines: EventCostLine[];
+  event_cost_requests: EventCostRequest[];
   event_attendance_requests: EventAttendanceRequest[];
   event_attendance_request_lines: EventAttendanceRequestLine[];
   profile_offices: ProfileOffice[];

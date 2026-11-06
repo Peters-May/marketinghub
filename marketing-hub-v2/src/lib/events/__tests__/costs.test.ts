@@ -4,6 +4,7 @@ import {
   costTotalsByCurrency,
   costsSheetPath,
   defaultCostsRequestDraft,
+  findCostRequestRecipient,
   parseCostAmount,
 } from "@/lib/events/costs";
 
@@ -61,6 +62,29 @@ describe("costTotalsByCurrency", () => {
 describe("costsSheetPath", () => {
   it("opens the event with the sheet", () => {
     expect(costsSheetPath("evt_1")).toBe("/app/events?open=evt_1&costs=1");
+  });
+});
+
+describe("findCostRequestRecipient", () => {
+  const users = [
+    { email: "ada@petersandmay.com", role: "member" },
+    { email: "seo@petersandmay.com", role: "seo" },
+  ];
+
+  it("matches an existing staff member regardless of case", () => {
+    expect(findCostRequestRecipient(users, "Ada@PetersAndMay.com")).toEqual({
+      person: users[0],
+      onList: true,
+    });
+  });
+
+  it("flags someone who is in the Hub but not on the costs list", () => {
+    expect(findCostRequestRecipient(users, "seo@petersandmay.com")?.onList).toBe(false);
+  });
+
+  it("returns null when the email is new", () => {
+    expect(findCostRequestRecipient(users, "new@petersandmay.com")).toBeNull();
+    expect(findCostRequestRecipient(users, "  ")).toBeNull();
   });
 });
 

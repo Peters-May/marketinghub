@@ -4,6 +4,7 @@ import type {
   EventCostCategory,
   EventCostCurrency,
   EventCostLine,
+  EventCostRequest,
   HubNotification,
 } from "@/lib/types";
 
@@ -61,6 +62,36 @@ export async function saveEventCostLine(input: {
       created_at: nowIso(),
     };
     store.event_cost_lines.push(row);
+  });
+  return row;
+}
+
+export async function listEventCostRequests(eventId: string) {
+  const store = await readStore();
+  return (store.event_cost_requests ?? [])
+    .filter((row) => row.event_id === eventId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function addEventCostRequest(input: {
+  event_id: string;
+  staff_user_id: string;
+  staff_name: string;
+  requested_by_user_id: string;
+  requested_by_name: string;
+}): Promise<EventCostRequest> {
+  const row: EventCostRequest = {
+    id: uid("ecr"),
+    event_id: input.event_id,
+    staff_user_id: input.staff_user_id,
+    staff_name: input.staff_name.trim(),
+    requested_by_user_id: input.requested_by_user_id,
+    requested_by_name: input.requested_by_name.trim(),
+    created_at: nowIso(),
+  };
+  await updateStore((store) => {
+    if (!store.event_cost_requests) store.event_cost_requests = [];
+    store.event_cost_requests.push(row);
   });
   return row;
 }
