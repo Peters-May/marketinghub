@@ -19,6 +19,13 @@ export async function listEventCostLines(eventId: string) {
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
+export async function listAllEventCostLines() {
+  const store = await readStore();
+  return [...(store.event_cost_lines ?? [])].sort((a, b) =>
+    a.created_at.localeCompare(b.created_at)
+  );
+}
+
 export async function getEventCostLine(id: string) {
   const store = await readStore();
   return (store.event_cost_lines ?? []).find((row) => row.id === id) ?? null;

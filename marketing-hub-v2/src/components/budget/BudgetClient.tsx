@@ -23,6 +23,11 @@ import type {
   BudgetPayment,
   BudgetPaymentStatus,
 } from "@/lib/types";
+import {
+  BudgetEventCosts,
+  type BudgetCostEvent,
+  type BudgetEventCostLine,
+} from "@/components/budget/BudgetEventCosts";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchSelect } from "@/components/ui/SearchSelect";
@@ -40,6 +45,7 @@ function gbp(value: number | null | undefined) {
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "payments", label: "Payments" },
+  { id: "event_costs", label: "Event costs" },
   { id: "breakdowns", label: "Breakdowns" },
   { id: "notes", label: "Notes" },
   { id: "quarters", label: "Quarters" },
@@ -329,12 +335,18 @@ export function BudgetClient({
   meta,
   events = [],
   themes = [],
+  eventCosts = [],
+  costEvents = [],
+  costStaff = [],
 }: {
   lines: BudgetLine[];
   payments: BudgetPayment[];
   meta: BudgetMeta;
   events?: BudgetLinkOption[];
   themes?: BudgetLinkOption[];
+  eventCosts?: BudgetEventCostLine[];
+  costEvents?: BudgetCostEvent[];
+  costStaff?: { id: string; name: string }[];
 }) {
   const [lines, setLines] = useState(initialLines);
   const [payments, setPayments] = useState(initialPayments);
@@ -641,7 +653,7 @@ export function BudgetClient({
         </ul>
       ) : null}
 
-      <div className="mb-6 inline-flex rounded-xl border border-border bg-sand/60 p-1">
+      <div className="mb-6 inline-flex flex-wrap rounded-xl border border-border bg-sand/60 p-1">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -1159,6 +1171,10 @@ export function BudgetClient({
             )}
           </div>
         </div>
+      ) : null}
+
+      {tab === "event_costs" ? (
+        <BudgetEventCosts lines={eventCosts} events={costEvents} staff={costStaff} />
       ) : null}
 
       {tab === "breakdowns" ? (

@@ -1,6 +1,7 @@
 import { waitUntil } from "@vercel/functions";
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
+import { canAccessBudget } from "@/lib/auth/budget-access";
 import { isAutoMemberEmail, memberEmailDomains } from "@/lib/auth/member-domain";
 import { createHubUser, listEvents, listHubUsers } from "@/lib/data/repos";
 import { sendEventCostsRequest } from "@/lib/email/send-event-costs-request";
@@ -140,12 +141,13 @@ export async function POST(request: NextRequest) {
   if (!body || typeof body !== "object") return jsonError("Invalid request", 400);
   const action = String(body.action ?? "");
   const viewer = { id: user.id, isAdmin: user.role === "admin" };
+  const budgetEditor = canAccessBudget(user);
 
   if (action === "save_line") {
     const id = String(body.id ?? "").trim();
     const existing = id ? await getEventCostLine(id) : null;
     if (id && !existing) return jsonError("That line no longer exists", 404);
-    if (existing && !canEditCostLine(existing, viewer)) {
+    if (existing && !canEditCostLine(existing, viewer) && !budgetEditor) {
       return jsonError("You can only edit your own lines", 403);
     }
 
@@ -159,10 +161,10 @@ export async function POST(request: NextRequest) {
     const amount = parseCostAmount(body.amount);
     if (amount === undefined) return jsonError("Enter an amount of 0 or more, or leave it blank", 400);
 
-    // Members always own the lines they add or edit; only admins assign.
+    // Members always own the lines they add or edit. Admins and budget editors assign.
     let staffUserId: string | null = user.id;
     let staffName = user.full_name || user.email;
-    if (viewer.isAdmin) {
+    if (viewer.isAdmin || budgetEditor) {
       staffUserId = String(body.staff_user_id ?? "").trim() || null;
       staffName = "";
       if (staffUserId) {
@@ -193,7 +195,7 @@ export async function POST(request: NextRequest) {
   if (action === "delete_line") {
     const existing = await getEventCostLine(String(body.id ?? ""));
     if (!existing) return jsonOk({ ok: true });
-    if (!canEditCostLine(existing, viewer)) {
+    if (!canEditCostLine(existing, viewer) && !budgetEditor) {
       return jsonError("You can only remove your own lines", 403);
     }
     await removeEventCostLine(existing.id);
