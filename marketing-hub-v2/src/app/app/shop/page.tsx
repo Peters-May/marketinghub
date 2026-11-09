@@ -19,7 +19,11 @@ export default async function InternalShopPage() {
     listMerchInventory(),
     user ? getContactByUserId(user.id) : Promise.resolve(null),
   ]);
-  const merch = user ? filterMerchOrdersForUser(allMerch, user) : [];
+  const merch = user
+    ? filterMerchOrdersForUser(allMerch, user, {
+        contactId: viewerContact?.id ?? null,
+      })
+    : [];
   const canManageAll = user ? isMerchAdmin(user) : false;
 
   return (

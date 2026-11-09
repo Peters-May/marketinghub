@@ -1,4 +1,4 @@
-import {
+﻿import {
   emptyAttendanceOpsFields,
   type EventAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
@@ -1832,7 +1832,9 @@ export async function createMerchOrder(
     created_at: nowIso(),
     updated_at: nowIso(),
   };
-  if (hasServiceRoleKey()) {
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (!hasServiceRoleKey()) break;
     const supabase = createServiceClient();
     const { data, error } = await supabase.rpc("hub_merch_order_insert", {
       p_item: item,
@@ -1843,7 +1845,16 @@ export async function createMerchOrder(
       if (!stored) throw new Error("Could not save clothing request");
       return stored;
     }
-    if (!isMissingMerchRpc(error)) throw new Error(error.message);
+    if (isMissingMerchRpc(error)) break;
+    const message = error.message || "Could not save clothing request";
+    const retryable =
+      /lock timeout|statement timeout|canceling statement|55P03|57014|502|524|timeout/i.test(
+        message
+      );
+    if (!retryable || attempt === maxAttempts - 1) {
+      throw new Error(message);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
   }
   await updateStore((s) => {
     s.merch_orders.push(item);

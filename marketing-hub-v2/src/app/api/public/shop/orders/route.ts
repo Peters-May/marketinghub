@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk } from "@/lib/api";
-import { createMerchOrder } from "@/lib/data/repos";
+import { createMerchOrder, getContactByEmail } from "@/lib/data/repos";
 import { notifyMarketingAlert } from "@/lib/email/send-marketing-alert";
 import { normalizeClothingLogo } from "@/lib/merch/north-sails";
 import {
   normalizeMerchOrderItems,
   syncMerchOrderPrimaryFields,
 } from "@/lib/merch/order-items";
+import { resolveMerchRequestedFor } from "@/lib/merch/requested-for";
 
 function plainNotes(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   const name =
     typeof body.name === "string" ? body.name.trim() : "";
   const email =
-    typeof body.email === "string" ? body.email.trim() : "";
+    typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const office =
     typeof body.office === "string" ? body.office.trim() : "";
   if (!name) return jsonError("Name is required", 400);
@@ -44,25 +45,48 @@ export async function POST(request: NextRequest) {
     return jsonError("Add at least one item to the order", 400);
   }
 
+  // Match hub contacts (and linked members) by guest email when possible.
+  // Never block the order if contact lookup is slow or the store is locked.
+  let contact = null;
+  try {
+    contact = await getContactByEmail(email);
+  } catch (err) {
+    console.error("[public/shop/orders] contact lookup failed:", err);
+  }
+  const resolved = resolveMerchRequestedFor({
+    requested_for: name,
+    contact,
+    fallbackName: name,
+  });
+
   const guestNotes = plainNotes(body.notes);
   const notesParts = [`Public shop request · ${email}`];
   if (guestNotes) notesParts.push(guestNotes);
 
-  const item = await createMerchOrder({
-    ...syncMerchOrderPrimaryFields(items),
-    items,
-    requested_for: name,
-    requested_for_contact_id: null,
-    office: office || "—",
-    needed_by:
-      typeof body.needed_by === "string" && body.needed_by.trim()
-        ? body.needed_by.trim()
-        : null,
-    status: "requested",
-    notes: notesParts.join("\n\n"),
-    created_by: name,
-    created_by_user_id: null,
-  });
+  let item;
+  try {
+    item = await createMerchOrder({
+      ...syncMerchOrderPrimaryFields(items),
+      items,
+      requested_for: resolved.requested_for,
+      requested_for_contact_id: resolved.requested_for_contact_id,
+      office: office || "—",
+      needed_by:
+        typeof body.needed_by === "string" && body.needed_by.trim()
+          ? body.needed_by.trim()
+          : null,
+      status: "requested",
+      notes: notesParts.join("\n\n"),
+      created_by: name,
+      created_by_user_id: resolved.allocated_user_id,
+    });
+  } catch (err) {
+    console.error("[public/shop/orders] create failed:", err);
+    return jsonError(
+      "Could not save clothing request. Please try again in a moment.",
+      503
+    );
+  }
 
   notifyMarketingAlert({
     kind: "clothing",

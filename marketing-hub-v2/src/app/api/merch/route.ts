@@ -4,6 +4,7 @@ import {
   createMerchOrder,
   deleteMerchOrder,
   getContact,
+  getContactByUserId,
   getMerchOrder,
   listMerchOrders,
   updateMerchOrder,
@@ -25,7 +26,10 @@ import { resolveMerchRequestedFor } from "@/lib/merch/requested-for";
 export async function GET() {
   const { user, error } = await requireStaff();
   if (error) return error;
-  const orders = filterMerchOrdersForUser(await listMerchOrders(), user);
+  const viewerContact = await getContactByUserId(user.id);
+  const orders = filterMerchOrdersForUser(await listMerchOrders(), user, {
+    contactId: viewerContact?.id ?? null,
+  });
   return jsonOk({ orders, canManageAll: isMerchAdmin(user) });
 }
 
@@ -36,11 +40,13 @@ export async function POST(request: NextRequest) {
   const action = body.action as string | undefined;
   const admin = isMerchAdmin(user);
   const fallbackName = user.full_name || user.email || "Staff";
+  const viewerContact = admin ? null : await getContactByUserId(user.id);
+  const ownership = { contactId: viewerContact?.id ?? null };
 
   if (action === "update") {
     const existing = await getMerchOrder(body.id);
     if (!existing) return jsonError("Not found", 404);
-    if (!admin && !ownsMerchOrder(existing, user)) {
+    if (!admin && !ownsMerchOrder(existing, user, ownership)) {
       return jsonError("Forbidden", 403);
     }
     const patch = { ...(body.patch ?? {}) } as Record<string, unknown>;
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
   if (action === "delete") {
     const existing = await getMerchOrder(body.id);
     if (!existing) return jsonError("Not found", 404);
-    if (!admin && !ownsMerchOrder(existing, user)) {
+    if (!admin && !ownsMerchOrder(existing, user, ownership)) {
       return jsonError("Forbidden", 403);
     }
     try {

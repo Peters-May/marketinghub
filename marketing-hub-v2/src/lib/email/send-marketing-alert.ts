@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { Resend } from "resend";
 
 export type MarketingAlertKind =
@@ -49,7 +50,8 @@ export function escapeHtml(s: string): string {
 
 function hubPathFor(kind: MarketingAlertKind): string {
   if (kind === "feedback") return "/app/feedback";
-  if (kind === "clothing") return "/shop";
+  // Internal Merch → Orders (not the public /shop browse page).
+  if (kind === "clothing") return "/app/shop";
   return "/app/requests";
 }
 
@@ -202,15 +204,28 @@ export async function sendMarketingAlert(params: {
   }
 }
 
-/** Fire-and-forget so create APIs are never blocked by email. */
+/** Queue alert after the response — waitUntil keeps the send alive on Vercel. */
 export function notifyMarketingAlert(params: {
   kind: MarketingAlertKind;
   subtype?: string;
   clothing?: ClothingAlertDetail;
 }): void {
-  void sendMarketingAlert(params).catch((err) => {
-    console.error("[notifyMarketingAlert] Unhandled:", err);
-  });
+  waitUntil(
+    sendMarketingAlert(params)
+      .then((result) => {
+        if (!result.success) {
+          console.error(
+            "[notifyMarketingAlert] failed:",
+            result.error,
+            "kind:",
+            params.kind
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("[notifyMarketingAlert] Unhandled:", err);
+      })
+  );
 }
 
 export function staffRequestAlertKind(
