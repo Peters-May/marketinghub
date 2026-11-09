@@ -296,7 +296,8 @@ export function clothingProductsWithImages(
 export function withoutUnitCost<T extends { unit_cost?: number | null }>(
   product: T
 ): Omit<T, "unit_cost"> {
-  const { unit_cost: _unitCost, ...rest } = product;
+  const rest = { ...product };
+  delete rest.unit_cost;
   return rest;
 }
 

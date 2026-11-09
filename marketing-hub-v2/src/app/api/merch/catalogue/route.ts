@@ -103,10 +103,7 @@ function parseUnitCost(value: unknown): number | null | undefined {
 function stripCatalogueCosts(
   catalogue: MerchCatalogueImage[]
 ): MerchCatalogueImage[] {
-  return catalogue.map((row) => {
-    const { unit_cost: _cost, ...rest } = row;
-    return rest;
-  });
+  return catalogue.map((row) => withoutUnitCost(row));
 }
 
 export async function GET(request: NextRequest) {
