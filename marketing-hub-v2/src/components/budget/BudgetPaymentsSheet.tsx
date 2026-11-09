@@ -15,6 +15,7 @@ export type BudgetPaymentLineOption = {
 export type BudgetPaymentLinkOption = {
   id: string;
   title: string;
+  startsAt?: string | null;
 };
 
 type Draft = BudgetPayment & { amountText: string };
@@ -28,12 +29,6 @@ const STATUS_OPTIONS: { value: BudgetPaymentStatus; label: string }[] = [
   { value: "committed", label: "Committed" },
 ];
 
-const YEAR_OPTIONS = [
-  { value: "all", label: "All years" },
-  { value: "2026", label: "2026" },
-  { value: "2027", label: "2027" },
-] as const;
-
 function toDraft(payment: BudgetPayment): Draft {
   return {
     ...payment,
@@ -41,7 +36,15 @@ function toDraft(payment: BudgetPayment): Draft {
   };
 }
 
-function paymentYear(payment: BudgetPayment): string | null {
+/** Prefer linked event year so Boot 2027 spend is not filed under 2026. */
+function paymentYear(
+  payment: BudgetPayment,
+  eventYearById: Map<string, string>
+): string | null {
+  if (payment.event_id) {
+    const linked = eventYearById.get(payment.event_id);
+    if (linked) return linked;
+  }
   if (!payment.paid_at) return null;
   const match = /^(\d{4})/.exec(payment.paid_at);
   return match?.[1] ?? null;
@@ -60,6 +63,7 @@ export function BudgetPaymentsSheet({
   lineOptions,
   events,
   themes,
+  year,
   defaultLineId,
   onPaymentsChange,
 }: {
@@ -67,6 +71,7 @@ export function BudgetPaymentsSheet({
   lineOptions: BudgetPaymentLineOption[];
   events: BudgetPaymentLinkOption[];
   themes: BudgetPaymentLinkOption[];
+  year: string;
   defaultLineId?: string;
   onPaymentsChange?: (payments: BudgetPayment[]) => void;
 }) {
@@ -77,10 +82,18 @@ export function BudgetPaymentsSheet({
     "all"
   );
   const [lineFilter, setLineFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState<"all" | "2026" | "2027">("all");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
+
+  const eventYearById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const event of events) {
+      const eventYear = event.startsAt?.slice(0, 4);
+      if (eventYear) map.set(event.id, eventYear);
+    }
+    return map;
+  }, [events]);
 
   function publish(next: Draft[]) {
     rowsRef.current = next;
@@ -277,13 +290,10 @@ export function BudgetPaymentsSheet({
 
   const filtered = useMemo(() => {
     return rows.filter((payment) => {
+      if (paymentYear(payment, eventYearById) !== year) return false;
       if (statusFilter !== "all" && payment.status !== statusFilter) return false;
       if (lineFilter !== "all" && payment.budget_line_id !== lineFilter) {
         return false;
-      }
-      if (yearFilter !== "all") {
-        const year = paymentYear(payment);
-        if (year !== yearFilter) return false;
       }
       const lineLabel =
         lineOptions.find((option) => option.value === payment.budget_line_id)
@@ -295,12 +305,14 @@ export function BudgetPaymentsSheet({
         lineLabel,
       ]);
     });
-  }, [rows, statusFilter, lineFilter, yearFilter, search, lineOptions]);
+  }, [rows, statusFilter, lineFilter, year, search, lineOptions, eventYearById]);
 
   const eventOptions = useMemo(
     () =>
-      [...events].sort((a, b) => a.title.localeCompare(b.title)),
-    [events]
+      [...events]
+        .filter((event) => !event.startsAt || event.startsAt.startsWith(year))
+        .sort((a, b) => a.title.localeCompare(b.title)),
+    [events, year]
   );
   const themeOptions = useMemo(
     () =>
@@ -311,8 +323,9 @@ export function BudgetPaymentsSheet({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        Edit cells directly — changes save when you leave a field. Use the year
-        filter for 2026 or 2027 payments by date.
+        Showing {year} payments. Linked event year wins over payment date, so
+        Boot 2027 spend stays in 2027. Edit cells directly — changes save when
+        you leave a field.
       </p>
 
       <div className="surface-card overflow-hidden">
@@ -324,16 +337,10 @@ export function BudgetPaymentsSheet({
                 onSearchChange={setSearch}
                 searchPlaceholder="Search supplier, description, line…"
                 resultCount={filtered.length}
-                totalCount={rows.length}
+                totalCount={rows.filter(
+                  (payment) => paymentYear(payment, eventYearById) === year
+                ).length}
                 selects={[
-                  {
-                    id: "year",
-                    label: "Year",
-                    value: yearFilter,
-                    onChange: (value) =>
-                      setYearFilter(value as "all" | "2026" | "2027"),
-                    options: [...YEAR_OPTIONS],
-                  },
                   {
                     id: "status",
                     label: "Status",
@@ -378,9 +385,9 @@ export function BudgetPaymentsSheet({
 
         {filtered.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted">
-            {rows.length
+            {rows.some((payment) => paymentYear(payment, eventYearById) === year)
               ? "No payments match these filters."
-              : "No payments yet. Add a row to start tracking spend."}
+              : `No ${year} payments yet. Switch year above, link a payment to a ${year} event, or add a row.`}
           </p>
         ) : (
           <div className="overflow-x-auto">

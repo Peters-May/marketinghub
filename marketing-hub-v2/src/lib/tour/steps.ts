@@ -294,7 +294,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     id: "budget",
     selector: '[data-tour="nav-budget"]',
     title: "Budget",
-    body: "2026 marketing budget — visible to Hub admins, plus Simon, Tom, and Michael.",
+    body: "2026 / 2027 marketing budget — visible to Hub admins, plus Simon, Tom, and Michael.",
     href: "/app/budget",
     placement: "right",
   },

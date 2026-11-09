@@ -159,7 +159,7 @@ export const STAFF_NAV: NavItem[] = [
   {
     href: "/app/budget",
     label: "Budget",
-    description: "2026 marketing budget — Admin view only (plus Simon, Tom, and Michael)",
+    description: "2026 / 2027 marketing budget — Admin view only (plus Simon, Tom, and Michael)",
     icon: Wallet,
     budgetAccess: true,
   },

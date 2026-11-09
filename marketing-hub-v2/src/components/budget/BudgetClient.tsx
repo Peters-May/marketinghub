@@ -50,6 +50,9 @@ const TABS = [
   { id: "quarters", label: "Quarters" },
 ] as const;
 
+const BUDGET_YEARS = [2026, 2027] as const;
+type BudgetYear = (typeof BUDGET_YEARS)[number];
+
 type TabId = (typeof TABS)[number]["id"];
 
 const STATUS_OPTIONS: { value: BudgetPaymentStatus; label: string }[] = [
@@ -288,7 +291,6 @@ export function BudgetClient({
   lines: initialLines,
   payments: initialPayments,
   meta,
-  events = [],
   themes = [],
   eventCosts = [],
   costEvents = [],
@@ -319,10 +321,34 @@ export function BudgetClient({
     "Q1"
   );
   const [paymentsSheetKey, setPaymentsSheetKey] = useState(0);
+  const [budgetYear, setBudgetYear] = useState<BudgetYear>(() => {
+    const fromMeta = Number(meta.year);
+    return fromMeta === 2027 ? 2027 : 2026;
+  });
+  const yearLabel = String(budgetYear);
+
+  const eventYearById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const event of costEvents) {
+      const year = event.startsAt?.slice(0, 4);
+      if (year) map.set(event.id, year);
+    }
+    return map;
+  }, [costEvents]);
+
+  const yearPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      const linkedYear = payment.event_id
+        ? eventYearById.get(payment.event_id)
+        : undefined;
+      if (linkedYear) return linkedYear === yearLabel;
+      return payment.paid_at?.startsWith(yearLabel) ?? false;
+    });
+  }, [payments, eventYearById, yearLabel]);
 
   const totals = useMemo(
-    () => computeBudgetTotals(lines, payments),
-    [lines, payments]
+    () => computeBudgetTotals(lines, yearPayments),
+    [lines, yearPayments]
   );
   const thresholdLines = useMemo(() => budgetThresholds(totals), [totals]);
 
@@ -415,7 +441,7 @@ export function BudgetClient({
         line={line}
         spend={spend}
         open={open}
-        payments={payments.filter(
+        payments={yearPayments.filter(
           (payment) => payment.budget_line_id === line.id
         )}
         onToggle={() => setOpenLineId(open ? null : line.id)}
@@ -487,8 +513,8 @@ export function BudgetClient({
   return (
     <div>
       <PageHeader
-        title={meta.title}
-        description={`${meta.source} · amounts in ${meta.currency}. Add payments to track spend against each line.`}
+        title={`Marketing Budget ${budgetYear}`}
+        description={`${meta.source} · amounts in ${meta.currency}. Switch year to separate 2026 and 2027 spend — Boot and other January shows sit in their event year.`}
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -516,6 +542,30 @@ export function BudgetClient({
           </div>
         }
       />
+
+      <div
+        className="mb-4 inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white p-1"
+        role="tablist"
+        aria-label="Budget year"
+      >
+        {BUDGET_YEARS.map((year) => (
+          <button
+            key={year}
+            type="button"
+            role="tab"
+            aria-selected={budgetYear === year}
+            className={cn(
+              "rounded-xl px-3.5 py-2 text-sm font-medium transition",
+              budgetYear === year
+                ? "bg-brand text-white shadow-sm"
+                : "text-muted hover:bg-sand hover:text-foreground"
+            )}
+            onClick={() => setBudgetYear(year)}
+          >
+            {year}
+          </button>
+        ))}
+      </div>
 
       <p className="mb-6 inline-flex items-center gap-2 rounded-xl border border-border bg-sand/70 px-3 py-2 text-xs text-muted">
         <Lock className="h-3.5 w-3.5" />
@@ -808,11 +858,16 @@ export function BudgetClient({
 
       {tab === "payments" ? (
         <BudgetPaymentsSheet
-          key={paymentsSheetKey}
+          key={`${paymentsSheetKey}-${budgetYear}`}
           payments={payments}
           lineOptions={lineOptions}
-          events={events}
+          events={costEvents.map((event) => ({
+            id: event.id,
+            title: event.title,
+            startsAt: event.startsAt,
+          }))}
           themes={themes}
+          year={yearLabel}
           defaultLineId={
             lines.find((line) => !isHistoricBudgetLine(line))?.id ??
             lines[0]?.id
@@ -822,7 +877,13 @@ export function BudgetClient({
       ) : null}
 
       {tab === "event_costs" ? (
-        <BudgetEventCosts lines={eventCosts} events={costEvents} staff={costStaff} />
+        <BudgetEventCosts
+          key={budgetYear}
+          lines={eventCosts}
+          events={costEvents}
+          staff={costStaff}
+          year={yearLabel}
+        />
       ) : null}
 
       {tab === "breakdowns" ? (

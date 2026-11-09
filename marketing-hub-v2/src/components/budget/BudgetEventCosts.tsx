@@ -88,16 +88,18 @@ export function BudgetEventCosts({
   lines,
   events,
   staff: initialStaff,
+  year,
 }: {
   lines: BudgetEventCostLine[];
   events: BudgetCostEvent[];
   staff: Staff[];
+  /** Calendar year for event start dates — Boot Düsseldorf 2027 stays in 2027. */
+  year: string;
 }) {
   const [rows, setRows] = useState<Draft[]>(() => lines.map(toDraft));
   const rowsRef = useRef(rows);
   const [staff, setStaff] = useState<Staff[]>(initialStaff);
   const [search, setSearch] = useState("");
-  const [yearFilter, setYearFilter] = useState<"all" | "2026" | "2027">("all");
   const [addEventId, setAddEventId] = useState("");
   const [addingId, setAddingId] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -111,24 +113,22 @@ export function BudgetEventCosts({
 
   const eventById = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
   const eventOptions = useMemo(() => {
-    const sorted = [...events].sort((a, b) => a.title.localeCompare(b.title));
-    if (yearFilter === "all") return sorted;
-    return sorted.filter((event) => event.startsAt?.startsWith(yearFilter));
-  }, [events, yearFilter]);
+    return [...events]
+      .filter((event) => event.startsAt?.startsWith(year))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [events, year]);
 
   const visible = useMemo(() => {
     return rows.filter((line) => {
-      if (yearFilter !== "all") {
-        const startsAt = eventById.get(line.eventId)?.startsAt ?? line.startsAt;
-        if (!startsAt?.startsWith(yearFilter)) return false;
-      }
+      const startsAt = eventById.get(line.eventId)?.startsAt ?? line.startsAt;
+      if (!startsAt?.startsWith(year)) return false;
       if (!needle) return true;
       return [line.eventTitle, line.location, line.description, line.staffName, line.notes, line.category]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [rows, needle, yearFilter, eventById]);
+  }, [rows, needle, year, eventById]);
 
   const groups = useMemo(() => {
     const byEvent = new Map<string, Draft[]>();
@@ -335,7 +335,8 @@ export function BudgetEventCosts({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        The same lines as each event costs sheet. A change here updates the event, and a change on the event updates this tab.
+        Showing {year} events only (by event start date). A change here updates
+        the event sheet, and a change on the event updates this tab.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -346,18 +347,6 @@ export function BudgetEventCosts({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <select
-          aria-label="Year"
-          className="field !h-9 !w-auto !py-1.5"
-          value={yearFilter}
-          onChange={(event) =>
-            setYearFilter(event.target.value as "all" | "2026" | "2027")
-          }
-        >
-          <option value="all">All years</option>
-          <option value="2026">2026</option>
-          <option value="2027">2027</option>
-        </select>
         <select
           aria-label="Event to add"
           className="field !h-9 max-w-xs !py-1.5"
@@ -395,9 +384,12 @@ export function BudgetEventCosts({
 
       {groups.length === 0 ? (
         <p className="surface-card px-5 py-6 text-sm text-muted">
-          {rows.length
+          {rows.some((line) => {
+            const startsAt = eventById.get(line.eventId)?.startsAt ?? line.startsAt;
+            return startsAt?.startsWith(year);
+          })
             ? "No event costs match that search."
-            : "No event costs yet. Add a line to an event, or enter costs on the event sheet."}
+            : `No ${year} event costs yet. Switch year above, or add a line to a ${year} event.`}
         </p>
       ) : (
         groups.map((group) => (
