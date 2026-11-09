@@ -1,20 +1,10 @@
-import type { PlannedNotification, PlannedTask } from "@/lib/automation/plan";
+import type { DailyPlan } from "@/lib/automation/run";
 
 export async function dailyAutomationWorkflow() {
   "use workflow";
   console.log("[workflow] daily automation start");
   const plan = await planDailyWorkStep();
-  let createdTasks = 0;
-  for (const task of plan.tasks) {
-    const created = await createDailyTask(task);
-    if (created) createdTasks += 1;
-  }
-  const notifications = await recordDailyRun({
-    started: plan.started,
-    createdTasks,
-    notifications: plan.notifications,
-  });
-  const result = { createdTasks, notifications };
+  const result = await applyDailyPlanStep(plan);
   console.log("[workflow] daily automation finished", result);
   return result;
 }
@@ -26,20 +16,15 @@ async function planDailyWorkStep() {
   return loadDailyPlan();
 }
 
-async function createDailyTask(task: PlannedTask) {
+async function applyDailyPlanStep(plan: DailyPlan) {
   "use step";
-  console.log("[workflow] create daily task", task.automation_key);
-  const { createPlannedTask } = await import("@/lib/automation/run");
-  return createPlannedTask(task);
-}
-
-async function recordDailyRun(input: {
-  started: string;
-  createdTasks: number;
-  notifications: PlannedNotification[];
-}) {
-  "use step";
-  console.log("[workflow] record daily run", input.createdTasks);
-  const { recordDailyAutomationRun } = await import("@/lib/automation/run");
-  return recordDailyAutomationRun(input);
+  console.log(
+    "[workflow] apply daily plan",
+    plan.tasks.length,
+    "tasks",
+    plan.notifications.length,
+    "notifications"
+  );
+  const { applyDailyAutomationPlan } = await import("@/lib/automation/run");
+  return applyDailyAutomationPlan(plan);
 }

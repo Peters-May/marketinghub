@@ -56,6 +56,7 @@ import {
   canClaimSend,
   holdsSend,
   SEND_HEARTBEAT_MS,
+  SEND_LOCK_MS,
   sendHeartbeatAt,
   type ClaimRule,
 } from "@/lib/email/send-lock";
@@ -4489,6 +4490,25 @@ export async function getPublicEmailByShareToken(token: string) {
   return null;
 }
 
+type EmailCampaignRpcError = { code?: string; message?: string };
+
+function isMissingEmailCampaignRpc(error: EmailCampaignRpcError): boolean {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST202" ||
+    /hub_email_campaign_get|hub_email_campaign_claim|hub_email_campaign_hold|hub_email_campaign_release|hub_email_campaign_bump_stat|schema cache/i.test(
+      message
+    )
+  );
+}
+
+function campaignFromRpc(data: unknown): EmailCampaign | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const row = data as EmailCampaign;
+  if (typeof row.id !== "string" || !row.id.trim()) return null;
+  return normalizeEmailCampaign(row);
+}
+
 /**
  * Take ownership of a send. The check and the write run in one store
  * mutation, so two callers racing for the same campaign get one claim.
@@ -4498,6 +4518,27 @@ export async function claimEmailCampaignSend(
   id: string,
   rule: ClaimRule & { clearSchedule?: boolean }
 ): Promise<string | null> {
+  const next = uid("send");
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_email_campaign_claim", {
+      p_campaign_id: id,
+      p_claim: next,
+      p_from: rule.from,
+      p_due_only: rule.dueOnly === true,
+      p_clear_schedule: rule.clearSchedule === true,
+      p_lock_ms: SEND_LOCK_MS,
+    });
+    if (!error) {
+      if (typeof data === "string" && data.trim()) {
+        forgetRemoteStore();
+        return data;
+      }
+      return null;
+    }
+    if (!isMissingEmailCampaignRpc(error)) throw new Error(error.message);
+  }
+
   let claim: string | null = null;
   await updateStore((s) => {
     claim = null;
@@ -4506,7 +4547,6 @@ export async function claimEmailCampaignSend(
     const prev = normalizeEmailCampaign(s.email_campaigns![idx]);
     if (!canClaimSend(prev, rule)) return;
     const now = nowIso();
-    const next = uid("send");
     s.email_campaigns![idx] = {
       ...prev,
       status: "sending",
@@ -4526,6 +4566,21 @@ export async function claimEmailCampaignSend(
  * is getting old. False after a cancel or after another runner took over.
  */
 export async function holdEmailCampaignSend(id: string, claim: string): Promise<boolean> {
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_email_campaign_hold", {
+      p_campaign_id: id,
+      p_claim: claim,
+      p_heartbeat_ms: SEND_HEARTBEAT_MS,
+    });
+    if (!error) {
+      // Hold may refresh the heartbeat; only invalidate when ownership is confirmed.
+      if (data === true) forgetRemoteStore();
+      return data === true;
+    }
+    if (!isMissingEmailCampaignRpc(error)) throw new Error(error.message);
+  }
+
   const fresh = await readStoreFresh();
   const current = (fresh.email_campaigns ?? []).find((x) => x.id === id);
   if (!current || !holdsSend(normalizeEmailCampaign(current), claim)) return false;
@@ -4551,6 +4606,27 @@ export async function releaseEmailCampaignSend(
   claim: string,
   patch: Partial<EmailCampaign>
 ): Promise<EmailCampaign | null> {
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_email_campaign_release", {
+      p_campaign_id: id,
+      p_claim: claim,
+      p_patch: {
+        ...patch,
+        ...(patch.status !== undefined
+          ? { status: normalizeEmailCampaignStatus(patch.status) }
+          : {}),
+        ...(patch.stats ? { stats: normalizeEmailStats(patch.stats) } : {}),
+      },
+    });
+    if (!error) {
+      const stored = campaignFromRpc(data);
+      if (stored) forgetRemoteStore();
+      return stored;
+    }
+    if (!isMissingEmailCampaignRpc(error)) throw new Error(error.message);
+  }
+
   let updated: EmailCampaign | null = null;
   await updateStore((s) => {
     updated = null;
@@ -4833,6 +4909,22 @@ export async function bumpEmailCampaignStat(
   delta = 1,
   touchUpdated = true
 ) {
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_email_campaign_bump_stat", {
+      p_campaign_id: campaignId,
+      p_field: field,
+      p_delta: delta,
+      p_touch_updated: touchUpdated,
+    });
+    if (!error) {
+      const stored = campaignFromRpc(data);
+      if (stored) forgetRemoteStore();
+      return stored;
+    }
+    if (!isMissingEmailCampaignRpc(error)) throw new Error(error.message);
+  }
+
   let updated: EmailCampaign | null = null;
   await updateStore((s) => {
     if (!s.email_campaigns) s.email_campaigns = [];
