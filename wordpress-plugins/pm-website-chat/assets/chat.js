@@ -1447,12 +1447,19 @@
 
   function resumeSession(id) {
     setTyping(true);
+    var controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timeoutId = setTimeout(function () {
+      if (controller) controller.abort();
+    }, 8000);
+    var fetchOpts = {
+      headers: headers(),
+      credentials: useProxy ? "same-origin" : "omit",
+    };
+    if (controller) fetchOpts.signal = controller.signal;
     fetch(
       apiUrl("api/chat/sessions/" + encodeURIComponent(id) + "/messages"),
-      {
-        headers: headers(),
-        credentials: useProxy ? "same-origin" : "omit",
-      }
+      fetchOpts
     )
       .then(function (r) {
         return parseBody(r).then(function (data) {
@@ -1504,6 +1511,7 @@
         startSession();
       })
       .finally(function () {
+        clearTimeout(timeoutId);
         setTyping(false);
       });
   }
