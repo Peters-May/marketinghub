@@ -41,6 +41,7 @@ import {
   CompactMultiImageThumb,
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
+import { ShareReviewPanel } from "@/components/share/ShareReviewPanel";
 import { PostShareControls } from "@/components/social/PostShareControls";
 import { SocialIdeasPanel } from "@/components/social/SocialIdeasPanel";
 import { MemberIdeasColumn } from "@/components/social/MemberIdeasColumn";
@@ -64,6 +65,10 @@ type SocialPost = {
   category?: string;
   shareEnabled?: boolean;
   shareToken?: string;
+  clientShareEnabled?: boolean;
+  clientShareToken?: string;
+  shareLatestDecision?: string;
+  shareLatestApprovedBy?: string;
   /** Planable cross-post group — used to collapse platform copies in member view. */
   planableGroupId?: string | null;
   /** All Planable sibling ids in the same group (member-view dedupe). */
@@ -558,6 +563,10 @@ export function SocialClient({
             source: "hub" as const,
             shareEnabled: c.share_enabled === true,
             shareToken: c.share_token || "",
+            clientShareEnabled: c.client_share_enabled === true,
+            clientShareToken: c.client_share_token || "",
+            shareLatestDecision: c.share_latest_decision || "",
+            shareLatestApprovedBy: c.share_latest_approved_by || "",
             owner: c.owner || "",
           };
         })
@@ -1690,24 +1699,76 @@ export function SocialClient({
                 </div>
               ) : null}
               {!memberView && selected.source === "hub" ? (
-                <PostShareControls
-                  contentId={selected.id}
-                  enabled={selected.shareEnabled === true}
-                  shareToken={selected.shareToken}
-                  onUpdated={(next) => {
-                    setPosts((prev) =>
-                      prev.map((p) =>
-                        p.id === selected.id
-                          ? {
-                              ...p,
-                              shareEnabled: next.share_enabled,
-                              shareToken: next.share_token,
-                            }
-                          : p
-                      )
-                    );
-                  }}
-                />
+                <>
+                  <PostShareControls
+                    contentId={selected.id}
+                    enabled={selected.shareEnabled === true}
+                    shareToken={selected.shareToken}
+                    clientEnabled={selected.clientShareEnabled === true}
+                    clientShareToken={selected.clientShareToken}
+                    onUpdated={(next) => {
+                      setPosts((prev) =>
+                        prev.map((p) =>
+                          p.id === selected.id
+                            ? {
+                                ...p,
+                                shareEnabled: next.share_enabled,
+                                shareToken: next.share_token,
+                                clientShareEnabled: next.client_share_enabled,
+                                clientShareToken: next.client_share_token,
+                              }
+                            : p
+                        )
+                      );
+                    }}
+                  />
+                  {selected.shareLatestApprovedBy ? (
+                    <p className="text-xs text-muted">
+                      Latest share response:{" "}
+                      {selected.shareLatestDecision === "approved"
+                        ? "Approved"
+                        : selected.shareLatestDecision === "changes_requested"
+                          ? "Changes requested"
+                          : "Response"}{" "}
+                      by {selected.shareLatestApprovedBy}
+                    </p>
+                  ) : null}
+                  <ShareReviewPanel
+                    targetType="content"
+                    targetId={selected.id}
+                    onApplied={(payload) => {
+                      setPosts((prev) =>
+                        prev.map((p) =>
+                          p.id === selected.id
+                            ? {
+                                ...p,
+                                text:
+                                  payload.caption !== undefined
+                                    ? payload.caption
+                                    : p.text,
+                                html:
+                                  payload.caption !== undefined
+                                    ? payload.caption
+                                    : p.html,
+                                mediaUrls: payload.asset_url
+                                  ? payload.asset_url
+                                      .split(/\r?\n/)
+                                      .map((u) => u.trim())
+                                      .filter(Boolean)
+                                  : p.mediaUrls,
+                                mediaUrl: payload.asset_url
+                                  ? payload.asset_url
+                                      .split(/\r?\n/)
+                                      .map((u) => u.trim())
+                                      .filter(Boolean)[0] || null
+                                  : p.mediaUrl,
+                              }
+                            : p
+                        )
+                      );
+                    }}
+                  />
+                </>
               ) : null}
               <p className="text-sm text-muted">
                 {selected.scheduledAt

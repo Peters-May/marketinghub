@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import type { ShareAudience } from "@/lib/types";
 
 export function EmailPublicShareControls({
   kind,
   id,
   initialEnabled,
   initialPath = "",
+  initialClientEnabled = false,
+  initialClientPath = "",
   layout,
   allowEnable = true,
   takeDraft,
@@ -15,6 +18,8 @@ export function EmailPublicShareControls({
   onError,
   onEnabledChange,
   onPathChange,
+  onClientEnabledChange,
+  onClientPathChange,
   onDone,
 }: {
   kind: "template" | "campaign";
@@ -22,6 +27,8 @@ export function EmailPublicShareControls({
   initialEnabled: boolean;
   /** Known public path, so a later copy does not wait on a save. */
   initialPath?: string;
+  initialClientEnabled?: boolean;
+  initialClientPath?: string;
   layout: "menu" | "inline";
   /** When false, an existing link can be copied or turned off, not created. */
   allowEnable?: boolean;
@@ -35,15 +42,19 @@ export function EmailPublicShareControls({
   onError?: (message: string) => void;
   onEnabledChange?: (enabled: boolean) => void;
   onPathChange?: (path: string) => void;
+  onClientEnabledChange?: (enabled: boolean) => void;
+  onClientPathChange?: (path: string) => void;
   onDone?: () => void;
 }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [path, setPath] = useState(initialPath);
+  const [clientEnabled, setClientEnabled] = useState(initialClientEnabled);
+  const [clientPath, setClientPath] = useState(initialClientPath);
   const [busy, setBusy] = useState(false);
   const [localNote, setLocalNote] = useState("");
   const [localError, setLocalError] = useState("");
 
-  if (!allowEnable && !enabled) return null;
+  if (!allowEnable && !enabled && !clientEnabled) return null;
 
   function reportNote(message: string) {
     setLocalError("");
@@ -57,7 +68,11 @@ export function EmailPublicShareControls({
     onError?.(message);
   }
 
-  async function post(next: boolean, patch?: Record<string, unknown> | null) {
+  async function post(
+    next: boolean,
+    audience: ShareAudience,
+    patch?: Record<string, unknown> | null
+  ) {
     const res = await fetch(
       kind === "template" ? "/api/email/templates" : "/api/email/campaigns",
       {
@@ -67,6 +82,7 @@ export function EmailPublicShareControls({
           action: "set_share",
           id,
           enabled: next,
+          audience,
           ...(next && patch ? { patch } : {}),
         }),
       }
@@ -86,37 +102,39 @@ export function EmailPublicShareControls({
     }
   }
 
-  function publishEnabled(next: boolean) {
-    setEnabled(next);
-    onEnabledChange?.(next);
-  }
-
-  function rememberPath(next: string) {
-    setPath(next);
-    onPathChange?.(next);
-  }
-
-  async function enableAndCopy() {
+  async function enableAndCopy(audience: ShareAudience) {
     if (busy) return;
+    const isStaff = audience === "staff";
+    const currentEnabled = isStaff ? enabled : clientEnabled;
+    const currentPath = isStaff ? path : clientPath;
     const draft = takeDraft?.() ?? null;
-    if (enabled && path && !draft) {
-      await copyUrl(`${window.location.origin}${path}`);
+    if (currentEnabled && currentPath && !draft) {
+      await copyUrl(`${window.location.origin}${currentPath}`);
       reportNote(
-        "Public link copied. Anyone with the link can view this draft."
+        `${isStaff ? "Staff" : "Client"} approval link copied. Anyone with the link can review this draft.`
       );
       onDone?.();
       return;
     }
     setBusy(true);
     try {
-      const data = await post(true, draft);
+      const data = await post(true, audience, draft);
       const nextPath = String(data.path ?? "");
       if (!nextPath) throw new Error("Could not create the link");
-      rememberPath(nextPath);
+      if (isStaff) {
+        setPath(nextPath);
+        onPathChange?.(nextPath);
+        setEnabled(true);
+        onEnabledChange?.(true);
+      } else {
+        setClientPath(nextPath);
+        onClientPathChange?.(nextPath);
+        setClientEnabled(true);
+        onClientEnabledChange?.(true);
+      }
       await copyUrl(`${window.location.origin}${nextPath}`);
-      publishEnabled(true);
       reportNote(
-        "Public link copied. Anyone with the link can view this draft."
+        `${isStaff ? "Staff" : "Client"} approval link copied. Anyone with the link can review this draft.`
       );
       onDone?.();
     } catch (err) {
@@ -129,14 +147,24 @@ export function EmailPublicShareControls({
     }
   }
 
-  async function turnOff() {
+  async function turnOff(audience: ShareAudience) {
     if (busy) return;
     setBusy(true);
     try {
-      await post(false);
-      rememberPath("");
-      publishEnabled(false);
-      reportNote("Public link turned off.");
+      await post(false, audience);
+      if (audience === "staff") {
+        setPath("");
+        onPathChange?.("");
+        setEnabled(false);
+        onEnabledChange?.(false);
+        reportNote("Staff approval link turned off.");
+      } else {
+        setClientPath("");
+        onClientPathChange?.("");
+        setClientEnabled(false);
+        onClientEnabledChange?.(false);
+        reportNote("Client approval link turned off.");
+      }
       onDone?.();
     } catch (err) {
       reportError(
@@ -147,11 +175,6 @@ export function EmailPublicShareControls({
     }
   }
 
-  const enableLabel = busy
-    ? "Working…"
-    : enabled
-      ? "Copy public link"
-      : "Make share link public";
   const itemClass =
     "block w-full px-3 py-2 text-left text-sm hover:bg-slate-50 disabled:opacity-60";
 
@@ -160,18 +183,20 @@ export function EmailPublicShareControls({
       <>
         <div className="my-1 border-t border-border" />
         <p className="px-3 py-1 text-xs text-muted">
-          {enabled
-            ? "Public link is on. No sign-in required."
-            : "Share this draft outside the Hub."}
+          Share for approval — staff and client links.
         </p>
         {allowEnable || enabled ? (
           <button
             type="button"
             className={itemClass}
             disabled={busy || (!allowEnable && !enabled)}
-            onClick={() => void enableAndCopy()}
+            onClick={() => void enableAndCopy("staff")}
           >
-            {enableLabel}
+            {busy
+              ? "Working…"
+              : enabled
+                ? "Copy staff approval link"
+                : "Create staff approval link"}
           </button>
         ) : null}
         {enabled ? (
@@ -179,9 +204,33 @@ export function EmailPublicShareControls({
             type="button"
             className={itemClass}
             disabled={busy}
-            onClick={() => void turnOff()}
+            onClick={() => void turnOff("staff")}
           >
-            Turn off public link
+            Turn off staff link
+          </button>
+        ) : null}
+        {allowEnable || clientEnabled ? (
+          <button
+            type="button"
+            className={itemClass}
+            disabled={busy || (!allowEnable && !clientEnabled)}
+            onClick={() => void enableAndCopy("client")}
+          >
+            {busy
+              ? "Working…"
+              : clientEnabled
+                ? "Copy client approval link"
+                : "Create client approval link"}
+          </button>
+        ) : null}
+        {clientEnabled ? (
+          <button
+            type="button"
+            className={itemClass}
+            disabled={busy}
+            onClick={() => void turnOff("client")}
+          >
+            Turn off client link
           </button>
         ) : null}
       </>
@@ -189,25 +238,55 @@ export function EmailPublicShareControls({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        className="btn-secondary px-3 py-1.5 text-sm"
-        disabled={busy}
-        onClick={() => void enableAndCopy()}
-      >
-        {enableLabel}
-      </button>
-      {enabled ? (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="btn-ghost px-3 py-1.5 text-sm"
+          className="btn-secondary px-3 py-1.5 text-sm"
           disabled={busy}
-          onClick={() => void turnOff()}
+          onClick={() => void enableAndCopy("staff")}
         >
-          Turn off public link
+          {busy
+            ? "Working…"
+            : enabled
+              ? "Copy staff approval link"
+              : "Create staff approval link"}
         </button>
-      ) : null}
+        {enabled ? (
+          <button
+            type="button"
+            className="btn-ghost px-3 py-1.5 text-sm"
+            disabled={busy}
+            onClick={() => void turnOff("staff")}
+          >
+            Turn off staff
+          </button>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="btn-secondary px-3 py-1.5 text-sm"
+          disabled={busy}
+          onClick={() => void enableAndCopy("client")}
+        >
+          {busy
+            ? "Working…"
+            : clientEnabled
+              ? "Copy client approval link"
+              : "Create client approval link"}
+        </button>
+        {clientEnabled ? (
+          <button
+            type="button"
+            className="btn-ghost px-3 py-1.5 text-sm"
+            disabled={busy}
+            onClick={() => void turnOff("client")}
+          >
+            Turn off client
+          </button>
+        ) : null}
+      </div>
       {localNote ? (
         <p className="w-full text-xs text-muted">{localNote}</p>
       ) : null}

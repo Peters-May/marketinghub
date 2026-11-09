@@ -1,4 +1,5 @@
 import { previewMerge } from "@/lib/email/design/preview";
+import type { ShareAudience } from "@/lib/types";
 
 /** Same shape as a social share token: unguessable, URL-safe, not a path. */
 function isEmailShareToken(token: string): boolean {
@@ -33,6 +34,9 @@ export type PublicEmailDraft = {
   subject: string;
   html_body: string;
   sent: boolean;
+  audience: ShareAudience;
+  kind: "campaign" | "template";
+  id: string;
 };
 
 export function emailSharePath(token: string): string {
@@ -41,11 +45,22 @@ export function emailSharePath(token: string): string {
   return `/share/email/${encodeURIComponent(trimmed)}`;
 }
 
+export function emailShareDocumentPath(token: string): string {
+  const trimmed = token.trim();
+  if (!isEmailShareToken(trimmed)) return "";
+  return `/share/email/${encodeURIComponent(trimmed)}/document`;
+}
+
 /** Drop share fields so a normal save cannot publish or rewrite the link. */
 export function omitEmailSharePatch(patch: object): Record<string, unknown> {
   const next = { ...(patch as Record<string, unknown>) };
   delete next.share_token;
   delete next.share_enabled;
+  delete next.client_share_token;
+  delete next.client_share_enabled;
+  delete next.share_latest_decision;
+  delete next.share_latest_approved_by;
+  delete next.share_latest_responded_at;
   return next;
 }
 
@@ -53,22 +68,28 @@ export function toPublicEmailDraft(
   record: {
     share_enabled?: boolean;
     share_token?: string;
+    client_share_token?: string;
+    client_share_enabled?: boolean;
     title: string;
     subject: string;
     html_body: string;
     sent?: boolean;
+    id?: string;
+    kind?: "campaign" | "template";
   },
-  token: string
+  token: string,
+  audience: ShareAudience = "staff"
 ): PublicEmailDraft | null {
   const trimmed = token.trim();
   if (!isEmailShareToken(trimmed)) return null;
-  if (record.share_enabled !== true) return null;
-  if ((record.share_token ?? "").trim() !== trimmed) return null;
   return {
     title: record.title,
     subject: record.subject,
     html_body: record.html_body,
     sent: record.sent === true,
+    audience,
+    kind: record.kind === "template" ? "template" : "campaign",
+    id: String(record.id ?? ""),
   };
 }
 

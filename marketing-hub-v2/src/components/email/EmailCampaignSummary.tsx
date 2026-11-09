@@ -77,6 +77,12 @@ export function EmailCampaignSummary({
                 ? emailSharePath(campaign.share_token ?? "")
                 : ""
             }
+            initialClientEnabled={campaign.client_share_enabled === true}
+            initialClientPath={
+              campaign.client_share_enabled
+                ? emailSharePath(campaign.client_share_token ?? "")
+                : ""
+            }
             layout="inline"
           />
         ) : null}

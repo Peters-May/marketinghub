@@ -31,6 +31,8 @@ function item(overrides: Partial<ContentItem> = {}): ContentItem {
     notes: "Do not send the rate card.",
     share_token: "abcdefghij1234567890ab",
     share_enabled: true,
+    client_share_token: "clienttoken1234567890xy",
+    client_share_enabled: true,
     created_at: "2026-10-01T00:00:00.000Z",
     updated_at: "2026-10-01T00:00:00.000Z",
     ...overrides,
@@ -39,7 +41,10 @@ function item(overrides: Partial<ContentItem> = {}): ContentItem {
 
 describe("toPublicSocialPreview", () => {
   it("returns the social mock and omits internal fields", () => {
-    const preview = toPublicSocialPreview(item());
+    const preview = toPublicSocialPreview(
+      item(),
+      "abcdefghij1234567890ab"
+    );
     expect(preview).toEqual({
       title: "Internal working title",
       platforms: ["LinkedIn", "Instagram"],
@@ -49,17 +54,32 @@ describe("toPublicSocialPreview", () => {
       canvaUrl: "https://www.canva.com/design/abc/view",
       dueDate: "2026-10-12",
       previewStatus: "Draft",
+      audience: "staff",
+      contentId: "c1",
     });
     expect(JSON.stringify(preview)).not.toContain("planable");
     expect(JSON.stringify(preview)).not.toContain("rate card");
     expect(JSON.stringify(preview)).not.toContain("Sophie");
   });
 
+  it("resolves client audience from the client token", () => {
+    const preview = toPublicSocialPreview(
+      item(),
+      "clienttoken1234567890xy"
+    );
+    expect(preview?.audience).toBe("client");
+  });
+
   it("stays closed when the link is off or the token is weak", () => {
-    expect(toPublicSocialPreview(item({ share_enabled: false }))).toBeNull();
+    expect(
+      toPublicSocialPreview(item({ share_enabled: false }), "abcdefghij1234567890ab")
+    ).toBeNull();
     expect(toPublicSocialPreview(item({ share_token: "short" }))).toBeNull();
     expect(
-      toPublicSocialPreview(item({ content_type: "Editorial", channel: ["Editorial"] }))
+      toPublicSocialPreview(
+        item({ content_type: "Editorial", channel: ["Editorial"] }),
+        "abcdefghij1234567890ab"
+      )
     ).toBeNull();
   });
 

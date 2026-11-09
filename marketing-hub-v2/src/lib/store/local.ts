@@ -326,6 +326,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
         normalizeAssistantReview(row)
       )
     ),
+    share_reviews: store.share_reviews ?? seed.share_reviews ?? [],
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -403,6 +404,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.email_settings ||
     !store.ai_settings ||
     !store.assistant_reviews ||
+    !store.share_reviews ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );

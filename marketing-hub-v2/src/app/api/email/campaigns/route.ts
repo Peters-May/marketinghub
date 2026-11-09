@@ -81,16 +81,19 @@ export async function POST(request: NextRequest) {
     const id = String(body.id ?? "");
     if (!id) return jsonError("id required", 400);
     const enabled = body.enabled === true;
+    const audience =
+      body.audience === "client" ? ("client" as const) : ("staff" as const);
     const patch = enabled
       ? (omitEmailSharePatch(
           body.patch && typeof body.patch === "object" ? body.patch : {}
         ) as Partial<EmailCampaign>)
       : undefined;
-    const result = await setEmailCampaignShare(id, enabled, patch);
+    const result = await setEmailCampaignShare(id, enabled, patch, audience);
     if (!result) return jsonError("Not found", 404);
     return jsonOk({
       share_enabled: result.share_enabled,
       share_token: result.share_token,
+      audience,
       path: result.share_enabled ? emailSharePath(result.share_token) : "",
     });
   }

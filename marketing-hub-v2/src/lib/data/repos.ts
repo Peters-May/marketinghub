@@ -1,4 +1,4 @@
-﻿import {
+import {
   emptyAttendanceOpsFields,
   type EventAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
@@ -145,6 +145,10 @@ import type {
   EmailEvent,
   EmailEventKind,
   EmailGalleryImage,
+  ShareAudience,
+  ShareReviewDecision,
+  ShareReviewResponse,
+  ShareReviewTargetType,
 } from "@/lib/types";
 import {
   capAssistantReviews,
@@ -193,6 +197,11 @@ export function withContentPlanableDefaults(
     sync_source: item.sync_source ?? "",
     share_token: item.share_token ?? "",
     share_enabled: item.share_enabled === true,
+    client_share_token: item.client_share_token ?? "",
+    client_share_enabled: item.client_share_enabled === true,
+    share_latest_decision: item.share_latest_decision ?? "",
+    share_latest_approved_by: item.share_latest_approved_by ?? "",
+    share_latest_responded_at: item.share_latest_responded_at ?? null,
     pin_homepage: item.pin_homepage === true,
     in_slider: item.in_slider === true,
     newsroom_name: item.newsroom_name,
@@ -511,35 +520,63 @@ function isMissingShareRpc(error: { code?: string; message?: string }): boolean 
   const message = error.message ?? "";
   return (
     error.code === "PGRST202" ||
-    /hub_set_content_share|hub_content_by_share_token|schema cache/i.test(message)
+    /hub_set_content_share|hub_content_by_share_token|hub_append_share_review|schema cache/i.test(
+      message
+    )
   );
 }
 
-/** Turn the unlisted staff preview on or off. The token stays so the same link can be restored. */
+export type ShareAudienceParam = "staff" | "client";
+
+/** Turn an unlisted staff or client approval link on or off. Token stays for restore. */
 export async function setContentPostShare(
   id: string,
-  enabled: boolean
+  enabled: boolean,
+  audience: ShareAudienceParam = "staff"
 ): Promise<{ share_token: string; share_enabled: boolean } | null> {
   const { generateShareToken, isShareToken } = await import(
     "@/lib/social/post-share"
   );
   const { isSocialContentItem } = await import("@/lib/data/normalize");
-  const supabase = createServiceClient();
-  const { data, error } = await supabase.rpc("hub_set_content_share", {
-    p_content_id: id,
-    p_enabled: enabled,
-    p_new_token: generateShareToken(),
-  });
-  if (!error && data && typeof data === "object") {
-    const row = data as { share_token?: string; share_enabled?: boolean };
-    const share_token = String(row.share_token ?? "");
-    if (isShareToken(share_token)) {
-      return { share_token, share_enabled: row.share_enabled === true };
+
+  if (audience === "staff") {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_set_content_share", {
+      p_content_id: id,
+      p_enabled: enabled,
+      p_new_token: generateShareToken(),
+      p_audience: "staff",
+    });
+    if (!error && data && typeof data === "object") {
+      const row = data as { share_token?: string; share_enabled?: boolean };
+      const share_token = String(row.share_token ?? "");
+      if (isShareToken(share_token)) {
+        return { share_token, share_enabled: row.share_enabled === true };
+      }
+      return null;
     }
-    return null;
-  }
-  if (error && !isMissingShareRpc(error)) {
-    throw new Error(error.message);
+    if (error && !isMissingShareRpc(error)) {
+      throw new Error(error.message);
+    }
+  } else {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_set_content_share", {
+      p_content_id: id,
+      p_enabled: enabled,
+      p_new_token: generateShareToken(),
+      p_audience: "client",
+    });
+    if (!error && data && typeof data === "object") {
+      const row = data as { share_token?: string; share_enabled?: boolean };
+      const share_token = String(row.share_token ?? "");
+      if (isShareToken(share_token)) {
+        return { share_token, share_enabled: row.share_enabled === true };
+      }
+      return null;
+    }
+    if (error && !isMissingShareRpc(error)) {
+      throw new Error(error.message);
+    }
   }
 
   let result: { share_token: string; share_enabled: boolean } | null = null;
@@ -548,6 +585,19 @@ export async function setContentPostShare(
     if (idx === -1) return;
     const current = withContentPlanableDefaults(s.content[idx]);
     if (!isSocialContentItem(current)) return;
+    if (audience === "client") {
+      const share_token = isShareToken(current.client_share_token ?? "")
+        ? current.client_share_token!
+        : generateShareToken();
+      s.content[idx] = {
+        ...current,
+        client_share_token: share_token,
+        client_share_enabled: enabled,
+        updated_at: nowIso(),
+      };
+      result = { share_token, share_enabled: enabled };
+      return;
+    }
     const share_token = isShareToken(current.share_token ?? "")
       ? current.share_token!
       : generateShareToken();
@@ -562,7 +612,7 @@ export async function setContentPostShare(
   return result;
 }
 
-/** Public staff preview. Null when the token is unknown or the link is off. */
+/** Public approval preview. Null when the token is unknown or the link is off. */
 export async function getPublicPostByShareToken(token: string) {
   const { isShareToken, toPublicSocialPreview } = await import(
     "@/lib/social/post-share"
@@ -577,7 +627,8 @@ export async function getPublicPostByShareToken(token: string) {
   if (!error) {
     if (!data || typeof data !== "object") return null;
     return toPublicSocialPreview(
-      withContentPlanableDefaults(data as ContentItem)
+      withContentPlanableDefaults(data as ContentItem),
+      trimmed
     );
   }
   if (!isMissingShareRpc(error)) throw new Error(error.message);
@@ -585,9 +636,273 @@ export async function getPublicPostByShareToken(token: string) {
   const store = await readStore();
   const item = store.content
     .map(withContentPlanableDefaults)
-    .find((c) => c.share_enabled && c.share_token === trimmed);
+    .find((c) => {
+      if (c.share_enabled && c.share_token === trimmed) return true;
+      if (c.client_share_enabled && c.client_share_token === trimmed) return true;
+      return false;
+    });
   if (!item) return null;
-  return toPublicSocialPreview(item);
+  return toPublicSocialPreview(item, trimmed);
+}
+
+export async function listShareReviewsForTarget(
+  target_type: ShareReviewTargetType,
+  target_id: string
+): Promise<ShareReviewResponse[]> {
+  const store = await readStore();
+  const { normalizeShareReview } = await import("@/lib/share/review");
+  return (store.share_reviews ?? [])
+    .map((row) => normalizeShareReview(row))
+    .filter((row): row is ShareReviewResponse => !!row)
+    .filter((row) => row.target_type === target_type && row.target_id === target_id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function mirrorLatestShareReview(
+  target:
+    | ContentItem
+    | EmailCampaign
+    | EmailTemplate,
+  review: ShareReviewResponse
+) {
+  target.share_latest_decision = review.decision;
+  target.share_latest_approved_by = review.approved_by_name;
+  target.share_latest_responded_at = review.created_at;
+}
+
+/** Resolve a live share token to a content or email draft target. */
+export async function resolveShareTargetByToken(token: string): Promise<{
+  audience: ShareAudience;
+  target_type: ShareReviewTargetType;
+  target_id: string;
+  title: string;
+  caption: string;
+  subject: string;
+  hubPath: string;
+} | null> {
+  const { isShareToken, toPublicSocialPreview } = await import(
+    "@/lib/social/post-share"
+  );
+  const { matchShareAudience, hubPathForShareTarget } = await import(
+    "@/lib/share/review"
+  );
+  const trimmed = token.trim();
+  if (!isShareToken(trimmed)) return null;
+
+  const store = await readStore();
+  for (const raw of store.content ?? []) {
+    const item = withContentPlanableDefaults(raw);
+    const audience = matchShareAudience({
+      token: trimmed,
+      staffToken: item.share_token,
+      staffEnabled: item.share_enabled,
+      clientToken: item.client_share_token,
+      clientEnabled: item.client_share_enabled,
+    });
+    if (!audience) continue;
+    const preview = toPublicSocialPreview(item, trimmed);
+    if (!preview) continue;
+    return {
+      audience,
+      target_type: "content",
+      target_id: item.id,
+      title: preview.title,
+      caption: preview.caption,
+      subject: "",
+      hubPath: hubPathForShareTarget("content", item.id),
+    };
+  }
+
+  for (const row of store.email_campaigns ?? []) {
+    const campaign = normalizeEmailCampaign(row);
+    const audience = matchShareAudience({
+      token: trimmed,
+      staffToken: campaign.share_token,
+      staffEnabled: campaign.share_enabled,
+      clientToken: campaign.client_share_token,
+      clientEnabled: campaign.client_share_enabled,
+    });
+    if (!audience) continue;
+    return {
+      audience,
+      target_type: "email_campaign",
+      target_id: campaign.id,
+      title: campaign.title,
+      caption: "",
+      subject: campaign.subject,
+      hubPath: hubPathForShareTarget("email_campaign", campaign.id),
+    };
+  }
+
+  for (const row of store.email_templates ?? []) {
+    const template = normalizeEmailTemplate(row);
+    const audience = matchShareAudience({
+      token: trimmed,
+      staffToken: template.share_token,
+      staffEnabled: template.share_enabled,
+      clientToken: template.client_share_token,
+      clientEnabled: template.client_share_enabled,
+    });
+    if (!audience) continue;
+    return {
+      audience,
+      target_type: "email_template",
+      target_id: template.id,
+      title: template.name,
+      caption: "",
+      subject: template.subject_default,
+      hubPath: hubPathForShareTarget("email_template", template.id),
+    };
+  }
+
+  return null;
+}
+
+export async function appendShareReview(input: {
+  token: string;
+  decision: ShareReviewDecision;
+  amended_caption?: string;
+  amended_subject?: string;
+  notes?: string;
+  tagged_people?: { name: string; email?: string }[];
+  added_image_urls?: string[];
+  approved_by_name: string;
+  approved_by_email?: string;
+  approved_by_role?: string;
+}): Promise<ShareReviewResponse | null> {
+  const target = await resolveShareTargetByToken(input.token);
+  if (!target) return null;
+
+  const { normalizeShareReview, normalizeTaggedPeople, normalizeImageUrls } =
+    await import("@/lib/share/review");
+
+  const review = normalizeShareReview({
+    id: uid("srev"),
+    target_type: target.target_type,
+    target_id: target.target_id,
+    audience: target.audience,
+    decision: input.decision,
+    original_caption: target.caption,
+    original_subject: target.subject,
+    amended_caption:
+      input.amended_caption !== undefined
+        ? String(input.amended_caption)
+        : target.caption,
+    amended_subject:
+      input.amended_subject !== undefined
+        ? String(input.amended_subject)
+        : target.subject,
+    notes: String(input.notes ?? "").trim(),
+    tagged_people: normalizeTaggedPeople(input.tagged_people),
+    added_image_urls: normalizeImageUrls(input.added_image_urls),
+    approved_by_name: String(input.approved_by_name ?? "").trim(),
+    approved_by_email: String(input.approved_by_email ?? "").trim(),
+    approved_by_role: String(input.approved_by_role ?? "").trim(),
+    created_at: nowIso(),
+  });
+  if (!review) return null;
+
+  await updateStore((s) => {
+    if (!s.share_reviews) s.share_reviews = [];
+    s.share_reviews.push(review);
+    if (s.share_reviews.length > 500) {
+      s.share_reviews = s.share_reviews.slice(-500);
+    }
+
+    if (review.target_type === "content") {
+      const idx = s.content.findIndex((c) => c.id === review.target_id);
+      if (idx !== -1) {
+        const current = withContentPlanableDefaults(s.content[idx]);
+        mirrorLatestShareReview(current, review);
+        s.content[idx] = { ...current, updated_at: nowIso() };
+      }
+    } else if (review.target_type === "email_campaign") {
+      if (!s.email_campaigns) s.email_campaigns = [];
+      const idx = s.email_campaigns.findIndex((c) => c.id === review.target_id);
+      if (idx !== -1) {
+        const current = normalizeEmailCampaign(s.email_campaigns[idx]);
+        mirrorLatestShareReview(current, review);
+        s.email_campaigns[idx] = {
+          ...current,
+          updated_at: nowIso(),
+        };
+      }
+    } else if (review.target_type === "email_template") {
+      if (!s.email_templates) s.email_templates = [];
+      const idx = s.email_templates.findIndex((c) => c.id === review.target_id);
+      if (idx !== -1) {
+        const current = normalizeEmailTemplate(s.email_templates[idx]);
+        mirrorLatestShareReview(current, review);
+        s.email_templates[idx] = {
+          ...current,
+          updated_at: nowIso(),
+        };
+      }
+    }
+  });
+
+  return review;
+}
+
+/** Apply amended caption / subject / images from a review into the live Hub record. */
+export async function applyShareReview(
+  reviewId: string,
+  options: { applyCopy?: boolean; applyImages?: boolean } = {}
+): Promise<{
+  content?: ContentItem;
+  campaign?: EmailCampaign;
+  template?: EmailTemplate;
+} | null> {
+  const applyCopy = options.applyCopy !== false;
+  const applyImages = options.applyImages === true;
+  const store = await readStore();
+  const { normalizeShareReview } = await import("@/lib/share/review");
+  const review = (store.share_reviews ?? [])
+    .map((row) => normalizeShareReview(row))
+    .find((row) => row && row.id === reviewId);
+  if (!review) return null;
+
+  if (review.target_type === "content") {
+    const existing = await getContent(review.target_id);
+    if (!existing) return null;
+    const patch: Partial<ContentItem> = {};
+    if (applyCopy && review.amended_caption.trim()) {
+      patch.caption = review.amended_caption;
+    }
+    if (applyImages && review.added_image_urls.length) {
+      const existingUrls = (existing.asset_url || "")
+        .split(/\r?\n/)
+        .map((u) => u.trim())
+        .filter(Boolean);
+      const merged = [...existingUrls];
+      for (const url of review.added_image_urls) {
+        if (!merged.includes(url)) merged.push(url);
+      }
+      patch.asset_url = merged.join("\n");
+    }
+    const updated = await updateContent(review.target_id, patch);
+    return updated ? { content: updated } : null;
+  }
+
+  if (review.target_type === "email_campaign") {
+    const patch: Partial<EmailCampaign> = {};
+    if (applyCopy && review.amended_subject.trim()) {
+      patch.subject = review.amended_subject;
+    }
+    const updated = await updateEmailCampaign(review.target_id, patch);
+    return updated ? { campaign: updated } : null;
+  }
+
+  if (review.target_type === "email_template") {
+    const patch: Partial<EmailTemplate> = {};
+    if (applyCopy && review.amended_subject.trim()) {
+      patch.subject_default = review.amended_subject;
+    }
+    const updated = await updateEmailTemplate(review.target_id, patch);
+    return updated ? { template: updated } : null;
+  }
+
+  return null;
 }
 
 export async function createContent(
@@ -1833,6 +2148,7 @@ export async function createMerchOrder(
     updated_at: nowIso(),
   };
   const maxAttempts = 4;
+  let lastRpcError: string | null = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (!hasServiceRoleKey()) break;
     const supabase = createServiceClient();
@@ -1846,13 +2162,13 @@ export async function createMerchOrder(
       return stored;
     }
     if (isMissingMerchRpc(error)) break;
-    const message = error.message || "Could not save clothing request";
+    lastRpcError = error.message || "Could not save clothing request";
     const retryable =
       /lock timeout|statement timeout|canceling statement|55P03|57014|502|524|timeout/i.test(
-        message
+        lastRpcError
       );
     if (!retryable || attempt === maxAttempts - 1) {
-      throw new Error(message);
+      throw new Error(lastRpcError);
     }
     await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
   }
@@ -4034,6 +4350,11 @@ function normalizeEmailTemplate(
     design: normalizeEmailDesign(t.design),
     share_token: (t.share_token ?? "").trim(),
     share_enabled: t.share_enabled === true,
+    client_share_token: (t.client_share_token ?? "").trim(),
+    client_share_enabled: t.client_share_enabled === true,
+    share_latest_decision: t.share_latest_decision ?? "",
+    share_latest_approved_by: t.share_latest_approved_by ?? "",
+    share_latest_responded_at: t.share_latest_responded_at ?? null,
     created_at: t.created_at ?? nowIso(),
     updated_at: t.updated_at ?? nowIso(),
   };
@@ -4095,6 +4416,11 @@ function normalizeEmailCampaign(
     send_heartbeat_at: c.send_heartbeat_at ?? null,
     share_token: (c.share_token ?? "").trim(),
     share_enabled: c.share_enabled === true,
+    client_share_token: (c.client_share_token ?? "").trim(),
+    client_share_enabled: c.client_share_enabled === true,
+    share_latest_decision: c.share_latest_decision ?? "",
+    share_latest_approved_by: c.share_latest_approved_by ?? "",
+    share_latest_responded_at: c.share_latest_responded_at ?? null,
     stats: normalizeEmailStats(c.stats),
     last_error: c.last_error ?? "",
     created_by: c.created_by ?? "",
@@ -4180,11 +4506,12 @@ export async function deleteEmailTemplate(id: string) {
   });
 }
 
-/** Turn the unlisted draft link on or off. The token stays so the same link can be restored. */
+/** Turn an unlisted staff or client draft approval link on or off. */
 export async function setEmailTemplateShare(
   id: string,
   enabled: boolean,
-  patch?: Partial<EmailTemplate>
+  patch?: Partial<EmailTemplate>,
+  audience: ShareAudienceParam = "staff"
 ): Promise<{ share_token: string; share_enabled: boolean } | null> {
   const { generateShareToken, isShareToken } = await import(
     "@/lib/social/post-share"
@@ -4195,6 +4522,21 @@ export async function setEmailTemplateShare(
     const idx = s.email_templates.findIndex((x) => x.id === id);
     if (idx === -1) return;
     const prev = normalizeEmailTemplate(s.email_templates[idx]);
+    if (audience === "client") {
+      const share_token = isShareToken(prev.client_share_token ?? "")
+        ? prev.client_share_token!
+        : generateShareToken();
+      s.email_templates[idx] = normalizeEmailTemplate({
+        ...prev,
+        ...(enabled ? patch : undefined),
+        id,
+        client_share_token: share_token,
+        client_share_enabled: enabled,
+        updated_at: nowIso(),
+      });
+      result = { share_token, share_enabled: enabled };
+      return;
+    }
     const share_token = isShareToken(prev.share_token ?? "")
       ? prev.share_token!
       : generateShareToken();
@@ -4414,11 +4756,12 @@ export async function syncEmailCampaignStats(
   return updated;
 }
 
-/** Turn the unlisted draft link on or off. The token stays so the same link can be restored. */
+/** Turn an unlisted staff or client draft approval link on or off. */
 export async function setEmailCampaignShare(
   id: string,
   enabled: boolean,
-  patch?: Partial<EmailCampaign>
+  patch?: Partial<EmailCampaign>,
+  audience: ShareAudienceParam = "staff"
 ): Promise<{ share_token: string; share_enabled: boolean } | null> {
   const { generateShareToken, isShareToken } = await import(
     "@/lib/social/post-share"
@@ -4429,10 +4772,38 @@ export async function setEmailCampaignShare(
     const idx = s.email_campaigns.findIndex((x) => x.id === id);
     if (idx === -1) return;
     const prev = normalizeEmailCampaign(s.email_campaigns[idx]);
+    const content = enabled && patch ? patch : {};
+    if (audience === "client") {
+      const share_token = isShareToken(prev.client_share_token ?? "")
+        ? prev.client_share_token!
+        : generateShareToken();
+      s.email_campaigns[idx] = normalizeEmailCampaign({
+        ...prev,
+        ...content,
+        id,
+        status:
+          content.status !== undefined
+            ? normalizeEmailCampaignStatus(content.status)
+            : prev.status,
+        list_ids: Array.isArray(content.list_ids)
+          ? content.list_ids
+          : prev.list_ids,
+        recipient_ids: Array.isArray(content.recipient_ids)
+          ? content.recipient_ids
+          : prev.recipient_ids,
+        stats: content.stats ? normalizeEmailStats(content.stats) : prev.stats,
+        send_claim: prev.send_claim,
+        send_heartbeat_at: prev.send_heartbeat_at,
+        client_share_token: share_token,
+        client_share_enabled: enabled,
+        updated_at: nowIso(),
+      });
+      result = { share_token, share_enabled: enabled };
+      return;
+    }
     const share_token = isShareToken(prev.share_token ?? "")
       ? prev.share_token!
       : generateShareToken();
-    const content = enabled && patch ? patch : {};
     s.email_campaigns[idx] = normalizeEmailCampaign({
       ...prev,
       ...content,
@@ -4461,40 +4832,63 @@ export async function setEmailCampaignShare(
 export async function getPublicEmailByShareToken(token: string) {
   const { isShareToken } = await import("@/lib/social/post-share");
   const { toPublicEmailDraft } = await import("@/lib/email/share");
+  const { matchShareAudience } = await import("@/lib/share/review");
   const trimmed = token.trim();
   if (!isShareToken(trimmed)) return null;
   const store = await readStore();
   for (const row of store.email_campaigns ?? []) {
-    if (row.share_enabled !== true) continue;
-    if ((row.share_token ?? "").trim() !== trimmed) continue;
     const campaign = normalizeEmailCampaign(row);
+    const audience = matchShareAudience({
+      token: trimmed,
+      staffToken: campaign.share_token,
+      staffEnabled: campaign.share_enabled,
+      clientToken: campaign.client_share_token,
+      clientEnabled: campaign.client_share_enabled,
+    });
+    if (!audience) continue;
     const draft = toPublicEmailDraft(
       {
-        share_enabled: campaign.share_enabled,
-        share_token: campaign.share_token,
+        share_enabled: true,
+        share_token: trimmed,
+        client_share_token: campaign.client_share_token,
+        client_share_enabled: campaign.client_share_enabled,
         title: campaign.title,
         subject: campaign.subject,
         html_body: campaign.html_body,
         sent: campaign.status === "sent" || campaign.status === "sending",
+        id: campaign.id,
+        kind: "campaign",
       },
-      trimmed
+      trimmed,
+      audience
     );
     if (draft) return draft;
   }
   for (const row of store.email_templates ?? []) {
-    if (row.share_enabled !== true) continue;
-    if ((row.share_token ?? "").trim() !== trimmed) continue;
     const template = normalizeEmailTemplate(row);
+    const audience = matchShareAudience({
+      token: trimmed,
+      staffToken: template.share_token,
+      staffEnabled: template.share_enabled,
+      clientToken: template.client_share_token,
+      clientEnabled: template.client_share_enabled,
+    });
+    if (!audience) continue;
     const draft = toPublicEmailDraft(
       {
-        share_enabled: template.share_enabled,
-        share_token: template.share_token,
+        share_enabled: true,
+        share_token: trimmed,
+        client_share_token: template.client_share_token,
+        client_share_enabled: template.client_share_enabled,
         title: template.name,
         subject: template.subject_default,
         html_body: template.html_body,
         sent: false,
+        id: template.id,
+        kind: "template",
       },
-      trimmed
+      trimmed,
+      audience
     );
     if (draft) return draft;
   }

@@ -43,6 +43,7 @@ import {
 import type { FooterLinkSettings } from "@/lib/email/footer-links";
 import { EmailCanvas, EmailInboxBar, type CanvasSelection } from "@/components/email/builder/EmailCanvas";
 import { EmailPublicShareControls } from "@/components/email/EmailPublicShareControls";
+import { ShareReviewPanel } from "@/components/share/ShareReviewPanel";
 import { EmailInspector } from "@/components/email/builder/EmailInspector";
 import {
   EmailVariableSelect,
@@ -162,6 +163,8 @@ export function EmailDesigner({
   canDelete = false,
   initialShareEnabled = false,
   initialSharePath = "",
+  initialClientShareEnabled = false,
+  initialClientSharePath = "",
 }: {
   kind: "template" | "campaign";
   id: string;
@@ -182,6 +185,8 @@ export function EmailDesigner({
   canDelete?: boolean;
   initialShareEnabled?: boolean;
   initialSharePath?: string;
+  initialClientShareEnabled?: boolean;
+  initialClientSharePath?: string;
 }) {
   const router = useRouter();
   const history = useDesignHistory(() =>
@@ -216,6 +221,10 @@ export function EmailDesigner({
   const [previewing, setPreviewing] = useState(false);
   const [shareEnabled, setShareEnabled] = useState(initialShareEnabled);
   const [sharePath, setSharePath] = useState(initialSharePath);
+  const [clientShareEnabled, setClientShareEnabled] = useState(
+    initialClientShareEnabled
+  );
+  const [clientSharePath, setClientSharePath] = useState(initialClientSharePath);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedNote, setSavedNote] = useState("");
@@ -1129,6 +1138,8 @@ export function EmailDesigner({
                 id={id}
                 initialEnabled={shareEnabled}
                 initialPath={sharePath}
+                initialClientEnabled={clientShareEnabled}
+                initialClientPath={clientSharePath}
                 layout="menu"
                 allowEnable={!readOnly}
                 takeDraft={readOnly ? undefined : takeShareDraft}
@@ -1140,6 +1151,8 @@ export function EmailDesigner({
                 onError={setError}
                 onEnabledChange={setShareEnabled}
                 onPathChange={setSharePath}
+                onClientEnabledChange={setClientShareEnabled}
+                onClientPathChange={setClientSharePath}
                 onDone={() => setPreviewMenu(false)}
               />
             </div>
@@ -1437,6 +1450,18 @@ export function EmailDesigner({
               </div>
             </>
           ) : null}
+          <div className="mt-4 rounded-xl border border-border bg-white px-4 py-3">
+            <ShareReviewPanel
+              targetType={kind === "template" ? "email_template" : "email_campaign"}
+              targetId={id}
+              onApplied={(payload) => {
+                if (payload.subject !== undefined) {
+                  setSubject(payload.subject);
+                  markDirty();
+                }
+              }}
+            />
+          </div>
         </div>
       </div>
       <div className="flex min-h-[70vh] flex-1">

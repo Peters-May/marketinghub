@@ -247,6 +247,43 @@ export type ContentStatus =
   | "published"
   | "cancelled";
 
+/** Audience for an unlisted share-for-approval link. */
+export type ShareAudience = "staff" | "client";
+
+/** Decision recorded on a public share-for-approval response. */
+export type ShareReviewDecision = "approved" | "changes_requested";
+
+export type ShareReviewTargetType =
+  | "content"
+  | "email_campaign"
+  | "email_template";
+
+export type ShareTaggedPerson = {
+  name: string;
+  email?: string;
+};
+
+/** One returned approval / amendment from a share link. */
+export type ShareReviewResponse = {
+  id: string;
+  target_type: ShareReviewTargetType;
+  target_id: string;
+  audience: ShareAudience;
+  decision: ShareReviewDecision;
+  /** Caption/subject shown when the reviewer opened the form. */
+  original_caption: string;
+  original_subject: string;
+  amended_caption: string;
+  amended_subject: string;
+  notes: string;
+  tagged_people: ShareTaggedPerson[];
+  added_image_urls: string[];
+  approved_by_name: string;
+  approved_by_email: string;
+  approved_by_role: string;
+  created_at: string;
+};
+
 export type ReleasePerson = {
   name: string;
   role: string;
@@ -344,12 +381,22 @@ export type ContentItem = {
   asset_url: string;
   notes: string;
   /**
-   * Unlisted staff preview token. Anyone with the link can see the social
+   * Unlisted staff approval token. Anyone with the link can review the social
    * mock; the Hub login is not required. Empty when a link has never been created.
    */
   share_token?: string;
-  /** When false, an existing token does not open the public preview. */
+  /** When false, an existing staff token does not open the public review. */
   share_enabled?: boolean;
+  /** Unlisted client approval token. Empty until a client link is created. */
+  client_share_token?: string;
+  /** When false, an existing client token does not open the public review. */
+  client_share_enabled?: boolean;
+  /** Latest share-review decision for list/drawer reference. */
+  share_latest_decision?: ShareReviewDecision | "";
+  /** Latest Approved by / Reviewed by name. */
+  share_latest_approved_by?: string;
+  /** ISO timestamp of the latest share-review response. */
+  share_latest_responded_at?: string | null;
   /** Homepage hero on the public newsroom. */
   pin_homepage?: boolean;
   /** Included in the public newsroom slider. */
@@ -1256,10 +1303,15 @@ export type EmailTemplate = {
   html_body: string;
   /** Visual builder document. Null for hand-written HTML. */
   design: EmailDesign | null;
-  /** Unlisted token for a draft preview outside the Hub. */
+  /** Unlisted staff approval token for a draft outside the Hub. */
   share_token?: string;
-  /** When true, anyone with the share link can view the saved draft. */
+  /** When true, anyone with the staff share link can review the saved draft. */
   share_enabled?: boolean;
+  client_share_token?: string;
+  client_share_enabled?: boolean;
+  share_latest_decision?: ShareReviewDecision | "";
+  share_latest_approved_by?: string;
+  share_latest_responded_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1330,10 +1382,15 @@ export type EmailCampaign = {
   send_claim?: string;
   /** Refreshed by the runner while it sends. Drives the stale-send lock. */
   send_heartbeat_at?: string | null;
-  /** Unlisted token for a draft preview outside the Hub. */
+  /** Unlisted staff approval token for a draft outside the Hub. */
   share_token?: string;
-  /** When true, anyone with the share link can view the saved draft. */
+  /** When true, anyone with the staff share link can review the saved draft. */
   share_enabled?: boolean;
+  client_share_token?: string;
+  client_share_enabled?: boolean;
+  share_latest_decision?: ShareReviewDecision | "";
+  share_latest_approved_by?: string;
+  share_latest_responded_at?: string | null;
   stats: EmailCampaignStats;
   last_error: string;
   created_by: string;
@@ -1564,6 +1621,8 @@ export type HubStore = {
   ai_settings: AiKeySettings;
   /** Logged assistant asks for admin review (capped). */
   assistant_reviews: AssistantReview[];
+  /** Public share-for-approval responses (content + email). */
+  share_reviews: ShareReviewResponse[];
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };

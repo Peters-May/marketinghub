@@ -47,6 +47,12 @@ export default async function EmailDesignPage({
             ? emailSharePath(template.share_token ?? "")
             : ""
         }
+        initialClientShareEnabled={template.client_share_enabled === true}
+        initialClientSharePath={
+          template.client_share_enabled
+            ? emailSharePath(template.client_share_token ?? "")
+            : ""
+        }
       />
     );
   }
@@ -83,6 +89,12 @@ export default async function EmailDesignPage({
       initialShareEnabled={campaign.share_enabled === true}
       initialSharePath={
         campaign.share_enabled ? emailSharePath(campaign.share_token ?? "") : ""
+      }
+      initialClientShareEnabled={campaign.client_share_enabled === true}
+      initialClientSharePath={
+        campaign.client_share_enabled
+          ? emailSharePath(campaign.client_share_token ?? "")
+          : ""
       }
     />
   );

@@ -5,9 +5,10 @@ import {
   primaryCanvaUrl,
   stripHtml,
 } from "@/lib/data/normalize";
-import type { ContentItem, ContentStatus } from "@/lib/types";
+import { matchShareAudience } from "@/lib/share/review";
+import type { ContentItem, ContentStatus, ShareAudience } from "@/lib/types";
 
-/** Fields safe to show on an unlisted staff preview. No notes, owner, or Planable ids. */
+/** Fields safe to show on an unlisted approval preview. No notes, owner, or Planable ids. */
 export type PublicSocialPreview = {
   title: string;
   platforms: string[];
@@ -18,6 +19,8 @@ export type PublicSocialPreview = {
   dueDate: string | null;
   /** Coarse label for the preview banner. Internal workflow states stay in the Hub. */
   previewStatus: "Draft" | "Scheduled" | "Published" | "Cancelled";
+  audience: ShareAudience;
+  contentId: string;
 };
 
 export function postSharePath(token: string): string {
@@ -33,7 +36,10 @@ export function generateShareToken(): string {
   crypto.getRandomValues(bytes);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }
 
 export function previewStatusLabel(
@@ -45,15 +51,10 @@ export function previewStatusLabel(
   return "Draft";
 }
 
-/** Build the public mock from a Hub social item. Returns null when the link is off. */
-export function toPublicSocialPreview(
-  item: ContentItem
-): PublicSocialPreview | null {
-  if (!item.share_enabled) return null;
-  const token = (item.share_token ?? "").trim();
-  if (!isShareToken(token)) return null;
-  if (!isSocialContentItem(item)) return null;
-
+function buildPublicSocialPreview(
+  item: ContentItem,
+  audience: ShareAudience
+): PublicSocialPreview {
   const rawCaption = (item.caption || item.notes || "").trim();
   const looksHtml = /<\/?[a-z][\s\S]*>/i.test(rawCaption);
   const caption = stripHtml(rawCaption);
@@ -69,5 +70,39 @@ export function toPublicSocialPreview(
     canvaUrl: canva || null,
     dueDate: item.due_date,
     previewStatus: previewStatusLabel(item.status),
+    audience,
+    contentId: item.id,
   };
+}
+
+/**
+ * Build the public mock from a Hub social item for a specific token.
+ * Returns null when the token does not match an enabled staff/client link.
+ */
+export function toPublicSocialPreview(
+  item: ContentItem,
+  token?: string
+): PublicSocialPreview | null {
+  if (!isSocialContentItem(item)) return null;
+
+  const trimmed = (token ?? item.share_token ?? "").trim();
+  const audience = matchShareAudience({
+    token: trimmed,
+    staffToken: item.share_token,
+    staffEnabled: item.share_enabled,
+    clientToken: item.client_share_token,
+    clientEnabled: item.client_share_enabled,
+  });
+  if (!audience) {
+    // Legacy callers without a token: staff link only.
+    if (!token) {
+      if (!item.share_enabled) return null;
+      const staffToken = (item.share_token ?? "").trim();
+      if (!isShareToken(staffToken)) return null;
+      return buildPublicSocialPreview(item, "staff");
+    }
+    return null;
+  }
+
+  return buildPublicSocialPreview(item, audience);
 }

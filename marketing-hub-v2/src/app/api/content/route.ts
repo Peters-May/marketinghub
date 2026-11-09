@@ -137,11 +137,18 @@ export async function POST(request: NextRequest) {
   if (action === "set_post_share") {
     const id = String(body.id ?? "");
     if (!id) return jsonError("id required", 400);
-    const result = await setContentPostShare(id, body.enabled === true);
+    const audience =
+      body.audience === "client" ? ("client" as const) : ("staff" as const);
+    const result = await setContentPostShare(
+      id,
+      body.enabled === true,
+      audience
+    );
     if (!result) return jsonError("Not found", 404);
     return jsonOk({
       share_enabled: result.share_enabled,
       share_token: result.share_token,
+      audience,
       path: result.share_enabled ? postSharePath(result.share_token) : "",
     });
   }
@@ -160,6 +167,11 @@ export async function POST(request: NextRequest) {
     const patch = { ...(body.patch ?? {}) } as Record<string, unknown>;
     delete patch.share_token;
     delete patch.share_enabled;
+    delete patch.client_share_token;
+    delete patch.client_share_enabled;
+    delete patch.share_latest_decision;
+    delete patch.share_latest_approved_by;
+    delete patch.share_latest_responded_at;
     if (patch.status === "published") {
       return jsonError(
         "Publish only in Planable. Sync from Planable to mark it published in the Hub.",

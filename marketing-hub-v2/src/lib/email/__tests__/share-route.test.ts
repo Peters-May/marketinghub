@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { GET } from "@/app/share/email/[token]/route";
+import { GET } from "@/app/share/email/[token]/document/route";
 
 const getPublicEmailByShareToken = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/data/repos", () => ({
@@ -9,13 +9,13 @@ vi.mock("@/lib/data/repos", () => ({
 
 const TOKEN = "abcdefghij1234567890ab";
 
-describe("public email share route", () => {
+describe("public email share document route", () => {
   beforeEach(() => getPublicEmailByShareToken.mockReset());
 
   it("returns 404 when the link is off", async () => {
     getPublicEmailByShareToken.mockResolvedValueOnce(null);
     const res = await GET(
-      new NextRequest(`https://hub.test/share/email/${TOKEN}`),
+      new NextRequest(`https://hub.test/share/email/${TOKEN}/document`),
       { params: { token: TOKEN } }
     );
     expect(res.status).toBe(404);
@@ -32,9 +32,12 @@ describe("public email share route", () => {
       subject: "Hello",
       html_body: "<p>Hi {{name}}</p>",
       sent: false,
+      audience: "staff",
+      kind: "campaign",
+      id: "ec_1",
     });
     const res = await GET(
-      new NextRequest(`https://hub.test/share/email/${TOKEN}`),
+      new NextRequest(`https://hub.test/share/email/${TOKEN}/document`),
       { params: { token: TOKEN } }
     );
     expect(res.status).toBe(200);

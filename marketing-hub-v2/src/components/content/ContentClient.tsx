@@ -38,6 +38,7 @@ import {
   CompactMultiImageThumb,
   PlatformPostPreview,
 } from "@/components/social/PlatformPostPreview";
+import { ShareReviewPanel } from "@/components/share/ShareReviewPanel";
 import { PostShareControls } from "@/components/social/PostShareControls";
 import { SocialIdeasPanel } from "@/components/social/SocialIdeasPanel";
 import { ChannelMultiSelect } from "@/components/ui/ChannelMultiSelect";
@@ -1631,11 +1632,13 @@ export function ContentClient({
                     images={previewAssetUrls(edit.asset_url)}
                     canvaUrl={primaryCanvaUrl(edit.asset_url) || null}
                   />
-                  <div className="mt-3">
+                  <div className="mt-3 space-y-4">
                     <PostShareControls
                       contentId={editingItem.id}
                       enabled={editingItem.share_enabled === true}
                       shareToken={editingItem.share_token}
+                      clientEnabled={editingItem.client_share_enabled === true}
+                      clientShareToken={editingItem.client_share_token}
                       onUpdated={(next) => {
                         setItems((prev) =>
                           prev.map((item) =>
@@ -1644,10 +1647,52 @@ export function ContentClient({
                                   ...item,
                                   share_enabled: next.share_enabled,
                                   share_token: next.share_token,
+                                  client_share_enabled: next.client_share_enabled,
+                                  client_share_token: next.client_share_token,
                                 }
                               : item
                           )
                         );
+                      }}
+                    />
+                    <ShareReviewPanel
+                      targetType="content"
+                      targetId={editingItem.id}
+                      onApplied={(payload) => {
+                        setItems((prev) =>
+                          prev.map((item) =>
+                            item.id === editingItem.id
+                              ? {
+                                  ...item,
+                                  caption:
+                                    payload.caption !== undefined
+                                      ? payload.caption
+                                      : item.caption,
+                                  asset_url:
+                                    payload.asset_url !== undefined
+                                      ? payload.asset_url
+                                      : item.asset_url,
+                                }
+                              : item
+                          )
+                        );
+                        if (payload.caption !== undefined || payload.asset_url) {
+                          setEdit((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  caption:
+                                    payload.caption !== undefined
+                                      ? payload.caption
+                                      : prev.caption,
+                                  asset_url:
+                                    payload.asset_url !== undefined
+                                      ? payload.asset_url
+                                      : prev.asset_url,
+                                }
+                              : prev
+                          );
+                        }
                       }}
                     />
                   </div>

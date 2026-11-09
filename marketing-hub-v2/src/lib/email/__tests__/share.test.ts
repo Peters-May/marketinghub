@@ -15,21 +15,23 @@ describe("email share link", () => {
     expect(emailSharePath("../etc/passwd-extra")).toBe("");
   });
 
-  it("hides the draft until the link is turned on", () => {
+  it("builds a public draft with audience metadata", () => {
     const record = {
-      share_enabled: false,
+      share_enabled: true,
       share_token: TOKEN,
       title: "October schedules",
       subject: "Hello {{first_name}}",
       html_body: "<p>Hi</p>",
+      id: "ec_1",
+      kind: "campaign" as const,
     };
-    expect(toPublicEmailDraft(record, TOKEN)).toBeNull();
-    expect(
-      toPublicEmailDraft({ ...record, share_enabled: true }, "not-the-token-value")
-    ).toBeNull();
-    expect(toPublicEmailDraft({ ...record, share_enabled: true }, TOKEN)).toMatchObject({
+    expect(toPublicEmailDraft(record, "short")).toBeNull();
+    expect(toPublicEmailDraft(record, TOKEN, "client")).toMatchObject({
       title: "October schedules",
       subject: "Hello {{first_name}}",
+      audience: "client",
+      kind: "campaign",
+      id: "ec_1",
     });
   });
 
@@ -39,6 +41,8 @@ describe("email share link", () => {
         subject: "Hello",
         share_token: TOKEN,
         share_enabled: true,
+        client_share_token: TOKEN,
+        client_share_enabled: true,
       })
     ).toEqual({ subject: "Hello" });
   });
