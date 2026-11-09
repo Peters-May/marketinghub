@@ -93,6 +93,45 @@ const EVENT_VIEWS = [
 
 type EventViewMode = (typeof EVENT_VIEWS)[number]["id"];
 
+type EventFocusFilter = "upcoming" | "attending" | "undated" | "prep";
+
+const EVENT_FOCUS_LABELS: Record<EventFocusFilter, string> = {
+  upcoming: "Upcoming",
+  attending: "Attending",
+  undated: "Needs a date",
+  prep: "Prep open",
+};
+
+function matchesFocusFilter(
+  event: EventItem,
+  focus: EventFocusFilter
+): boolean {
+  switch (focus) {
+    case "upcoming":
+      return hasValidStart(event);
+    case "attending":
+      return Boolean(event.pm_attending);
+    case "undated":
+      return !hasValidStart(event);
+    case "prep": {
+      if (!event.pm_attending) return false;
+      const progress = attendanceChecklistProgress(event);
+      return progress.total > 0 && progress.done < progress.total;
+    }
+  }
+}
+
+function sortEventsByStart(a: EventItem, b: EventItem) {
+  const at = a.starts_at
+    ? new Date(a.starts_at).getTime()
+    : Number.MAX_SAFE_INTEGER;
+  const bt = b.starts_at
+    ? new Date(b.starts_at).getTime()
+    : Number.MAX_SAFE_INTEGER;
+  if (at !== bt) return at - bt;
+  return a.title.localeCompare(b.title);
+}
+
 /** Brief pause so a run of ticks becomes one save, without waiting on the hub store. */
 const ATTENDANCE_OPS_SAVE_MS = 160;
 
@@ -1010,7 +1049,9 @@ function EventDashboard({
   prep,
   showPrep,
   selectedId,
+  activeFocus,
   onSelect,
+  onFocus,
   onOpenCalendar,
   onOpenList,
 }: {
@@ -1022,41 +1063,43 @@ function EventDashboard({
   prep: { event: EventItem; progress: { done: number; total: number } }[];
   showPrep: boolean;
   selectedId: string | null;
+  activeFocus: EventFocusFilter | null;
   onSelect: (event: EventItem) => void;
+  onFocus: (focus: EventFocusFilter) => void;
   onOpenCalendar: () => void;
   onOpenList: () => void;
 }) {
   const stats: {
+    id: EventFocusFilter;
     label: string;
     value: number;
     hint: string;
-    onClick: () => void;
   }[] = [
     {
+      id: "upcoming",
       label: "Upcoming",
       value: upcoming,
       hint: "Dated events in this filter",
-      onClick: onOpenCalendar,
     },
     {
+      id: "attending",
       label: "Attending",
       value: attending,
       hint: "Peters & May is going",
-      onClick: onOpenList,
     },
     {
+      id: "undated",
       label: "Needs a date",
       value: undated,
       hint: "Not on the calendar",
-      onClick: onOpenList,
     },
   ];
   if (showPrep) {
     stats.push({
+      id: "prep",
       label: "Prep open",
       value: prepOpen,
       hint: "Checklist still to finish",
-      onClick: onOpenList,
     });
   }
 
@@ -1068,18 +1111,27 @@ function EventDashboard({
           showPrep ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"
         )}
       >
-        {stats.map((stat) => (
-          <button
-            key={stat.label}
-            type="button"
-            className="rounded-lg border border-border bg-white px-3 py-3 text-left hover:bg-sand"
-            onClick={stat.onClick}
-          >
-            <p className="text-xs text-muted">{stat.label}</p>
-            <p className="mt-1 font-display text-2xl text-brand">{stat.value}</p>
-            <p className="mt-1 text-xs text-muted">{stat.hint}</p>
-          </button>
-        ))}
+        {stats.map((stat) => {
+          const active = activeFocus === stat.id;
+          return (
+            <button
+              key={stat.id}
+              type="button"
+              aria-pressed={active}
+              className={cn(
+                "rounded-lg border px-3 py-3 text-left transition",
+                active
+                  ? "border-brand bg-accent-soft/50 ring-1 ring-brand/20"
+                  : "border-border bg-white hover:bg-sand"
+              )}
+              onClick={() => onFocus(stat.id)}
+            >
+              <p className="text-xs text-muted">{stat.label}</p>
+              <p className="mt-1 font-display text-2xl text-brand">{stat.value}</p>
+              <p className="mt-1 text-xs text-muted">{stat.hint}</p>
+            </button>
+          );
+        })}
       </div>
 
       <section>
@@ -1297,6 +1349,7 @@ export function EventsClient({
   const attendanceOpsTimer = useRef<number | null>(null);
   const flushAttendanceOpsRef = useRef<() => Promise<void>>(async () => {});
   const [viewMode, setViewMode] = useState<EventViewMode>("dashboard");
+  const [focusFilter, setFocusFilter] = useState<EventFocusFilter | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [divisionFilter, setDivisionFilter] = useState("all");
@@ -1683,9 +1736,36 @@ export function EventsClient({
     });
   }, [dated, undated, filtered]);
 
+  const focusedEvents = useMemo(() => {
+    if (!focusFilter) return null;
+    return filtered
+      .filter((event) => matchesFocusFilter(event, focusFilter))
+      .sort(sortEventsByStart);
+  }, [filtered, focusFilter]);
+
+  const listEvents = focusedEvents ?? dated;
+
+  const focusedCalendarDated = useMemo(() => {
+    if (!focusFilter || focusFilter === "upcoming") return calendarDated;
+    if (focusFilter === "undated") return [];
+    return calendarDated.filter((event) =>
+      matchesFocusFilter(event, focusFilter)
+    );
+  }, [calendarDated, focusFilter]);
+
+  const selectFocusFilter = useCallback(
+    (focus: EventFocusFilter) => {
+      const next = focusFilter === focus ? null : focus;
+      setFocusFilter(next);
+      if (next === "upcoming") setViewMode("calendar");
+      else if (next) setViewMode("list");
+    },
+    [focusFilter]
+  );
+
   const calendarEvents = useMemo(
     () =>
-      calendarDated.map((e) => {
+      focusedCalendarDated.map((e) => {
         const color = participationColor(
           participationOf(e, allAttendance)
         );
@@ -1725,20 +1805,11 @@ export function EventsClient({
           },
         };
       }),
-    [calendarDated, attendingByEventId, allAttendance]
+    [focusedCalendarDated, attendingByEventId, allAttendance]
   );
 
   const dashboard = useMemo(() => {
     const attending = filtered.filter((event) => event.pm_attending);
-    const byStart = (a: EventItem, b: EventItem) => {
-      const at = a.starts_at
-        ? new Date(a.starts_at).getTime()
-        : Number.MAX_SAFE_INTEGER;
-      const bt = b.starts_at
-        ? new Date(b.starts_at).getTime()
-        : Number.MAX_SAFE_INTEGER;
-      return at - bt;
-    };
     const prep = attending
       .map((event) => ({
         event,
@@ -1747,14 +1818,14 @@ export function EventsClient({
       .filter(
         ({ progress }) => progress.total > 0 && progress.done < progress.total
       )
-      .sort((a, b) => byStart(a.event, b.event));
+      .sort((a, b) => sortEventsByStart(a.event, b.event));
     return {
       upcoming: dated.length,
       attending: attending.length,
       undated: undated.length,
       prepOpen: prep.length,
       prep: prep.slice(0, 6),
-      next: [...dated].sort(byStart).slice(0, 6),
+      next: [...dated].sort(sortEventsByStart).slice(0, 6),
     };
   }, [filtered, dated, undated]);
 
@@ -1821,13 +1892,14 @@ export function EventsClient({
 
   const handleDownloadFilteredIcs = useCallback(() => {
     setSyncMenuOpen(false);
-    const count = downloadCalendarIcs(filtered, "marketing-events.ics");
+    const exportEvents = focusedEvents ?? filtered;
+    const count = downloadCalendarIcs(exportEvents, "marketing-events.ics");
     if (count === 0) {
       flashSyncNotice("No dated events to export for the current filters.");
       return;
     }
     flashSyncNotice(`Downloaded ${count} event${count === 1 ? "" : "s"} (.ics).`);
-  }, [filtered, flashSyncNotice]);
+  }, [filtered, focusedEvents, flashSyncNotice]);
 
   const handleCopyCalendarFeed = useCallback(() => {
     setSyncMenuOpen(false);
@@ -2173,7 +2245,7 @@ export function EventsClient({
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search events, location, notes…"
-        resultCount={filtered.length}
+        resultCount={focusedEvents?.length ?? filtered.length}
         totalCount={events.length}
         dateRange={{
           from: dateFrom,
@@ -2226,6 +2298,21 @@ export function EventsClient({
         <p className="-mt-2 mb-4 text-xs text-muted">
           List and calendar show today through the next three months.
         </p>
+      ) : null}
+      {focusFilter ? (
+        <div className="-mt-2 mb-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-brand/20 bg-accent-soft/60 px-2.5 py-1 font-medium text-brand">
+            Showing: {EVENT_FOCUS_LABELS[focusFilter]}
+            {focusedEvents ? ` · ${focusedEvents.length}` : ""}
+          </span>
+          <button
+            type="button"
+            className="font-medium text-brand underline-offset-2 hover:underline"
+            onClick={() => setFocusFilter(null)}
+          >
+            Clear
+          </button>
+        </div>
       ) : null}
       {!showForm && !edit ? <FormAlert message={formError} /> : null}
 
@@ -2346,7 +2433,9 @@ export function EventsClient({
               prep={dashboard.prep}
               showPrep={showAttendanceOps}
               selectedId={selected?.id ?? null}
+              activeFocus={focusFilter}
               onSelect={setSelected}
+              onFocus={selectFocusFilter}
               onOpenCalendar={() => setViewMode("calendar")}
               onOpenList={() => setViewMode("list")}
             />
@@ -2513,7 +2602,7 @@ export function EventsClient({
             />
           ) : (
             <ul className="divide-y divide-border">
-              {dated.map((e) => (
+              {listEvents.map((e) => (
                 <li key={e.id}>
                   <button
                     type="button"
@@ -2537,14 +2626,18 @@ export function EventsClient({
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-muted">
-                      {format(new Date(e.starts_at!), "d MMM yyyy")}
+                      {e.starts_at
+                        ? format(new Date(e.starts_at), "d MMM yyyy")
+                        : "No date"}
                     </span>
                   </button>
                 </li>
               ))}
-              {dated.length === 0 ? (
+              {listEvents.length === 0 ? (
                 <li className="py-6 text-sm text-muted">
-                  No dated events match your filters.
+                  {focusFilter
+                    ? `No events match “${EVENT_FOCUS_LABELS[focusFilter]}”.`
+                    : "No dated events match your filters."}
                 </li>
               ) : null}
             </ul>
