@@ -85,7 +85,13 @@ export function BudgetPaymentsSheet({
   function publish(next: Draft[]) {
     rowsRef.current = next;
     setRows(next);
-    onPaymentsChange?.(next.map(({ amountText: _amountText, ...payment }) => payment));
+    onPaymentsChange?.(
+      next.map((row) => {
+        const { amountText, ...payment } = row;
+        void amountText;
+        return payment;
+      })
+    );
   }
 
   function setRowError(id: string, message: string) {
