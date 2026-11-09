@@ -42,6 +42,8 @@ type Draft = BudgetEventCostLine & { amountText: string };
 const CELL =
   "h-8 w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition hover:border-border focus:border-accent focus:bg-white";
 
+const ADD_SOMEONE = "__add__";
+
 function eventWhen(value: string | null) {
   if (!value) return "";
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -85,7 +87,7 @@ function fromSaved(
 export function BudgetEventCosts({
   lines,
   events,
-  staff,
+  staff: initialStaff,
 }: {
   lines: BudgetEventCostLine[];
   events: BudgetCostEvent[];
@@ -93,11 +95,17 @@ export function BudgetEventCosts({
 }) {
   const [rows, setRows] = useState<Draft[]>(() => lines.map(toDraft));
   const rowsRef = useRef(rows);
+  const [staff, setStaff] = useState<Staff[]>(initialStaff);
   const [search, setSearch] = useState("");
   const [addEventId, setAddEventId] = useState("");
   const [addingId, setAddingId] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [addingStaffRowId, setAddingStaffRowId] = useState<string | null>(null);
+  const [lineNewName, setLineNewName] = useState("");
+  const [lineNewEmail, setLineNewEmail] = useState("");
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [addingStaffError, setAddingStaffError] = useState("");
   const needle = search.trim().toLowerCase();
 
   const eventById = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
@@ -214,6 +222,55 @@ export function BudgetEventCosts({
     if (next) void persist(next);
   }
 
+  function rememberStaff(person: Staff) {
+    setStaff((prev) => {
+      if (prev.some((item) => item.id === person.id)) return prev;
+      return [...prev, person].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }
+
+  function cancelLineAddStaff() {
+    setAddingStaffRowId(null);
+    setLineNewName("");
+    setLineNewEmail("");
+    setAddingStaffError("");
+  }
+
+  async function confirmLineAddStaff(rowId: string) {
+    const name = lineNewName.trim();
+    const email = lineNewEmail.trim();
+    if (!name || !email.includes("@")) {
+      setAddingStaffError("Enter their name and email");
+      return;
+    }
+    setAddingStaff(true);
+    setAddingStaffError("");
+    const res = await fetch("/api/events/costs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_staff",
+        full_name: name,
+        email,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setAddingStaff(false);
+    if (!res.ok || !data.staff?.id) {
+      setAddingStaffError(
+        typeof data.error === "string" ? data.error : "Could not add this person"
+      );
+      return;
+    }
+    const person = {
+      id: String(data.staff.id),
+      name: String(data.staff.name || name),
+    };
+    rememberStaff(person);
+    cancelLineAddStaff();
+    commit(rowId, { staffUserId: person.id, staffName: person.name });
+  }
+
   async function addLine(eventId: string) {
     const event = eventById.get(eventId);
     if (!event) {
@@ -261,6 +318,7 @@ export function BudgetEventCosts({
       setRowError(id, typeof data.error === "string" ? data.error : "Could not remove");
       return;
     }
+    if (addingStaffRowId === id) cancelLineAddStaff();
     setRows((prev) => {
       const next = prev.filter((row) => row.id !== id);
       rowsRef.current = next;
@@ -422,9 +480,22 @@ export function BudgetEventCosts({
                         <select
                           aria-label="Staff"
                           className={CELL}
-                          value={row.staffUserId ?? ""}
+                          value={
+                            addingStaffRowId === row.id
+                              ? ADD_SOMEONE
+                              : (row.staffUserId ?? "")
+                          }
                           onChange={(event) => {
-                            const staffUserId = event.target.value || null;
+                            const value = event.target.value;
+                            if (value === ADD_SOMEONE) {
+                              setAddingStaffRowId(row.id);
+                              setLineNewName("");
+                              setLineNewEmail("");
+                              setAddingStaffError("");
+                              return;
+                            }
+                            if (addingStaffRowId === row.id) cancelLineAddStaff();
+                            const staffUserId = value || null;
                             const person = staff.find((item) => item.id === staffUserId);
                             commit(row.id, {
                               staffUserId,
@@ -441,7 +512,60 @@ export function BudgetEventCosts({
                               {person.name}
                             </option>
                           ))}
+                          <option value={ADD_SOMEONE}>Add someone…</option>
                         </select>
+                        {addingStaffRowId === row.id ? (
+                          <div className="mt-1 grid gap-1.5">
+                            <input
+                              className="field !h-8"
+                              aria-label="New staff name"
+                              placeholder="Name"
+                              value={lineNewName}
+                              disabled={addingStaff}
+                              onChange={(event) => {
+                                setLineNewName(event.target.value);
+                                setAddingStaffError("");
+                              }}
+                            />
+                            <input
+                              className="field !h-8"
+                              aria-label="New staff email"
+                              type="email"
+                              placeholder="name@petersandmay.com"
+                              autoComplete="off"
+                              value={lineNewEmail}
+                              disabled={addingStaff}
+                              onChange={(event) => {
+                                setLineNewEmail(event.target.value);
+                                setAddingStaffError("");
+                              }}
+                            />
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                className="btn-primary !h-8 !px-3"
+                                disabled={addingStaff}
+                                onClick={() => void confirmLineAddStaff(row.id)}
+                              >
+                                {addingStaff ? "Adding…" : "Add"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-ghost !h-8 !px-2"
+                                disabled={addingStaff}
+                                onClick={cancelLineAddStaff}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <p className="text-xs text-muted">
+                              Added as a Hub member with their Peters & May email.
+                            </p>
+                            {addingStaffError ? (
+                              <p className="text-xs text-danger">{addingStaffError}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-2 py-1">
                         <input

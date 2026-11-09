@@ -51,6 +51,8 @@ async function resolveCostsRecipient(input: {
   staffUserId: string;
   email: string;
   fullName: string;
+  /** Hub user notes when creating someone who is not on the list yet. */
+  createNotes?: string;
 }): Promise<
   | { person: HubUser; added: boolean; invited: boolean }
   | { error: string }
@@ -81,6 +83,7 @@ async function resolveCostsRecipient(input: {
     };
   }
 
+  const createNotes = input.createNotes?.trim() || "Added from an event costs request";
   try {
     const invited = hasServiceRoleKey();
     const person = invited
@@ -88,13 +91,13 @@ async function resolveCostsRecipient(input: {
           email,
           full_name: fullName,
           role: "member",
-          notes: "Added from an event costs request",
+          notes: createNotes,
         })
       : await createHubUser({
           email,
           full_name: fullName,
           role: "member",
-          notes: "Added from an event costs request",
+          notes: createNotes,
         });
     return { person, added: true, invited };
   } catch (err) {
@@ -200,6 +203,29 @@ export async function POST(request: NextRequest) {
     }
     await removeEventCostLine(existing.id);
     return jsonOk({ ok: true });
+  }
+
+  /** Add a colleague to the costs staff list (admin / budget editor), without sending a request. */
+  if (action === "add_staff") {
+    if (!viewer.isAdmin && !budgetEditor) {
+      return jsonError("Only admins can add people to costs", 403);
+    }
+    const resolved = await resolveCostsRecipient({
+      staffUserId: "",
+      email: String(body.email ?? ""),
+      fullName: String(body.full_name ?? ""),
+      createNotes: "Added from an event costs sheet",
+    });
+    if ("error" in resolved) return jsonError(resolved.error, 400);
+    const { person, added, invited } = resolved;
+    return jsonOk({
+      staff: {
+        id: person.id,
+        name: person.full_name || person.email,
+      },
+      added,
+      invited,
+    });
   }
 
   if (action === "request") {

@@ -95,6 +95,12 @@ export function EventCostsModal({
   const [requestMessage, setRequestMessage] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [requestMsg, setRequestMsg] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
+  /** Cost-line staff picker: which row is creating a new person. */
+  const [addingStaffRowId, setAddingStaffRowId] = useState<string | null>(null);
+  const [lineNewName, setLineNewName] = useState("");
+  const [lineNewEmail, setLineNewEmail] = useState("");
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [addingStaffError, setAddingStaffError] = useState("");
 
   const publish = useCallback(
     (next: Draft[]) => {
@@ -203,6 +209,59 @@ export function EventCostsModal({
     void save(next);
   }
 
+  function rememberStaff(person: Staff) {
+    setStaff((prev) => {
+      if (prev.some((item) => item.id === person.id)) return prev;
+      return [...prev, person].sort((a, b) => a.name.localeCompare(b.name));
+    });
+  }
+
+  function cancelLineAddStaff() {
+    setAddingStaffRowId(null);
+    setLineNewName("");
+    setLineNewEmail("");
+    setAddingStaffError("");
+  }
+
+  async function confirmLineAddStaff(rowId: string) {
+    const name = lineNewName.trim();
+    const email = lineNewEmail.trim();
+    if (!name || !email.includes("@")) {
+      setAddingStaffError("Enter their name and email");
+      return;
+    }
+    if (!companyEmail(email)) {
+      setAddingStaffError("Use their Peters & May email address");
+      return;
+    }
+    setAddingStaff(true);
+    setAddingStaffError("");
+    const res = await fetch("/api/events/costs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "add_staff",
+        full_name: name,
+        email,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setAddingStaff(false);
+    if (!res.ok || !data.staff?.id) {
+      setAddingStaffError(
+        typeof data.error === "string" ? data.error : "Could not add this person"
+      );
+      return;
+    }
+    const person = {
+      id: String(data.staff.id),
+      name: String(data.staff.name || name),
+    };
+    rememberStaff(person);
+    cancelLineAddStaff();
+    saveWith(rowId, { staff_user_id: person.id, staff_name: person.name });
+  }
+
   async function addLine() {
     setAdding(true);
     setError("");
@@ -240,6 +299,7 @@ export function EventCostsModal({
       setRowError(id, typeof data.error === "string" ? data.error : "Could not remove");
       return;
     }
+    if (addingStaffRowId === id) cancelLineAddStaff();
     publish(rows.filter((row) => row.id !== id));
   }
 
@@ -350,12 +410,7 @@ export function EventCostsModal({
       setRequests((prev) => [data.request, ...prev.filter((item) => item.id !== data.request.id)]);
     }
     if (data.staff?.id && data.staff?.name) {
-      setStaff((prev) => {
-        if (prev.some((person) => person.id === data.staff.id)) return prev;
-        return [...prev, { id: data.staff.id, name: data.staff.name }].sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
-      });
+      rememberStaff({ id: data.staff.id, name: data.staff.name });
     }
     setComposeOpen(false);
     setRequestMsg({
@@ -509,16 +564,36 @@ export function EventCostsModal({
 
                         <span className="flex min-w-0 items-center gap-1.5 px-1">
                           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sand text-[11px] text-muted">
-                            {initials(row.staff_name)}
+                            {initials(
+                              addingStaffRowId === row.id ? lineNewName || "?" : row.staff_name
+                            )}
                           </span>
                           {viewer?.isAdmin ? (
                             <select
                               aria-label="Staff"
                               className={`${CELL} !px-1`}
-                              value={row.staff_user_id ?? ""}
-                              onChange={(e) =>
-                                saveWith(row.id, { staff_user_id: e.target.value || null })
+                              value={
+                                addingStaffRowId === row.id
+                                  ? ADD_SOMEONE
+                                  : (row.staff_user_id ?? "")
                               }
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === ADD_SOMEONE) {
+                                  setAddingStaffRowId(row.id);
+                                  setLineNewName("");
+                                  setLineNewEmail("");
+                                  setAddingStaffError("");
+                                  return;
+                                }
+                                if (addingStaffRowId === row.id) cancelLineAddStaff();
+                                saveWith(row.id, {
+                                  staff_user_id: value || null,
+                                  staff_name:
+                                    staffOptions(row).find((person) => person.id === value)
+                                      ?.name ?? "",
+                                });
+                              }}
                             >
                               <option value="">Unassigned</option>
                               {staffOptions(row).map((person) => (
@@ -526,6 +601,7 @@ export function EventCostsModal({
                                   {person.name}
                                 </option>
                               ))}
+                              <option value={ADD_SOMEONE}>Add someone…</option>
                             </select>
                           ) : (
                             <span className="truncate text-sm text-muted">
@@ -560,6 +636,56 @@ export function EventCostsModal({
                           <Lock className="mx-auto h-3.5 w-3.5 text-muted" aria-label="Read only" />
                         )}
                       </div>
+                      {addingStaffRowId === row.id ? (
+                        <div className="mt-1 grid gap-2 rounded-lg bg-background p-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+                          <input
+                            className="field !h-8"
+                            aria-label="New staff name"
+                            placeholder="Name"
+                            value={lineNewName}
+                            disabled={addingStaff}
+                            onChange={(e) => {
+                              setLineNewName(e.target.value);
+                              setAddingStaffError("");
+                            }}
+                          />
+                          <input
+                            className="field !h-8"
+                            aria-label="New staff email"
+                            type="email"
+                            placeholder="name@petersandmay.com"
+                            autoComplete="off"
+                            value={lineNewEmail}
+                            disabled={addingStaff}
+                            onChange={(e) => {
+                              setLineNewEmail(e.target.value);
+                              setAddingStaffError("");
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-primary !h-8 !px-3"
+                            disabled={addingStaff}
+                            onClick={() => void confirmLineAddStaff(row.id)}
+                          >
+                            {addingStaff ? "Adding…" : "Add"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost !h-8 !px-2"
+                            disabled={addingStaff}
+                            onClick={cancelLineAddStaff}
+                          >
+                            Cancel
+                          </button>
+                          <p className="text-xs text-muted sm:col-span-4">
+                            They will be added as a Hub member using their Peters & May email.
+                          </p>
+                          {addingStaffError ? (
+                            <p className="text-xs text-danger sm:col-span-4">{addingStaffError}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {rowErrors[row.id] ? (
                         <p className="px-2 pt-1 text-xs text-danger">{rowErrors[row.id]}</p>
                       ) : null}
