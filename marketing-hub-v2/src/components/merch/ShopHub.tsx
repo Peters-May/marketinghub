@@ -34,29 +34,29 @@ export function ShopHub({
 
   const views: { id: ShopView; label: string }[] = canManageAll
     ? [
-        { id: "shop", label: "Shop" },
+        { id: "shop", label: "Browse" },
         { id: "orders", label: "Orders" },
         { id: "catalogue", label: "Catalogue" },
         { id: "inventory", label: "Stock" },
       ]
     : [
-        { id: "shop", label: "Shop" },
+        { id: "shop", label: "Browse" },
         { id: "orders", label: "My orders" },
       ];
 
   return (
     <div data-tour="shop-page">
       <PageHeader
-        title="Shop"
+        title="Merch"
         description={
           canManageAll
-            ? "Corporate clothing catalogue — browse, request kit, manage products and stock."
+            ? "Corporate clothing catalogue — browse, request kit, manage products and stock. Public link: /shop"
             : "Browse corporate clothing and submit requests to Marketing."
         }
       />
 
       <SegmentFilter
-        label="Shop section"
+        label="Merch section"
         value={view}
         onChange={setView}
         options={views}

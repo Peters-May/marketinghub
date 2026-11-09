@@ -8,7 +8,7 @@ export type TourPrepareAction =
   | { type: "events-select-first" }
   | { type: "media-root" }
   | { type: "media-open"; category: string }
-  | { type: "requests-tab"; tab: "merch" | "asset" | "social_form" | "other" }
+  | { type: "requests-tab"; tab: "asset" | "social_form" | "other" }
   | { type: "requests-open-order-form" };
 
 export function dispatchTourPrepare(actions: TourPrepareAction | TourPrepareAction[]) {

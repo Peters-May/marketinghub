@@ -17,11 +17,16 @@ export function ClothingShopClient({
   viewerName = "",
   viewerContactId = null,
   onOrderCreated,
+  publicMode = false,
+  hideIntro = false,
 }: {
   canManageAll?: boolean;
   viewerName?: string;
   viewerContactId?: string | null;
   onOrderCreated?: (order: MerchOrder) => void;
+  /** Public standalone shop — public APIs + guest checkout. */
+  publicMode?: boolean;
+  hideIntro?: boolean;
 }) {
   const [products, setProducts] = useState<ClothingProductCardItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,11 +36,15 @@ export function ClothingShopClient({
   const [bagOpen, setBagOpen] = useState(false);
   const [toast, setToast] = useState("");
 
+  const catalogueUrl = publicMode
+    ? "/api/public/shop/catalogue"
+    : "/api/merch/catalogue";
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setLoadError("");
     try {
-      const res = await fetch("/api/merch/catalogue");
+      const res = await fetch(catalogueUrl);
       if (!res.ok) {
         setLoadError("Could not load catalogue");
         return;
@@ -49,7 +58,7 @@ export function ClothingShopClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [catalogueUrl]);
 
   useEffect(() => {
     void refresh();
@@ -64,23 +73,35 @@ export function ClothingShopClient({
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl text-brand">Shop</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            Browse corporate clothing, choose colour and size, then submit a
-            request to Marketing.
-          </p>
+      {!hideIntro ? (
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl text-brand">Shop</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Browse corporate clothing, choose colour and size, then submit a
+              request to Marketing.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-primary"
+            data-tour="requests-clothing-bag"
+            onClick={() => setBagOpen(true)}
+          >
+            Bag{bagCount ? ` (${bagCount})` : ""}
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-primary"
-          data-tour="requests-clothing-bag"
-          onClick={() => setBagOpen(true)}
-        >
-          Bag{bagCount ? ` (${bagCount})` : ""}
-        </button>
-      </div>
+      ) : (
+        <div className="mb-6 flex justify-end">
+          <button
+            type="button"
+            className="bg-[#0B2545] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-[#071A2E]"
+            onClick={() => setBagOpen(true)}
+          >
+            Bag{bagCount ? ` (${bagCount})` : ""}
+          </button>
+        </div>
+      )}
 
       {toast ? (
         <p className="mb-4 text-sm text-emerald-800" role="status">
@@ -104,6 +125,7 @@ export function ClothingShopClient({
         <ClothingProductDetail
           product={activeProduct}
           initial={selection}
+          standalone={publicMode}
           onClose={() => setSelection(null)}
           onAddToBag={(line) => {
             setBag((prev) => [...prev, line]);
@@ -122,6 +144,8 @@ export function ClothingShopClient({
           canManageAll={canManageAll}
           viewerName={viewerName}
           viewerContactId={viewerContactId}
+          publicMode={publicMode}
+          standalone={publicMode}
           onSubmitted={(order) => {
             setBag([]);
             setBagOpen(false);

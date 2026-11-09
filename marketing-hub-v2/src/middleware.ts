@@ -117,7 +117,8 @@ function roleResponse(
 }
 
 function isProtectedHubPath(pathname: string) {
-  return pathname.startsWith("/app") || pathname === "/shop" || pathname.startsWith("/shop/");
+  // /shop is the public standalone clothing catalogue (no login).
+  return pathname.startsWith("/app");
 }
 
 export async function middleware(request: NextRequest) {
@@ -233,5 +234,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/shop", "/shop/:path*"],
+  matcher: ["/app/:path*"],
 };

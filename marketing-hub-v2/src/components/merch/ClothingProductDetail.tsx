@@ -32,11 +32,14 @@ export function ClothingProductDetail({
   initial,
   onClose,
   onAddToBag,
+  standalone = false,
 }: {
   product: ClothingProductCardItem;
   initial?: Partial<ShopSelection>;
   onClose: () => void;
   onAddToBag: (line: BagLineDraft) => void;
+  /** Full-viewport overlay (public shop has no hub sidebar). */
+  standalone?: boolean;
 }) {
   const swatches = product.colourSwatches?.length
     ? product.colourSwatches
@@ -93,7 +96,12 @@ export function ClothingProductDetail({
   }
 
   return (
-    <div className="fixed inset-0 z-50 md:left-sidebar">
+    <div
+      className={cn(
+        "fixed inset-0 z-50",
+        standalone ? "" : "md:left-sidebar"
+      )}
+    >
       <button
         type="button"
         className="absolute inset-0 bg-black/30"

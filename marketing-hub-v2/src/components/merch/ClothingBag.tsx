@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { isImageUrl } from "@/lib/social/platforms";
+import { cn } from "@/lib/utils";
 import { SearchSelect } from "@/components/ui/SearchSelect";
 import { FormAlert } from "@/components/ui/FormAlert";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
@@ -22,6 +23,8 @@ export function ClothingBag({
   canManageAll,
   viewerName,
   viewerContactId,
+  publicMode = false,
+  standalone = false,
 }: {
   lines: BagLineDraft[];
   onChangeLines: (next: BagLineDraft[]) => void;
@@ -30,12 +33,17 @@ export function ClothingBag({
   canManageAll: boolean;
   viewerName: string;
   viewerContactId: string | null;
+  /** Guest checkout via public shop APIs. */
+  publicMode?: boolean;
+  standalone?: boolean;
 }) {
   const [requestedFor, setRequestedFor] = useState(viewerName);
   const [requestedForContactId, setRequestedForContactId] = useState<
     string | null
   >(viewerContactId);
   const [forMode, setForMode] = useState<"me" | "other">("me");
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [office, setOffice] = useState("Southampton");
   const [neededBy, setNeededBy] = useState("");
   const [notes, setNotes] = useState("");
@@ -44,7 +52,7 @@ export function ClothingBag({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!canManageAll) return;
+    if (!canManageAll || publicMode) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -59,7 +67,7 @@ export function ClothingBag({
     return () => {
       cancelled = true;
     };
-  }, [canManageAll]);
+  }, [canManageAll, publicMode]);
 
   const totalQty = useMemo(
     () => lines.reduce((sum, line) => sum + (line.quantity || 0), 0),
@@ -71,21 +79,55 @@ export function ClothingBag({
       setError("Add at least one item to your bag");
       return;
     }
+    if (publicMode) {
+      if (!guestName.trim()) {
+        setError("Name is required");
+        return;
+      }
+      if (!guestEmail.trim() || !guestEmail.includes("@")) {
+        setError("A valid email is required");
+        return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
+      const payloadItems = lines.map((line) => ({
+        item: line.item,
+        fit: line.fit,
+        size: line.size,
+        quantity: line.quantity,
+        colour: line.colour,
+        logo: line.logo,
+      }));
+
+      if (publicMode) {
+        const res = await fetch("/api/public/shop/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: payloadItems,
+            name: guestName.trim(),
+            email: guestEmail.trim(),
+            office,
+            needed_by: neededBy || null,
+            notes,
+          }),
+        });
+        const data = (await res.json()) as { error?: string; item?: MerchOrder };
+        if (!res.ok || !data.item) {
+          setError(apiErrorMessage(data.error, "Could not submit order"));
+          return;
+        }
+        onSubmitted(data.item);
+        return;
+      }
+
       const res = await fetch("/api/merch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: lines.map((line) => ({
-            item: line.item,
-            fit: line.fit,
-            size: line.size,
-            quantity: line.quantity,
-            colour: line.colour,
-            logo: line.logo,
-          })),
+          items: payloadItems,
           requested_for:
             forMode === "me" && !canManageAll ? viewerName : requestedFor,
           requested_for_contact_id:
@@ -110,7 +152,12 @@ export function ClothingBag({
   }
 
   return (
-    <div className="fixed inset-0 z-50 md:left-sidebar">
+    <div
+      className={cn(
+        "fixed inset-0 z-50",
+        standalone ? "" : "md:left-sidebar"
+      )}
+    >
       <button
         type="button"
         className="absolute inset-0 bg-black/30"
@@ -188,7 +235,31 @@ export function ClothingBag({
           )}
 
           <div className="grid gap-3 border-t border-border pt-4">
-            {canManageAll ? (
+            {publicMode ? (
+              <>
+                <div>
+                  <label className="label">Your name</label>
+                  <input
+                    className="field"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Full name"
+                    autoComplete="name"
+                  />
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input
+                    className="field"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    autoComplete="email"
+                  />
+                </div>
+              </>
+            ) : canManageAll ? (
               <div>
                 <label className="label">For</label>
                 <SearchSelect
@@ -295,12 +366,21 @@ export function ClothingBag({
             </div>
             <div>
               <label className="label">Notes</label>
-              <RichTextEditor
-                value={notes}
-                onChange={setNotes}
-                placeholder="Anything Marketing should know…"
-                minHeight="70px"
-              />
+              {publicMode ? (
+                <textarea
+                  className="field min-h-[88px] resize-y"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Anything Marketing should know…"
+                />
+              ) : (
+                <RichTextEditor
+                  value={notes}
+                  onChange={setNotes}
+                  placeholder="Anything Marketing should know…"
+                  minHeight="70px"
+                />
+              )}
             </div>
           </div>
 

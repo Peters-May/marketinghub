@@ -113,8 +113,8 @@ export const STAFF_NAV: NavItem[] = [
     icon: Sparkles,
   },
   {
-    href: "/shop",
-    label: "Shop",
+    href: "/app/shop",
+    label: "Merch",
     description: "Corporate clothing catalogue — browse and request kit",
     icon: ShoppingBag,
     member: true,
