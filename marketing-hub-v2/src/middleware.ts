@@ -116,11 +116,14 @@ function roleResponse(
   return continueRequest(request, source, gateToken, outageMark);
 }
 
+function isProtectedHubPath(pathname: string) {
+  return pathname.startsWith("/app") || pathname === "/shop" || pathname.startsWith("/shop/");
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  const isAppRoute = pathname.startsWith("/app");
-  if (!isAppRoute) {
+  if (!isProtectedHubPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -230,5 +233,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*"],
+  matcher: ["/app/:path*", "/shop", "/shop/:path*"],
 };

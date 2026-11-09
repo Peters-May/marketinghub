@@ -77,11 +77,11 @@ export function InternalHub({
               requests from the dedicated Shop page.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/app/shop" className="btn-primary">
+              <Link href="/shop" className="btn-primary">
                 Open shop
               </Link>
               {canManageAll ? (
-                <Link href="/app/shop" className="btn-secondary">
+                <Link href="/shop" className="btn-secondary">
                   Manage catalogue
                 </Link>
               ) : null}

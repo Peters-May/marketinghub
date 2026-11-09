@@ -49,6 +49,7 @@ export function escapeHtml(s: string): string {
 
 function hubPathFor(kind: MarketingAlertKind): string {
   if (kind === "feedback") return "/app/feedback";
+  if (kind === "clothing") return "/shop";
   return "/app/requests";
 }
 

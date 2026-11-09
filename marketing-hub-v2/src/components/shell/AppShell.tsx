@@ -28,7 +28,8 @@ const ASSISTANT_DOCK_KEY = "hub-assistant-dock";
 
 function navTourId(href: string): string {
   if (href === "/app") return "home";
-  const slug = href.replace(/^\/app\/?/, "") || "home";
+  if (href === "/shop" || href.startsWith("/shop/")) return "shop";
+  const slug = href.replace(/^\/app\/?/, "").replace(/^\//, "") || "home";
   return slug.split("/")[0] || "home";
 }
 

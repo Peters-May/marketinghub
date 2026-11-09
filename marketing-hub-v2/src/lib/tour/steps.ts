@@ -160,7 +160,7 @@ const REQUESTS_DEEP: TourStep[] = [
     selector: '[data-tour="nav-shop"]',
     title: "Shop",
     body: "Browse corporate clothing, choose colour and size, add to bag, then submit a request to Marketing.",
-    href: "/app/shop",
+    href: "/shop",
     placement: "right",
   },
 ];
