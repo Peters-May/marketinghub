@@ -97,6 +97,7 @@ export function BudgetEventCosts({
   const rowsRef = useRef(rows);
   const [staff, setStaff] = useState<Staff[]>(initialStaff);
   const [search, setSearch] = useState("");
+  const [yearFilter, setYearFilter] = useState<"all" | "2026" | "2027">("all");
   const [addEventId, setAddEventId] = useState("");
   const [addingId, setAddingId] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -109,20 +110,25 @@ export function BudgetEventCosts({
   const needle = search.trim().toLowerCase();
 
   const eventById = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
-  const eventOptions = useMemo(
-    () => [...events].sort((a, b) => a.title.localeCompare(b.title)),
-    [events]
-  );
+  const eventOptions = useMemo(() => {
+    const sorted = [...events].sort((a, b) => a.title.localeCompare(b.title));
+    if (yearFilter === "all") return sorted;
+    return sorted.filter((event) => event.startsAt?.startsWith(yearFilter));
+  }, [events, yearFilter]);
 
   const visible = useMemo(() => {
-    if (!needle) return rows;
-    return rows.filter((line) =>
-      [line.eventTitle, line.location, line.description, line.staffName, line.notes, line.category]
+    return rows.filter((line) => {
+      if (yearFilter !== "all") {
+        const startsAt = eventById.get(line.eventId)?.startsAt ?? line.startsAt;
+        if (!startsAt?.startsWith(yearFilter)) return false;
+      }
+      if (!needle) return true;
+      return [line.eventTitle, line.location, line.description, line.staffName, line.notes, line.category]
         .join(" ")
         .toLowerCase()
-        .includes(needle)
-    );
-  }, [rows, needle]);
+        .includes(needle);
+    });
+  }, [rows, needle, yearFilter, eventById]);
 
   const groups = useMemo(() => {
     const byEvent = new Map<string, Draft[]>();
@@ -340,6 +346,18 @@ export function BudgetEventCosts({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
+        <select
+          aria-label="Year"
+          className="field !h-9 !w-auto !py-1.5"
+          value={yearFilter}
+          onChange={(event) =>
+            setYearFilter(event.target.value as "all" | "2026" | "2027")
+          }
+        >
+          <option value="all">All years</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+        </select>
         <select
           aria-label="Event to add"
           className="field !h-9 max-w-xs !py-1.5"

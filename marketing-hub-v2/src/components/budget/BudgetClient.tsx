@@ -4,7 +4,6 @@ import { Fragment, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  ExternalLink,
   Lock,
   Pencil,
   Plus,
@@ -28,9 +27,9 @@ import {
   type BudgetCostEvent,
   type BudgetEventCostLine,
 } from "@/components/budget/BudgetEventCosts";
+import { BudgetPaymentsSheet } from "@/components/budget/BudgetPaymentsSheet";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { SearchSelect } from "@/components/ui/SearchSelect";
 import { cn } from "@/lib/utils";
 
 function gbp(value: number | null | undefined) {
@@ -61,12 +60,6 @@ const STATUS_OPTIONS: { value: BudgetPaymentStatus; label: string }[] = [
 
 function statusLabel(status: BudgetPaymentStatus) {
   return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
-}
-
-function statusClass(status: BudgetPaymentStatus) {
-  if (status === "paid") return "bg-emerald-50 text-emerald-800";
-  if (status === "committed") return "bg-sky-50 text-sky-800";
-  return "bg-amber-50 text-amber-900";
 }
 
 function groupLabel(group: BudgetGroup) {
@@ -279,30 +272,6 @@ const emptyLineForm: LineForm = {
   notes: "",
 };
 
-type PaymentForm = {
-  budget_line_id: string;
-  paid_at: string;
-  supplier: string;
-  description: string;
-  amount: string;
-  status: BudgetPaymentStatus;
-  invoice_url: string;
-  event_id: string;
-  theme_id: string;
-};
-
-const emptyPaymentForm: PaymentForm = {
-  budget_line_id: "",
-  paid_at: "",
-  supplier: "",
-  description: "",
-  amount: "",
-  status: "paid",
-  invoice_url: "",
-  event_id: "",
-  theme_id: "",
-};
-
 export type BudgetLinkOption = { id: string; title: string };
 
 function toLineForm(line: BudgetLine): LineForm {
@@ -312,20 +281,6 @@ function toLineForm(line: BudgetLine): LineForm {
     group: line.group,
     planned: String(line.planned),
     notes: line.notes,
-  };
-}
-
-function toPaymentForm(payment: BudgetPayment): PaymentForm {
-  return {
-    budget_line_id: payment.budget_line_id,
-    paid_at: payment.paid_at ?? "",
-    supplier: payment.supplier,
-    description: payment.description,
-    amount: String(payment.amount),
-    status: payment.status,
-    invoice_url: payment.invoice_url,
-    event_id: payment.event_id ?? "",
-    theme_id: payment.theme_id ?? "",
   };
 }
 
@@ -353,23 +308,17 @@ export function BudgetClient({
   const [tab, setTab] = useState<TabId>("overview");
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<"all" | BudgetGroup>("all");
-  const [paymentStatus, setPaymentStatus] = useState<"all" | BudgetPaymentStatus>(
-    "all"
-  );
-  const [paymentLine, setPaymentLine] = useState("all");
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [showHistoric, setShowHistoric] = useState(false);
   const [showLineForm, setShowLineForm] = useState(false);
   const [lineForm, setLineForm] = useState(emptyLineForm);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
-  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [quarterId, setQuarterId] = useState<BudgetMeta["quarters"][number]["id"]>(
     "Q1"
   );
+  const [paymentsSheetKey, setPaymentsSheetKey] = useState(0);
 
   const totals = useMemo(
     () => computeBudgetTotals(lines, payments),
@@ -482,34 +431,11 @@ export function BudgetClient({
           void post({ action: "delete_line", id: line.id });
         }}
         onAddPayment={() => {
-          setTab("payments");
-          setPaymentForm({
-            ...emptyPaymentForm,
-            budget_line_id: line.id,
-          });
-          setShowPaymentForm(true);
+          void addPaymentRow(line.id);
         }}
       />
     );
   }
-
-  const filteredPayments = useMemo(() => {
-    return payments.filter((payment) => {
-      if (paymentStatus !== "all" && payment.status !== paymentStatus) {
-        return false;
-      }
-      if (paymentLine !== "all" && payment.budget_line_id !== paymentLine) {
-        return false;
-      }
-      const line = lines.find((item) => item.id === payment.budget_line_id);
-      return matchesSearch(search, [
-        payment.supplier,
-        payment.description,
-        line?.name ?? "",
-        line?.code ?? "",
-      ]);
-    });
-  }, [payments, paymentStatus, paymentLine, search, lines]);
 
   const quarter =
     meta.quarters.find((item) => item.id === quarterId) ?? meta.quarters[0];
@@ -531,29 +457,31 @@ export function BudgetClient({
     setLineForm(emptyLineForm);
   }
 
-  async function savePayment() {
-    const payload = {
-      budget_line_id: paymentForm.budget_line_id,
-      paid_at: paymentForm.paid_at || null,
-      supplier: paymentForm.supplier,
-      description: paymentForm.description,
-      amount: Number(paymentForm.amount),
-      status: paymentForm.status,
-      invoice_url: paymentForm.invoice_url,
-      event_id: paymentForm.event_id || null,
-      theme_id: paymentForm.theme_id || null,
-    };
-    const ok = editingPaymentId
-      ? await post({
-          action: "update_payment",
-          id: editingPaymentId,
-          patch: payload,
-        })
-      : await post({ action: "create_payment", ...payload });
+  async function addPaymentRow(budgetLineId?: string) {
+    const lineId =
+      budgetLineId ||
+      lines.find((line) => !isHistoricBudgetLine(line))?.id ||
+      lines[0]?.id ||
+      "";
+    if (!lineId) {
+      setError("Add a budget line first");
+      return;
+    }
+    const ok = await post({
+      action: "create_payment",
+      budget_line_id: lineId,
+      amount: 1,
+      status: "pending",
+      supplier: "",
+      description: "",
+      paid_at: null,
+      invoice_url: "",
+      event_id: null,
+      theme_id: null,
+    });
     if (!ok) return;
-    setShowPaymentForm(false);
-    setEditingPaymentId(null);
-    setPaymentForm(emptyPaymentForm);
+    setTab("payments");
+    setPaymentsSheetKey((key) => key + 1);
   }
 
   return (
@@ -579,12 +507,8 @@ export function BudgetClient({
             <button
               type="button"
               className="btn-primary"
-              onClick={() => {
-                setTab("payments");
-                setEditingPaymentId(null);
-                setPaymentForm(emptyPaymentForm);
-                setShowPaymentForm(true);
-              }}
+              disabled={saving}
+              onClick={() => void addPaymentRow()}
             >
               <Plus className="h-4 w-4" />
               Add payment
@@ -883,294 +807,18 @@ export function BudgetClient({
       ) : null}
 
       {tab === "payments" ? (
-        <div className="space-y-6">
-          {showPaymentForm ? (
-            <div className="surface-card p-5">
-              <h2 className="mb-4 font-display text-lg text-brand">
-                {editingPaymentId ? "Edit payment" : "Add payment"}
-              </h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block text-sm md:col-span-2">
-                  <span className="label">Budget line</span>
-                  <SearchSelect
-                    className="mt-1"
-                    value={paymentForm.budget_line_id}
-                    onChange={(value) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        budget_line_id: value,
-                      }))
-                    }
-                    options={lineOptions}
-                    placeholder="Choose a line"
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Date</span>
-                  <input
-                    className="field mt-1 w-full"
-                    type="date"
-                    value={paymentForm.paid_at}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        paid_at: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Amount £</span>
-                  <input
-                    className="field mt-1 w-full"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paymentForm.amount}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        amount: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Supplier</span>
-                  <input
-                    className="field mt-1 w-full"
-                    value={paymentForm.supplier}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        supplier: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Status</span>
-                  <select
-                    className="field mt-1 w-full"
-                    value={paymentForm.status}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        status: e.target.value as BudgetPaymentStatus,
-                      }))
-                    }
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-sm md:col-span-2">
-                  <span className="label">Description</span>
-                  <input
-                    className="field mt-1 w-full"
-                    value={paymentForm.description}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        description: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="block text-sm md:col-span-2">
-                  <span className="label">Invoice / receipt URL</span>
-                  <input
-                    className="field mt-1 w-full"
-                    type="url"
-                    placeholder="https://"
-                    value={paymentForm.invoice_url}
-                    onChange={(e) =>
-                      setPaymentForm((form) => ({
-                        ...form,
-                        invoice_url: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Event</span>
-                  <SearchSelect
-                    className="mt-1"
-                    value={paymentForm.event_id}
-                    allowEmpty
-                    emptyLabel="None"
-                    onChange={(value) =>
-                      setPaymentForm((form) => ({ ...form, event_id: value }))
-                    }
-                    options={events.map((event) => ({
-                      value: event.id,
-                      label: event.title,
-                    }))}
-                    placeholder="Optional"
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="label">Theme</span>
-                  <SearchSelect
-                    className="mt-1"
-                    value={paymentForm.theme_id}
-                    allowEmpty
-                    emptyLabel="None"
-                    onChange={(value) =>
-                      setPaymentForm((form) => ({ ...form, theme_id: value }))
-                    }
-                    options={themes.map((theme) => ({
-                      value: theme.id,
-                      label: theme.title,
-                    }))}
-                    placeholder="Optional"
-                  />
-                </label>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={saving}
-                  onClick={() => void savePayment()}
-                >
-                  Save payment
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    setShowPaymentForm(false);
-                    setEditingPaymentId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="surface-card overflow-hidden">
-            <div className="border-b border-border px-5 py-3">
-              <FilterBar
-                search={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Search supplier, description, line…"
-                resultCount={filteredPayments.length}
-                totalCount={payments.length}
-                selects={[
-                  {
-                    id: "status",
-                    label: "Status",
-                    value: paymentStatus,
-                    onChange: (value) =>
-                      setPaymentStatus(value as "all" | BudgetPaymentStatus),
-                    options: [
-                      { value: "all", label: "All" },
-                      ...STATUS_OPTIONS,
-                    ],
-                  },
-                  {
-                    id: "line",
-                    label: "Line",
-                    value: paymentLine,
-                    onChange: setPaymentLine,
-                    options: [
-                      { value: "all", label: "All lines" },
-                      ...lineOptions,
-                    ],
-                  },
-                ]}
-              />
-            </div>
-            {filteredPayments.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-muted">
-                No payments yet. Add one to start tracking spend against the
-                2026 budget.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {filteredPayments.map((payment) => {
-                  const line = lines.find(
-                    (item) => item.id === payment.budget_line_id
-                  );
-                  return (
-                    <li
-                      key={payment.id}
-                      className="flex flex-wrap items-start justify-between gap-3 px-5 py-4"
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {payment.supplier || "Payment"}
-                          <span
-                            className={cn(
-                              "ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                              statusClass(payment.status)
-                            )}
-                          >
-                            {statusLabel(payment.status)}
-                          </span>
-                        </p>
-                        <p className="mt-1 text-sm text-muted">
-                          {line?.name ?? "Unknown line"}
-                          {payment.paid_at ? ` · ${payment.paid_at}` : ""}
-                          {payment.description
-                            ? ` · ${payment.description}`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium tabular-nums">
-                          {gbp(payment.amount)}
-                        </span>
-                        {payment.invoice_url ? (
-                          <a
-                            href={payment.invoice_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="btn-ghost px-2 py-1"
-                            aria-label="Open invoice"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="btn-ghost px-2 py-1"
-                          aria-label="Edit payment"
-                          onClick={() => {
-                            setEditingPaymentId(payment.id);
-                            setPaymentForm(toPaymentForm(payment));
-                            setShowPaymentForm(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-ghost px-2 py-1 text-danger"
-                          aria-label="Delete payment"
-                          onClick={() => {
-                            if (!window.confirm("Delete this payment?")) return;
-                            void post({
-                              action: "delete_payment",
-                              id: payment.id,
-                            });
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
+        <BudgetPaymentsSheet
+          key={paymentsSheetKey}
+          payments={payments}
+          lineOptions={lineOptions}
+          events={events}
+          themes={themes}
+          defaultLineId={
+            lines.find((line) => !isHistoricBudgetLine(line))?.id ??
+            lines[0]?.id
+          }
+          onPaymentsChange={setPayments}
+        />
       ) : null}
 
       {tab === "event_costs" ? (
