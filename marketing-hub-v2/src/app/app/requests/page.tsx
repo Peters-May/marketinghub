@@ -3,7 +3,6 @@ import { allowDemoAuth, DEMO_STAFF } from "@/lib/auth/config";
 import { getSessionUser } from "@/lib/auth/session";
 import {
   getContactByUserId,
-  listMerchInventory,
   listMerchOrders,
   listStaffRequests,
 } from "@/lib/data/repos";
@@ -15,9 +14,8 @@ import {
 export default async function RequestsPage() {
   const user =
     (await getSessionUser()) ?? (allowDemoAuth() ? DEMO_STAFF : null);
-  const [allMerch, inventory, requests, viewerContact] = await Promise.all([
+  const [allMerch, requests, viewerContact] = await Promise.all([
     listMerchOrders(),
-    listMerchInventory(),
     listStaffRequests(),
     user ? getContactByUserId(user.id) : Promise.resolve(null),
   ]);
@@ -29,7 +27,6 @@ export default async function RequestsPage() {
   return (
     <InternalHub
       merch={merch}
-      inventory={inventory}
       requests={requests}
       canManageAll={canManageAll}
       viewerName={user?.full_name ?? ""}

@@ -8,7 +8,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import { onTourPrepare } from "@/lib/tour/bus";
 import type {
-  MerchInventoryItem,
   MerchOrder,
   StaffRequest,
   StaffRequestKind,
@@ -25,14 +24,12 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function InternalHub({
   merch,
-  inventory: _inventory,
   requests,
   canManageAll = false,
   viewerName = "",
   viewerContactId = null,
 }: {
   merch: MerchOrder[];
-  inventory: MerchInventoryItem[];
   requests: StaffRequest[];
   canManageAll?: boolean;
   viewerName?: string;
