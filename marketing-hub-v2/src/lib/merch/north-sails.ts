@@ -25,12 +25,15 @@ export type ClothingBrand =
 export type ClothingProduct = {
   id: string;
   label: string;
-  brand: ClothingBrand;
+  brand: ClothingBrand | string;
   material?: string;
+  description?: string;
   colours: string[];
   defaultColour: string;
+  sizes?: string[];
   /** Product page hints for staff */
   links?: { male?: string; female?: string };
+  supplier_url?: string;
 };
 
 export const CLOTHING_BRAND = "North Sails";

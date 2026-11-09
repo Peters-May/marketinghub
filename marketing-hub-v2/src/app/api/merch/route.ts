@@ -178,6 +178,25 @@ export async function POST(request: NextRequest) {
         ? resolved.allocated_user_id
         : user.id,
   });
-  notifyMarketingAlert({ kind: "clothing" });
+  notifyMarketingAlert({
+    kind: "clothing",
+    clothing: {
+      requested_for: item.requested_for,
+      created_by: item.created_by,
+      office: item.office,
+      needed_by: item.needed_by,
+      notes: item.notes,
+      lines: (item.items ?? items).map((line) => ({
+        item: line.item,
+        fit: line.fit,
+        size: line.size,
+        colour: line.colour,
+        logo: line.logo,
+        quantity: line.quantity,
+        is_other: line.is_other,
+        other_description: line.other_description,
+      })),
+    },
+  });
   return jsonOk({ item }, { status: 201 });
 }

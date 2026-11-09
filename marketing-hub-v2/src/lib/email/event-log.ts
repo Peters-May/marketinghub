@@ -95,9 +95,18 @@ export async function listSentEmailRows(campaignId: string): Promise<string[]> {
     .filter(Boolean);
 }
 
-export async function listEmailEventRows(campaignId?: string): Promise<EmailEvent[]> {
+export type ListEmailEventRowsOptions = {
+  /** When set, only these kinds are fetched. Sent campaigns can skip "sent". */
+  kinds?: EmailEventKind[];
+};
+
+export async function listEmailEventRows(
+  campaignId?: string,
+  options?: ListEmailEventRowsOptions
+): Promise<EmailEvent[]> {
   if (!hasServiceRoleKey()) return [];
   const supabase = createServiceClient();
+  const kinds = options?.kinds?.filter((kind) => KINDS.has(kind));
   let data: Array<Record<string, unknown>>;
   try {
     data = await readAllPages<Record<string, unknown>>((from, to) => {
@@ -109,6 +118,7 @@ export async function listEmailEventRows(campaignId?: string): Promise<EmailEven
         .order("created_at", { ascending: false })
         .order("id", { ascending: true });
       if (campaignId) query = query.eq("campaign_id", campaignId);
+      if (kinds && kinds.length > 0) query = query.in("kind", kinds);
       return query.range(from, to);
     }, campaignId ? SINGLE_CAMPAIGN_MAX : MAX_EVENT_ROWS);
   } catch (err) {
@@ -119,6 +129,7 @@ export async function listEmailEventRows(campaignId?: string): Promise<EmailEven
   for (const row of data) {
     const kind = asKind(String(row.kind ?? ""));
     if (!kind) continue;
+    if (kinds && kinds.length > 0 && !kinds.includes(kind)) continue;
     rows.push({
       id: String(row.id),
       campaign_id: String(row.campaign_id),

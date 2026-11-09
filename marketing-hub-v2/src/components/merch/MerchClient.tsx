@@ -620,12 +620,15 @@ function OrderItemsList({ order }: { order: MerchOrder }) {
 export function MerchClient({
   initial,
   hideHeader = false,
+  ordersOnly = false,
   canManageAll = false,
   viewerName = "",
   viewerContactId = null,
 }: {
   initial: MerchOrder[];
   hideHeader?: boolean;
+  /** When true, hide the inline “New order” form (shop handles creating). */
+  ordersOnly?: boolean;
   /** Admins see every order; members only receive their own from the API. */
   canManageAll?: boolean;
   viewerName?: string;
@@ -633,6 +636,10 @@ export function MerchClient({
 }) {
   const statusOptions = canManageAll ? STATUSES : MEMBER_STATUSES;
   const [orders, setOrders] = useState(initial);
+
+  useEffect(() => {
+    setOrders(initial);
+  }, [initial]);
   const [productCards, setProductCards] = useState<ClothingProductCardItem[]>(
     () => CLOTHING_PRODUCTS.map((p) => ({ ...p, image_url: "" }))
   );
@@ -843,7 +850,7 @@ export function MerchClient({
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-display text-xl text-brand">
-              {canManageAll ? "Corporate clothing" : "My clothing orders"}
+              {canManageAll ? "Orders" : "My clothing orders"}
             </h2>
             <p className="mt-0.5 text-xs text-muted">
               {canManageAll
@@ -851,20 +858,7 @@ export function MerchClient({
                 : `${CLOTHING_BRAND} · only your requests are shown`}
             </p>
           </div>
-          <button
-            type="button"
-            className="btn-primary"
-            data-tour="requests-new-order"
-            onClick={() => setShowForm(true)}
-          >
-            New order
-          </button>
-        </div>
-      ) : (
-        <PageHeader
-          title="Corporate clothing"
-          description={`${CLOTHING_BRAND} kit — Regatta or Pique polo (navy/white), navy gilet, navy sailor jacket, white collared shirt. Choose male or female fit.`}
-          actions={
+          {!ordersOnly ? (
             <button
               type="button"
               className="btn-primary"
@@ -873,6 +867,23 @@ export function MerchClient({
             >
               New order
             </button>
+          ) : null}
+        </div>
+      ) : (
+        <PageHeader
+          title="Corporate clothing"
+          description={`${CLOTHING_BRAND} kit — Regatta or Pique polo (navy/white), navy gilet, navy sailor jacket, white collared shirt. Choose male or female fit.`}
+          actions={
+            !ordersOnly ? (
+              <button
+                type="button"
+                className="btn-primary"
+                data-tour="requests-new-order"
+                onClick={() => setShowForm(true)}
+              >
+                New order
+              </button>
+            ) : undefined
           }
         />
       )}
@@ -907,7 +918,7 @@ export function MerchClient({
         ]}
       />
 
-      {showForm ? (
+      {!ordersOnly && showForm ? (
         <div
           className="surface-card mb-6 p-5 space-y-4"
           data-tour="requests-order-form"

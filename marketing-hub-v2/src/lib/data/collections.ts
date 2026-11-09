@@ -1,5 +1,9 @@
 import type { HubStore } from "@/lib/types";
-import { CLOTHING_LOGOS } from "@/lib/merch/north-sails";
+import {
+  CLOTHING_LOGOS,
+  CLOTHING_PRODUCTS,
+  CLOTHING_SIZES,
+} from "@/lib/merch/north-sails";
 
 /** Spreadsheet collections — excludes users/access requests (Admin → Users). */
 export type CollectionKey = Exclude<
@@ -339,17 +343,11 @@ const MERCH_SIZES: FieldOption[] = [
   { value: "3XL", label: "3XL" },
 ];
 
-const MERCH_ITEMS: FieldOption[] = [
-  { value: "Polo — Regatta (polyester)", label: "Polo — Regatta (polyester)" },
-  { value: "Polo — Pique (cotton)", label: "Polo — Pique (cotton)" },
-  { value: "Polo — Tactel", label: "Polo — Tactel" },
-  { value: "Gilet — Marstrand (navy)", label: "Gilet — Marstrand (navy)" },
-  { value: "Sailor jacket (navy)", label: "Sailor jacket (navy)" },
-  { value: "Collared shirt (white)", label: "Collared shirt (white)" },
-  { value: "Premier white shirt", label: "Premier white shirt" },
-  { value: "Backpack", label: "Backpack" },
-  { value: "High Vis", label: "High Vis" },
-];
+/** Baseline built-in labels — custom shop products may add more via Field Manager. */
+const MERCH_ITEMS: FieldOption[] = CLOTHING_PRODUCTS.map((p) => ({
+  value: p.label,
+  label: p.label,
+}));
 
 const MERCH_FITS: FieldOption[] = [
   { value: "male", label: "Male" },
@@ -361,6 +359,10 @@ const MERCH_COLOURS: FieldOption[] = [
   { value: "Navy", label: "Navy" },
   { value: "White", label: "White" },
   { value: "Yellow", label: "Yellow" },
+  { value: "Sand", label: "Sand" },
+  { value: "Olive", label: "Olive" },
+  { value: "Black", label: "Black" },
+  { value: "Grey", label: "Grey" },
 ];
 
 const MERCH_LOGOS: FieldOption[] = CLOTHING_LOGOS.map((logo) => ({
@@ -376,8 +378,13 @@ const MERCH_BRANDS: FieldOption[] = [
   { value: "Other", label: "Other" },
 ];
 
+const MERCH_SIZES_FROM_BUILTINS: FieldOption[] = CLOTHING_SIZES.map((s) => ({
+  value: s,
+  label: s,
+}));
+
 const INVENTORY_SIZES: FieldOption[] = [
-  ...MERCH_SIZES,
+  ...MERCH_SIZES_FROM_BUILTINS,
   { value: "S-M", label: "S-M" },
   { value: "N/A", label: "N/A" },
 ];
@@ -423,6 +430,23 @@ const f = (
 /** Owner fields: select populated from the contacts table (stores contact name). */
 const ownerField = (): FieldDef =>
   f("owner", { type: "select", optionsSource: "contacts" });
+
+/**
+ * Catalogue product fields (store key `merch_catalogue`).
+ * Kept out of DATA_COLLECTIONS because rows use `product_id` (not `id`) and
+ * nested images/swatches — managed via the clothing Catalogue UI / API.
+ */
+export const MERCH_CATALOGUE_FIELDS: FieldDef[] = [
+  f("product_id", { type: "readonly", locked: true, label: "Product ID" }),
+  f("label", { label: "Name" }),
+  f("brand", { type: "select", options: MERCH_BRANDS }),
+  f("material"),
+  f("description", { type: "longtext" }),
+  f("image_url", { type: "url", label: "Primary image" }),
+  f("default_colour", { label: "Default colour" }),
+  f("supplier_url", { type: "url", label: "Supplier URL" }),
+  f("updated_at", { type: "readonly", locked: true }),
+];
 
 /** Editable store collections (raw table view). */
 export const DATA_COLLECTIONS: CollectionDef[] = [
@@ -978,7 +1002,7 @@ export const DATA_COLLECTIONS: CollectionDef[] = [
   {
     key: "merch_orders",
     label: "Merch orders",
-    description: "North Sails corporate clothing",
+    description: "Corporate clothing requests from the shop",
     fields: [
       f("id", { type: "readonly", locked: true }),
       f("item", { type: "select", options: MERCH_ITEMS }),

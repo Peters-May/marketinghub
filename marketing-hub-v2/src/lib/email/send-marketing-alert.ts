@@ -7,6 +7,26 @@ export type MarketingAlertKind =
   | "other_request"
   | "feedback";
 
+export type ClothingAlertLine = {
+  item: string;
+  fit?: string;
+  size?: string;
+  colour?: string;
+  logo?: string;
+  quantity?: number;
+  is_other?: boolean;
+  other_description?: string;
+};
+
+export type ClothingAlertDetail = {
+  requested_for?: string;
+  created_by?: string;
+  office?: string;
+  needed_by?: string | null;
+  notes?: string;
+  lines?: ClothingAlertLine[];
+};
+
 const KIND_LABEL: Record<MarketingAlertKind, string> = {
   clothing: "clothing",
   asset: "asset",
@@ -32,14 +52,82 @@ function hubPathFor(kind: MarketingAlertKind): string {
   return "/app/requests";
 }
 
+function clothingDetailHtml(detail: ClothingAlertDetail): string {
+  const rows: string[] = [];
+  if (detail.requested_for?.trim()) {
+    rows.push(
+      `<p style="margin:0 0 8px;"><strong>For:</strong> ${escapeHtml(detail.requested_for.trim())}</p>`
+    );
+  }
+  if (detail.created_by?.trim()) {
+    rows.push(
+      `<p style="margin:0 0 8px;"><strong>Submitted by:</strong> ${escapeHtml(detail.created_by.trim())}</p>`
+    );
+  }
+  if (detail.office?.trim()) {
+    rows.push(
+      `<p style="margin:0 0 8px;"><strong>Office:</strong> ${escapeHtml(detail.office.trim())}</p>`
+    );
+  }
+  if (detail.needed_by?.trim()) {
+    rows.push(
+      `<p style="margin:0 0 8px;"><strong>Needed by:</strong> ${escapeHtml(detail.needed_by.trim())}</p>`
+    );
+  }
+
+  const lines = detail.lines ?? [];
+  if (lines.length) {
+    const items = lines
+      .map((line) => {
+        if (line.is_other) {
+          const label =
+            line.other_description?.trim() || line.item || "Other item";
+          const qty = line.quantity && line.quantity > 1 ? ` ×${line.quantity}` : "";
+          return `<li>${escapeHtml(label)}${qty}</li>`;
+        }
+        const parts = [
+          line.item,
+          line.colour,
+          line.size,
+          line.fit,
+          line.logo,
+        ]
+          .map((p) => (typeof p === "string" ? p.trim() : ""))
+          .filter(Boolean);
+        const qty =
+          line.quantity && line.quantity > 0 ? ` ×${line.quantity}` : "";
+        return `<li>${escapeHtml(parts.join(" · "))}${qty}</li>`;
+      })
+      .join("");
+    rows.push(
+      `<p style="margin:12px 0 4px;"><strong>Items</strong></p><ul style="margin:0;padding-left:18px;">${items}</ul>`
+    );
+  }
+
+  if (detail.notes?.trim()) {
+    const plain = detail.notes
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (plain) {
+      rows.push(
+        `<p style="margin:12px 0 0;"><strong>Notes:</strong> ${escapeHtml(plain)}</p>`
+      );
+    }
+  }
+
+  return rows.join("");
+}
+
 /**
- * Lightweight alert to marketing — type only, no request/feedback details.
- * Fails gracefully if Resend is not configured.
+ * Lightweight alert to marketing.
+ * Clothing alerts may include requester + line items; other kinds stay type-only.
  */
 export async function sendMarketingAlert(params: {
   kind: MarketingAlertKind;
   /** Extra label e.g. feedback type "bug" — still no body/details */
   subtype?: string;
+  clothing?: ClothingAlertDetail;
 }): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
@@ -63,6 +151,15 @@ export async function sendMarketingAlert(params: {
   const path = hubPathFor(params.kind);
   const href = origin ? `${origin}${path}` : path;
 
+  const clothingBlock =
+    params.kind === "clothing" && params.clothing
+      ? clothingDetailHtml(params.clothing)
+      : "";
+
+  const detailNote = clothingBlock
+    ? clothingBlock
+    : `<p>Open the hub to review — this email does not include the request details.</p>`;
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -72,8 +169,8 @@ export async function sendMarketingAlert(params: {
 </head>
 <body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>A new <strong>${escapeHtml(what)}${escapeHtml(subtype)}</strong> was submitted in Marketing Hub.</p>
-  <p>Open the hub to review — this email does not include the request details.</p>
-  <p><a href="${escapeHtml(href)}" style="color: #0f766e; text-decoration: none;">Open in Marketing Hub →</a></p>
+  ${detailNote}
+  <p style="margin-top:16px;"><a href="${escapeHtml(href)}" style="color: #0B2545; text-decoration: none;">Open in Marketing Hub →</a></p>
   <p style="color: #666; font-size: 12px;">Automated notification from Marketing Hub.</p>
 </body>
 </html>
@@ -108,6 +205,7 @@ export async function sendMarketingAlert(params: {
 export function notifyMarketingAlert(params: {
   kind: MarketingAlertKind;
   subtype?: string;
+  clothing?: ClothingAlertDetail;
 }): void {
   void sendMarketingAlert(params).catch((err) => {
     console.error("[notifyMarketingAlert] Unhandled:", err);

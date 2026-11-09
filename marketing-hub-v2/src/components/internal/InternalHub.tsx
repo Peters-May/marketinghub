@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { MerchClient } from "@/components/merch/MerchClient";
-import { InventoryClient } from "@/components/merch/InventoryClient";
 import { StaffRequestsClient } from "@/components/internal/StaffRequestsClient";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
@@ -15,7 +15,6 @@ import type {
 } from "@/lib/types";
 
 type Tab = "merch" | "asset" | "social_form" | "other";
-type MerchView = "orders" | "inventory";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "merch", label: "Corporate clothing" },
@@ -26,7 +25,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function InternalHub({
   merch,
-  inventory,
+  inventory: _inventory,
   requests,
   canManageAll = false,
   viewerName = "",
@@ -39,24 +38,15 @@ export function InternalHub({
   viewerName?: string;
   viewerContactId?: string | null;
 }) {
-  const [tab, setTab] = useState<Tab>("merch");
-  const [merchView, setMerchView] = useState<MerchView>("orders");
+  const [tab, setTab] = useState<Tab>("asset");
 
   useEffect(() => {
     return onTourPrepare((action) => {
       if (action.type === "requests-tab") {
         setTab(action.tab);
-        if (action.tab === "merch") setMerchView("orders");
       }
     });
   }, []);
-
-  const merchViews: { id: MerchView; label: string }[] = canManageAll
-    ? [
-        { id: "orders", label: "Orders" },
-        { id: "inventory", label: "Stock inventory" },
-      ]
-    : [{ id: "orders", label: "My orders" }];
 
   return (
     <div>
@@ -64,8 +54,8 @@ export function InternalHub({
         title="Requests"
         description={
           canManageAll
-            ? "North Sails clothing orders and stock, asset asks, and social media form requests for the marketing team."
-            : "Request corporate clothing and track your own orders. Asset and social form requests for the marketing team."
+            ? "Asset asks and social form requests for Marketing. Clothing lives in the Shop."
+            : "Request assets or social forms. Browse and order clothing in the Shop."
         }
       />
 
@@ -79,28 +69,32 @@ export function InternalHub({
       />
 
       {tab === "merch" ? (
-        <div data-tour="requests-clothing">
-          {merchViews.length > 1 ? (
-            <SegmentFilter
-              label="Clothing section"
-              value={merchView}
-              onChange={setMerchView}
-              options={merchViews}
-              size="md"
-              tourIdPrefix="requests-merch-view"
-            />
-          ) : null}
-          {merchView === "inventory" && canManageAll ? (
-            <InventoryClient initial={inventory} />
-          ) : (
-            <MerchClient
-              initial={merch}
-              hideHeader
-              canManageAll={canManageAll}
-              viewerName={viewerName}
-              viewerContactId={viewerContactId}
-            />
-          )}
+        <div data-tour="requests-clothing" className="space-y-5">
+          <div className="surface-card p-5">
+            <h2 className="font-display text-xl text-brand">Clothing shop</h2>
+            <p className="mt-1 text-sm text-muted">
+              Browse products, choose colours and sizes, and submit clothing
+              requests from the dedicated Shop page.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/app/shop" className="btn-primary">
+                Open shop
+              </Link>
+              {canManageAll ? (
+                <Link href="/app/shop" className="btn-secondary">
+                  Manage catalogue
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <MerchClient
+            initial={merch}
+            hideHeader
+            ordersOnly
+            canManageAll={canManageAll}
+            viewerName={viewerName}
+            viewerContactId={viewerContactId}
+          />
         </div>
       ) : (
         <StaffRequestsClient

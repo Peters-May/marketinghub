@@ -830,21 +830,44 @@ export type MerchInventoryItem = {
   updated_at: string;
 };
 
+/** Colour option for shop swatches (name + hex). */
+export type MerchCatalogueColour = {
+  name: string;
+  hex: string;
+};
+
+/** Gallery image; optional colour ties the photo to a swatch. */
+export type MerchCatalogueImageAsset = {
+  url: string;
+  colour?: string;
+  sort?: number;
+};
+
 /**
- * Catalogue overrides for a fixed clothing product (by product id).
- * Missing / empty override fields fall back to the built-in North Sails defaults.
+ * Catalogue product row (admin-owned).
+ * Built-in North Sails products may exist as overrides; custom products have
+ * `custom: true` (or a product_id not in the built-in list).
  */
 export type MerchCatalogueImage = {
   product_id: string;
+  /** Primary / legacy single image. Prefer `images` when present. */
   image_url: string;
-  /** Display name override (renames the item everywhere it is used). */
+  images?: MerchCatalogueImageAsset[];
+  /** Display name (required for custom products). */
   label?: string;
   brand?: string;
   material?: string;
+  description?: string;
+  /** Legacy colour name list. Prefer `colour_swatches` when present. */
   colours?: string[];
+  colour_swatches?: MerchCatalogueColour[];
   default_colour?: string;
+  sizes?: string[];
+  supplier_url?: string;
   /** When true, the item is removed from the live order catalogue. Admins can restore it. */
   hidden?: boolean;
+  /** Admin-created product (not only an override of a built-in). */
+  custom?: boolean;
   updated_at: string;
 };
 

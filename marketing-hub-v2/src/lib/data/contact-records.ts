@@ -136,6 +136,44 @@ export async function getContactRecordByEmail(
   return data?.[0] ? asContact(data[0].payload) : null;
 }
 
+/** Name lookups for a small set of addresses. Avoids paging the whole table. */
+export async function listContactRecordsByEmails(
+  emails: string[]
+): Promise<Contact[] | null> {
+  const needles = [
+    ...new Set(
+      emails
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+  if (needles.length === 0) return [];
+  if (!(await ensureHubContactsSplit())) return null;
+  const supabase = createServiceClient();
+  const all: Contact[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < needles.length; index += 100) {
+    const chunk = needles.slice(index, index + 100);
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("payload")
+      .in("email", chunk);
+    if (error) {
+      if (missingContactStore(error)) return null;
+      throw new Error(error.message);
+    }
+    for (const row of data ?? []) {
+      const contact = asContact(row.payload);
+      if (!contact) continue;
+      const email = (contact.email || "").trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      all.push(contact);
+    }
+  }
+  return all;
+}
+
 export async function getContactRecordByUserId(
   userId: string
 ): Promise<Contact | null | undefined> {

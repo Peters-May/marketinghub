@@ -130,6 +130,7 @@ export function buildCampaignReport(input: {
   const bouncedPeople: CampaignSuppressionPerson[] = [];
   const seenUnsub = new Set<string>();
   const seenBounce = new Set<string>();
+  const campaignUnsubEmails = new Set<string>();
 
   for (const row of input.suppressions) {
     if (row.campaign_id !== input.campaign.id) continue;
@@ -138,6 +139,7 @@ export function buildCampaignReport(input: {
     if (row.reason === "complaint") suppressions.complaint += 1;
     const email = row.email.trim().toLowerCase();
     if (!email) continue;
+    if (row.reason === "unsubscribe") campaignUnsubEmails.add(email);
     const detail =
       typeof row.detail === "string" && row.detail.trim()
         ? row.detail.trim()
@@ -181,14 +183,7 @@ export function buildCampaignReport(input: {
           reason: "unsubscribe",
           ...(detail ? { detail } : {}),
         });
-        if (
-          !input.suppressions.some(
-            (row) =>
-              row.campaign_id === input.campaign.id &&
-              row.reason === "unsubscribe" &&
-              row.email.trim().toLowerCase() === email
-          )
-        ) {
+        if (!campaignUnsubEmails.has(email)) {
           suppressions.unsubscribe += 1;
         }
       }

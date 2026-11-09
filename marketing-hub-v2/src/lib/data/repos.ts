@@ -68,6 +68,7 @@ import {
   getContactRecordByEmail,
   getContactRecordByUserId,
   listContactRecords,
+  listContactRecordsByEmails,
   revokeStoredConsent,
   upsertContactRecords,
   upsertPortalMembers,
@@ -921,6 +922,43 @@ export async function listContacts() {
   if (rows) return rows.map(normalizeContact);
   const store = await readStore();
   return store.contacts.map(normalizeContact);
+}
+
+/** Resolve display names for a few report addresses without loading every contact. */
+export async function listContactNamesByEmails(
+  emails: string[]
+): Promise<Array<{ email: string; name: string }>> {
+  const needles = [
+    ...new Set(
+      emails
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    ),
+  ];
+  if (needles.length === 0) return [];
+
+  const rows = await listContactRecordsByEmails(needles);
+  if (rows) {
+    return rows
+      .map((contact) => normalizeContact(contact))
+      .map((contact) => ({
+        email: (contact.email || "").trim().toLowerCase(),
+        name: (contact.name || "").trim(),
+      }))
+      .filter((row) => row.email && row.name);
+  }
+
+  const wanted = new Set(needles);
+  const store = await readStore();
+  const out: Array<{ email: string; name: string }> = [];
+  for (const contact of store.contacts) {
+    const email = (contact.email || "").trim().toLowerCase();
+    if (!wanted.has(email)) continue;
+    const name = (contact.name || "").trim();
+    if (!name) continue;
+    out.push({ email, name });
+  }
+  return out;
 }
 
 function asBoolFlag(value: unknown): boolean {
@@ -1796,12 +1834,18 @@ export async function listMerchCatalogue() {
 
 export type MerchCataloguePatch = {
   image_url?: string;
+  images?: MerchCatalogueImage["images"];
   label?: string;
   brand?: string;
   material?: string;
+  description?: string;
   colours?: string[];
+  colour_swatches?: MerchCatalogueImage["colour_swatches"];
   default_colour?: string;
+  sizes?: string[];
+  supplier_url?: string;
   hidden?: boolean;
+  custom?: boolean;
 };
 
 function normalizeOptionalText(value: unknown): string | undefined {
@@ -1818,21 +1862,76 @@ function normalizeColourList(value: unknown): string[] | undefined {
   return colours;
 }
 
+function normalizeColourSwatches(
+  value: unknown
+): MerchCatalogueImage["colour_swatches"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const swatches = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as { name?: unknown; hex?: unknown };
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const hex = typeof row.hex === "string" ? row.hex.trim() : "";
+      if (!name) return null;
+      return { name, hex: hex || "#94A3B8" };
+    })
+    .filter((c): c is { name: string; hex: string } => Boolean(c));
+  return swatches;
+}
+
+function normalizeCatalogueImages(
+  value: unknown
+): MerchCatalogueImage["images"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const images: NonNullable<MerchCatalogueImage["images"]> = [];
+  value.forEach((entry, i) => {
+    if (!entry || typeof entry !== "object") return;
+    const row = entry as { url?: unknown; colour?: unknown; sort?: unknown };
+    const url = typeof row.url === "string" ? row.url.trim() : "";
+    if (!url) return;
+    const colour =
+      typeof row.colour === "string" ? row.colour.trim() : "";
+    const sort =
+      typeof row.sort === "number" && Number.isFinite(row.sort)
+        ? row.sort
+        : i;
+    images.push({
+      url,
+      ...(colour ? { colour } : {}),
+      sort,
+    });
+  });
+  return images;
+}
+
+function normalizeSizeList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+}
+
 /** True when the row still carries any stored override / image. */
 function catalogueRowHasContent(row: MerchCatalogueImage): boolean {
   return Boolean(
-    row.hidden ||
+    row.custom ||
+      row.hidden ||
       row.image_url?.trim() ||
+      (row.images && row.images.length > 0) ||
       row.label?.trim() ||
       row.brand?.trim() ||
       row.material?.trim() ||
+      row.description?.trim() ||
       (row.colours && row.colours.length > 0) ||
+      (row.colour_swatches && row.colour_swatches.length > 0) ||
+      (row.sizes && row.sizes.length > 0) ||
+      row.supplier_url?.trim() ||
       row.default_colour?.trim()
   );
 }
 
 /**
- * Upsert catalogue overrides for a clothing product.
+ * Upsert catalogue product (built-in override or custom).
  * Renaming `label` also rewrites matching merch order / inventory item strings.
  */
 export async function upsertMerchCatalogue(
@@ -1840,30 +1939,58 @@ export async function upsertMerchCatalogue(
   patch: MerchCataloguePatch
 ) {
   const id = productId.trim();
+  if (!id) return null;
   const base = clothingProductById(id);
-  if (!id || !base) return null;
 
   let updated: MerchCatalogueImage | null = null;
   await updateStore((s) => {
     const list = s.merch_catalogue ?? [];
     const idx = list.findIndex((c) => c.product_id === id);
     const prev = idx >= 0 ? list[idx] : undefined;
-    const oldLabel = effectiveProductLabel(id, list) ?? base.label;
+    const isCustom =
+      patch.custom === true ||
+      prev?.custom === true ||
+      (!base && (Boolean(prev) || Boolean(patch.label)));
+    const oldLabel =
+      effectiveProductLabel(id, list) ??
+      prev?.label?.trim() ??
+      base?.label ??
+      id;
+
+    const images =
+      patch.images !== undefined
+        ? normalizeCatalogueImages(patch.images)
+        : prev?.images;
+    const primaryFromImages = images?.find((img) => img.url?.trim())?.url;
 
     const next: MerchCatalogueImage = {
       product_id: id,
       image_url:
         patch.image_url !== undefined
           ? patch.image_url.trim()
-          : (prev?.image_url ?? ""),
+          : primaryFromImages || prev?.image_url || "",
       updated_at: nowIso(),
     };
+
+    if (images?.length) next.images = images;
+    else if (prev?.images?.length && patch.images === undefined) {
+      next.images = prev.images;
+    }
+
+    if (isCustom) next.custom = true;
 
     if (patch.label !== undefined) {
       const label = normalizeOptionalText(patch.label);
       if (label) next.label = label;
     } else if (prev?.label?.trim()) {
       next.label = prev.label.trim();
+    } else if (isCustom && base?.label) {
+      next.label = base.label;
+    }
+
+    if (isCustom && !next.label?.trim()) {
+      updated = null;
+      return;
     }
 
     if (patch.brand !== undefined) {
@@ -1880,11 +2007,34 @@ export async function upsertMerchCatalogue(
       next.material = prev.material.trim();
     }
 
-    if (patch.colours !== undefined) {
+    if (patch.description !== undefined) {
+      const description = normalizeOptionalText(patch.description);
+      if (description) next.description = description;
+    } else if (prev?.description?.trim()) {
+      next.description = prev.description.trim();
+    }
+
+    if (patch.colour_swatches !== undefined) {
+      const swatches = normalizeColourSwatches(patch.colour_swatches);
+      if (swatches?.length) {
+        next.colour_swatches = swatches;
+        next.colours = swatches.map((c) => c.name);
+      }
+    } else if (patch.colours !== undefined) {
       const colours = normalizeColourList(patch.colours);
-      if (colours && colours.length) next.colours = colours;
-    } else if (prev?.colours?.length) {
-      next.colours = [...prev.colours];
+      if (colours?.length) {
+        next.colours = colours;
+        if (prev?.colour_swatches?.length) {
+          next.colour_swatches = prev.colour_swatches.filter((c) =>
+            colours.includes(c.name)
+          );
+        }
+      }
+    } else {
+      if (prev?.colours?.length) next.colours = [...prev.colours];
+      if (prev?.colour_swatches?.length) {
+        next.colour_swatches = [...prev.colour_swatches];
+      }
     }
 
     if (patch.default_colour !== undefined) {
@@ -1894,19 +2044,47 @@ export async function upsertMerchCatalogue(
       next.default_colour = prev.default_colour.trim();
     }
 
+    if (patch.sizes !== undefined) {
+      const sizes = normalizeSizeList(patch.sizes);
+      if (sizes?.length) next.sizes = sizes;
+    } else if (prev?.sizes?.length) {
+      next.sizes = [...prev.sizes];
+    }
+
+    if (patch.supplier_url !== undefined) {
+      const supplier = normalizeOptionalText(patch.supplier_url);
+      if (supplier) next.supplier_url = supplier;
+    } else if (prev?.supplier_url?.trim()) {
+      next.supplier_url = prev.supplier_url.trim();
+    }
+
     if (patch.hidden !== undefined) {
       if (patch.hidden) next.hidden = true;
     } else if (prev?.hidden) {
       next.hidden = true;
     }
 
-    const newLabel = next.label?.trim() || base.label;
+    const newLabel = next.label?.trim() || base?.label || oldLabel;
     if (oldLabel !== newLabel) {
-      s.merch_orders = s.merch_orders.map((order) =>
-        order.item === oldLabel ? { ...order, item: newLabel, updated_at: nowIso() } : order
-      );
+      s.merch_orders = s.merch_orders.map((order) => {
+        let changed = order.item === oldLabel;
+        const items = order.items?.map((line) => {
+          if (line.item !== oldLabel) return line;
+          changed = true;
+          return { ...line, item: newLabel };
+        });
+        if (!changed) return order;
+        return {
+          ...order,
+          item: order.item === oldLabel ? newLabel : order.item,
+          ...(items ? { items } : {}),
+          updated_at: nowIso(),
+        };
+      });
       s.merch_inventory = s.merch_inventory.map((row) =>
-        row.item === oldLabel ? { ...row, item: newLabel, updated_at: nowIso() } : row
+        row.item === oldLabel
+          ? { ...row, item: newLabel, updated_at: nowIso() }
+          : row
       );
     }
 
@@ -4372,14 +4550,25 @@ export async function hasEmailCampaignEvent(
   return hasEmailEventRow(campaignId, normalized, kind);
 }
 
-export async function listEmailEvents(campaignId?: string) {
+export async function listEmailEvents(
+  campaignId?: string,
+  options?: { kinds?: EmailEventKind[] }
+) {
+  const kinds = options?.kinds;
+  const kindSet = kinds && kinds.length > 0 ? new Set(kinds) : null;
   const store = await readStore();
   let rows = [...(store.email_events ?? [])];
   if (campaignId) {
     rows = rows.filter((e) => e.campaign_id === campaignId);
   }
+  if (kindSet) {
+    rows = rows.filter((e) => kindSet.has(e.kind));
+  }
   const { listEmailEventRows } = await import("@/lib/email/event-log");
-  const extra = await listEmailEventRows(campaignId);
+  const extra = await listEmailEventRows(
+    campaignId,
+    kinds ? { kinds } : undefined
+  );
   const seen = new Set<string>();
   const merged: EmailEvent[] = [];
   for (const event of [...extra, ...rows]) {

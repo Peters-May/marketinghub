@@ -3,10 +3,20 @@
 import { cn } from "@/lib/utils";
 import { isImageUrl } from "@/lib/social/platforms";
 import type { ClothingProduct } from "@/lib/merch/north-sails";
+import type {
+  MerchCatalogueColour,
+  MerchCatalogueImageAsset,
+} from "@/lib/types";
 
 export type ClothingProductCardItem = ClothingProduct & {
   image_url: string;
   hidden?: boolean;
+  images?: MerchCatalogueImageAsset[];
+  colourSwatches?: MerchCatalogueColour[];
+  sizes?: string[];
+  description?: string;
+  supplier_url?: string;
+  custom?: boolean;
 };
 
 function ProductThumb({
