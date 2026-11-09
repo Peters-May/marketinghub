@@ -1748,16 +1748,71 @@ export async function deleteThemeOffshoot(id: string) {
   });
 }
 
-export async function listMerchOrders() {
-  const store = await readStore();
-  return [...store.merch_orders].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at)
+type MerchRpcError = { code?: string; message?: string };
+
+function isMissingMerchRpc(error: MerchRpcError): boolean {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST202" ||
+    /hub_merch_slice|hub_merch_catalogue_get|hub_merch_catalogue_upsert|hub_merch_catalogue_delete|hub_merch_order_insert|schema cache/i.test(
+      message
+    )
   );
 }
 
+type MerchSlice = {
+  merch_catalogue: MerchCatalogueImage[];
+  merch_inventory: MerchInventoryItem[];
+  merch_orders: MerchOrder[];
+};
+
+/** Merch collections only — avoids downloading the rest of hub_store. */
+async function readMerchSliceDirect(): Promise<MerchSlice | undefined> {
+  if (!hasServiceRoleKey()) return undefined;
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_merch_slice");
+  if (error) {
+    if (isMissingMerchRpc(error)) return undefined;
+    throw new Error(error.message);
+  }
+  if (!data || typeof data !== "object") return undefined;
+  const row = data as Record<string, unknown>;
+  return {
+    merch_catalogue: Array.isArray(row.merch_catalogue)
+      ? (row.merch_catalogue as MerchCatalogueImage[])
+      : [],
+    merch_inventory: Array.isArray(row.merch_inventory)
+      ? (row.merch_inventory as MerchInventoryItem[])
+      : [],
+    merch_orders: Array.isArray(row.merch_orders)
+      ? (row.merch_orders as MerchOrder[])
+      : [],
+  };
+}
+
+function catalogueFromRpc(data: unknown): MerchCatalogueImage | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const row = data as MerchCatalogueImage;
+  if (typeof row.product_id !== "string" || !row.product_id.trim()) return null;
+  return row;
+}
+
+function orderFromRpc(data: unknown): MerchOrder | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const row = data as MerchOrder;
+  if (typeof row.id !== "string" || !row.id.trim()) return null;
+  return row;
+}
+
+export async function listMerchOrders() {
+  const slice = await readMerchSliceDirect();
+  const orders = slice ? slice.merch_orders : (await readStore()).merch_orders;
+  return [...orders].sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export async function getMerchOrder(id: string) {
-  const store = await readStore();
-  return store.merch_orders.find((o) => o.id === id) ?? null;
+  const orders = await listMerchOrders();
+  return orders.find((o) => o.id === id) ?? null;
 }
 
 export async function createMerchOrder(
@@ -1776,6 +1831,19 @@ export async function createMerchOrder(
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  if (hasServiceRoleKey()) {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase.rpc("hub_merch_order_insert", {
+      p_item: item,
+    });
+    if (!error) {
+      forgetRemoteStore();
+      const stored = orderFromRpc(data);
+      if (!stored) throw new Error("Could not save clothing request");
+      return stored;
+    }
+    if (!isMissingMerchRpc(error)) throw new Error(error.message);
+  }
   await updateStore((s) => {
     s.merch_orders.push(item);
   });
@@ -1828,6 +1896,8 @@ export async function deleteMerchOrder(id: string) {
 }
 
 export async function listMerchCatalogue() {
+  const slice = await readMerchSliceDirect();
+  if (slice) return [...(slice.merch_catalogue ?? [])];
   const store = await readStore();
   return [...(store.merch_catalogue ?? [])];
 }
@@ -1930,6 +2000,175 @@ function catalogueRowHasContent(row: MerchCatalogueImage): boolean {
   );
 }
 
+function buildMerchCatalogueRow(
+  id: string,
+  patch: MerchCataloguePatch,
+  list: MerchCatalogueImage[],
+  prev: MerchCatalogueImage | undefined
+): {
+  next: MerchCatalogueImage | null;
+  oldLabel: string;
+  newLabel: string;
+  needsRenameCascade: boolean;
+} {
+  const base = clothingProductById(id);
+  const isCustom =
+    patch.custom === true ||
+    prev?.custom === true ||
+    (!base && (Boolean(prev) || Boolean(patch.label)));
+  const oldLabel =
+    effectiveProductLabel(id, list) ??
+    prev?.label?.trim() ??
+    base?.label ??
+    id;
+
+  const images =
+    patch.images !== undefined
+      ? normalizeCatalogueImages(patch.images)
+      : prev?.images;
+  const primaryFromImages = images?.find((img) => img.url?.trim())?.url;
+
+  const next: MerchCatalogueImage = {
+    product_id: id,
+    image_url:
+      patch.image_url !== undefined
+        ? patch.image_url.trim()
+        : primaryFromImages || prev?.image_url || "",
+    updated_at: nowIso(),
+  };
+
+  if (images?.length) next.images = images;
+  else if (prev?.images?.length && patch.images === undefined) {
+    next.images = prev.images;
+  }
+
+  if (isCustom) next.custom = true;
+
+  if (patch.label !== undefined) {
+    const label = normalizeOptionalText(patch.label);
+    if (label) next.label = label;
+  } else if (prev?.label?.trim()) {
+    next.label = prev.label.trim();
+  } else if (isCustom && base?.label) {
+    next.label = base.label;
+  }
+
+  if (isCustom && !next.label?.trim()) {
+    return { next: null, oldLabel, newLabel: oldLabel, needsRenameCascade: false };
+  }
+
+  if (patch.brand !== undefined) {
+    const brand = normalizeOptionalText(patch.brand);
+    if (brand) next.brand = brand;
+  } else if (prev?.brand?.trim()) {
+    next.brand = prev.brand.trim();
+  }
+
+  if (patch.material !== undefined) {
+    const material = normalizeOptionalText(patch.material);
+    if (material) next.material = material;
+  } else if (prev?.material?.trim()) {
+    next.material = prev.material.trim();
+  }
+
+  if (patch.description !== undefined) {
+    const description = normalizeOptionalText(patch.description);
+    if (description) next.description = description;
+  } else if (prev?.description?.trim()) {
+    next.description = prev.description.trim();
+  }
+
+  if (patch.colour_swatches !== undefined) {
+    const swatches = normalizeColourSwatches(patch.colour_swatches);
+    if (swatches?.length) {
+      next.colour_swatches = swatches;
+      next.colours = swatches.map((c) => c.name);
+    }
+  } else if (patch.colours !== undefined) {
+    const colours = normalizeColourList(patch.colours);
+    if (colours?.length) {
+      next.colours = colours;
+      if (prev?.colour_swatches?.length) {
+        next.colour_swatches = prev.colour_swatches.filter((c) =>
+          colours.includes(c.name)
+        );
+      }
+    }
+  } else {
+    if (prev?.colours?.length) next.colours = [...prev.colours];
+    if (prev?.colour_swatches?.length) {
+      next.colour_swatches = [...prev.colour_swatches];
+    }
+  }
+
+  if (patch.default_colour !== undefined) {
+    const defaultColour = normalizeOptionalText(patch.default_colour);
+    if (defaultColour) next.default_colour = defaultColour;
+  } else if (prev?.default_colour?.trim()) {
+    next.default_colour = prev.default_colour.trim();
+  }
+
+  if (patch.sizes !== undefined) {
+    const sizes = normalizeSizeList(patch.sizes);
+    if (sizes?.length) next.sizes = sizes;
+  } else if (prev?.sizes?.length) {
+    next.sizes = [...prev.sizes];
+  }
+
+  if (patch.supplier_url !== undefined) {
+    const supplier = normalizeOptionalText(patch.supplier_url);
+    if (supplier) next.supplier_url = supplier;
+  } else if (prev?.supplier_url?.trim()) {
+    next.supplier_url = prev.supplier_url.trim();
+  }
+
+  if (patch.hidden !== undefined) {
+    if (patch.hidden) next.hidden = true;
+  } else if (prev?.hidden) {
+    next.hidden = true;
+  }
+
+  const newLabel = next.label?.trim() || base?.label || oldLabel;
+  return {
+    next: catalogueRowHasContent(next) ? next : null,
+    oldLabel,
+    newLabel,
+    needsRenameCascade: oldLabel !== newLabel,
+  };
+}
+
+async function upsertMerchCatalogueDirect(
+  next: MerchCatalogueImage
+): Promise<MerchCatalogueImage | null | undefined> {
+  if (!hasServiceRoleKey()) return undefined;
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_merch_catalogue_upsert", {
+    p_item: next,
+  });
+  if (error) {
+    if (isMissingMerchRpc(error)) return undefined;
+    throw new Error(error.message);
+  }
+  forgetRemoteStore();
+  return catalogueFromRpc(data);
+}
+
+async function deleteMerchCatalogueDirect(
+  productId: string
+): Promise<boolean | undefined> {
+  if (!hasServiceRoleKey()) return undefined;
+  const supabase = createServiceClient();
+  const { data, error } = await supabase.rpc("hub_merch_catalogue_delete", {
+    p_product_id: productId,
+  });
+  if (error) {
+    if (isMissingMerchRpc(error)) return undefined;
+    throw new Error(error.message);
+  }
+  forgetRemoteStore();
+  return data === true;
+}
+
 /**
  * Upsert catalogue product (built-in override or custom).
  * Renaming `label` also rewrites matching merch order / inventory item strings.
@@ -1940,132 +2179,36 @@ export async function upsertMerchCatalogue(
 ) {
   const id = productId.trim();
   if (!id) return null;
-  const base = clothingProductById(id);
+
+  const list = await listMerchCatalogue();
+  const prev = list.find((c) => c.product_id === id);
+  const built = buildMerchCatalogueRow(id, patch, list, prev);
+
+  // Label renames still need a full-store write so orders/inventory stay in sync.
+  if (!built.needsRenameCascade) {
+    if (!built.next) {
+      const deleted = await deleteMerchCatalogueDirect(id);
+      if (deleted !== undefined) return null;
+    } else {
+      const stored = await upsertMerchCatalogueDirect(built.next);
+      if (stored !== undefined) {
+        if (!stored) throw new Error("Could not save clothing product");
+        return stored;
+      }
+    }
+  }
 
   let updated: MerchCatalogueImage | null = null;
   await updateStore((s) => {
-    const list = s.merch_catalogue ?? [];
-    const idx = list.findIndex((c) => c.product_id === id);
-    const prev = idx >= 0 ? list[idx] : undefined;
-    const isCustom =
-      patch.custom === true ||
-      prev?.custom === true ||
-      (!base && (Boolean(prev) || Boolean(patch.label)));
-    const oldLabel =
-      effectiveProductLabel(id, list) ??
-      prev?.label?.trim() ??
-      base?.label ??
-      id;
+    const storeList = s.merch_catalogue ?? [];
+    const idx = storeList.findIndex((c) => c.product_id === id);
+    const storePrev = idx >= 0 ? storeList[idx] : undefined;
+    const rebuilt = buildMerchCatalogueRow(id, patch, storeList, storePrev);
+    const next = rebuilt.next;
+    const oldLabel = rebuilt.oldLabel;
+    const newLabel = rebuilt.newLabel;
 
-    const images =
-      patch.images !== undefined
-        ? normalizeCatalogueImages(patch.images)
-        : prev?.images;
-    const primaryFromImages = images?.find((img) => img.url?.trim())?.url;
-
-    const next: MerchCatalogueImage = {
-      product_id: id,
-      image_url:
-        patch.image_url !== undefined
-          ? patch.image_url.trim()
-          : primaryFromImages || prev?.image_url || "",
-      updated_at: nowIso(),
-    };
-
-    if (images?.length) next.images = images;
-    else if (prev?.images?.length && patch.images === undefined) {
-      next.images = prev.images;
-    }
-
-    if (isCustom) next.custom = true;
-
-    if (patch.label !== undefined) {
-      const label = normalizeOptionalText(patch.label);
-      if (label) next.label = label;
-    } else if (prev?.label?.trim()) {
-      next.label = prev.label.trim();
-    } else if (isCustom && base?.label) {
-      next.label = base.label;
-    }
-
-    if (isCustom && !next.label?.trim()) {
-      updated = null;
-      return;
-    }
-
-    if (patch.brand !== undefined) {
-      const brand = normalizeOptionalText(patch.brand);
-      if (brand) next.brand = brand;
-    } else if (prev?.brand?.trim()) {
-      next.brand = prev.brand.trim();
-    }
-
-    if (patch.material !== undefined) {
-      const material = normalizeOptionalText(patch.material);
-      if (material) next.material = material;
-    } else if (prev?.material?.trim()) {
-      next.material = prev.material.trim();
-    }
-
-    if (patch.description !== undefined) {
-      const description = normalizeOptionalText(patch.description);
-      if (description) next.description = description;
-    } else if (prev?.description?.trim()) {
-      next.description = prev.description.trim();
-    }
-
-    if (patch.colour_swatches !== undefined) {
-      const swatches = normalizeColourSwatches(patch.colour_swatches);
-      if (swatches?.length) {
-        next.colour_swatches = swatches;
-        next.colours = swatches.map((c) => c.name);
-      }
-    } else if (patch.colours !== undefined) {
-      const colours = normalizeColourList(patch.colours);
-      if (colours?.length) {
-        next.colours = colours;
-        if (prev?.colour_swatches?.length) {
-          next.colour_swatches = prev.colour_swatches.filter((c) =>
-            colours.includes(c.name)
-          );
-        }
-      }
-    } else {
-      if (prev?.colours?.length) next.colours = [...prev.colours];
-      if (prev?.colour_swatches?.length) {
-        next.colour_swatches = [...prev.colour_swatches];
-      }
-    }
-
-    if (patch.default_colour !== undefined) {
-      const defaultColour = normalizeOptionalText(patch.default_colour);
-      if (defaultColour) next.default_colour = defaultColour;
-    } else if (prev?.default_colour?.trim()) {
-      next.default_colour = prev.default_colour.trim();
-    }
-
-    if (patch.sizes !== undefined) {
-      const sizes = normalizeSizeList(patch.sizes);
-      if (sizes?.length) next.sizes = sizes;
-    } else if (prev?.sizes?.length) {
-      next.sizes = [...prev.sizes];
-    }
-
-    if (patch.supplier_url !== undefined) {
-      const supplier = normalizeOptionalText(patch.supplier_url);
-      if (supplier) next.supplier_url = supplier;
-    } else if (prev?.supplier_url?.trim()) {
-      next.supplier_url = prev.supplier_url.trim();
-    }
-
-    if (patch.hidden !== undefined) {
-      if (patch.hidden) next.hidden = true;
-    } else if (prev?.hidden) {
-      next.hidden = true;
-    }
-
-    const newLabel = next.label?.trim() || base?.label || oldLabel;
-    if (oldLabel !== newLabel) {
+    if (rebuilt.needsRenameCascade) {
       s.merch_orders = s.merch_orders.map((order) => {
         let changed = order.item === oldLabel;
         const items = order.items?.map((line) => {
@@ -2088,16 +2231,16 @@ export async function upsertMerchCatalogue(
       );
     }
 
-    if (!catalogueRowHasContent(next)) {
-      s.merch_catalogue = list.filter((c) => c.product_id !== id);
+    if (!next) {
+      s.merch_catalogue = storeList.filter((c) => c.product_id !== id);
       updated = null;
       return;
     }
 
     if (idx === -1) {
-      s.merch_catalogue = [...list, next];
+      s.merch_catalogue = [...storeList, next];
     } else {
-      s.merch_catalogue = list.map((c, i) => (i === idx ? next : c));
+      s.merch_catalogue = storeList.map((c, i) => (i === idx ? next : c));
     }
     updated = next;
   });
@@ -2112,8 +2255,11 @@ export async function upsertMerchCatalogueImage(
 }
 
 export async function listMerchInventory() {
-  const store = await readStore();
-  return [...store.merch_inventory].sort((a, b) => {
+  const slice = await readMerchSliceDirect();
+  const inventory = slice
+    ? slice.merch_inventory
+    : (await readStore()).merch_inventory;
+  return [...inventory].sort((a, b) => {
     const itemCmp = a.item.localeCompare(b.item);
     if (itemCmp !== 0) return itemCmp;
     const fitCmp = (a.fit || "").localeCompare(b.fit || "");
