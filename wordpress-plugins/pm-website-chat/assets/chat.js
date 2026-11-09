@@ -812,19 +812,22 @@
     open = next;
     root.classList.toggle("pm-chat--open", open);
     if (open && !sessionId) {
-      setComposerEnabled(false);
       var remembered = readRememberedSession();
-      if (remembered) resumeSession(remembered);
-      else startSession();
+      if (remembered) {
+        setComposerEnabled(false);
+        resumeSession(remembered);
+      } else {
+        // Show greeting immediately — do not block the UI on Hub connect.
+        showOpeningGreeting(localGreeting());
+        setComposerEnabled(true);
+        startSession();
+      }
     }
     if (open) {
       startPoll();
       document.body.classList.add("pm-chat-lock");
       panel.setAttribute("tabindex", "-1");
-      if (sessionId) {
-        setComposerEnabled(true);
-        input.focus();
-      }
+      input.focus();
     } else {
       stopPoll();
       document.body.classList.remove("pm-chat-lock");
@@ -1522,13 +1525,19 @@
 
   function startSession() {
     if (sessionId) return Promise.resolve(sessionId);
-    // Stale promise after End chat must not reopen the old session.
-    if (sessionPromise) {
-      sessionPromise = null;
-    }
-    // Wait for the Hub greeting — do not show a placeholder that then swaps.
-    setTyping(true);
-    sessionPromise = fetch(apiUrl("api/chat/sessions"), {
+    if (sessionPromise) return sessionPromise;
+    showOpeningGreeting(localGreeting());
+    setComposerEnabled(true);
+
+    var controller =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timedOut = false;
+    var timeoutId = setTimeout(function () {
+      timedOut = true;
+      if (controller) controller.abort();
+    }, 8000);
+
+    var fetchOpts = {
       method: "POST",
       headers: headers(),
       credentials: useProxy ? "same-origin" : "omit",
@@ -1538,7 +1547,10 @@
         referrer: cfg.referrer,
         utm: cfg.utm || {},
       }),
-    })
+    };
+    if (controller) fetchOpts.signal = controller.signal;
+
+    sessionPromise = fetch(apiUrl("api/chat/sessions"), fetchOpts)
       .then(function (r) {
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Could not start chat");
@@ -1547,43 +1559,34 @@
       })
       .then(function (data) {
         rememberSession(data.session && data.session.id);
-        var serverBody =
-          (cfg.greeting && String(cfg.greeting).trim()) ||
-          (data.message && data.message.body) ||
-          localGreeting();
         if (data.message && data.message.id) {
           seenIds[data.message.id] = true;
           lastMessageAt = data.message.created_at;
         }
-        showOpeningGreeting(serverBody);
+        // Keep the greeting already on screen — only refresh hours / identical copy.
         if (data.office_hours_note) {
           cfg.labels.hours = data.office_hours_note;
           var sub = headerText.querySelector(".pm-chat__subtitle");
           if (sub && !teamJoined) sub.textContent = data.office_hours_note;
         }
         setComposerEnabled(true);
-        input.focus();
         return sessionId;
       })
       .catch(function () {
         sessionPromise = null;
-        // Offline fallback: one stable greeting, no mid-load swap.
         showOpeningGreeting(localGreeting());
         setComposerEnabled(true);
         showUnavailableNotice(function () {
-          if (greetingNode && greetingNode.parentNode) {
-            greetingNode.parentNode.removeChild(greetingNode);
-          }
-          greetingNode = null;
-          startersShown = false;
-          hideStarters();
-          setComposerEnabled(false);
           startSession();
         });
         return null;
       })
       .finally(function () {
+        clearTimeout(timeoutId);
         setTyping(false);
+        if (timedOut && !sessionId) {
+          sessionPromise = null;
+        }
       });
     return sessionPromise;
   }
