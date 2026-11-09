@@ -23,6 +23,7 @@ type EditState = {
   material: string;
   description: string;
   supplier_url: string;
+  unit_cost: string;
   colours: MerchCatalogueColour[];
   default_colour: string;
   sizes: string[];
@@ -31,12 +32,18 @@ type EditState = {
   create: boolean;
 };
 
+function formatCost(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  return value.toFixed(2);
+}
+
 const emptyEdit = (): EditState => ({
   label: "",
   brand: "North Sails",
   material: "",
   description: "",
   supplier_url: "",
+  unit_cost: "",
   colours: [
     { name: "Navy", hex: hexForColourName("Navy") },
     { name: "White", hex: hexForColourName("White") },
@@ -66,6 +73,7 @@ function productToEdit(product: ClothingProductCardItem): EditState {
     material: product.material || "",
     description: product.description || "",
     supplier_url: product.supplier_url || product.links?.male || "",
+    unit_cost: formatCost(product.unit_cost),
     colours,
     default_colour: product.defaultColour || colours[0]?.name || "",
     sizes: product.sizes?.length ? [...product.sizes] : [...CLOTHING_SIZES],
@@ -128,6 +136,7 @@ export function CatalogueManager() {
           material: edit.material.trim(),
           description: edit.description.trim(),
           supplier_url: edit.supplier_url.trim(),
+          unit_cost: edit.unit_cost.trim() === "" ? null : edit.unit_cost.trim(),
           colour_swatches: edit.colours,
           colours: edit.colours.map((c) => c.name),
           default_colour: edit.default_colour || edit.colours[0]?.name,
@@ -204,6 +213,16 @@ export function CatalogueManager() {
                   {product.custom ? " · Custom" : ""}
                   {product.hidden ? " · Hidden" : ""}
                 </p>
+                {typeof product.unit_cost === "number" ? (
+                  <p className="text-sm font-medium text-foreground">
+                    £{product.unit_cost.toFixed(2)}
+                    <span className="ml-1 text-xs font-normal text-muted">
+                      unit cost
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted">No unit cost set</p>
+                )}
                 {product.colourSwatches?.length || product.colours.length ? (
                   <ColourSwatches
                     colours={
@@ -348,6 +367,25 @@ export function CatalogueManager() {
                     setEdit({ ...edit, supplier_url: e.target.value })
                   }
                 />
+              </div>
+              <div>
+                <label className="label">Unit cost (£)</label>
+                <input
+                  className="field"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="e.g. 28.50"
+                  value={edit.unit_cost}
+                  onChange={(e) =>
+                    setEdit({ ...edit, unit_cost: e.target.value })
+                  }
+                />
+                <p className="mt-1 text-[11px] text-muted">
+                  Admin-only — used to track kit cost. Not shown on the public
+                  or staff shop.
+                </p>
               </div>
               <div>
                 <label className="label">Colours</label>

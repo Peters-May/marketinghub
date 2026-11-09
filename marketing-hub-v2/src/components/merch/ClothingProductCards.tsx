@@ -16,6 +16,8 @@ export type ClothingProductCardItem = ClothingProduct & {
   sizes?: string[];
   description?: string;
   supplier_url?: string;
+  /** Admin-only unit cost in GBP. */
+  unit_cost?: number | null;
   custom?: boolean;
 };
 

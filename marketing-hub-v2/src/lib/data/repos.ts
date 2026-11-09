@@ -1914,6 +1914,8 @@ export type MerchCataloguePatch = {
   default_colour?: string;
   sizes?: string[];
   supplier_url?: string;
+  /** Pass null to clear. */
+  unit_cost?: number | null;
   hidden?: boolean;
   custom?: boolean;
 };
@@ -1996,8 +1998,17 @@ function catalogueRowHasContent(row: MerchCatalogueImage): boolean {
       (row.colour_swatches && row.colour_swatches.length > 0) ||
       (row.sizes && row.sizes.length > 0) ||
       row.supplier_url?.trim() ||
-      row.default_colour?.trim()
+      row.default_colour?.trim() ||
+      (typeof row.unit_cost === "number" && Number.isFinite(row.unit_cost))
   );
+}
+
+function normalizeUnitCost(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100) / 100;
 }
 
 function buildMerchCatalogueRow(
@@ -2120,6 +2131,18 @@ function buildMerchCatalogueRow(
     if (supplier) next.supplier_url = supplier;
   } else if (prev?.supplier_url?.trim()) {
     next.supplier_url = prev.supplier_url.trim();
+  }
+
+  if (patch.unit_cost !== undefined) {
+    const unitCost = normalizeUnitCost(patch.unit_cost);
+    if (unitCost !== undefined) {
+      next.unit_cost = unitCost;
+    }
+  } else if (
+    typeof prev?.unit_cost === "number" &&
+    Number.isFinite(prev.unit_cost)
+  ) {
+    next.unit_cost = prev.unit_cost;
   }
 
   if (patch.hidden !== undefined) {

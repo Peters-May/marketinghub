@@ -445,6 +445,7 @@ export const MERCH_CATALOGUE_FIELDS: FieldDef[] = [
   f("image_url", { type: "url", label: "Primary image" }),
   f("default_colour", { label: "Default colour" }),
   f("supplier_url", { type: "url", label: "Supplier URL" }),
+  f("unit_cost", { type: "number", label: "Unit cost (£)" }),
   f("updated_at", { type: "readonly", locked: true }),
 ];
 

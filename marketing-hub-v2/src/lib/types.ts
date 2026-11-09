@@ -864,6 +864,8 @@ export type MerchCatalogueImage = {
   default_colour?: string;
   sizes?: string[];
   supplier_url?: string;
+  /** Unit cost in GBP for Marketing cost tracking (admin-only). */
+  unit_cost?: number | null;
   /** When true, the item is removed from the live order catalogue. Admins can restore it. */
   hidden?: boolean;
   /** Admin-created product (not only an override of a built-in). */

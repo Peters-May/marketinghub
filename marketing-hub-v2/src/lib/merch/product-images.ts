@@ -23,6 +23,8 @@ export type ShopClothingProduct = ClothingProduct & {
   sizes: string[];
   description?: string;
   supplier_url?: string;
+  /** Unit cost in GBP — only returned to admins. */
+  unit_cost?: number | null;
   hidden?: boolean;
   custom?: boolean;
 };
@@ -266,6 +268,10 @@ export function clothingProductsWithImages(
         : primary
           ? [{ url: primary, sort: 0 }]
           : [];
+    const unitCost =
+      typeof row?.unit_cost === "number" && Number.isFinite(row.unit_cost)
+        ? row.unit_cost
+        : null;
     return {
       ...p,
       image_url: primary,
@@ -279,10 +285,19 @@ export function clothingProductsWithImages(
         p.links?.male ||
         p.links?.female ||
         undefined,
+      unit_cost: unitCost,
       hidden: Boolean(row?.hidden),
       custom: row ? isCustomCatalogueRow(row) : false,
     };
   });
+}
+
+/** Strip admin-only cost fields before sending catalogue to non-admins / public. */
+export function withoutUnitCost<T extends { unit_cost?: number | null }>(
+  product: T
+): Omit<T, "unit_cost"> {
+  const { unit_cost: _unitCost, ...rest } = product;
+  return rest;
 }
 
 /** Stable slug for a new custom catalogue product. */

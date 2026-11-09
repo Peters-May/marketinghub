@@ -10,9 +10,15 @@ import { clothingProductById } from "@/lib/merch/north-sails";
 import {
   clothingProductsWithImages,
   slugifyProductId,
+  withoutUnitCost,
 } from "@/lib/merch/product-images";
 import { swatchesFromColourNames } from "@/lib/merch/colour-swatches";
-import type { MerchCatalogueColour, MerchCatalogueImageAsset } from "@/lib/types";
+import { isMerchAdmin } from "@/lib/merch/access";
+import type {
+  MerchCatalogueColour,
+  MerchCatalogueImage,
+  MerchCatalogueImageAsset,
+} from "@/lib/types";
 
 function parseColourList(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;
@@ -84,20 +90,41 @@ function parseSizes(value: unknown): string[] | undefined {
     .filter(Boolean);
 }
 
+function parseUnitCost(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return null;
+  }
+  return Math.round(n * 100) / 100;
+}
+
+function stripCatalogueCosts(
+  catalogue: MerchCatalogueImage[]
+): MerchCatalogueImage[] {
+  return catalogue.map((row) => {
+    const { unit_cost: _cost, ...rest } = row;
+    return rest;
+  });
+}
+
 export async function GET(request: NextRequest) {
-  const { error } = await requireStaff();
+  const { user, error } = await requireStaff();
   if (error) return error;
+  const admin = isMerchAdmin(user);
   const includeHidden =
     request.nextUrl.searchParams.get("include_hidden") === "1";
   const [catalogue, inventory] = await Promise.all([
     listMerchCatalogue(),
     listMerchInventory(),
   ]);
+  const products = clothingProductsWithImages(catalogue, inventory, {
+    includeHidden: admin ? includeHidden : false,
+  });
   return jsonOk({
-    catalogue,
-    products: clothingProductsWithImages(catalogue, inventory, {
-      includeHidden,
-    }),
+    catalogue: admin ? catalogue : stripCatalogueCosts(catalogue),
+    products: admin ? products : products.map(withoutUnitCost),
   });
 }
 
@@ -163,6 +190,7 @@ export async function POST(request: NextRequest) {
     sizes: parseSizes(body.sizes),
     supplier_url:
       typeof body.supplier_url === "string" ? body.supplier_url : undefined,
+    unit_cost: parseUnitCost(body.unit_cost),
     hidden: typeof body.hidden === "boolean" ? body.hidden : undefined,
     custom: creating || body.custom === true ? true : undefined,
   };
