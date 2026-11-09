@@ -2,6 +2,8 @@ import { jsonOk } from "@/lib/api";
 import { listMerchCatalogue, listMerchInventory } from "@/lib/data/repos";
 import { clothingProductsWithImages } from "@/lib/merch/product-images";
 
+export const dynamic = "force-dynamic";
+
 /** Public catalogue — visible products only, no auth. */
 export async function GET() {
   const [catalogue, inventory] = await Promise.all([
