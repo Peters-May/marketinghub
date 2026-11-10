@@ -124,6 +124,30 @@ describe("parseHubCommand", () => {
     expect(parsed.asset_url).toBe("https://cdn.example.com/Peters-May.pdf");
   });
 
+  it("adds a multi-channel sailing campaign plan", () => {
+    const parsed = command(
+      "Add a campaign Antigua to Southampton March 2027 platform Multi-channel goal Promote sailing opportunities to racing teams notes Highest priority; segmented email, direct sales, LinkedIn"
+    );
+    expect(parsed.kind).toBe("create_paid_campaign");
+    if (parsed.kind !== "create_paid_campaign") return;
+    expect(parsed.name).toBe("Antigua to Southampton March 2027");
+    expect(parsed.platform).toBe("Multi-channel");
+    expect(parsed.goal).toContain("racing teams");
+    expect(parsed.notes).toContain("Highest priority");
+    expect(parsed.href).toBe("/app/reports");
+  });
+
+  it("adds an email campaign draft with a brief", () => {
+    const parsed = command(
+      "Add an email campaign Antigua to Southampton March 2027 brief Segmented email to yachts returning to Europe"
+    );
+    expect(parsed.kind).toBe("create_email_campaign");
+    if (parsed.kind !== "create_email_campaign") return;
+    expect(parsed.title).toBe("Antigua to Southampton March 2027");
+    expect(parsed.brief).toContain("yachts returning");
+    expect(parsed.href).toBe("/app/email");
+  });
+
   it("updates a task status", () => {
     const parsed = command("Update task call the organiser status done");
     expect(parsed.kind).toBe("update_task");

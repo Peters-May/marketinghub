@@ -9,7 +9,9 @@ import type { HubCommand } from "@/lib/command/parse";
 import { normalizeChannels } from "@/lib/data/normalize";
 import {
   createContent,
+  createEmailCampaign,
   createEvent,
+  createPaidCampaign,
   createTask,
   listContacts,
   linkEventContent,
@@ -63,7 +65,9 @@ function needsAdmin(kind: HubCommand["kind"]) {
     kind === "mark_events_we_are_attending" ||
     kind === "create_marketing_list" ||
     kind === "create_presentation" ||
-    kind === "create_event_cost"
+    kind === "create_event_cost" ||
+    kind === "create_paid_campaign" ||
+    kind === "create_email_campaign"
   );
 }
 
@@ -318,6 +322,75 @@ export async function executeHubCommand(
       ok: true,
       message: `Added ${amountLabel} ${line.category.replace(/_/g, " ")} for ${staffName} on “${found.item.title}”.`,
       href: costsSheetPath(found.item.id),
+      area: command.area,
+    };
+  }
+
+  if (command.kind === "create_paid_campaign") {
+    const created = await createPaidCampaign({
+      name: command.name,
+      platform: command.platform || "Multi-channel",
+      status: command.status || "draft",
+      external_id: "",
+      external_url: "",
+      starts_at: command.starts_at,
+      ends_at: command.ends_at,
+      spent: null,
+      goal: command.goal || command.name,
+      key_results: "",
+      cost_per_result: null,
+      impressions: null,
+      clicks: null,
+      ctr: "",
+      landing_clicks: null,
+      engagement_rate: "",
+      notes: command.notes || "",
+      theme_id: null,
+      content_id: null,
+      event_id: null,
+    });
+    return {
+      ok: true,
+      message: `Added campaign “${created.name}” under Reporting.`,
+      href: command.href,
+      area: command.area,
+    };
+  }
+
+  if (command.kind === "create_email_campaign") {
+    const created = await createEmailCampaign({
+      title: command.title,
+      status: "draft",
+      subject: command.subject || command.title,
+      preview_text: "",
+      from_name: "Peters & May Marketing",
+      from_email: "hello@petersandmay.com",
+      html_body: "",
+      design: null,
+      template_id: null,
+      audience_id: null,
+      exclude_audience_id: null,
+      list_ids: [],
+      recipient_ids: [],
+      brief: command.brief || "",
+      hubspot_url: "",
+      theme_id: null,
+      content_id: null,
+      event_id: null,
+      folder: command.folder || "",
+      category: "marketing",
+      follow_up_of: null,
+      adj_open_rate: null,
+      adj_click_rate: null,
+      scheduled_at: null,
+      sent_at: null,
+      last_error: "",
+      created_by: user.email || user.id || "",
+    });
+    return {
+      ok: true,
+      message: `Added email campaign draft “${created.title}”.`,
+      href: command.href,
       area: command.area,
     };
   }

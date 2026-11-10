@@ -48,6 +48,27 @@ describe("hub-actions", () => {
     expect(wrapped).toContain("Add PR content Bahri");
   });
 
+  it("serializes a sailing campaign into parseable command lines", () => {
+    const campaignLine = serializeHubAction({
+      kind: "create_campaign",
+      name: "Antigua to Southampton March 2027",
+      platform: "Multi-channel",
+      goal: "Promote sailing opportunities to racing teams",
+      notes: "Highest priority; segmented email, direct sales, LinkedIn",
+    });
+    const emailLine = serializeHubAction({
+      kind: "create_email_campaign",
+      title: "Antigua to Southampton March 2027",
+      brief: "Segmented email to yachts returning to Europe",
+    });
+    const campaign = parseHubCommand(campaignLine);
+    const email = parseHubCommand(emailLine);
+    expect(campaign.ok && campaign.command.kind === "create_paid_campaign").toBe(
+      true
+    );
+    expect(email.ok && email.command.kind === "create_email_campaign").toBe(true);
+  });
+
   it("extracts propose_hub_actions from generateText steps", () => {
     const actions = extractProposedActionsFromSteps([
       {

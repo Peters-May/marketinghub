@@ -37,12 +37,37 @@ export function parseCostAmount(value: unknown): number | null | undefined {
   return Math.round(amount * 100) / 100;
 }
 
-/** Admins edit any line; members only lines assigned to them. */
+type CostViewer = {
+  id: string;
+  /** Hub admin, or budget allowlist — sees and edits every line. */
+  canManageAll?: boolean;
+  /** @deprecated Prefer canManageAll; kept so older callers still work. */
+  isAdmin?: boolean;
+};
+
+/** Admins / budget editors manage every line; staff only their own. */
+export function canManageAllCostLines(viewer: Pick<CostViewer, "canManageAll" | "isAdmin">) {
+  return Boolean(viewer.canManageAll ?? viewer.isAdmin);
+}
+
+/** Admins / budget editors edit any line; members only lines assigned to them. */
 export function canEditCostLine(
   line: Pick<EventCostLine, "staff_user_id">,
-  viewer: { id: string; isAdmin: boolean }
+  viewer: CostViewer
 ) {
-  return viewer.isAdmin || (!!line.staff_user_id && line.staff_user_id === viewer.id);
+  return (
+    canManageAllCostLines(viewer) ||
+    (!!line.staff_user_id && line.staff_user_id === viewer.id)
+  );
+}
+
+/** Staff must not see colleagues' amounts — filter before returning or rendering. */
+export function filterVisibleCostLines<T extends Pick<EventCostLine, "staff_user_id">>(
+  lines: T[],
+  viewer: CostViewer
+): T[] {
+  if (canManageAllCostLines(viewer)) return lines;
+  return lines.filter((line) => line.staff_user_id === viewer.id);
 }
 
 /** Totals per currency, in COST_CURRENCIES order. Blank amounts are skipped. */

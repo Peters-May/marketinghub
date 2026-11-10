@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canEditCostLine,
+  canManageAllCostLines,
   costTotalsByCurrency,
   costsSheetPath,
   defaultCostsRequestDraft,
+  filterVisibleCostLines,
   findCostRequestRecipient,
   parseCostAmount,
 } from "@/lib/events/costs";
@@ -34,11 +36,38 @@ describe("canEditCostLine", () => {
     expect(canEditCostLine({ staff_user_id: null }, { id: "a1", isAdmin: true })).toBe(true);
   });
 
+  it("lets a budget editor edit any line via canManageAll", () => {
+    expect(
+      canEditCostLine({ staff_user_id: "u2" }, { id: "b1", canManageAll: true })
+    ).toBe(true);
+    expect(canManageAllCostLines({ canManageAll: true })).toBe(true);
+  });
+
   it("limits a member to their own lines", () => {
     const member = { id: "u1", isAdmin: false };
     expect(canEditCostLine({ staff_user_id: "u1" }, member)).toBe(true);
     expect(canEditCostLine({ staff_user_id: "u2" }, member)).toBe(false);
     expect(canEditCostLine({ staff_user_id: null }, member)).toBe(false);
+  });
+});
+
+describe("filterVisibleCostLines", () => {
+  const lines = [
+    { id: "1", staff_user_id: "u1" },
+    { id: "2", staff_user_id: "u2" },
+    { id: "3", staff_user_id: null },
+  ];
+
+  it("returns every line for admins and budget editors", () => {
+    expect(filterVisibleCostLines(lines, { id: "a1", canManageAll: true })).toEqual(lines);
+    expect(filterVisibleCostLines(lines, { id: "a1", isAdmin: true })).toEqual(lines);
+  });
+
+  it("returns only the viewer's own lines for staff", () => {
+    expect(filterVisibleCostLines(lines, { id: "u1", canManageAll: false })).toEqual([
+      lines[0],
+    ]);
+    expect(filterVisibleCostLines(lines, { id: "u3", isAdmin: false })).toEqual([]);
   });
 });
 

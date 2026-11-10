@@ -31,7 +31,7 @@ type CostRequest = {
   requested_by_name: string;
   created_at: string;
 };
-type Viewer = { id: string; isAdmin: boolean; name?: string };
+type Viewer = { id: string; isAdmin: boolean; canManageAll?: boolean; name?: string };
 /** Amount is kept as typed text while editing; parsed on save. */
 type Draft = EventCostLine & { amountText: string };
 
@@ -568,7 +568,7 @@ export function EventCostsModal({
                               addingStaffRowId === row.id ? lineNewName || "?" : row.staff_name
                             )}
                           </span>
-                          {viewer?.isAdmin ? (
+                          {viewer?.canManageAll || viewer?.isAdmin ? (
                             <select
                               aria-label="Staff"
                               className={`${CELL} !px-1`}

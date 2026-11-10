@@ -67,6 +67,21 @@ export const hubActionSchema = z.discriminatedUnion("kind", [
     description: z.string().min(1).max(300),
     notes: z.string().optional(),
   }),
+  z.object({
+    kind: z.literal("create_campaign"),
+    name: z.string().min(1).max(200),
+    platform: z.string().min(1).max(80).optional(),
+    goal: z.string().min(1).max(1000).optional(),
+    notes: z.string().max(4000).optional(),
+    starts_at: z.string().nullable().optional(),
+  }),
+  z.object({
+    kind: z.literal("create_email_campaign"),
+    title: z.string().min(1).max(200),
+    subject: z.string().max(200).optional(),
+    brief: z.string().max(4000).optional(),
+    folder: z.string().max(80).optional(),
+  }),
 ]);
 
 export type HubAction = z.infer<typeof hubActionSchema>;
@@ -156,6 +171,21 @@ export function serializeHubAction(action: HubAction): string {
         `description ${action.description}`,
       ];
       if (action.notes) bits.push(`notes ${action.notes}`);
+      return bits.join(" ");
+    }
+    case "create_campaign": {
+      const bits = [`Add a campaign ${action.name}`];
+      if (action.starts_at) bits.push(`starts ${action.starts_at}`);
+      bits.push(`platform ${action.platform || "Multi-channel"}`);
+      if (action.goal) bits.push(`goal ${action.goal}`);
+      if (action.notes) bits.push(`notes ${action.notes}`);
+      return bits.join(" ");
+    }
+    case "create_email_campaign": {
+      const bits = [`Add an email campaign ${action.title}`];
+      if (action.folder) bits.push(`folder ${action.folder}`);
+      if (action.subject) bits.push(`subject ${action.subject}`);
+      if (action.brief) bits.push(`brief ${action.brief}`);
       return bits.join(" ");
     }
     default:

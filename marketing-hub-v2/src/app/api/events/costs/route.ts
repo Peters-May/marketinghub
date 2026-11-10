@@ -7,7 +7,9 @@ import { createHubUser, listEvents, listHubUsers } from "@/lib/data/repos";
 import { sendEventCostsRequest } from "@/lib/email/send-event-costs-request";
 import {
   canEditCostLine,
+  canManageAllCostLines,
   costsSheetPath,
+  filterVisibleCostLines,
   findCostRequestRecipient,
   isCostCategory,
   isCostCurrency,
@@ -117,7 +119,14 @@ export async function GET(request: NextRequest) {
   if (error || !user) return error;
   const eventId = request.nextUrl.searchParams.get("eventId")?.trim() ?? "";
   if (!eventId) return jsonError("eventId is required");
-  const lines = await listEventCostLines(eventId);
+  const canManageAll = canAccessBudget(user);
+  const viewer = {
+    id: user.id,
+    isAdmin: user.role === "admin",
+    canManageAll,
+    name: user.full_name || user.email,
+  };
+  const lines = filterVisibleCostLines(await listEventCostLines(eventId), viewer);
   // The header button only needs the lines; skip the user directory lookup.
   if (request.nextUrl.searchParams.get("summary") === "1") return jsonOk({ lines });
   const [staff, requests] = await Promise.all([
@@ -127,11 +136,7 @@ export async function GET(request: NextRequest) {
   return jsonOk({
     lines,
     requests,
-    viewer: {
-      id: user.id,
-      isAdmin: user.role === "admin",
-      name: user.full_name || user.email,
-    },
+    viewer,
     staff: staff.map((u) => ({ id: u.id, name: u.full_name || u.email })),
     memberDomains: memberEmailDomains(),
   });
@@ -143,14 +148,18 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") return jsonError("Invalid request", 400);
   const action = String(body.action ?? "");
-  const viewer = { id: user.id, isAdmin: user.role === "admin" };
-  const budgetEditor = canAccessBudget(user);
+  const canManageAll = canAccessBudget(user);
+  const viewer = {
+    id: user.id,
+    isAdmin: user.role === "admin",
+    canManageAll,
+  };
 
   if (action === "save_line") {
     const id = String(body.id ?? "").trim();
     const existing = id ? await getEventCostLine(id) : null;
     if (id && !existing) return jsonError("That line no longer exists", 404);
-    if (existing && !canEditCostLine(existing, viewer) && !budgetEditor) {
+    if (existing && !canEditCostLine(existing, viewer)) {
       return jsonError("You can only edit your own lines", 403);
     }
 
@@ -167,7 +176,7 @@ export async function POST(request: NextRequest) {
     // Members always own the lines they add or edit. Admins and budget editors assign.
     let staffUserId: string | null = user.id;
     let staffName = user.full_name || user.email;
-    if (viewer.isAdmin || budgetEditor) {
+    if (canManageAllCostLines(viewer)) {
       staffUserId = String(body.staff_user_id ?? "").trim() || null;
       staffName = "";
       if (staffUserId) {
@@ -198,7 +207,7 @@ export async function POST(request: NextRequest) {
   if (action === "delete_line") {
     const existing = await getEventCostLine(String(body.id ?? ""));
     if (!existing) return jsonOk({ ok: true });
-    if (!canEditCostLine(existing, viewer) && !budgetEditor) {
+    if (!canEditCostLine(existing, viewer)) {
       return jsonError("You can only remove your own lines", 403);
     }
     await removeEventCostLine(existing.id);
@@ -207,7 +216,7 @@ export async function POST(request: NextRequest) {
 
   /** Add a colleague to the costs staff list (admin / budget editor), without sending a request. */
   if (action === "add_staff") {
-    if (!viewer.isAdmin && !budgetEditor) {
+    if (!canManageAllCostLines(viewer)) {
       return jsonError("Only admins can add people to costs", 403);
     }
     const resolved = await resolveCostsRecipient({

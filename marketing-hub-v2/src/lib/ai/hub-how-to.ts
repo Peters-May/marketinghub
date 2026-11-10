@@ -16,14 +16,20 @@ export const HUB_HOW_TO_TOPICS: HubHowToTopic[] = [
     title: "Create a marketing campaign",
     href: "/app/email",
     summary:
-      "Email marketing campaigns are created under Email. Paid media campaigns live under Reporting.",
+      "Ask the Hub assistant to create a campaign, or add one under Email (sends) or Reporting (paid/multi-channel plans).",
     steps: [
-      "Open Email (/app/email) for newsletter or marketing sends.",
-      "Use Create / New campaign, choose a template or blank design, set audience, then save a draft.",
-      "Sending and pitch emails stay in Admin workflows; members mainly see sent marketing emails.",
-      "For paid ads (LinkedIn, Google), open Reporting (/app/reports) and add a paid campaign record.",
+      "In the assistant, describe the campaign (route, channels, priority). Confirm the proposed create_campaign / create_email_campaign actions.",
+      "Open Email (/app/email) to finish audience and design on an email draft.",
+      "Open Reporting (/app/reports) for paid or multi-channel campaign plans and metrics.",
     ],
-    keywords: ["campaign", "email campaign", "newsletter", "paid media", "ads"],
+    keywords: [
+      "campaign",
+      "email campaign",
+      "newsletter",
+      "paid media",
+      "ads",
+      "sailing",
+    ],
   },
   {
     id: "add-event",

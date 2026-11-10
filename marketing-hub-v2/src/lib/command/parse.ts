@@ -1,7 +1,13 @@
 import { addDays, format, nextDay, startOfDay } from "date-fns";
 import type { ContentStatus } from "@/lib/types";
 
-export type HubDataArea = "tasks" | "events" | "content" | "email" | "library";
+export type HubDataArea =
+  | "tasks"
+  | "events"
+  | "content"
+  | "email"
+  | "library"
+  | "reports";
 
 export const COMMAND_EXAMPLES = [
   "Add a task to call the organiser, due Friday",
@@ -10,6 +16,8 @@ export const COMMAND_EXAMPLES = [
   "Add a LinkedIn post about autumn yacht moves, due next Tuesday",
   "Add editorial content Peters & May Bahri Shipment with link https://example.com/release.pdf",
   "Add PR content Peters & May Bahri Shipment with link https://example.com/release.pdf",
+  "Add a campaign Antigua to Southampton March 2027 platform Multi-channel goal Promote sailing opportunities to racing teams",
+  "Add an email campaign Antigua to Southampton March 2027 brief Segmented email to yachts returning to Europe",
   "Update task call the organiser status done",
   "Update event Monaco Yacht Show location Port Hercules",
   'Link post "Monaco stand setup" to event "Monaco Yacht Show"',
@@ -131,6 +139,23 @@ export type HubCommand = CommandBase &
         staff_name: string;
         description: string;
         notes: string;
+      }
+    | {
+        kind: "create_paid_campaign";
+        name: string;
+        platform: string;
+        status: "draft" | "active" | "paused" | "complete";
+        goal: string;
+        notes: string;
+        starts_at: string | null;
+        ends_at: string | null;
+      }
+    | {
+        kind: "create_email_campaign";
+        title: string;
+        subject: string;
+        brief: string;
+        folder: string;
       }
   );
 
@@ -1482,12 +1507,142 @@ function parsePresentationCommand(text: string): ParseResult | null {
   };
 }
 
+/**
+ * Paid / multi-channel campaign planning record under Reporting.
+ * Example: Add a campaign Antigua to Southampton March 2027 platform Multi-channel goal Promote sailing opportunities notes Highest priority
+ */
+function parsePaidCampaignCommand(text: string, now: Date): ParseResult | null {
+  const match = text.match(
+    /^(?:add|create|new)\s+(?:a\s+|an\s+|the\s+)?(?:paid\s+|marketing\s+|multi-?channel\s+)?campaign\b\s*(.*)$/i
+  );
+  if (!match) return null;
+  // Email campaigns use a more specific opener.
+  if (/^(?:an?\s+)?email\b/i.test(match[1] ?? "")) return null;
+
+  let rest = (match[1] ?? "").trim();
+  let notes = "";
+  const notesMatch = rest.match(/\bnotes\b\s+(.+)$/i);
+  if (notesMatch && notesMatch.index != null) {
+    notes = notesMatch[1].trim();
+    rest = rest.slice(0, notesMatch.index).trim();
+  }
+  let goal = "";
+  const goalMatch = rest.match(/\bgoal\b\s+(.+)$/i);
+  if (goalMatch && goalMatch.index != null) {
+    goal = goalMatch[1].trim();
+    rest = rest.slice(0, goalMatch.index).trim();
+  }
+  let platform = "Multi-channel";
+  const platformMatch = rest.match(/\bplatform\b\s+(.+)$/i);
+  if (platformMatch && platformMatch.index != null) {
+    platform = platformMatch[1].trim().replace(/^["“”']+|["“”']+$/g, "");
+    rest = rest.slice(0, platformMatch.index).trim();
+  }
+
+  let startsAt: string | null = null;
+  const startsMatch = rest.match(/\bstarts\b\s+(\d{4}-\d{2}-\d{2})\b/i);
+  if (startsMatch && startsMatch.index != null) {
+    startsAt = startsMatch[1];
+    rest = `${rest.slice(0, startsMatch.index)} ${rest.slice(startsMatch.index + startsMatch[0].length)}`.trim();
+  }
+  // Keep route wording like "Antigua to Southampton March 2027" intact as the title.
+  void now;
+  const name = cleanTitle(rest).slice(0, 160);
+  if (!name) {
+    return fail(
+      "Name the campaign. For example: Add a campaign Antigua to Southampton March 2027 platform Multi-channel goal Promote sailing opportunities"
+    );
+  }
+  if (!goal) goal = name;
+
+  return {
+    ok: true,
+    command: {
+      kind: "create_paid_campaign",
+      name,
+      platform: platform || "Multi-channel",
+      status: "draft",
+      goal,
+      notes,
+      starts_at: startsAt,
+      ends_at: null,
+      summary: `Add campaign “${name}” on ${platform || "Multi-channel"}.`,
+      verb: "Add",
+      href: "/app/reports",
+      area: "reports",
+    },
+  };
+}
+
+/**
+ * Email marketing draft under Email.
+ * Example: Add an email campaign Antigua to Southampton March 2027 brief Segmented email to racing teams
+ */
+function parseEmailCampaignCommand(text: string): ParseResult | null {
+  const match = text.match(
+    /^(?:add|create|new)\s+(?:a\s+|an\s+|the\s+)?email\s+campaign\b\s*(.*)$/i
+  );
+  if (!match) return null;
+
+  let rest = (match[1] ?? "").trim();
+  let brief = "";
+  const briefMatch = rest.match(/\bbrief\b\s+(.+)$/i);
+  if (briefMatch && briefMatch.index != null) {
+    brief = briefMatch[1].trim();
+    rest = rest.slice(0, briefMatch.index).trim();
+  }
+  let subject = "";
+  const subjectMatch = rest.match(/\bsubject\b\s+(.+)$/i);
+  if (subjectMatch && subjectMatch.index != null) {
+    subject = subjectMatch[1].trim().replace(/^["“”']+|["“”']+$/g, "");
+    rest = rest.slice(0, subjectMatch.index).trim();
+  }
+  let folder = "";
+  const folderMatch = rest.match(/\bfolder\b\s+(.+)$/i);
+  if (folderMatch && folderMatch.index != null) {
+    folder = folderMatch[1].trim().replace(/^["“”']+|["“”']+$/g, "");
+    rest = rest.slice(0, folderMatch.index).trim();
+  }
+
+  const title = cleanTitle(rest).slice(0, 160);
+  if (!title) {
+    return fail(
+      "Name the email campaign. For example: Add an email campaign Antigua to Southampton March 2027 brief Promote sailing opportunities"
+    );
+  }
+
+  return {
+    ok: true,
+    command: {
+      kind: "create_email_campaign",
+      title,
+      subject: subject || title,
+      brief: brief || title,
+      folder,
+      summary: `Add email campaign draft “${title}”.`,
+      verb: "Add",
+      href: "/app/email",
+      area: "email",
+    },
+  };
+}
+
 export function parseHubCommand(input: string, now = new Date()): ParseResult {
   const text = stripPolite(input);
   const cost = parseEventCostCommand(text);
   if (cost) {
     if (!cost.ok) return cost;
     return { ok: true, command: { ...cost.command, source: text } };
+  }
+  const emailCampaign = parseEmailCampaignCommand(text);
+  if (emailCampaign) {
+    if (!emailCampaign.ok) return emailCampaign;
+    return { ok: true, command: { ...emailCampaign.command, source: text } };
+  }
+  const paidCampaign = parsePaidCampaignCommand(text, now);
+  if (paidCampaign) {
+    if (!paidCampaign.ok) return paidCampaign;
+    return { ok: true, command: { ...paidCampaign.command, source: text } };
   }
   const presentation = parsePresentationCommand(text);
   if (presentation) {
