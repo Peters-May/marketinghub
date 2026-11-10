@@ -283,6 +283,9 @@ function withDefaults(store: Partial<HubStore>): HubStore {
     merch_inventory:
       migrateMerchInventory(store.merch_inventory) ??
       (fillMissingFromSeed ? seed.merch_inventory : []),
+    merch_issued_kit:
+      store.merch_issued_kit ??
+      (fillMissingFromSeed ? seed.merch_issued_kit : []),
     merch_catalogue: store.merch_catalogue ?? seed.merch_catalogue ?? [],
     staff_requests:
       migrateStaffRequests(store.staff_requests) ?? seed.staff_requests,
@@ -377,6 +380,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.platform_credentials ||
     !store.merch_orders ||
     !store.merch_inventory ||
+    !store.merch_issued_kit ||
     !store.merch_catalogue ||
     !store.staff_requests ||
     !store.awards ||

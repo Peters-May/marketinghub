@@ -108,6 +108,7 @@ import type {
   HubUser,
   MerchCatalogueImage,
   MerchInventoryItem,
+  MerchIssuedPerson,
   MerchOrder,
   PaidCampaign,
   PlatformCredential,
@@ -2657,6 +2658,55 @@ export async function deleteMerchInventoryItem(id: string) {
   await updateStore((s) => {
     s.merch_inventory = s.merch_inventory.filter((c) => c.id !== id);
   });
+}
+
+export async function listMerchIssuedKit() {
+  const store = await readStore();
+  if (!store.merch_issued_kit?.length) {
+    const { buildIssuedKitSeed } = await import(
+      "@/lib/merch/previous-orders-seed"
+    );
+    const seeded = buildIssuedKitSeed(nowIso());
+    await updateStore((s) => {
+      if (!s.merch_issued_kit?.length) s.merch_issued_kit = seeded;
+    });
+    return seeded;
+  }
+  return [...store.merch_issued_kit].sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export async function replaceMerchIssuedKit(people: MerchIssuedPerson[]) {
+  const next = people.map((person) => ({
+    ...person,
+    id: person.id || uid("iss"),
+    name: person.name.trim() || "Unknown",
+    year: Number.isFinite(person.year) ? person.year : new Date().getFullYear(),
+    lines: (person.lines ?? []).map((line, index) => ({
+      id: line.id || `line_${index}`,
+      item: String(line.item ?? "").trim(),
+      size: String(line.size ?? "").trim(),
+      quantity:
+        Number.isFinite(Number(line.quantity)) && Number(line.quantity) > 0
+          ? Math.floor(Number(line.quantity))
+          : 1,
+      colour: String(line.colour ?? "").trim(),
+      note: String(line.note ?? "").trim(),
+    })),
+    source:
+      person.source === "delivered" || person.source === "manual"
+        ? person.source
+        : "original",
+    merch_order_id: person.merch_order_id ?? null,
+    created_at: person.created_at || nowIso(),
+    updated_at: nowIso(),
+  }));
+  await updateStore((s) => {
+    s.merch_issued_kit = next;
+  });
+  return next;
 }
 
 function normalizeStaffRequest(item: StaffRequest): StaffRequest {

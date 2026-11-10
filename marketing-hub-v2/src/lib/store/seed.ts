@@ -8,6 +8,7 @@ import {
   createDefaultBudgetPayments,
 } from "@/lib/budget/2026";
 import { createMerchInventorySeed } from "@/lib/merch/inventory-seed";
+import { buildIssuedKitSeed } from "@/lib/merch/previous-orders-seed";
 
 const now = new Date().toISOString();
 
@@ -1267,6 +1268,7 @@ export function createSeedStore(): HubStore {
       },
     ],
     merch_inventory: createMerchInventorySeed(now),
+    merch_issued_kit: buildIssuedKitSeed(now),
     merch_catalogue: [],
     staff_requests: [
       {

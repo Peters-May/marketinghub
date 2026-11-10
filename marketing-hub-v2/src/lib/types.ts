@@ -860,6 +860,28 @@ export type MerchOrder = {
   updated_at: string;
 };
 
+/** One clothing line on an issued-kit / previous-orders person record. */
+export type MerchIssuedLine = {
+  id: string;
+  item: string;
+  size: string;
+  quantity: number;
+  colour: string;
+  note: string;
+};
+
+/** Person kit history row for Previous orders (year tables). */
+export type MerchIssuedPerson = {
+  id: string;
+  name: string;
+  year: number;
+  lines: MerchIssuedLine[];
+  source: "original" | "delivered" | "manual";
+  merch_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** On-hand corporate clothing / kit stock */
 export type MerchInventoryItem = {
   id: string;
@@ -1567,6 +1589,8 @@ export type HubStore = {
   theme_offshoots: ThemeOffshoot[];
   merch_orders: MerchOrder[];
   merch_inventory: MerchInventoryItem[];
+  /** Issued kit archive for Previous orders (by year). */
+  merch_issued_kit: MerchIssuedPerson[];
   /** Preview images for fixed clothing catalogue products. */
   merch_catalogue: MerchCatalogueImage[];
   staff_requests: StaffRequest[];
