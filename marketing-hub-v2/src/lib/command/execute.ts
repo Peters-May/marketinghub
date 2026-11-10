@@ -26,7 +26,10 @@ import {
   markEventsWeAreAttending,
   withContentPlanableDefaults,
 } from "@/lib/data/repos";
-import { emptyAttendanceOpsFields } from "@/lib/events/attendance-checklist";
+import {
+  emptyAttendanceOpsFields,
+  stripAttendanceOpsFields,
+} from "@/lib/events/attendance-checklist";
 import { costsSheetPath, formatCostAmount } from "@/lib/events/costs";
 import { saveEventCostLine } from "@/lib/events/costs-data";
 import { loadOwnerDirectory, matchOwnerUserId } from "@/lib/identity/owners";
@@ -517,6 +520,7 @@ export async function executeHubCommand(
     const attendance = command.attending
       ? await resolveProposedAttendance(command.attending)
       : { pm_attendance: "", pm_attending: false, people: [] };
+    const isAdmin = user.role === "admin";
     const item = await createEvent(
       {
         title: command.title,
@@ -528,9 +532,13 @@ export async function executeHubCommand(
         notes: command.notes,
         link_url: "",
         date_status: command.date_status,
-        pm_attendance: attendance.pm_attendance,
         ...emptyAttendanceOpsFields(),
-        pm_attending: attendance.pm_attending,
+        ...(isAdmin
+          ? {
+              pm_attendance: attendance.pm_attendance,
+              pm_attending: attendance.pm_attending,
+            }
+          : { pm_attendance: "" }),
         created_by: user.id,
       },
       attendance.people
@@ -554,21 +562,27 @@ export async function executeHubCommand(
         message: `Several events match “${command.query}”: ${describeMatches(found.items)}. Use the full title.`,
       };
     }
+    const isAdmin = user.role === "admin";
     const attendance = command.attending
       ? await resolveProposedAttendance(command.attending)
       : null;
-    const updated = await updateEvent(found.item.id, {
-      ...command.patch,
+    const patch = {
+      ...(isAdmin
+        ? command.patch
+        : stripAttendanceOpsFields({ ...command.patch })),
       ...(attendance
         ? {
             pm_attendance: mergeAttendanceLabel(
               found.item.pm_attendance ?? "",
               attendance.pm_attendance
             ),
-            ...(attendance.pm_attending ? { pm_attending: true } : {}),
+            ...(isAdmin && attendance.pm_attending
+              ? { pm_attending: true }
+              : {}),
           }
         : {}),
-    });
+    };
+    const updated = await updateEvent(found.item.id, patch);
     if (!updated) return { ok: false, message: "That event could not be updated." };
     if (attendance?.people.length) {
       await upsertEventAttendanceMany(found.item.id, attendance.people);

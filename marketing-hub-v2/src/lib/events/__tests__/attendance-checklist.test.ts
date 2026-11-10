@@ -7,6 +7,7 @@ import {
   formatAttendanceChecklistCount,
   patchAttendanceChecklist,
   readAttendanceOpsFields,
+  stripAttendanceOpsFields,
 } from "@/lib/events/attendance-checklist";
 
 describe("attendance checklist", () => {
@@ -93,5 +94,19 @@ describe("attendance checklist", () => {
     });
     expect(fields.hotel_booked).toBe(false);
     expect(fields.attendance_checklist_na).toEqual({ hotel_booked: true });
+  });
+
+  it("strips company attendance ops from member patches", () => {
+    const patch = stripAttendanceOpsFields({
+      title: "FLIBS",
+      pm_attending: true,
+      accommodation_arranged: true,
+      hotel_name: "Marina Bay",
+      location: "Fort Lauderdale",
+    });
+    expect(patch).toEqual({
+      title: "FLIBS",
+      location: "Fort Lauderdale",
+    });
   });
 });

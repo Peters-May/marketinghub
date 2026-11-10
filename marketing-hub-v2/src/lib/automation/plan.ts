@@ -66,28 +66,16 @@ export function planDailyWork(input: {
       if (progress.done >= progress.total) continue;
       const key = `event-prep:${event.id}`;
       if (existingKeys.has(key)) continue;
-      const lead = input.attendance.find(
-        (row) =>
-          row.event_id === event.id &&
-          (row.attendance_status === "attending" || row.attendance_status === "interested")
-      );
+      // Unassigned — company prep is marketing ops, not the first RSVP.
       tasks.push({
         automation_key: key,
         title: `Prepare for ${event.title}`,
         due_date: event.starts_at.slice(0, 10),
         related_type: "event",
         related_id: event.id,
-        owner: lead?.user_name ?? "",
-        owner_user_id: lead?.user_id ?? null,
+        owner: "",
+        owner_user_id: null,
       });
-      if (lead?.user_id) {
-        notifications.push({
-          user_id: lead.user_id,
-          title: `Prepare for ${event.title}`,
-          body: `Checklist ${progress.done}/${progress.total}. A task has been added.`,
-          href: `/app/events?open=${encodeURIComponent(event.id)}`,
-        });
-      }
     }
   }
 

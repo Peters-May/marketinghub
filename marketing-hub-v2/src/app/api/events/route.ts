@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { jsonError, jsonOk, requireStaff } from "@/lib/api";
-import { readAttendanceOpsFields } from "@/lib/events/attendance-checklist";
+import {
+  emptyAttendanceOpsFields,
+  readAttendanceOpsFields,
+  stripAttendanceOpsFields,
+} from "@/lib/events/attendance-checklist";
 import { canDeleteEvent } from "@/lib/events/access";
 import { plannerFieldsFromBody } from "@/lib/events/planner";
 import {
@@ -28,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   const { user, error } = await requireStaff();
   if (error || !user) return error;
+  const isAdmin = user.role === "admin";
 
   if (action === "delete") {
     const id = typeof body.id === "string" ? body.id : "";
@@ -41,9 +46,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "update") {
-    const patch: Partial<EventItem> = { ...(body.patch ?? {}) };
-    if (user.role !== "admin") {
+    let patch: Partial<EventItem> = { ...(body.patch ?? {}) };
+    if (!isAdmin) {
       delete patch.created_by;
+      patch = stripAttendanceOpsFields(patch);
     }
     const updated = await updateEvent(body.id, patch);
     if (!updated) return jsonError("Event not found", 404);
@@ -59,7 +65,7 @@ export async function POST(request: NextRequest) {
     division: body.division ?? "",
     notes: body.notes ?? "",
     link_url: body.link_url ?? "",
-    ...readAttendanceOpsFields(body),
+    ...(isAdmin ? readAttendanceOpsFields(body) : emptyAttendanceOpsFields()),
     ...plannerFieldsFromBody(body),
     created_by: user.id,
   });

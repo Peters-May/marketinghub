@@ -51,6 +51,32 @@ export type EventAttendanceOpsFields = Pick<
   | keyof EventHotelFields
 >;
 
+/** Keys only admins may set on create/update (company planning, not RSVP). */
+export const ATTENDANCE_OPS_FIELD_KEYS = [
+  "pm_attending",
+  "attendance_checklist_na",
+  ...ATTENDANCE_CHECKLIST_KEYS,
+  "hotel_name",
+  "hotel_confirmation",
+  "hotel_check_in",
+  "hotel_check_out",
+  "hotel_guests",
+  "hotel_cost_estimate",
+  "hotel_booking_url",
+  "hotel_notes",
+] as const satisfies ReadonlyArray<keyof EventAttendanceOpsFields>;
+
+/** Drop company attendance / checklist / hotel fields from a patch. */
+export function stripAttendanceOpsFields<T extends Record<string, unknown>>(
+  patch: T
+): T {
+  const next = { ...patch };
+  for (const key of ATTENDANCE_OPS_FIELD_KEYS) {
+    delete next[key];
+  }
+  return next;
+}
+
 export const emptyHotelFields = (): EventHotelFields => ({
   hotel_name: "",
   hotel_confirmation: "",

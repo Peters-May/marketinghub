@@ -194,7 +194,7 @@ describe("buildDashboard", () => {
     ).toEqual([]);
   });
 
-  it("shows preparation for events the viewer is attending, and org items only on everyone", () => {
+  it("shows preparation for admins only, and org items only on everyone", () => {
     const shared = {
       now,
       viewer,
@@ -245,6 +245,13 @@ describe("buildDashboard", () => {
     expect(mine.actions.map((row) => row.key)).toEqual(["event:e1"]);
     expect(mine.actions[0]?.href).toBe("/app/events?open=e1");
     expect(mine.upcomingEvents.map((row) => row.key)).not.toContain("event:e1");
+
+    const memberMine = buildDashboard({
+      ...shared,
+      viewer: { ...viewer, isAdmin: false },
+      scope: "mine",
+    });
+    expect(memberMine.actions.map((row) => row.key)).toEqual([]);
 
     const everyone = buildDashboard({ ...shared, scope: "everyone" });
     expect(everyone.actions.map((row) => row.key)).toEqual([

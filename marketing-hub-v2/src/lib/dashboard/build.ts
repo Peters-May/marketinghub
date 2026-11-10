@@ -291,27 +291,30 @@ export function buildDashboard(input: BuildInput): DashboardModel {
       )
       .map((row) => row.event_id)
   );
-  for (const event of input.events) {
-    if (!event.pm_attending || !event.starts_at) continue;
-    if (personal && !myEventIds.has(event.id)) continue;
-    const progress = attendanceChecklistProgress(event);
-    if (progress.done >= progress.total) continue;
-    const start = dayFrom(event.starts_at);
-    if (!start || start.getTime() > eventHorizon.getTime()) continue;
-    const end = dayFrom(event.ends_at);
-    if (end && end.getTime() < today.getTime()) continue;
-    if (!end && start.getTime() < today.getTime()) continue;
-    const key = `event:${event.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    actions.push({
-      key,
-      title: event.title,
-      reason: `Preparation ${progress.done}/${progress.total}`,
-      when: formatDay(start),
-      href: recordPath("event", event.id),
-      tone: "attention",
-    });
+  // Company attendance checklist is admin planning — not shown on member home.
+  if (viewer.isAdmin) {
+    for (const event of input.events) {
+      if (!event.pm_attending || !event.starts_at) continue;
+      if (personal && !myEventIds.has(event.id)) continue;
+      const progress = attendanceChecklistProgress(event);
+      if (progress.done >= progress.total) continue;
+      const start = dayFrom(event.starts_at);
+      if (!start || start.getTime() > eventHorizon.getTime()) continue;
+      const end = dayFrom(event.ends_at);
+      if (end && end.getTime() < today.getTime()) continue;
+      if (!end && start.getTime() < today.getTime()) continue;
+      const key = `event:${event.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      actions.push({
+        key,
+        title: event.title,
+        reason: `Preparation ${progress.done}/${progress.total}`,
+        when: formatDay(start),
+        href: recordPath("event", event.id),
+        tone: "attention",
+      });
+    }
   }
 
   if (!personal && viewer.isAdmin) {

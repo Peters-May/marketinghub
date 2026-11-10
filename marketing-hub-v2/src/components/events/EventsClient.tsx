@@ -1254,7 +1254,10 @@ export function EventsClient({
   const canManageAttendees = view !== "external";
   const showUndatedQueue = view === "admin";
   const showAdminChecks = view === "admin";
-  const showAttendanceOps = view === "admin" || view === "member";
+  /** Company attendance checklist / prep — marketing ops, not member RSVP. */
+  const showAttendanceOps = view === "admin";
+  /** Personal/event cost lines stay available to members. */
+  const showEventCosts = view === "admin" || view === "member";
 
   function mayDelete(event: { created_by: string | null }) {
     if (view === "admin") return true;
@@ -1298,7 +1301,7 @@ export function EventsClient({
 
   useEffect(() => {
     setCostCount(null);
-    if (!selectedId || !showAttendanceOps) return;
+    if (!selectedId || !showEventCosts) return;
     let cancelled = false;
     void fetch(
       `/api/events/costs?eventId=${encodeURIComponent(selectedId)}&summary=1`
@@ -1311,7 +1314,7 @@ export function EventsClient({
     return () => {
       cancelled = true;
     };
-  }, [selectedId, showAttendanceOps]);
+  }, [selectedId, showEventCosts]);
 
   useEffect(() => {
     if (!initialCostsOpen) return;
@@ -2645,7 +2648,7 @@ export function EventsClient({
         </div>
 
         <aside className="flex flex-col gap-4" data-tour="events-detail">
-          {costsOpen && selected && showAttendanceOps ? (
+          {costsOpen && selected && showEventCosts ? (
             <EventCostsModal
               key={selected.id}
               eventId={selected.id}
@@ -2662,20 +2665,24 @@ export function EventsClient({
                     <h2 className="font-display text-xl text-brand">
                       {selected.title}
                     </h2>
-                    {showAttendanceOps ? (
+                    {showAttendanceOps || showEventCosts ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <AttendingBadge event={selected} />
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1 text-xs text-foreground transition hover:bg-sand"
-                          onClick={() => setCostsOpen(true)}
-                        >
-                          <Receipt className="h-3.5 w-3.5" aria-hidden />
-                          Costs
-                          {costCount ? (
-                            <span className="text-muted">· {costCount}</span>
-                          ) : null}
-                        </button>
+                        {showAttendanceOps ? (
+                          <AttendingBadge event={selected} />
+                        ) : null}
+                        {showEventCosts ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1 text-xs text-foreground transition hover:bg-sand"
+                            onClick={() => setCostsOpen(true)}
+                          >
+                            <Receipt className="h-3.5 w-3.5" aria-hidden />
+                            Costs
+                            {costCount ? (
+                              <span className="text-muted">· {costCount}</span>
+                            ) : null}
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
