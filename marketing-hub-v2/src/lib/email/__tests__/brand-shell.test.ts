@@ -28,7 +28,7 @@ describe("branded hub email shell", () => {
     expect(html).toContain("Peters &amp; May");
     expect(html).toContain("New clothing");
     expect(html).toContain("Open in Marketing Hub");
-    expect(html).toContain("pm-group-logo.png");
+    expect(html).toContain("pm-group-logo-rev.png");
     expect(html).toContain("bespoke logistics");
   });
 

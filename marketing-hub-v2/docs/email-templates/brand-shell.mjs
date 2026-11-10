@@ -6,7 +6,7 @@
  */
 
 export const LOGO_URL =
-  "https://marketing.petersandmay.com/pm-group-logo.png";
+  "https://marketing.petersandmay.com/pm-group-logo-rev.png";
 export const SITE_URL = "https://marketing.petersandmay.com";
 export const BRAND = "#0B2545";
 export const ACCENT = "#007DC5";
@@ -67,10 +67,10 @@ export function brandEmail({
                 <img
                   src="${LOGO_URL}"
                   alt="Peters &amp; May"
-                  width="160"
-                  style="display:block;max-width:160px;height:auto;border:0;"
+                  width="220"
+                  style="display:block;max-width:220px;height:auto;border:0;"
                 />
-                <p style="margin:14px 0 0;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#C5D0DB;">
+                <p style="margin:16px 0 0;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#C5D0DB;">
                   Marketing Hub
                 </p>
                 <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;color:#ffffff;font-weight:700;">
