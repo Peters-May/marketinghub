@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { MerchClient } from "@/components/merch/MerchClient";
 import { InventoryClient } from "@/components/merch/InventoryClient";
 import { ClothingShopClient } from "@/components/merch/ClothingShopClient";
 import { CatalogueManager } from "@/components/merch/CatalogueManager";
+import { PreviousOrdersClient } from "@/components/merch/PreviousOrdersClient";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentFilter } from "@/components/ui/SegmentFilter";
 import type { MerchInventoryItem, MerchOrder } from "@/lib/types";
 
-type ShopView = "shop" | "orders" | "catalogue" | "inventory";
+type ShopView = "shop" | "orders" | "previous" | "catalogue" | "inventory";
 
 export function ShopHub({
   merch,
@@ -32,10 +33,20 @@ export function ShopHub({
     setOrders(merch);
   }, [merch]);
 
+  useEffect(() => {
+    if (!canManageAll && view === "previous") setView("shop");
+  }, [canManageAll, view]);
+
+  const deliveredOrders = useMemo(
+    () => orders.filter((order) => order.status === "delivered"),
+    [orders]
+  );
+
   const views: { id: ShopView; label: string }[] = canManageAll
     ? [
         { id: "shop", label: "Browse" },
         { id: "orders", label: "Orders" },
+        { id: "previous", label: "Previous orders" },
         { id: "catalogue", label: "Catalogue" },
         { id: "inventory", label: "Stock" },
       ]
@@ -60,7 +71,7 @@ export function ShopHub({
         value={view}
         onChange={setView}
         options={views}
-        size="md"
+        size="lg"
         tourIdPrefix="shop-view"
       />
 
@@ -76,6 +87,8 @@ export function ShopHub({
             ]);
           }}
         />
+      ) : view === "previous" && canManageAll ? (
+        <PreviousOrdersClient deliveredOrders={deliveredOrders} />
       ) : view === "catalogue" && canManageAll ? (
         <CatalogueManager />
       ) : view === "inventory" && canManageAll ? (
@@ -98,14 +111,29 @@ export function ShopHub({
             >
               Other requests
             </Link>
+            {canManageAll ? (
+              <>
+                {" · "}
+                Delivered orders move to{" "}
+                <button
+                  type="button"
+                  className="text-brand underline-offset-2 hover:underline"
+                  onClick={() => setView("previous")}
+                >
+                  Previous orders
+                </button>
+              </>
+            ) : null}
           </p>
           <MerchClient
             initial={orders}
             hideHeader
             ordersOnly
+            hideDelivered
             canManageAll={canManageAll}
             viewerName={viewerName}
             viewerContactId={viewerContactId}
+            onOrdersChange={setOrders}
           />
         </div>
       )}

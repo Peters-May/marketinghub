@@ -621,18 +621,23 @@ export function MerchClient({
   initial,
   hideHeader = false,
   ordersOnly = false,
+  hideDelivered = false,
   canManageAll = false,
   viewerName = "",
   viewerContactId = null,
+  onOrdersChange,
 }: {
   initial: MerchOrder[];
   hideHeader?: boolean;
   /** When true, hide the inline “New order” form (shop handles creating). */
   ordersOnly?: boolean;
+  /** When true, delivered orders are omitted (they live under Previous orders). */
+  hideDelivered?: boolean;
   /** Admins see every order; members only receive their own from the API. */
   canManageAll?: boolean;
   viewerName?: string;
   viewerContactId?: string | null;
+  onOrdersChange?: (orders: MerchOrder[]) => void;
 }) {
   const statusOptions = canManageAll ? STATUSES : MEMBER_STATUSES;
   const [orders, setOrders] = useState(initial);
@@ -640,6 +645,16 @@ export function MerchClient({
   useEffect(() => {
     setOrders(initial);
   }, [initial]);
+
+  function commitOrders(
+    updater: MerchOrder[] | ((prev: MerchOrder[]) => MerchOrder[])
+  ) {
+    setOrders((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      onOrdersChange?.(next);
+      return next;
+    });
+  }
   const [productCards, setProductCards] = useState<ClothingProductCardItem[]>(
     () => CLOTHING_PRODUCTS.map((p) => ({ ...p, image_url: "" }))
   );
@@ -700,8 +715,13 @@ export function MerchClient({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [orders, productCards]);
 
+  const visibleOrders = useMemo(
+    () => (hideDelivered ? orders.filter((o) => o.status !== "delivered") : orders),
+    [orders, hideDelivered]
+  );
+
   const filtered = useMemo(() => {
-    return orders.filter((o) => {
+    return visibleOrders.filter((o) => {
       if (!matchesSearch(search, merchOrderSearchText(o))) {
         return false;
       }
@@ -712,7 +732,7 @@ export function MerchClient({
       }
       return true;
     });
-  }, [orders, search, statusFilter, itemFilter]);
+  }, [visibleOrders, search, statusFilter, itemFilter]);
 
   const editingOrder = editingId
     ? orders.find((o) => o.id === editingId) ?? null
@@ -747,7 +767,7 @@ export function MerchClient({
       setFormError(apiErrorMessage(data, "Could not save order"));
       return;
     }
-    setOrders((prev) => upsertById(prev, item));
+    commitOrders((prev) => upsertById(prev, item));
     setShowForm(false);
     setOrderHeader(buildEmptyOrderHeader(viewerName, viewerContactId));
     setItemRows([buildEmptyItemRow(productCards)]);
@@ -800,7 +820,7 @@ export function MerchClient({
       setFormError(apiErrorMessage(data, "Could not save order"));
       return;
     }
-      setOrders((prev) => upsertById(prev, item));
+      commitOrders((prev) => upsertById(prev, item));
       closeEdit();
     } finally {
       setSaving(false);
@@ -819,7 +839,7 @@ export function MerchClient({
       setFormError(apiErrorMessage(data, "Could not save order"));
       return;
     }
-    setOrders((prev) => upsertById(prev, item));
+    commitOrders((prev) => upsertById(prev, item));
     if (editingId === id && editHeader) {
       setEditHeader({ ...editHeader, status: item.status });
     }
@@ -839,7 +859,7 @@ export function MerchClient({
       window.alert(data?.error || "Could not delete this order.");
       return;
     }
-    setOrders((prev) => prev.filter((o) => o.id !== id));
+    commitOrders((prev) => prev.filter((o) => o.id !== id));
     if (editingId === id) closeEdit();
   }
 
@@ -893,7 +913,7 @@ export function MerchClient({
         onSearchChange={setSearch}
         searchPlaceholder="Search item, person, office…"
         resultCount={filtered.length}
-        totalCount={orders.length}
+        totalCount={visibleOrders.length}
         selects={[
           {
             id: "status",

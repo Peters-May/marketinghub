@@ -117,6 +117,28 @@ export function merchOrderItemLabels(order: MerchOrder): string[] {
   });
 }
 
+/** Compact clothing summary for previous-orders / issued-kit views. */
+export function formatMerchOrderClothing(order: MerchOrder): string {
+  return getMerchOrderItems(order)
+    .map((line) => {
+      if (line.is_other) {
+        return (line.other_description ?? "").trim() || OTHER_ITEM_LABEL;
+      }
+      const parts: string[] = [line.item];
+      const sizeColour = [line.size, line.colour].filter(Boolean).join(" ");
+      if (line.quantity > 1 && sizeColour) {
+        parts.push(`– ${line.quantity} × ${sizeColour}`);
+      } else if (line.quantity > 1) {
+        parts.push(`– ${line.quantity} ×`);
+      } else if (sizeColour) {
+        parts.push(`– ${sizeColour}`);
+      }
+      return parts.join(" ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
 export function merchOrderSearchText(order: MerchOrder): string[] {
   const lines = getMerchOrderItems(order);
   return [
