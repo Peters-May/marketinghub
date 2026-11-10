@@ -289,6 +289,13 @@ export function EventCostsModal({
   }
 
   async function removeLine(id: string) {
+    const row = rows.find((item) => item.id === id);
+    const label =
+      row?.description?.trim() ||
+      row?.staff_name?.trim() ||
+      "this cost line";
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
     const res = await fetch("/api/events/costs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

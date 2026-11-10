@@ -295,6 +295,7 @@ export async function POST(request: NextRequest) {
     waitUntil(
       sendEventCostsRequest({
         to: email,
+        cc: user.email,
         subject,
         message,
         path,

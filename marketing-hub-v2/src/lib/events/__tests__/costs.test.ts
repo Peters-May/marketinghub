@@ -126,7 +126,9 @@ describe("defaultCostsRequestDraft", () => {
     });
     expect(draft.subject).toBe("Boot Düsseldorf");
     expect(draft.message).toContain("Hi Jesper,");
-    expect(draft.message).toContain("Boot Düsseldorf");
+    expect(draft.message).toContain(
+      "Please can you add your costs for Boot Düsseldorf in Marketing Hub."
+    );
     expect(draft.message).toContain("Sophie Edgerley");
   });
 });

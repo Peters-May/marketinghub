@@ -23,6 +23,8 @@ export async function sendEventCostsRequest(params: {
   message: string;
   /** Hub path, e.g. /app/events?open=…&costs=1 */
   path: string;
+  /** Requester email — copied so they keep a record of what was sent. */
+  cc?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
@@ -40,6 +42,10 @@ export async function sendEventCostsRequest(params: {
     return { success: false, error: "Message is empty" };
   }
 
+  const to = params.to.trim().toLowerCase();
+  const ccRaw = params.cc?.trim().toLowerCase() || "";
+  const cc = ccRaw && ccRaw !== to ? ccRaw : undefined;
+
   const html = brandedHubEmailHtml({
     eyebrow: "Marketing Hub · Events",
     heading: subject,
@@ -53,7 +59,8 @@ export async function sendEventCostsRequest(params: {
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
       from,
-      to: params.to,
+      to,
+      ...(cc ? { cc } : {}),
       subject,
       html,
     });

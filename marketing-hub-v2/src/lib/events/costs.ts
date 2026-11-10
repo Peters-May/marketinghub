@@ -123,7 +123,7 @@ export function defaultCostsRequestDraft(params: {
     message: [
       `Hi ${first},`,
       "",
-      `Please add your costs for ${params.eventTitle.trim() || "this event"} in Marketing Hub.`,
+      `Please can you add your costs for ${params.eventTitle.trim() || "this event"} in Marketing Hub.`,
       "",
       "Add a line for each cost — travel, accommodation, print, or anything else. Leave the amount blank if you don't know it yet.",
       "",
