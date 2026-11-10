@@ -19,6 +19,11 @@ import {
 import { isClosedTaskStatus } from "@/lib/data/collections";
 import { listHubUsers } from "@/lib/data/repos";
 import {
+  brandedHubEmailHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
+import {
   decryptCredentialSecret,
   encryptCredentialSecret,
 } from "@/lib/security/credentials-crypto";
@@ -193,7 +198,7 @@ function syncReminderTask(
 }
 
 function appOrigin(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  return emailAppOrigin();
 }
 
 function uniqueEmails(emails: Array<string | undefined | null>): string[] {
@@ -243,15 +248,17 @@ async function sendExpiryEmail(input: {
       : input.days === 0
         ? `The OpenAI API key expires today (${input.expiresOn}).`
         : `The OpenAI API key expires on ${input.expiresOn}. ${input.days} day${input.days === 1 ? "" : "s"} remain.`;
-  const html = `<!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #0B2545; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <p><strong>${subject}</strong></p>
-  <p>${when}</p>
-  <p>Replace it in Marketing Hub under Admin → AI key. A new OpenAI project key lasts 90 days — set the expiry date when you save it.</p>
-  <p><a href="${href}" style="color: #007DC5;">Open AI key settings</a></p>
-</body>
-</html>`;
+  const html = brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · Admin",
+    heading: subject,
+    bodyHtml: `
+      <p style="margin:0 0 14px;">${escapeHtml(when)}</p>
+      <p style="margin:0;">Replace it in Marketing Hub under Admin → AI key. A new OpenAI project key lasts 90 days — set the expiry date when you save it.</p>
+    `,
+    ctaLabel: "Open AI key settings",
+    ctaHref: href,
+    footerNote: "Automated reminder from Marketing Hub.",
+  });
   const text = `${subject}\n\n${when}\n\nReplace it in Marketing Hub under Admin → AI key.\n${href}`;
   try {
     const resend = new Resend(apiKey);

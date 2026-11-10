@@ -1,13 +1,15 @@
 import { Resend } from "resend";
 import { getPrMonitorSettings } from "@/lib/data/repos";
 import { parseDigestEmails } from "@/lib/pr/monitor-settings";
+import {
+  brandedHubEmailHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
 import type { PrMonitorMention } from "@/lib/types";
 
 function appOrigin(): string {
-  const fromEnv =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    "";
+  const fromEnv = emailAppOrigin() || process.env.APP_URL?.trim() || "";
   if (fromEnv) return fromEnv.replace(/\/$/, "");
   if (process.env.VERCEL_URL?.trim()) {
     return `https://${process.env.VERCEL_URL.trim().replace(/\/$/, "")}`;
@@ -39,21 +41,25 @@ export async function sendMonitorDigest(input: {
     .slice(0, 8)
     .map((m) => {
       const outlet = m.outlet ? ` (${m.outlet})` : "";
-      return `• ${m.title}${outlet}`;
+      return `<li style="margin:0 0 6px;">${escapeHtml(m.title)}${escapeHtml(outlet)}</li>`;
     })
-    .join("<br/>");
+    .join("");
   const more =
-    count > 8 ? `<p>…and ${count - 8} more.</p>` : "";
-  const html = `<!DOCTYPE html>
-<html>
-<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #0B2545; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <p><strong>${subject}</strong></p>
-  <p>Marketing Hub monitoring found new mentions for active queries.</p>
-  <p>${preview}</p>
-  ${more}
-  <p><a href="${href}" style="color: #007DC5;">Open Mention Browser</a></p>
-</body>
-</html>`;
+    count > 8
+      ? `<p style="margin:12px 0 0;">…and ${count - 8} more.</p>`
+      : "";
+  const html = brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · PR monitoring",
+    heading: subject,
+    bodyHtml: `
+      <p style="margin:0 0 14px;">Marketing Hub monitoring found new mentions for active queries.</p>
+      <ul style="margin:0;padding-left:18px;">${preview}</ul>
+      ${more}
+    `,
+    ctaLabel: "Open Mention Browser",
+    ctaHref: href,
+    footerNote: "Automated digest from Marketing Hub PR monitoring.",
+  });
   const text = `${subject}\n\n${input.mentions
     .slice(0, 8)
     .map((m) => `- ${m.title}${m.outlet ? ` (${m.outlet})` : ""}`)

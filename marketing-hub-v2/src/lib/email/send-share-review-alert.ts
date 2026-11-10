@@ -1,12 +1,12 @@
 import { Resend } from "resend";
 import { byLabelForDecision } from "@/lib/share/review";
 import { diffWordsToHtml, hasCopyChanges } from "@/lib/share/text-diff";
-import { escapeHtml } from "@/lib/email/send-marketing-alert";
+import {
+  brandedHubEmailHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
 import type { ShareReviewResponse } from "@/lib/types";
-
-function appOrigin() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-}
 
 export async function sendShareReviewAlert(params: {
   review: ShareReviewResponse;
@@ -29,7 +29,7 @@ export async function sendShareReviewAlert(params: {
     review.decision === "approved" ? "Approved" : "Changes requested";
   const byLabel = byLabelForDecision(review.decision);
   const audienceLabel = review.audience === "client" ? "Client" : "Staff";
-  const origin = appOrigin();
+  const origin = emailAppOrigin();
   const href = origin ? `${origin}${hubPath}` : hubPath;
 
   const copyBlocks: string[] = [];
@@ -68,7 +68,7 @@ export async function sendShareReviewAlert(params: {
       ? `<p style="margin:12px 0 4px;"><strong>Attached images</strong></p><ul style="margin:0;padding-left:18px;">${review.added_image_urls
           .map(
             (url) =>
-              `<li><a href="${escapeHtml(url)}" style="color:#0B2545;">${escapeHtml(url)}</a></li>`
+              `<li><a href="${escapeHtml(url)}" style="color:#007DC5;">${escapeHtml(url)}</a></li>`
           )
           .join("")}</ul>`
       : "";
@@ -86,27 +86,25 @@ export async function sendShareReviewAlert(params: {
     .join(" · ");
 
   const subject = `${audienceLabel} share review: ${decisionLabel} — ${title || "Untitled"}`;
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 640px; margin: 0 auto; padding: 20px;">
-  <p>A <strong>${escapeHtml(audienceLabel.toLowerCase())}</strong> share-for-approval response was returned in Marketing Hub.</p>
-  <p style="margin:0 0 8px;"><strong>Item:</strong> ${escapeHtml(title || "Untitled")}</p>
-  <p style="margin:0 0 8px;"><strong>Decision:</strong> ${escapeHtml(decisionLabel)}</p>
-  <p style="margin:0 0 8px;"><strong>${escapeHtml(byLabel)}:</strong> ${byLine}</p>
-  ${copyBlocks.join("")}
-  ${notes}
-  ${people}
-  ${images}
-  <p style="margin-top:16px;"><a href="${escapeHtml(href)}" style="color: #0B2545; text-decoration: none;">Open in Marketing Hub →</a></p>
-  <p style="color: #666; font-size: 12px;">Automated notification from Marketing Hub. Marketing still applies edits before publish.</p>
-</body>
-</html>
-`.trim();
+  const html = brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · Share review",
+    heading: decisionLabel,
+    maxWidth: 640,
+    bodyHtml: `
+      <p style="margin:0 0 16px;">A <strong>${escapeHtml(audienceLabel.toLowerCase())}</strong> share-for-approval response was returned.</p>
+      <p style="margin:0 0 8px;"><strong>Item:</strong> ${escapeHtml(title || "Untitled")}</p>
+      <p style="margin:0 0 8px;"><strong>Decision:</strong> ${escapeHtml(decisionLabel)}</p>
+      <p style="margin:0 0 8px;"><strong>${escapeHtml(byLabel)}:</strong> ${byLine}</p>
+      ${copyBlocks.join("")}
+      ${notes}
+      ${people}
+      ${images}
+    `,
+    ctaLabel: "Open in Marketing Hub",
+    ctaHref: href,
+    footerNote:
+      "Automated notification from Marketing Hub. Marketing still applies edits before publish.",
+  });
 
   try {
     const resend = new Resend(apiKey);

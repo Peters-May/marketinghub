@@ -1,3 +1,4 @@
+import { brandedHubEmailHtml } from "@/lib/email/brand-shell";
 import { previewMerge } from "@/lib/email/design/preview";
 import type { ShareAudience } from "@/lib/types";
 
@@ -94,7 +95,17 @@ export function toPublicEmailDraft(
 }
 
 export function unavailableEmailPreviewHtml(): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="robots" content="noindex, nofollow"><title>Email preview</title></head><body style="margin:0;padding:32px;font-family:Arial,sans-serif;color:#0B2545;">This email preview is not available.</body></html>`;
+  return brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · Email",
+    heading: "Preview unavailable",
+    title: "Email preview",
+    bodyHtml:
+      '<p style="margin:0;">This email preview is not available.</p>',
+    footerNote: "Peters & May Marketing Hub",
+  }).replace(
+    "<head>",
+    '<head><meta name="robots" content="noindex, nofollow">'
+  );
 }
 
 function escapeHtml(value: string): string {

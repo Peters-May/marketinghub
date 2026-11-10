@@ -10,14 +10,16 @@ import {
   unsubscribeUrlFor,
   viewInBrowserUrlFor,
 } from "@/lib/email/unsubscribe-token";
-import { EMAIL_DOCUMENT_HEADERS } from "@/lib/email/share";
+import {
+  EMAIL_DOCUMENT_HEADERS,
+  unavailableEmailPreviewHtml,
+} from "@/lib/email/share";
 import type { Contact } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function unavailable() {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Email preview</title></head><body style="margin:0;padding:32px;font-family:Arial,sans-serif;color:#0B2545;">This email preview is not available.</body></html>`;
-  return new Response(html, {
+  return new Response(unavailableEmailPreviewHtml(), {
     status: 404,
     headers: { "content-type": "text/html; charset=utf-8" },
   });

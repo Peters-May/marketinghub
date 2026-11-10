@@ -28,7 +28,7 @@ const templates = [
       ],
       ctaLabel: "Accept invitation",
       ctaHref: confirmLink("invite", "/set-password"),
-      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#64748b;">
+      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#5B6472;">
                   If you didn’t expect this invitation, you can ignore this email.
                 </p>`,
     }),
@@ -60,8 +60,8 @@ const templates = [
       ],
       ctaLabel: "Sign in",
       ctaHref: confirmLink("magiclink", "/login"),
-      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#64748b;">
-                  Or enter this one-time code: <strong style="color:#0b3a4a;letter-spacing:0.08em;">{{ .Token }}</strong>
+      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#5B6472;">
+                  Or enter this one-time code: <strong style="color:#0B2545;letter-spacing:0.08em;">{{ .Token }}</strong>
                 </p>`,
     }),
   },
@@ -78,7 +78,7 @@ const templates = [
       ],
       ctaLabel: "Reset password",
       ctaHref: confirmLink("recovery", "/set-password"),
-      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#64748b;">
+      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#5B6472;">
                   If you didn’t request this, you can safely ignore this email.
                 </p>`,
     }),
@@ -95,7 +95,7 @@ const templates = [
       ],
       ctaLabel: "Confirm new email",
       ctaHref: confirmLink("email_change", "/app"),
-      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#64748b;">
+      afterCtaHtml: `<p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#5B6472;">
                   If you didn’t request this change, you can ignore this email.
                 </p>`,
     }),
@@ -113,10 +113,10 @@ const templates = [
       ctaLabel: "Open Marketing Hub",
       ctaHref: "https://marketing.petersandmay.com/login",
       showFallbackLink: false,
-      afterCtaHtml: `<p style="margin:24px 0 0;font-size:28px;line-height:1.2;letter-spacing:0.2em;font-weight:700;color:#0b3a4a;text-align:center;">
+      afterCtaHtml: `<p style="margin:24px 0 0;font-size:28px;line-height:1.2;letter-spacing:0.2em;font-weight:700;color:#0B2545;text-align:center;">
                   {{ .Token }}
                 </p>
-                <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#64748b;text-align:center;">
+                <p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#5B6472;text-align:center;">
                   This code expires shortly.
                 </p>`,
     }),
@@ -125,7 +125,7 @@ const templates = [
 
 const readme = `# Auth email templates (branded header)
 
-All Marketing Hub Auth emails share the same Peters &amp; May header (logo + teal bar) and footer.
+All Marketing Hub Auth emails share the same Peters &amp; May header (navy + P&amp;M Blue accent) and footer.
 
 CTA links use \`/auth/confirm?token_hash=…\`. That page does not verify on open — the user must click Continue first (Outlook Safe Links safe). Do not switch back to \`{{ .ConfirmationURL }}\` or restore auto-verify-on-GET.
 

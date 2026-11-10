@@ -1,14 +1,14 @@
 import { Resend } from "resend";
-import { escapeHtml } from "@/lib/email/send-marketing-alert";
-
-function appOrigin() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-}
+import {
+  brandedHubEmailHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
 
 function messageToHtml(message: string) {
   return escapeHtml(message.trim())
     .split(/\n{2,}/)
-    .map((block) => `<p>${block.replace(/\n/g, "<br/>")}</p>`)
+    .map((block) => `<p style="margin:0 0 14px;">${block.replace(/\n/g, "<br/>")}</p>`)
     .join("\n");
 }
 
@@ -32,7 +32,7 @@ export async function sendEventCostsRequest(params: {
 
   const from =
     process.env.RESEND_FROM_EMAIL?.trim() || "marketing@petersandmay.com";
-  const origin = appOrigin();
+  const origin = emailAppOrigin();
   const href = origin ? `${origin}${params.path}` : params.path;
   const subject = params.subject.trim() || "Event costs";
   const message = params.message.trim();
@@ -40,20 +40,14 @@ export async function sendEventCostsRequest(params: {
     return { success: false, error: "Message is empty" };
   }
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  ${messageToHtml(message)}
-  <p><a href="${escapeHtml(href)}" style="color: #0f766e; text-decoration: none;">Add your costs →</a></p>
-  <p style="color: #666; font-size: 12px;">Automated notification from Marketing Hub.</p>
-</body>
-</html>
-`.trim();
+  const html = brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · Events",
+    heading: subject,
+    bodyHtml: messageToHtml(message),
+    ctaLabel: "Add your costs",
+    ctaHref: href,
+    footerNote: "Automated notification from Marketing Hub.",
+  });
 
   try {
     const resend = new Resend(apiKey);

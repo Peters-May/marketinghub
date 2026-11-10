@@ -1,5 +1,10 @@
 import { waitUntil } from "@vercel/functions";
 import { Resend } from "resend";
+import {
+  brandedHubEmailHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
 
 export type MarketingAlertKind =
   | "clothing"
@@ -36,17 +41,7 @@ const KIND_LABEL: Record<MarketingAlertKind, string> = {
   feedback: "feedback",
 };
 
-function appOrigin() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-}
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+export { escapeHtml };
 
 function hubPathFor(kind: MarketingAlertKind): string {
   if (kind === "feedback") return "/app/feedback";
@@ -150,7 +145,7 @@ export async function sendMarketingAlert(params: {
       : "";
 
   const subject = `New ${what}${subtype} in Marketing Hub`;
-  const origin = appOrigin();
+  const origin = emailAppOrigin();
   const path = hubPathFor(params.kind);
   const href = origin ? `${origin}${path}` : path;
 
@@ -161,23 +156,19 @@ export async function sendMarketingAlert(params: {
 
   const detailNote = clothingBlock
     ? clothingBlock
-    : `<p>Open the hub to review — this email does not include the request details.</p>`;
+    : `<p style="margin:0;">Open the hub to review — this email does not include the request details.</p>`;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <p>A new <strong>${escapeHtml(what)}${escapeHtml(subtype)}</strong> was submitted in Marketing Hub.</p>
-  ${detailNote}
-  <p style="margin-top:16px;"><a href="${escapeHtml(href)}" style="color: #0B2545; text-decoration: none;">Open in Marketing Hub →</a></p>
-  <p style="color: #666; font-size: 12px;">Automated notification from Marketing Hub.</p>
-</body>
-</html>
-`.trim();
+  const html = brandedHubEmailHtml({
+    eyebrow: "Marketing Hub · Alert",
+    heading: `New ${what}${subtype}`,
+    bodyHtml: `
+      <p style="margin:0 0 16px;">A new <strong>${escapeHtml(what)}${escapeHtml(subtype)}</strong> was submitted in Marketing Hub.</p>
+      ${detailNote}
+    `,
+    ctaLabel: "Open in Marketing Hub",
+    ctaHref: href,
+    footerNote: "Automated notification from Marketing Hub.",
+  });
 
   try {
     const resend = new Resend(apiKey);

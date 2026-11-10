@@ -1,22 +1,18 @@
 import { Resend } from "resend";
 import { getChatSettings, getChatSession, listChatMessages } from "@/lib/chat/data";
+import {
+  brandedDetailRowsHtml,
+  brandedHubEmailHtml,
+  brandedPanelHtml,
+  emailAppOrigin,
+  escapeHtml,
+} from "@/lib/email/brand-shell";
 import type { ChatMessage, ChatSession } from "@/lib/types";
 
-const NAVY = "#0B2545";
-const BLUE = "#007DC5";
-const MIST = "#E3E6E9";
-const GREY = "#5b6472";
+export { escapeHtml };
 
 function appOrigin() {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-}
-
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return emailAppOrigin();
 }
 
 function transcriptToHtml(transcript: string): string {
@@ -34,13 +30,6 @@ function uniqueEmails(emails: Array<string | undefined | null>): string[] {
     out.push(trimmed);
   }
   return out;
-}
-
-function logoUrl(): string {
-  const origin = appOrigin();
-  return origin
-    ? `${origin}/pm-group-logo.png`
-    : "https://marketing.petersandmay.com/pm-group-logo.png";
 }
 
 function formatWhen(iso: string | null | undefined): string {
@@ -106,70 +95,31 @@ export type ChatEmailDetailProps = {
 
 /** Branded HTML shell for website-chat staff and visitor emails. */
 export function brandedChatEmailHtml(props: ChatEmailDetailProps): string {
-  const rowsHtml = props.rows
-    .filter((row) => row.value.trim())
-    .map((row) => {
-      const value = row.href
-        ? `<a href="${escapeHtml(row.href)}" style="color:${BLUE};">${escapeHtml(row.value)}</a>`
-        : escapeHtml(row.value);
-      return `<tr>
-  <td style="padding:8px 0; width:120px; vertical-align:top; color:${GREY}; font-size:13px;">${escapeHtml(row.label)}</td>
-  <td style="padding:8px 0; vertical-align:top; color:${NAVY}; font-size:14px;">${value}</td>
-</tr>`;
-    })
-    .join("");
-
-  const snippetsHtml =
+  const snippetsInner =
     props.snippets && props.snippets.length
-      ? `<div style="margin-top:18px; padding:14px 16px; background:${MIST}; border-radius:8px;">
-  <p style="margin:0 0 8px; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:${GREY};">${escapeHtml(props.snippetsLabel || "Conversation")}</p>
-  ${props.snippets
-    .map(
-      (s) =>
-        `<p style="margin:0 0 10px; font-size:14px; color:${NAVY};">${transcriptToHtml(s)}</p>`
-    )
-    .join("")}
-</div>`
+      ? props.snippets
+          .map(
+            (s) =>
+              `<p style="margin:0 0 10px;font-size:14px;color:#0B2545;">${transcriptToHtml(s)}</p>`
+          )
+          .join("")
       : "";
 
-  const ctaHtml =
-    props.ctaHref && props.ctaLabel
-      ? `<p style="margin:24px 0 0;">
-  <a href="${escapeHtml(props.ctaHref)}" style="display:inline-block; background:${BLUE}; color:#ffffff; text-decoration:none; font-weight:600; font-size:14px; padding:12px 18px; border-radius:6px;">${escapeHtml(props.ctaLabel)}</a>
-</p>`
-      : "";
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
-<body style="margin:0; padding:0; background:#f4f6f7; font-family:Arial, Helvetica, sans-serif; line-height:1.5; color:${NAVY};">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f7; padding:24px 12px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px; background:#ffffff; border-radius:10px; overflow:hidden; border:1px solid ${MIST};">
-        <tr>
-          <td style="background:${NAVY}; padding:20px 24px;">
-            <img src="${escapeHtml(logoUrl())}" alt="Peters &amp; May" width="160" style="display:block; max-width:160px; height:auto; border:0;"/>
-            <p style="margin:14px 0 0; font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:#c5d0db;">${escapeHtml(props.eyebrow)}</p>
-            <h1 style="margin:6px 0 0; font-size:22px; line-height:1.3; color:#ffffff; font-weight:700;">${escapeHtml(props.heading)}</h1>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:24px;">
-            <p style="margin:0 0 16px; font-size:15px; color:${NAVY};">${escapeHtml(props.intro)}</p>
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid ${MIST}; border-bottom:1px solid ${MIST};">
-              ${rowsHtml}
-            </table>
-            ${snippetsHtml}
-            ${ctaHtml}
-            <p style="margin:28px 0 0; font-size:12px; color:${GREY};">${escapeHtml(props.footerNote || "Automated message from the Peters & May Marketing Hub website chat.")}</p>
-          </td>
-        </tr>
-      </table>
-      <p style="margin:16px 0 0; font-size:11px; color:${GREY};">Peters &amp; May — bespoke logistics</p>
-    </td></tr>
-  </table>
-</body>
-</html>`.trim();
+  return brandedHubEmailHtml({
+    eyebrow: props.eyebrow,
+    heading: props.heading,
+    maxWidth: 640,
+    bodyHtml: `
+      <p style="margin:0 0 16px;font-size:15px;color:#0B2545;">${escapeHtml(props.intro)}</p>
+      ${brandedDetailRowsHtml(props.rows)}
+      ${brandedPanelHtml(props.snippetsLabel || "Conversation", snippetsInner)}
+    `,
+    ctaLabel: props.ctaLabel,
+    ctaHref: props.ctaHref,
+    footerNote:
+      props.footerNote ||
+      "Automated message from the Peters & May Marketing Hub website chat.",
+  });
 }
 
 async function resolveTeamReplyTo(
