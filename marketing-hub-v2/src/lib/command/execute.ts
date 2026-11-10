@@ -217,6 +217,29 @@ async function syncContent(item: ContentItem): Promise<{
   return { item: pushed.item, note: "" };
 }
 
+/** Build the confirm reply when some of a multi-action batch saved and others failed. */
+export function formatBatchSaveMessage(options: {
+  savedCount: number;
+  failedMessages: string[];
+  linksOnly?: boolean;
+}): string {
+  const { savedCount, failedMessages, linksOnly = false } = options;
+  const head = linksOnly
+    ? `Linked ${savedCount} post${savedCount === 1 ? "" : "s"}.`
+    : `Saved ${savedCount} record${savedCount === 1 ? "" : "s"}.`;
+  if (!failedMessages.length) return head;
+  const unique = [...new Set(failedMessages.map((message) => message.trim()).filter(Boolean))];
+  const detail =
+    unique.length === 0
+      ? ""
+      : unique.length === 1
+        ? unique[0]
+        : unique.map((message, index) => `${index + 1}. ${message}`).join(" ");
+  return detail
+    ? `${head} ${failedMessages.length} could not be saved: ${detail}`
+    : `${head} ${failedMessages.length} could not be saved.`;
+}
+
 export async function executeHubCommands(
   commands: HubCommand[],
   user: SessionUser
@@ -243,15 +266,14 @@ export async function executeHubCommands(
   if (!saved.length) {
     return { ok: false, message: failed[0] ?? "Nothing was saved." };
   }
-  const failNote = failed.length
-    ? ` ${failed.length} could not be saved.`
-    : "";
   const linksOnly = commands.every((command) => command.kind === "link_content");
   return {
     ok: true,
-    message: linksOnly
-      ? `Linked ${saved.length} post${saved.length === 1 ? "" : "s"}.${failNote}`
-      : `Saved ${saved.length} records.${failNote}`,
+    message: formatBatchSaveMessage({
+      savedCount: saved.length,
+      failedMessages: failed,
+      linksOnly,
+    }),
     href,
     area: areas[0],
     areas,
