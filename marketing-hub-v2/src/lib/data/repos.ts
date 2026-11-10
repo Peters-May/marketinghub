@@ -2679,30 +2679,35 @@ export async function listMerchIssuedKit() {
 }
 
 export async function replaceMerchIssuedKit(people: MerchIssuedPerson[]) {
-  const next = people.map((person) => ({
-    ...person,
-    id: person.id || uid("iss"),
-    name: person.name.trim() || "Unknown",
-    year: Number.isFinite(person.year) ? person.year : new Date().getFullYear(),
-    lines: (person.lines ?? []).map((line, index) => ({
-      id: line.id || `line_${index}`,
-      item: String(line.item ?? "").trim(),
-      size: String(line.size ?? "").trim(),
-      quantity:
-        Number.isFinite(Number(line.quantity)) && Number(line.quantity) > 0
-          ? Math.floor(Number(line.quantity))
-          : 1,
-      colour: String(line.colour ?? "").trim(),
-      note: String(line.note ?? "").trim(),
-    })),
-    source:
+  const next: MerchIssuedPerson[] = people.map((person) => {
+    const source: MerchIssuedPerson["source"] =
       person.source === "delivered" || person.source === "manual"
         ? person.source
-        : "original",
-    merch_order_id: person.merch_order_id ?? null,
-    created_at: person.created_at || nowIso(),
-    updated_at: nowIso(),
-  }));
+        : "original";
+    return {
+      ...person,
+      id: person.id || uid("iss"),
+      name: person.name.trim() || "Unknown",
+      year: Number.isFinite(person.year)
+        ? person.year
+        : new Date().getFullYear(),
+      lines: (person.lines ?? []).map((line, index) => ({
+        id: line.id || `line_${index}`,
+        item: String(line.item ?? "").trim(),
+        size: String(line.size ?? "").trim(),
+        quantity:
+          Number.isFinite(Number(line.quantity)) && Number(line.quantity) > 0
+            ? Math.floor(Number(line.quantity))
+            : 1,
+        colour: String(line.colour ?? "").trim(),
+        note: String(line.note ?? "").trim(),
+      })),
+      source,
+      merch_order_id: person.merch_order_id ?? null,
+      created_at: person.created_at || nowIso(),
+      updated_at: nowIso(),
+    };
+  });
   await updateStore((s) => {
     s.merch_issued_kit = next;
   });
