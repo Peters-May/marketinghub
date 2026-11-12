@@ -145,7 +145,9 @@ export async function POST(request: Request, ctx: Ctx) {
       });
     }
 
-    // Waiting with no staff yet: keep the AI qualifying (do not freeze on the canned line).
+    // Waiting for a team member: keep status as requested even if they keep typing.
+    // Staff already in the thread → store only. Otherwise AI may still reply, but
+    // do not flip the session back to "ai" (inbox must stay on Waiting).
     if (session.status === "waiting") {
       const prior = await listChatMessages(id);
       const hasStaff = prior.some((m) => m.role === "staff");
@@ -156,7 +158,6 @@ export async function POST(request: Request, ctx: Ctx) {
             "Thanks — the team has your message and will reply here shortly.",
         });
       }
-      await updateChatSession(id, { status: "ai" });
     }
 
     // Short debounce only when the message looks like a fragment they may still be typing.
