@@ -70,8 +70,8 @@ export async function POST(request: Request, ctx: Ctx) {
       session_id: id,
       role: "assistant",
       body: email
-        ? `Thank you. We have your details and will follow up at ${email}. ${settings.office_hours_note}`
-        : `Thank you. A colleague will pick this up shortly. ${settings.office_hours_note} You can leave a business email so we can reach you if you close this window.`,
+        ? `We are allocating this to a team member now — please wait. If no one is available, we will follow up by email at ${email}. Please type your enquiry here.`
+        : `We are allocating this to a team member now — please wait. If no one is available, we will follow up by email. Please type your enquiry here, and leave a business email if you can so we can reach you if you close this window.`,
     });
 
     const updated = await getChatSession(id);
