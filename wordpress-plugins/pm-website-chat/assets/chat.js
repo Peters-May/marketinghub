@@ -241,6 +241,20 @@
     parent.appendChild(row);
   }
 
+  /** Pin a node near the top of the thread so earlier replies stay readable. */
+  function scrollToReveal(node) {
+    if (!node || !messagesEl) return;
+    var nodeRect = node.getBoundingClientRect();
+    var boxRect = messagesEl.getBoundingClientRect();
+    var top = messagesEl.scrollTop + (nodeRect.top - boxRect.top) - 12;
+    if (top < 0) top = 0;
+    messagesEl.scrollTop = top;
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   function appendBubble(role, body, id, authorName, attachments) {
     if (id && seenIds[id]) return;
     if (id) seenIds[id] = true;
@@ -251,7 +265,7 @@
       var line = el("div", "pm-chat__system", text);
       messagesEl.insertBefore(line, typingEl);
       pinFollowUps();
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      scrollToBottom();
       if (text) transcriptLines.push("[System] " + text);
       return line;
     }
@@ -277,7 +291,8 @@
     }
     messagesEl.insertBefore(wrap, typingEl);
     pinFollowUps();
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    // Visitor / assistant: show the start of the new turn, not leap to the footer.
+    scrollToReveal(wrap);
     var who = label || (role === "visitor" ? "You" : role);
     if (text) transcriptLines.push("[" + who + "] " + text);
     if (files.length) {
@@ -346,7 +361,7 @@
   function setTyping(on) {
     typingEl.classList.toggle("is-on", !!on);
     messagesEl.appendChild(typingEl);
-    if (on) messagesEl.scrollTop = messagesEl.scrollHeight;
+    if (on) scrollToBottom();
   }
 
   function clearNode(node) {
@@ -485,8 +500,10 @@
       btn.type = "button";
       btn.addEventListener("click", function () {
         group.remove();
-        if (tryStartCollectFromRouteLabel(label)) {
+        var routeKind = detectRouteCollectKind(label);
+        if (routeKind) {
           appendBubble("visitor", label);
+          startCollect(routeKind, { force: true });
           return;
         }
         sendMessageText(label);
@@ -512,14 +529,10 @@
       choices && choices.length >= 2 ? choices : parsed.choices;
     var yachtList = looksLikeYachtChecklist(parsed.body);
     var freightList = looksLikeFreightChecklist(parsed.body);
-    // Prefer the step form over a long AI field dump.
+    // Prefer the step form over a long AI field dump (one intro inside startCollect).
     if (!collectState && !teamJoined && !suppressCollectTrigger) {
       if (yachtList || freightList) {
-        var shortAck =
-          freightList
-            ? "Thank you — I’ll take a few freight details in short steps."
-            : "Thank you — I’ll take a few yacht details in short steps.";
-        appendBubble("assistant", shortAck, id, authorName);
+        if (id) seenIds[id] = true;
         startCollect(freightList ? "freight" : "yacht", { force: true });
         return;
       }
@@ -582,7 +595,7 @@
   }
 
   /** Yacht / freight route picks should open the guided form, not an AI checklist. */
-  function tryStartCollectFromRouteLabel(text) {
+  function detectRouteCollectKind(text) {
     var t = String(text || "").trim().toLowerCase();
     if (
       t === "yacht transport" ||
@@ -590,8 +603,7 @@
       t === "boat transport" ||
       /^yacht\b/.test(t)
     ) {
-      startCollect("yacht", { force: true });
-      return true;
+      return "yacht";
     }
     if (
       t === "freight or cargo" ||
@@ -601,10 +613,16 @@
       /^freight\b/.test(t) ||
       /^cargo\b/.test(t)
     ) {
-      startCollect("freight", { force: true });
-      return true;
+      return "freight";
     }
-    return false;
+    return null;
+  }
+
+  function tryStartCollectFromRouteLabel(text) {
+    var kind = detectRouteCollectKind(text);
+    if (!kind) return false;
+    startCollect(kind, { force: true });
+    return true;
   }
 
   var root = el(
@@ -894,7 +912,7 @@
     actions.appendChild(office);
     notice.appendChild(actions);
     messagesEl.insertBefore(notice, typingEl);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    scrollToReveal(notice);
     return notice;
   }
 
@@ -1065,20 +1083,26 @@
       kind === "freight"
         ? "Thank you. I'll take a few details in three short steps. You can also paste a full enquiry if you prefer."
         : "Thank you. I'll take a few details in four short steps. If you have a specification sheet, you can paste it instead.";
-    appendBubble("assistant", intro);
+    var introNode = appendBubble("assistant", intro);
     input.placeholder = "Or ask a question…";
     renderCollectStep();
+    // Keep the intro (and prior Yes / route pick) in view — don't jump to form footer.
+    if (introNode) scrollToReveal(introNode);
   }
 
-  function cardHead(title, stepLabel) {
+  function cardHead(title, stepLabel, onClose) {
     var head = el("div", "pm-chat__card-head");
     head.appendChild(el("span", "pm-chat__card-title", title));
     if (stepLabel) head.appendChild(el("span", "pm-chat__card-step", stepLabel));
     var dismiss = el("button", "pm-chat__card-close", "×");
     dismiss.type = "button";
-    dismiss.setAttribute("aria-label", "Close form");
+    dismiss.setAttribute(
+      "aria-label",
+      onClose ? "Close paste box" : "Close form"
+    );
     dismiss.addEventListener("click", function () {
-      stopCollect();
+      if (typeof onClose === "function") onClose();
+      else stopCollect();
     });
     head.appendChild(dismiss);
     return head;
@@ -1095,7 +1119,12 @@
       collectEl.appendChild(
         cardHead(
           freightPaste ? "Paste your cargo details" : "Paste your yacht details",
-          ""
+          "",
+          function () {
+            // X on paste only leaves paste mode — keep the quote form open.
+            collectState.pasteMode = false;
+            renderCollectStep();
+          }
         )
       );
       var body = el("div", "pm-chat__card-body");
@@ -1362,18 +1391,26 @@
   /**
    * Route labels and clear yacht/freight intent open the guided form.
    * Free-typed detail dumps stay with the AI.
+   * Returns the collect kind, or null — caller appends the visitor bubble first.
    */
-  function maybeStartCollectFromVisitor(text) {
-    if (tryStartCollectFromRouteLabel(text)) return true;
+  function detectCollectKindFromVisitor(text) {
+    var route = detectRouteCollectKind(text);
+    if (route) return route;
     var kind = detectQuoteKindFromText(text);
-    if (kind === "yacht" || kind === "freight") {
-      // Only auto-form for short intent lines, not full pasted enquiries.
-      if (String(text || "").trim().length <= 80) {
-        startCollect(kind, { force: true });
-        return true;
-      }
+    if (
+      (kind === "yacht" || kind === "freight") &&
+      String(text || "").trim().length <= 80
+    ) {
+      return kind;
     }
-    return false;
+    return null;
+  }
+
+  function maybeStartCollectFromVisitor(text) {
+    var kind = detectCollectKindFromVisitor(text);
+    if (!kind) return false;
+    startCollect(kind, { force: true });
+    return true;
   }
 
   var awaitingDeferredReply = false;
@@ -1635,9 +1672,13 @@
       return;
     }
     hideStarters();
-    if (!opts.skipCollect && maybeStartCollectFromVisitor(text)) {
-      appendBubble("visitor", text);
-      return;
+    if (!opts.skipCollect) {
+      var collectKind = detectCollectKindFromVisitor(text);
+      if (collectKind) {
+        appendBubble("visitor", text);
+        startCollect(collectKind, { force: true });
+        return;
+      }
     }
     var visitorWrap = opts.reuseWrap || null;
     if (!visitorWrap) {
