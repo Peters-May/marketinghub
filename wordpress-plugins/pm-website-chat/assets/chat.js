@@ -1416,18 +1416,32 @@
 
   var awaitingDeferredReply = false;
   var fastPollUntil = 0;
+  var pollVisibleBound = false;
+
+  function advanceLastMessageAt(iso) {
+    if (!iso) return;
+    var next = Date.parse(iso);
+    if (!Number.isFinite(next)) return;
+    var prev = lastMessageAt ? Date.parse(lastMessageAt) : 0;
+    if (!Number.isFinite(prev) || next >= prev) lastMessageAt = iso;
+  }
 
   function startPoll() {
     stopPoll();
     function pollOnce() {
       if (!sessionId || !open) return;
-      if (typeof document !== "undefined" && document.hidden) return;
       var path =
         "api/chat/sessions/" +
         encodeURIComponent(sessionId) +
         "/messages";
       if (lastMessageAt) {
-        path += "?after=" + encodeURIComponent(lastMessageAt);
+        var ms = Date.parse(lastMessageAt);
+        // after_ms avoids ISO `+` offsets being corrupted in query strings.
+        path +=
+          "?after_ms=" +
+          encodeURIComponent(
+            String(Number.isFinite(ms) ? ms : Date.now())
+          );
       } else {
         path += "?t=" + Date.now();
       }
@@ -1441,14 +1455,20 @@
           if (!data.messages) return;
           var gotAssistant = false;
           data.messages.forEach(function (m) {
-            if (m.id && seenIds[m.id]) return;
+            if (m.id && seenIds[m.id]) {
+              advanceLastMessageAt(m.created_at);
+              return;
+            }
             if (m.role === "visitor") {
               if (m.id) seenIds[m.id] = true;
-              if (m.created_at) lastMessageAt = m.created_at;
+              advanceLastMessageAt(m.created_at);
               return;
             }
             if (m.role === "staff" || m.role === "system") {
-              if (m.role === "staff") noteTeamJoined(m.author_name);
+              if (m.role === "staff") {
+                noteTeamJoined(m.author_name);
+                fastPollUntil = Date.now() + 60000;
+              }
               appendBubble(m.role, m.body, m.id, m.author_name, m.attachments);
             } else if (m.role === "assistant") {
               gotAssistant = true;
@@ -1456,7 +1476,7 @@
             } else if (m.id) {
               seenIds[m.id] = true;
             }
-            if (m.created_at) lastMessageAt = m.created_at;
+            advanceLastMessageAt(m.created_at);
           });
           if (gotAssistant && awaitingDeferredReply) {
             awaitingDeferredReply = false;
@@ -1469,13 +1489,21 @@
     function scheduleNext() {
       if (pollTimer) clearTimeout(pollTimer);
       if (!open) return;
-      var wait = Date.now() < fastPollUntil ? 1500 : 4000;
+      // Faster while waiting for / talking to the team.
+      var wait =
+        Date.now() < fastPollUntil || teamJoined ? 1500 : 4000;
       pollTimer = setTimeout(function () {
         pollOnce();
         scheduleNext();
       }, wait);
     }
     scheduleNext();
+    if (typeof document !== "undefined" && !pollVisibleBound) {
+      pollVisibleBound = true;
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden && open && sessionId) pollOnce();
+      });
+    }
   }
 
   function stopPoll() {
@@ -1710,6 +1738,16 @@
       .then(function (r) {
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Send failed");
+          if (data.visitor_message && data.visitor_message.id) {
+            seenIds[data.visitor_message.id] = true;
+            advanceLastMessageAt(data.visitor_message.created_at);
+          }
+          // Waiting / human: team replies arrive via poll — do not expect AI here.
+          if (data.mode === "waiting" || data.mode === "human") {
+            awaitingDeferredReply = false;
+            fastPollUntil = Date.now() + 120000;
+            return;
+          }
           if (data.deferred) {
             awaitingDeferredReply = true;
             fastPollUntil = Date.now() + 20000;
@@ -1717,7 +1755,7 @@
           }
           awaitingDeferredReply = false;
           if (data.message && data.message.body) {
-            lastMessageAt = data.message.created_at;
+            advanceLastMessageAt(data.message.created_at);
             if ((data.message.role || "assistant") === "assistant") {
               presentAssistant(
                 data.message.body,
@@ -1848,9 +1886,12 @@
         return parseBody(r).then(function (data) {
           if (!r.ok) throw new Error(data.error || "Handoff failed");
           (data.messages || []).forEach(function (m) {
-            appendBubble(m.role, m.body, m.id);
-            if (m.created_at) lastMessageAt = m.created_at;
+            appendBubble(m.role, m.body, m.id, m.author_name);
+            advanceLastMessageAt(m.created_at);
           });
+          // Poll quickly so Hub staff replies appear in the website widget.
+          fastPollUntil = Date.now() + 180000;
+          if (open) startPoll();
         });
       })
       .catch(function (err) {

@@ -56,7 +56,16 @@ export async function GET(request: Request, ctx: Ctx) {
 
   const { id } = ctx.params;
   const url = new URL(request.url);
-  const after = url.searchParams.get("after")?.trim() || undefined;
+  const afterRaw = url.searchParams.get("after")?.trim() || undefined;
+  // Prefer after_ms — avoids `+` in ISO offsets being turned into spaces in query strings.
+  const afterMsRaw = url.searchParams.get("after_ms")?.trim();
+  const afterMs = afterMsRaw ? Number(afterMsRaw) : NaN;
+  const after =
+    Number.isFinite(afterMs) && afterMs > 0
+      ? new Date(afterMs).toISOString()
+      : afterRaw
+        ? afterRaw.replace(" ", "+")
+        : undefined;
 
   try {
     const session = await getChatSession(id);
@@ -136,28 +145,13 @@ export async function POST(request: Request, ctx: Ctx) {
       attachments,
     });
 
-    // Staff has taken over: store only; they reply from Hub.
-    if (session.status === "human") {
+    // Staff / Speak to the team: store the visitor message only — Hub replies via poll.
+    // Keep status as waiting/human (do not flip back to ai).
+    if (session.status === "human" || session.status === "waiting") {
       return chatJson(request, {
-        mode: "human",
-        message:
-          "Thanks — the team has your message and will reply here shortly.",
+        mode: session.status === "human" ? "human" : "waiting",
+        visitor_message: visitorMsg,
       });
-    }
-
-    // Waiting for a team member: keep status as requested even if they keep typing.
-    // Staff already in the thread → store only. Otherwise AI may still reply, but
-    // do not flip the session back to "ai" (inbox must stay on Waiting).
-    if (session.status === "waiting") {
-      const prior = await listChatMessages(id);
-      const hasStaff = prior.some((m) => m.role === "staff");
-      if (hasStaff) {
-        return chatJson(request, {
-          mode: "human",
-          message:
-            "Thanks — the team has your message and will reply here shortly.",
-        });
-      }
     }
 
     // Short debounce only when the message looks like a fragment they may still be typing.

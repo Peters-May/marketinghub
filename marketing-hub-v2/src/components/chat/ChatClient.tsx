@@ -333,13 +333,10 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       setError("The visitor closed this chat, so it cannot be taken over.");
       return;
     }
-    if (selected?.status !== "human") {
-      setError("Take over this chat before you reply.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
+      // Waiting / AI: reply auto-takes over (admin sets status to human).
       const res = await fetch("/api/chat/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -979,13 +976,9 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     <div>
                       <textarea
                         className="field min-h-[72px]"
-                        placeholder={
-                          selected.status === "human"
-                            ? "Reply as the team…"
-                            : "Take over to reply as yourself"
-                        }
+                        placeholder="Reply as the team…"
                         value={reply}
-                        disabled={selected.status !== "human"}
+                        disabled={busy}
                         onChange={(e) => setReply(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -995,17 +988,19 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                         }}
                       />
                       <div className="mt-1 flex items-center justify-between text-xs text-[#5b6472]">
-                        <span>Enter to send · Shift+Enter for a new line</span>
-                        {selected.status === "human" ? (
-                          <button
-                            type="button"
-                            className="btn-primary"
-                            disabled={busy || !reply.trim()}
-                            onClick={() => void sendReply()}
-                          >
-                            Send
-                          </button>
-                        ) : null}
+                        <span>
+                          {selected.status === "waiting" || selected.status === "ai"
+                            ? "Sending takes over this chat · Enter to send"
+                            : "Enter to send · Shift+Enter for a new line"}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={busy || !reply.trim()}
+                          onClick={() => void sendReply()}
+                        >
+                          Send
+                        </button>
                       </div>
                     </div>
                   )}
