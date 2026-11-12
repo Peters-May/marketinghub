@@ -145,13 +145,26 @@ export async function POST(request: Request, ctx: Ctx) {
       attachments,
     });
 
-    // Staff / Speak to the team: store the visitor message only — Hub replies via poll.
-    // Keep status as waiting/human (do not flip back to ai).
-    if (session.status === "human" || session.status === "waiting") {
+    // Staff has taken over: store only; they reply from Hub.
+    if (session.status === "human") {
       return chatJson(request, {
-        mode: session.status === "human" ? "human" : "waiting",
+        mode: "human",
         visitor_message: visitorMsg,
       });
+    }
+
+    // Speak to the team requested: keep status as waiting (do not flip back to ai),
+    // but still let the AI answer while they wait for a colleague.
+    if (session.status === "waiting") {
+      const prior = await listChatMessages(id);
+      const hasStaff = prior.some((m) => m.role === "staff");
+      if (hasStaff) {
+        return chatJson(request, {
+          mode: "human",
+          visitor_message: visitorMsg,
+        });
+      }
+      // Fall through to AI — status stays waiting.
     }
 
     // Short debounce only when the message looks like a fragment they may still be typing.
