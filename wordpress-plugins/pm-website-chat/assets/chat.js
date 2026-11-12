@@ -1039,7 +1039,7 @@
       el(
         "p",
         "pm-chat__hint",
-        "A colleague will reply here. If you close this window, we'll reply by email." +
+        "We will allocate you to a team member — please wait. If no one is available, we will follow up by email. Type your enquiry in the message box." +
           (hours ? " " + hours : "")
       )
     );
