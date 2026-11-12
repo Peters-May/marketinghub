@@ -1294,6 +1294,7 @@
       kind === "freight"
         ? "Freight / cargo enquiry (guided form):"
         : "Yacht transport enquiry (guided form):",
+      "",
     ];
     var fields = kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS;
     fields.forEach(function (f) {

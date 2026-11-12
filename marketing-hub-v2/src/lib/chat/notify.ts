@@ -7,6 +7,10 @@ import {
   emailAppOrigin,
   escapeHtml,
 } from "@/lib/email/brand-shell";
+import {
+  conversationEmailHtml,
+  conversationEmailText,
+} from "@/lib/chat/quote-format";
 import type { ChatMessage, ChatSession } from "@/lib/types";
 
 export { escapeHtml };
@@ -88,6 +92,8 @@ export type ChatEmailDetailProps = {
   rows: Array<{ label: string; value: string; href?: string }>;
   snippetsLabel?: string;
   snippets?: string[];
+  /** Pre-built conversation / quote HTML (tables). Takes priority over snippets. */
+  conversationHtml?: string;
   ctaLabel?: string;
   ctaHref?: string;
   footerNote?: string;
@@ -104,6 +110,9 @@ export function brandedChatEmailHtml(props: ChatEmailDetailProps): string {
           )
           .join("")
       : "";
+  const conversationBlock = props.conversationHtml?.trim()
+    ? props.conversationHtml
+    : brandedPanelHtml(props.snippetsLabel || "Conversation", snippetsInner);
 
   return brandedHubEmailHtml({
     eyebrow: props.eyebrow,
@@ -112,7 +121,7 @@ export function brandedChatEmailHtml(props: ChatEmailDetailProps): string {
     bodyHtml: `
       <p style="margin:0 0 16px;font-size:15px;color:#0B2545;">${escapeHtml(props.intro)}</p>
       ${brandedDetailRowsHtml(props.rows)}
-      ${brandedPanelHtml(props.snippetsLabel || "Conversation", snippetsInner)}
+      ${conversationBlock}
     `,
     ctaLabel: props.ctaLabel,
     ctaHref: props.ctaHref,
@@ -196,7 +205,15 @@ export async function notifyChatStaff(params: {
   const messages = session
     ? await listChatMessages(params.sessionId).catch(() => [] as ChatMessage[])
     : [];
-  const snippets = latestVisitorSnippets(messages);
+  const conversationHtml = messages.length
+    ? conversationEmailHtml(messages, { maxChatLines: 8 })
+    : "";
+  const conversationText = messages.length
+    ? conversationEmailText(messages)
+    : "";
+  const snippets = conversationHtml
+    ? []
+    : latestVisitorSnippets(messages);
   const who = session
     ? visitorLabel({
         visitor_name: session.visitor_name,
@@ -245,6 +262,7 @@ export async function notifyChatStaff(params: {
     ],
     snippetsLabel: "Recent visitor messages",
     snippets,
+    conversationHtml: conversationHtml || undefined,
     ctaLabel: "Open chat inbox",
     ctaHref: href,
     footerNote:
@@ -259,7 +277,11 @@ export async function notifyChatStaff(params: {
     `Who: ${who}`,
     `Where: ${where}`,
     when ? `When: ${when}` : "",
-    snippets.length ? `Recent messages:\n- ${snippets.join("\n- ")}` : "",
+    conversationText
+      ? `\n${conversationText}`
+      : snippets.length
+        ? `Recent messages:\n- ${snippets.join("\n- ")}`
+        : "",
     "",
     `Open inbox: ${href}`,
   ]
@@ -312,12 +334,19 @@ export async function emailChatTranscript(params: {
   const replyTo = await resolveTeamReplyTo(params.session);
 
   let lastStaff = "";
+  let messages: ChatMessage[] = [];
   try {
-    const messages = await listChatMessages(params.session.id);
+    messages = await listChatMessages(params.session.id);
     lastStaff = latestStaffSnippet(messages);
   } catch {
     lastStaff = "";
   }
+  const structuredHtml = messages.length
+    ? conversationEmailHtml(messages)
+    : "";
+  const structuredText = messages.length
+    ? conversationEmailText(messages)
+    : transcript;
 
   const sent: string[] = [];
   const errors: string[] = [];
@@ -379,9 +408,12 @@ export async function emailChatTranscript(params: {
           ? "Latest team reply and transcript"
           : "Conversation"
         : "Transcript",
-      snippets: isVisitor && lastStaff
-        ? [`Team: ${lastStaff}`, transcript.slice(0, 5000)]
-        : [transcript.slice(0, 6000)],
+      snippets: structuredHtml
+        ? []
+        : isVisitor && lastStaff
+          ? [`Team: ${lastStaff}`, transcript.slice(0, 5000)]
+          : [transcript.slice(0, 6000)],
+      conversationHtml: structuredHtml || undefined,
       ctaLabel: isVisitor ? undefined : "Open in Marketing Hub",
       ctaHref: isVisitor ? undefined : href,
       footerNote: isVisitor
@@ -396,14 +428,13 @@ export async function emailChatTranscript(params: {
           intro,
           "",
           lastStaff ? `Latest team reply:\n${lastStaff}\n` : "",
-          "Conversation:",
-          transcript,
+          structuredText || transcript,
           "",
           `Reply to this email (${replyTo}) to continue with the team.`,
         ]
           .filter(Boolean)
           .join("\n")
-      : `${subject}\n\n${who}\n${where}\n\n${transcript}`;
+      : `${subject}\n\n${who}\n${where}\n\n${structuredText || transcript}`;
 
     const result = await sendResendEmail({
       to,
