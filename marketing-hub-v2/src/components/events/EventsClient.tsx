@@ -169,20 +169,39 @@ const emptyForm = {
 
 type EventForm = typeof emptyForm;
 
-function toLocalInput(iso: string | null | undefined): string {
+/** Calendar date for From/To inputs — avoids datetime-local timezone loss on Ends. */
+function toDateInput(iso: string | null | undefined): string {
   if (!iso) return "";
-  const d = new Date(iso);
+  const raw = iso.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Store event dates as YYYY-MM-DD so From and To both persist without UTC shift. */
+function toStoredEventDate(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
 }
 
 function toEditForm(event: EventItem): EventForm {
   const planner = readPlannerFields(event);
   return {
     title: event.title,
-    starts_at: toLocalInput(event.starts_at),
-    ends_at: toLocalInput(event.ends_at),
+    starts_at: toDateInput(event.starts_at),
+    ends_at: toDateInput(event.ends_at),
     location: event.location,
     event_type: event.event_type || "Event",
     division: event.division || "",
@@ -629,19 +648,19 @@ function EventFields({
         />
       </div>
       <div>
-        <label className="label">Starts (optional)</label>
+        <label className="label">From</label>
         <input
           className="field"
-          type="datetime-local"
+          type="date"
           value={form.starts_at}
           onChange={(e) => onChange({ ...form, starts_at: e.target.value })}
         />
       </div>
       <div>
-        <label className="label">Ends</label>
+        <label className="label">To</label>
         <input
           className="field"
-          type="datetime-local"
+          type="date"
           value={form.ends_at}
           onChange={(e) => onChange({ ...form, ends_at: e.target.value })}
         />
@@ -1926,10 +1945,8 @@ export function EventsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          starts_at: form.starts_at
-            ? new Date(form.starts_at).toISOString()
-            : null,
-          ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+          starts_at: toStoredEventDate(form.starts_at),
+          ends_at: toStoredEventDate(form.ends_at),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1976,10 +1993,8 @@ export function EventsClient({
           id: editingId,
           patch: {
             title: edit.title.trim() || "Untitled event",
-            starts_at: edit.starts_at
-              ? new Date(edit.starts_at).toISOString()
-              : null,
-            ends_at: edit.ends_at ? new Date(edit.ends_at).toISOString() : null,
+            starts_at: toStoredEventDate(edit.starts_at),
+            ends_at: toStoredEventDate(edit.ends_at),
             location: edit.location,
             event_type: edit.event_type || "Event",
             division: edit.division || "",
@@ -2726,6 +2741,35 @@ export function EventsClient({
                     isAdmin={showAdminChecks}
                     currentUserId={currentUserId}
                     tab={detailTab}
+                    reloadToken={attendingPeople
+                      .map((row) => `${row.user_id}:${row.attendance_status}`)
+                      .sort()
+                      .join("|")}
+                    peopleManager={
+                      detailTab === "people" ? (
+                        <EventAttendeeManager
+                          attending={attendingPeople}
+                          contacts={peopleContacts}
+                          contactsLoaded={peopleContactsLoaded}
+                          canManage={canManageAttendees}
+                          currentUserId={currentUserId}
+                          saving={attendanceSaving}
+                          onContactCreated={(contact) => {
+                            setPeopleContacts((prev) =>
+                              prev.some((c) => c.id === contact.id)
+                                ? prev
+                                : [...prev, contact]
+                            );
+                          }}
+                          onAddContact={(contactId) =>
+                            void addAttendeeFromContact(selected.id, contactId)
+                          }
+                          onRemove={(userId) =>
+                            void removeAttendee(selected.id, userId)
+                          }
+                        />
+                      ) : null
+                    }
                   />
                 ) : null}
 
@@ -2764,7 +2808,9 @@ export function EventsClient({
                     <dt className="label !mb-0.5">Location</dt>
                     <dd>{selected.location || "—"}</dd>
                   </div>
-                  <LinkedSailings eventId={selected.id} />
+                  {selected.division === "Racing" ? (
+                    <LinkedSailings eventId={selected.id} />
+                  ) : null}
                   {selected.link_url ? (
                     <div>
                       <dt className="label !mb-0.5">Link</dt>

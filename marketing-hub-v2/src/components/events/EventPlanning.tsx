@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { HUB_OFFICE_LABELS } from "@/lib/events/offices";
 import type { EventAttendance, EventBooking, EventOffice } from "@/lib/types";
 
@@ -11,11 +11,17 @@ export function EventPlanning({
   isAdmin,
   currentUserId,
   tab,
+  peopleManager,
+  reloadToken = "",
 }: {
   eventId: string;
   isAdmin: boolean;
   currentUserId: string | null;
   tab: Tab;
+  /** Add/remove people UI — shown above offices on the People tab. */
+  peopleManager?: ReactNode;
+  /** Change when attendance changes outside this panel so travel details refresh. */
+  reloadToken?: string;
 }) {
   const [offices, setOffices] = useState<EventOffice[]>([]);
   const [bookings, setBookings] = useState<EventBooking[]>([]);
@@ -43,8 +49,7 @@ export function EventPlanning({
 
   useEffect(() => {
     void load();
-  }, [load]);
-
+  }, [load, reloadToken]);
   async function post(body: Record<string, unknown>) {
     const res = await fetch("/api/events/planning", {
       method: "POST",
@@ -108,18 +113,22 @@ export function EventPlanning({
           ) : (
             <p className="text-muted">Mark whether you are attending before adding arrival and departure.</p>
           )}
-          <ul className="divide-y divide-border">
-            {attendance.map((row) => (
-              <li key={row.id} className="py-2">
-                <p className="font-medium">{row.user_name}</p>
-                <p className="text-xs text-muted">
-                  {[row.attendance_status.replace(/_/g, " "), row.office, row.role, row.arrival_on && `arrives ${row.arrival_on}`, row.departure_on && `leaves ${row.departure_on}`]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </li>
-            ))}
-          </ul>
+          {peopleManager ? (
+            <div className="border-t border-border pt-3">{peopleManager}</div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {attendance.map((row) => (
+                <li key={row.id} className="py-2">
+                  <p className="font-medium">{row.user_name}</p>
+                  <p className="text-xs text-muted">
+                    {[row.attendance_status.replace(/_/g, " "), row.office, row.role, row.arrival_on && `arrives ${row.arrival_on}`, row.departure_on && `leaves ${row.departure_on}`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
           <div>
             <p className="label">Offices at this event</p>
             <ul className="mt-1 space-y-1">
