@@ -8,7 +8,7 @@ import {
   DEFAULT_ENQUIRY_CHAT_GUIDANCE,
   suggestOfficeFromEnquiryText,
 } from "@/lib/chat/enquiry-guidance";
-import { STAFF_REPLY_TEMPLATES } from "@/lib/chat/staff-draft";
+import { STAFF_REPLY_TEMPLATES } from "@/lib/chat/staff-templates";
 import { SITE_KB_PREFIX } from "@/lib/chat/site-knowledge";
 import { ALLOWLISTED_SITE_PAGES } from "@/lib/chat/site-pages";
 import { cn } from "@/lib/utils";
