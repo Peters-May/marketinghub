@@ -41,7 +41,7 @@ export async function draftStaffReply(input: {
   const { text } = await generateText({
     model: await model(),
     temperature: 0.4,
-    maxTokens: 280,
+    maxOutputTokens: 280,
     system: `You draft website-chat replies for Peters & May staff to edit and send.
 British English. Warm, consultative, unhurried. Short paragraphs. No emoji. No exclamation marks. No hype.
 Write as a human colleague (not “the assistant”). Do not invent rates, sailings, capacity, or promises.

@@ -198,7 +198,7 @@ export function conversationEmailHtml(
     } else {
       // No quote — last few chat lines only.
       blocks = blocks
-        .map((b) => {
+        .map((b): ConversationBlock => {
           if (b.type !== "chat") return b;
           return { type: "chat", lines: b.lines.slice(-maxChat) };
         })
