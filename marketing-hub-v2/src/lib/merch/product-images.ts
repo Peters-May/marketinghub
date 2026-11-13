@@ -138,22 +138,38 @@ function isCustomCatalogueRow(row: MerchCatalogueImage): boolean {
   return !CLOTHING_PRODUCTS.some((p) => p.id === row.product_id);
 }
 
+/** True when a catalogue row is marked hidden (boolean or legacy string). */
+export function isCatalogueHidden(
+  row?: MerchCatalogueImage | null
+): boolean {
+  if (!row) return false;
+  const value = (row as { hidden?: unknown }).hidden;
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
 /**
  * Built-in products with catalogue overrides, plus any admin-created products.
+ *
+ * Shop / public (`includeHidden` off): once any catalogue rows exist, built-ins
+ * without a row are omitted. That stops discontinued built-ins (e.g. High Vis)
+ * from reappearing when a hide marker is missing from a stale catalogue read.
  */
 export function resolvedClothingProducts(
   catalogue: MerchCatalogueImage[],
   options?: { includeHidden?: boolean }
 ): ClothingProduct[] {
   const byId = catalogueByProductId(catalogue);
+  const includeHidden = options?.includeHidden === true;
+  const catalogueInUse = catalogue.length > 0;
   const builtIn = CLOTHING_PRODUCTS.flatMap((p) => {
     const row = byId[p.id] ?? null;
-    if (!options?.includeHidden && row?.hidden) return [];
+    if (!includeHidden && isCatalogueHidden(row)) return [];
+    if (!includeHidden && catalogueInUse && !row) return [];
     return [applyCatalogueOverrides(p, row)];
   });
   const custom = catalogue.flatMap((row) => {
     if (!isCustomCatalogueRow(row)) return [];
-    if (!options?.includeHidden && row.hidden) return [];
+    if (!includeHidden && isCatalogueHidden(row)) return [];
     if (!row.label?.trim() && !row.image_url?.trim() && !(row.images?.length)) {
       return [];
     }
@@ -244,7 +260,8 @@ export function clothingProductsWithImages(
   const byId = catalogueImageMap(catalogue);
   const byLabel = inventoryImageByItemLabel(inventory);
   const rows = catalogueByProductId(catalogue);
-  return resolvedClothingProducts(catalogue, options).map((p) => {
+  const includeHidden = options?.includeHidden === true;
+  const products = resolvedClothingProducts(catalogue, options).map((p) => {
     const row = rows[p.id];
     const gallery = normalizeGallery(row);
     const inventoryUrl = byLabel[p.label]?.trim() || "";
@@ -286,10 +303,12 @@ export function clothingProductsWithImages(
         p.links?.female ||
         undefined,
       unit_cost: unitCost,
-      hidden: Boolean(row?.hidden),
+      hidden: isCatalogueHidden(row),
       custom: row ? isCustomCatalogueRow(row) : false,
     };
   });
+  if (includeHidden) return products;
+  return products.filter((p) => !p.hidden);
 }
 
 /** Strip admin-only cost fields before sending catalogue to non-admins / public. */

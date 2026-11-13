@@ -2225,10 +2225,14 @@ export async function deleteMerchOrder(id: string) {
 }
 
 export async function listMerchCatalogue() {
-  const slice = await readMerchSliceDirect();
-  if (slice) return [...(slice.merch_catalogue ?? [])];
-  const store = await readStore();
-  return [...(store.merch_catalogue ?? [])];
+  try {
+    const slice = await readMerchSliceDirect();
+    if (slice) return [...(slice.merch_catalogue ?? [])];
+  } catch (err) {
+    console.error("[merch] catalogue slice failed; using fresh store", err);
+  }
+  // Fresh read so hide/restore is not masked by the short remote cache /tmp copy.
+  return [...((await readStoreFresh()).merch_catalogue ?? [])];
 }
 
 export type MerchCataloguePatch = {

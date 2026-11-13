@@ -52,7 +52,9 @@ export function ClothingShopClient({
       const data = (await res.json()) as {
         products?: ClothingProductCardItem[];
       };
-      setProducts(data.products ?? []);
+      setProducts(
+        (data.products ?? []).filter((product) => !product.hidden)
+      );
     } catch {
       setLoadError("Could not load catalogue");
     } finally {
