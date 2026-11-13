@@ -21,6 +21,9 @@
   var lastCollectKind = "";
   /** Prevent restarting the guided form after it has just been submitted. */
   var suppressCollectTrigger = false;
+  /** Captured early so Hub operators see Based sooner. */
+  var visitorLocationValue = "";
+  var pendingCollectKind = null;
   /** Plain-text lines for download on close. */
   var transcriptLines = [];
   var SESSION_KEY = "pm_website_chat_session_id";
@@ -1004,8 +1007,10 @@
       startCollect("freight", { force: true });
     });
     addStarter("Something else", "Tell us in your own words", function () {
-      ensureComposerVisible();
-      input.focus();
+      askVisitorLocationThen(function () {
+        ensureComposerVisible();
+        input.focus();
+      });
     });
     placeInThread(startersEl);
   }
@@ -1061,11 +1066,93 @@
     nameInput.focus();
   }
 
+  function saveVisitorLocation(value) {
+    visitorLocationValue = String(value || "").trim();
+    if (!visitorLocationValue || !sessionId) return Promise.resolve();
+    return fetch(
+      apiUrl(
+        "api/chat/sessions/" + encodeURIComponent(sessionId) + "/profile"
+      ),
+      {
+        method: "POST",
+        headers: headers(),
+        credentials: useProxy ? "same-origin" : "omit",
+        body: JSON.stringify({ visitor_location: visitorLocationValue }),
+      }
+    ).catch(function () {});
+  }
+
+  /** Ask where based once, then continue (quote form or free type). */
+  function askVisitorLocationThen(next) {
+    if (visitorLocationValue) {
+      if (typeof next === "function") next();
+      return;
+    }
+    hideStarters();
+    stopCollect();
+    clearNode(collectEl);
+    placeInThread(collectEl);
+    collectEl.appendChild(cardHead("Where are you based?", "", function () {
+      clearNode(collectEl);
+      if (collectEl.parentNode) collectEl.parentNode.removeChild(collectEl);
+      if (typeof next === "function") next();
+    }));
+    var body = el("div", "pm-chat__card-body");
+    body.appendChild(
+      el(
+        "p",
+        "pm-chat__hint",
+        "Country or city is enough — this helps us point your enquiry to the right team."
+      )
+    );
+    var locInput = el("input", "pm-chat__collect-input");
+    locInput.type = "text";
+    locInput.placeholder = "e.g. London, UK";
+    body.appendChild(locInput);
+    collectEl.appendChild(body);
+    var actions = el("div", "pm-chat__card-actions");
+    var skip = el("button", "pm-chat__btn-secondary", "Skip for now");
+    skip.type = "button";
+    skip.addEventListener("click", function () {
+      clearNode(collectEl);
+      if (collectEl.parentNode) collectEl.parentNode.removeChild(collectEl);
+      if (typeof next === "function") next();
+    });
+    var cont = el("button", "pm-chat__btn-primary", "Continue");
+    cont.type = "button";
+    cont.addEventListener("click", function () {
+      var value = (locInput.value || "").trim();
+      if (!value) {
+        locInput.focus();
+        return;
+      }
+      appendBubble("visitor", "Based in: " + value);
+      saveVisitorLocation(value).then(function () {
+        clearNode(collectEl);
+        if (collectEl.parentNode) collectEl.parentNode.removeChild(collectEl);
+        if (typeof next === "function") next();
+      });
+    });
+    actions.appendChild(skip);
+    actions.appendChild(cont);
+    collectEl.appendChild(actions);
+    locInput.focus();
+  }
+
   function startCollect(kind, opts) {
     opts = opts || {};
     if (suppressCollectTrigger && !opts.force) return;
     // Explicit chip restart of a new quote.
     if (opts.force) suppressCollectTrigger = false;
+    if (!opts.skipLocationAsk && !visitorLocationValue) {
+      pendingCollectKind = kind;
+      askVisitorLocationThen(function () {
+        var k = pendingCollectKind || kind;
+        pendingCollectKind = null;
+        startCollect(k, { force: true, skipLocationAsk: true, pasteFirst: opts.pasteFirst });
+      });
+      return;
+    }
     lastCollectKind = kind;
     var steps = kind === "freight" ? FREIGHT_STEPS : YACHT_STEPS;
     collectState = {
@@ -1073,7 +1160,9 @@
       fields: kind === "freight" ? FREIGHT_FIELDS : YACHT_FIELDS,
       steps: steps,
       index: 0,
-      values: {},
+      values: visitorLocationValue
+        ? { visitor_location: visitorLocationValue }
+        : {},
       pasteMode: !!opts.pasteFirst,
     };
     hideStarters();
@@ -1322,6 +1411,10 @@
     if (values.email) emailInput.value = values.email;
     if (values.name) nameInput.value = values.name;
     if (values.company) companyInput.value = values.company;
+    if (values.visitor_location) {
+      visitorLocationValue = String(values.visitor_location).trim();
+      saveVisitorLocation(visitorLocationValue);
+    }
     suppressCollectTrigger = true;
     stopCollect();
     // Persist enquiry + Portal when email was collected; then continue AI thread.
@@ -1917,6 +2010,8 @@
           name: nameInput.value.trim(),
           email: email,
           company: companyInput.value.trim(),
+          visitor_location: visitorLocationValue || "",
+          message: opts.message || "",
         }),
       }
     )
@@ -1972,6 +2067,8 @@
     teamJoined = false;
     greetingNode = null;
     lastCollectKind = "";
+    visitorLocationValue = "";
+    pendingCollectKind = null;
     lastMessageAt = null;
     seenIds = {};
     startersShown = false;

@@ -33,6 +33,7 @@ export async function POST(request: Request, ctx: Ctx) {
     email?: string;
     company?: string;
     message?: string;
+    visitor_location?: string;
   } | null;
 
   const email = typeof body?.email === "string" ? body.email.trim() : "";
@@ -47,11 +48,27 @@ export async function POST(request: Request, ctx: Ctx) {
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const company =
       typeof body?.company === "string" ? body.company.trim() : "";
+    const fromMessage =
+      typeof body?.message === "string"
+        ? body.message.match(
+            /Where are you based\?\s*\(country or city\):\s*(.+)/i
+          )
+        : null;
+    const location = (
+      (typeof body?.visitor_location === "string"
+        ? body.visitor_location
+        : "") ||
+      (fromMessage?.[1] ?? "") ||
+      session.visitor_location
+    )
+      .trim()
+      .slice(0, 200);
 
     await updateChatSession(id, {
       visitor_name: name || session.visitor_name,
       visitor_email: email,
       visitor_company: company || session.visitor_company,
+      ...(location ? { visitor_location: location } : {}),
     });
 
     const refreshed = (await getChatSession(id))!;

@@ -1111,6 +1111,8 @@ export type ChatSession = {
   visitor_name: string;
   visitor_email: string;
   visitor_company: string;
+  /** Country or city where the visitor is based (operator routing hint). */
+  visitor_location: string;
   enquiry_id: string | null;
   assignee_email: string;
   is_test: boolean;

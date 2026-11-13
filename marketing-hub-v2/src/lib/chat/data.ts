@@ -74,6 +74,7 @@ function rowToSession(row: Record<string, unknown>): ChatSession {
     visitor_name: asString(row.visitor_name),
     visitor_email: asString(row.visitor_email),
     visitor_company: asString(row.visitor_company),
+    visitor_location: asString(row.visitor_location),
     enquiry_id: row.enquiry_id ? asString(row.enquiry_id) : null,
     assignee_email: asString(row.assignee_email),
     is_test: Boolean(row.is_test),
@@ -418,6 +419,7 @@ export async function updateChatSession(
     visitor_name: string;
     visitor_email: string;
     visitor_company: string;
+    visitor_location: string;
     enquiry_id: string | null;
     assignee_email: string;
     last_message_at: string;

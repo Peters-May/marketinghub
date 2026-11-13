@@ -66,7 +66,7 @@ function pm_website_chat_proxy_hub($request) {
         strpos($path, '%2e') !== false ||
         strpos($path, '//') !== false ||
         !preg_match(
-            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff|close|attachments))?)?$#',
+            '#^api/chat/sessions(?:/[A-Za-z0-9_-]+(?:/(?:messages|lead|handoff|close|attachments|profile))?)?$#',
             $path
         )
     ) {

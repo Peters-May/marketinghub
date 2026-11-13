@@ -17,6 +17,7 @@ import {
 } from "@/lib/chat/data";
 import { generateAssistantReply } from "@/lib/chat/rag";
 import { syncClosedChatSessionToPortal } from "@/lib/chat/lead";
+import { draftStaffReply } from "@/lib/chat/staff-draft";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import type { ChatSessionStatus } from "@/lib/types";
 
@@ -187,6 +188,17 @@ export async function POST(request: Request) {
         handoff: reply.forceHandoff,
         sources: reply.sources,
       });
+    }
+
+    if (action === "suggest_staff_reply") {
+      const sessionId = String(body.session_id ?? "");
+      if (!sessionId) return jsonError("session_id required");
+      const session = await getChatSession(sessionId);
+      if (!session) return jsonError("Not found", 404);
+      const messages = await listChatMessages(sessionId);
+      const draft = await draftStaffReply({ session, messages });
+      if (!draft) return jsonError("Could not draft a reply", 502);
+      return jsonOk({ draft });
     }
 
     if (action === "reply") {

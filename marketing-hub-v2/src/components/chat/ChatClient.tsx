@@ -6,7 +6,9 @@ import { RecordDrawer } from "@/components/ui/RecordDrawer";
 import {
   DEFAULT_CHAT_GREETING,
   DEFAULT_ENQUIRY_CHAT_GUIDANCE,
+  suggestOfficeFromEnquiryText,
 } from "@/lib/chat/enquiry-guidance";
+import { STAFF_REPLY_TEMPLATES } from "@/lib/chat/staff-draft";
 import { SITE_KB_PREFIX } from "@/lib/chat/site-knowledge";
 import { ALLOWLISTED_SITE_PAGES } from "@/lib/chat/site-pages";
 import { cn } from "@/lib/utils";
@@ -181,6 +183,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
     handoff_rate: number;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState("");
   const [inboxFilter, setInboxFilter] = useState<"needs" | "open" | "closed">(
     "needs"
@@ -355,6 +358,31 @@ export function ChatClient({ configured, initialSessionId }: Props) {
       setError(e instanceof Error ? e.message : "Reply failed");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function suggestStaffReply() {
+    if (!selectedId) return;
+    setDrafting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/chat/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "suggest_staff_reply",
+          session_id: selectedId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not draft a reply");
+      const draft = String(data.draft ?? "").trim();
+      if (!draft) throw new Error("Empty draft");
+      setReply(draft);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not draft a reply");
+    } finally {
+      setDrafting(false);
     }
   }
 
@@ -974,11 +1002,32 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                     </p>
                   ) : (
                     <div>
+                      <div className="mb-2 flex flex-wrap gap-1.5">
+                        {STAFF_REPLY_TEMPLATES.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            className="rounded-full border border-[#e3e6e9] bg-white px-2.5 py-1 text-[12px] text-[#0B2545] hover:border-[#007DC5] hover:text-[#007DC5]"
+                            disabled={busy || drafting}
+                            onClick={() => setReply(tpl.body)}
+                          >
+                            {tpl.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="rounded-full border border-[#cfe5f5] bg-[#e6f2fa] px-2.5 py-1 text-[12px] font-medium text-[#005f97] hover:border-[#007DC5]"
+                          disabled={busy || drafting}
+                          onClick={() => void suggestStaffReply()}
+                        >
+                          {drafting ? "Drafting…" : "Suggest reply"}
+                        </button>
+                      </div>
                       <textarea
                         className="field min-h-[72px]"
                         placeholder="Reply as the team…"
                         value={reply}
-                        disabled={busy}
+                        disabled={busy || drafting}
                         onChange={(e) => setReply(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
@@ -996,7 +1045,7 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                         <button
                           type="button"
                           className="btn-primary"
-                          disabled={busy || !reply.trim()}
+                          disabled={busy || drafting || !reply.trim()}
                           onClick={() => void sendReply()}
                         >
                           Send
@@ -1024,6 +1073,27 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   : /yacht/i.test(guided?.title ?? "")
                     ? "Yacht transport"
                     : guided?.title || "Not given";
+                const basedFromForm = guidedField(guided ?? null, (label) =>
+                  label.includes("where are you based")
+                );
+                const based =
+                  selected.visitor_location?.trim() ||
+                  (basedFromForm !== "Not given" ? basedFromForm : "") ||
+                  "Not given";
+                const officeHint = suggestOfficeFromEnquiryText(
+                  [
+                    selected.visitor_location,
+                    basedFromForm !== "Not given" ? basedFromForm : "",
+                    guided?.title ?? "",
+                    ...(guided?.rows.map((r) => `${r.label}: ${r.value}`) ?? []),
+                    ...messages
+                      .filter((m) => m.role === "visitor")
+                      .slice(-6)
+                      .map((m) => m.body),
+                  ]
+                    .filter(Boolean)
+                    .join("\n")
+                );
                 return (
                   <div className="space-y-4">
                     <section>
@@ -1038,10 +1108,12 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                         <dt className="text-[#5b6472]">Company</dt>
                         <dd>{selected.visitor_company || "Not given"}</dd>
                         <dt className="text-[#5b6472]">Based</dt>
-                        <dd>
-                          {guidedField(guided ?? null, (label) =>
-                            label.includes("where are you based")
-                          )}
+                        <dd>{based}</dd>
+                        <dt className="text-[#5b6472]">Office</dt>
+                        <dd className="text-[#5b6472]">
+                          {officeHint
+                            ? `${officeHint} (suggested — confirm before forwarding)`
+                            : "Not suggested yet"}
                         </dd>
                       </dl>
                     </section>
