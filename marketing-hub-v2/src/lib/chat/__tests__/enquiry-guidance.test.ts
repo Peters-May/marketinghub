@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  looksLikePersonalEffectsEnquiry,
   resolveChatGuidance,
   suggestOfficeFromEnquiryText,
   DEFAULT_ENQUIRY_CHAT_GUIDANCE,
@@ -19,6 +20,27 @@ describe("resolveChatGuidance", () => {
     expect(resolveChatGuidance("Custom yacht-first rules.")).toBe(
       "Custom yacht-first rules."
     );
+  });
+});
+
+describe("looksLikePersonalEffectsEnquiry", () => {
+  it("flags personal laptops and household moves", () => {
+    expect(
+      looksLikePersonalEffectsEnquiry(
+        "I need a freight forwarder for a laptop China to London by air"
+      )
+    ).toBe(true);
+    expect(
+      looksLikePersonalEffectsEnquiry("household removal from London to Spain")
+    ).toBe(true);
+  });
+
+  it("allows commercial trade cargo", () => {
+    expect(
+      looksLikePersonalEffectsEnquiry(
+        "We need air freight for shipyard spare parts China to London"
+      )
+    ).toBe(false);
   });
 });
 

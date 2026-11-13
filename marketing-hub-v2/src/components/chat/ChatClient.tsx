@@ -1684,6 +1684,10 @@ export function ChatClient({ configured, initialSessionId }: Props) {
                   },
                   {
                     q: "I need a freight forwarder for a laptop China to London by air",
+                    expect: "Decline personal effects — Gerson referral, no freight quote",
+                  },
+                  {
+                    q: "We need air freight for shipyard spare parts China to London",
                     expect: "Forwarding team, not Commercial Marine",
                   },
                   {

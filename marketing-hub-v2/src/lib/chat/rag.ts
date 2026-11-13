@@ -1,7 +1,10 @@
 import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { BRAND_AI_SUMMARY } from "@/lib/brand/ai-summary";
-import { resolveChatGuidance } from "@/lib/chat/enquiry-guidance";
+import {
+  looksLikePersonalEffectsEnquiry,
+  resolveChatGuidance,
+} from "@/lib/chat/enquiry-guidance";
 import { extractReplyChoices } from "@/lib/chat/reply-choices";
 import { fetchRelevantSitePages } from "@/lib/chat/site-pages";
 import type { ChatKbDocument, ChatMessage } from "@/lib/types";
@@ -77,38 +80,48 @@ export async function streamAssistantReply(input: {
   sources: ChatMessage["sources"];
   forceHandoff: boolean;
 }> {
-  const [settings, docs, sitePages] = await Promise.all([
+  const personalEffects = looksLikePersonalEffectsEnquiry(input.visitorMessage);
+  const [settings, docs, sitePagesRaw] = await Promise.all([
     getChatSettings(),
-    searchKbDocuments(input.visitorMessage),
-    fetchRelevantSitePages(input.visitorMessage),
+    personalEffects
+      ? Promise.resolve([] as Awaited<ReturnType<typeof searchKbDocuments>>)
+      : searchKbDocuments(input.visitorMessage),
+    personalEffects
+      ? Promise.resolve([] as Awaited<ReturnType<typeof fetchRelevantSitePages>>)
+      : fetchRelevantSitePages(input.visitorMessage),
   ]);
-  const chunks = retrieveKnowledgeChunks(
-    input.visitorMessage,
-    docs.map((d) => ({
-      id: d.id,
-      title: d.title,
-      body: d.body,
-      source_url: d.source_url,
-      audience: "public" as const,
-    })),
-    { audience: "public", limit: 4 }
-  );
+  const sitePages = sitePagesRaw;
+  const chunks = personalEffects
+    ? []
+    : retrieveKnowledgeChunks(
+        input.visitorMessage,
+        docs.map((d) => ({
+          id: d.id,
+          title: d.title,
+          body: d.body,
+          source_url: d.source_url,
+          audience: "public" as const,
+        })),
+        { audience: "public", limit: 4 }
+      );
   if (chunks.length === 0 && sitePages.length === 0 && input.sessionId) {
     void recordChatKbMiss({
       question: input.visitorMessage,
       sessionId: input.sessionId,
     }).catch((err) => console.warn("[chat-kb-miss]", err));
   }
-  const sources: ChatMessage["sources"] = [
-    ...chunks.map((c) => ({
-      title: c.title,
-      ...(c.source_url ? { source_url: c.source_url } : {}),
-    })),
-    ...sitePages.map((p) => ({
-      title: p.title,
-      source_url: p.url,
-    })),
-  ];
+  const sources: ChatMessage["sources"] = personalEffects
+    ? []
+    : [
+        ...chunks.map((c) => ({
+          title: c.title,
+          ...(c.source_url ? { source_url: c.source_url } : {}),
+        })),
+        ...sitePages.map((p) => ({
+          title: p.title,
+          source_url: p.url,
+        })),
+      ];
 
   const forceHandoff = shouldForceHandoff(input.visitorMessage);
 
@@ -124,8 +137,9 @@ export async function streamAssistantReply(input: {
     );
   });
 
-  const kbBlock =
-    kbParts.length === 0
+  const kbBlock = personalEffects
+    ? "(Personal effects decline — do not use knowledge base. Give the Gerson Moving Services referral from Guidance. Do not list Sources.)"
+    : kbParts.length === 0
       ? "(No knowledge base or website excerpts cleared the relevance threshold. Do not invent services, routes, or facts. Continue qualifying from Guidance only, or invite Speak to the team.)"
       : kbParts.join("\n\n");
   const pageContext =
@@ -174,7 +188,8 @@ Hard rules:
 - If the visitor has already chosen yacht or freight (or said “Freight or cargo” / “Yacht transport”), do not list quote fields in chat. One short acknowledgement only — the website form collects the details.
 - On handover: say what happens next — the relevant team will review and reply by email (use the address already given), and will ask if anything else is needed. Do not invent a deadline. If they ask “what happens next”, answer that directly.
 - If they ask for rates or a quote, stay warm: thank them, apologise if they mentioned a missed call, show you heard the boat and places they named, confirm the team can review options and costs, offer a call or ask for the missing details in one go (not name and email alone). Never invent numbers. Do not open with “I can’t provide costs”. Do not say you will pass it to the team until those gaps are covered.
-- Route containers, yacht storage containers, and general cargo to the forwarding team. Commercial Marine is only for large workboats / commercial vessels. Never say “commercial transport team” or “Commercial Marine” for a container move.
+- Route containers, yacht storage containers, and commercial / trade cargo to the forwarding team. Commercial Marine is only for large workboats / commercial vessels. Never say “commercial transport team” or “Commercial Marine” for a container move.
+- Personal effects: Peters & May does not ship personal effects, household removals, personal luggage, or personal parcels (including a personal laptop, phone, or similar). Do not say the forwarding team can assist and do not collect freight quote details. Use the Gerson Moving Services referral from Guidance.
 - Do not invent VAT, TVA, duty, or customs rulings. If they ask, note the question and say the team will review it with customs colleagues as part of the enquiry. Do not reply with a stiff “I cannot advise” and then ask for information they already gave.
 - If you cannot answer from the excerpts, say so briefly, optionally offer Speak to the team, then ask what else you can help with.
 

@@ -69,10 +69,11 @@ If they already have an email on the thread, say the team will reply to that add
 Never say a yacht is already booked on a vessel, “Yes we can definitely do this”, a transit time, a cost, or “Our vessel…”. Quoting a published schedule date is allowed only under the sailing schedule exception above, with the other-options caveat.
 
 2) Freight / forwarding (including air freight, yacht storage containers, and equipment in containers)
-This is Global Freight Forwarding, not Commercial Marine. Air freight, sea freight, road freight, containers, yacht storage containers, laptops/parcels as freight, shipyard equipment, and general cargo all go here. Commercial Marine is only for large workboats / commercial vessels. Never reply with a hollow “the team has your message” — that is a system line, not an assistant answer.
+This is Global Freight Forwarding, not Commercial Marine. Air freight, sea freight, road freight, containers, yacht storage containers, shipyard equipment, and commercial / trade cargo all go here. Commercial Marine is only for large workboats / commercial vessels. Never reply with a hollow “the team has your message” — that is a system line, not an assistant answer.
+Do not treat personal effects as freight. Personal laptops, phones, luggage, household goods, removals, and personal parcels are route 7 — decline and refer; do not collect freight quote details for them.
 Start (if origin/destination/commodity are missing): “What are you looking to ship, and from where to where?”
 Then collect only gaps: name, company, email, commodity, origin, destination, mode if offered (air/sea/road), pieces, dimensions, weight, approximate value, timeframe, door-to-door or airport/port if known. Access notes and CSC status when relevant for containers.
-When they already named commodity and route (for example a laptop from China to London by air): thank them, mirror that, say the forwarding team can review air options, and ask for name, email, approximate dimensions/weight, value, and preferred timing. Do not call this Commercial Marine.
+When they already named commercial commodity and route (for example shipyard spare parts from China to London by air): thank them, mirror that, say the forwarding team can review air options, and ask for name, email, approximate dimensions/weight, value, and preferred timing. Do not call this Commercial Marine.
 When they already named pickup (for example Cockington Farm / a UK postcode), destination (for example STP Palma), access method, and inspection status: thank them by name, mirror those points, say you will pass it to the forwarding team for a quote, and ask only for truly missing essentials (often container size / dimensions, approximate gross weight, and preferred timeframe). Example shape: “Yes, we can review the transport of the yacht storage container from Cockington Farm to STP Shipyard in Palma. Could you confirm the container size, approximate gross weight, and preferred timeframe?”
 Alcohol, spirits, or other air freight that may need dangerous goods paperwork: do not refuse abruptly. Say you will check with the forwarding team whether they can assist, and that a specialist DG air forwarder may be needed if not. Never invent a rate.
 If they already sent enough, do not chase perfect data — pass it on and let Forwarding request anything still missing.
@@ -95,7 +96,7 @@ Default: “Thank you for introducing your company. Please send your company pro
 Exception — operational contact (not cold supplier) if they mention an existing Peters & May load, Timocom job, collection, T1, delivery or booking. Detect: picked up, T1, your load, Timocom, delivery, CMR, booking, collection completed. Ask for job/reference or direct to their operational contact.
 
 7) Personal effects / household moves
-Peters & May does not specialise in personal household removals. Reply: “Peters & May does not specialise in personal household removals. For this type of shipment, we recommend contacting Gerson Moving Services at james.hewings@gmsmove.com or gersonmovingservices.com.”
+Peters & May does not ship personal effects. This includes household removals, personal luggage, personal parcels, and personal electronics (for example a laptop, phone, or similar) even when the visitor asks for air freight or a freight forwarder. Do not say the forwarding team can assist. Do not ask for dimensions, weight, value, or timing for these. Reply: “Peters & May does not ship personal effects or household removals. For this type of shipment, we recommend contacting Gerson Moving Services at james.hewings@gmsmove.com or gersonmovingservices.com. What else can I help you with?”
 
 8) Domestic boat transport (same country, not international)
 Identify early when origin and destination are in the same country and the move is road-only / domestic.
@@ -125,6 +126,38 @@ When handing over, ask for a business email only if none has been given yet. If 
 If the visitor sends or says they have sent a photo, screenshot, or PDF of the yacht or cargo specification, acknowledge that you have received it and continue with only the gaps still missing. Do not ask them to retype dimensions that are “in the file” unless no file was actually attached.
 
 After a short factual decline or when the visitor’s question is answered and no quote details are still needed, close with a soft invite such as “What else can I help you with?” rather than leaving a dead end.`;
+
+/** Personal effects / household / personal parcel — decline; do not treat as freight. */
+export function looksLikePersonalEffectsEnquiry(text: string): boolean {
+  const t = String(text || "").toLowerCase();
+  if (!t.trim()) return false;
+  if (
+    /\b(personal effects?|household (goods|move|removal|removals)|house move|removal(s)? firm|luggage|suitcase|baggage|belongings)\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  // Personal electronics / small personal parcels (not commercial trade cargo).
+  if (
+    /\b(laptop|notebook|macbook|iphone|ipad|mobile phone|cellphone|tablet)\b/.test(
+      t
+    ) &&
+    !/\b(commercial|b2b|business|trade|wholesale|pallet|container|shipyard|spare parts?|equipment)\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(personal (parcel|package|item|shipment|goods)|my (laptop|phone|bag|suitcase|clothes|clothing))\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
 
 /** Heuristic office suggestion for website chat leads (customer never sees this). */
 export function suggestOfficeFromEnquiryText(text: string): string | null {
