@@ -32,13 +32,18 @@
 
   function setSidebarOpen(open) {
     document.body.classList.toggle("plan-comments-open", open);
-    const toggle = $("#plan-comments-toggle");
-    if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    const rail = $("#plan-comments-rail");
+    if (rail) {
+      if (open) rail.setAttribute("hidden", "");
+      else rail.removeAttribute("hidden");
+      rail.setAttribute("aria-expanded", open ? "true" : "false");
+    }
     try {
       localStorage.setItem(OPEN_KEY, open ? "1" : "0");
     } catch {
       /* ignore */
     }
+    if (open) syncIdentityPanel();
   }
 
   function isSidebarOpen() {
@@ -46,15 +51,15 @@
   }
 
   function updateBadge() {
-    const badge = $("#plan-comments-badge");
-    if (!badge) return;
     const n = openCount();
-    if (n > 0) {
-      badge.hidden = false;
-      badge.textContent = String(n);
-    } else {
-      badge.hidden = true;
-    }
+    document.querySelectorAll(".plan-comments-badge").forEach((badge) => {
+      if (n > 0) {
+        badge.hidden = false;
+        badge.textContent = String(n);
+      } else {
+        badge.hidden = true;
+      }
+    });
     const meta = $("#plan-comments-count");
     if (meta) meta.textContent = `${n} open`;
   }
@@ -83,13 +88,94 @@
   }
 
   function authorFieldsHtml(prefix) {
-    if (viewer) return "";
+    if (viewer) {
+      return `<p class="plan-comments-signed-in">Commenting as ${escapeHtml(viewer.name)}</p>`;
+    }
     return `<label for="${prefix}-name">Your name</label>
-      <input id="${prefix}-name" type="text" maxlength="120" value="${escapeHtml(guestName())}" placeholder="Name" required />`;
+      <input id="${prefix}-name" type="text" maxlength="120" value="${escapeHtml(guestName())}" placeholder="So we know who to follow up with" required autocomplete="name" />`;
+  }
+
+  function syncIdentityPanel(forceEdit = false) {
+    const panel = $("#plan-comments-identity");
+    if (!panel) return;
+    if (viewer) {
+      panel.classList.add("is-visible");
+      panel.innerHTML = `<p class="plan-comments-signed-in">Commenting as ${escapeHtml(viewer.name)}</p>`;
+      return;
+    }
+    const name = guestName();
+    panel.classList.add("is-visible");
+    if (name && !forceEdit) {
+      panel.innerHTML = `
+        <p class="plan-comments-signed-in">Commenting as <strong>${escapeHtml(name)}</strong>
+          <button type="button" class="plan-btn" id="plan-identity-edit" style="margin-left:8px;padding:4px 8px;font-size:11px">Change</button>
+        </p>`;
+      $("#plan-identity-edit")?.addEventListener("click", () => syncIdentityPanel(true));
+      return;
+    }
+    panel.innerHTML = `
+      <p class="plan-comments-identity-hint">Add your name so Marketing knows who to follow up with.</p>
+      <div class="plan-comments-identity-row">
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <label for="plan-identity-name">Your name</label>
+          <input id="plan-identity-name" type="text" maxlength="120" value="${escapeHtml(name)}" placeholder="e.g. Alex from Sales" autocomplete="name" />
+        </div>
+        <button type="button" class="plan-btn plan-btn-primary" id="plan-identity-save">Save</button>
+      </div>`;
+    $("#plan-identity-save")?.addEventListener("click", () => {
+      const input = /** @type {HTMLInputElement | null} */ ($("#plan-identity-name"));
+      const next = (input?.value || "").trim();
+      if (!next) {
+        showError("Enter your name so we know who to follow up with.");
+        input?.focus();
+        return;
+      }
+      saveGuestName(next);
+      showError("");
+      syncComposerNameFields();
+      syncIdentityPanel();
+    });
+    window.setTimeout(() => $("#plan-identity-name")?.focus(), 0);
+  }
+
+  function syncComposerNameFields() {
+    const name = guestName();
+    document.querySelectorAll("#plan-composer-name, .plan-thread-reply input[type='text']").forEach((el) => {
+      if (el instanceof HTMLInputElement && !el.value) el.value = name;
+    });
+  }
+
+  function requireAuthorName(scope) {
+    if (viewer?.name) return viewer.name;
+    const nameEl =
+      scope?.querySelector?.("input[type='text']") ||
+      $("#plan-composer-name") ||
+      $("#plan-identity-name");
+    const author_name = (nameEl?.value || guestName() || "").trim();
+    if (!author_name) {
+      showError("Enter your name so we know who to follow up with.");
+      setSidebarOpen(true);
+      syncIdentityPanel();
+      (nameEl || $("#plan-identity-name"))?.focus();
+      return "";
+    }
+    saveGuestName(author_name);
+    syncComposerNameFields();
+    return author_name;
   }
 
   function buildShell() {
     if ($("#plan-comments-sidebar")) return;
+
+    const rail = document.createElement("button");
+    rail.type = "button";
+    rail.id = "plan-comments-rail";
+    rail.className = "plan-comments-rail";
+    rail.setAttribute("aria-controls", "plan-comments-sidebar");
+    rail.setAttribute("aria-expanded", "false");
+    rail.innerHTML =
+      'Comments <span class="plan-comments-badge" hidden>0</span>';
+    document.body.appendChild(rail);
 
     const aside = document.createElement("aside");
     aside.id = "plan-comments-sidebar";
@@ -103,6 +189,7 @@
         </div>
         <button type="button" class="plan-comments-hide" id="plan-comments-hide">Hide</button>
       </div>
+      <div class="plan-comments-identity" id="plan-comments-identity"></div>
       <div class="plan-comments-error" id="plan-comments-error" role="alert"></div>
       <div class="plan-comments-composer" id="plan-comments-composer">
         <p class="plan-comments-quote" id="plan-composer-quote"></p>
@@ -125,9 +212,7 @@
     addBtn.textContent = "Add comment";
     document.body.appendChild(addBtn);
 
-    $("#plan-comments-toggle")?.addEventListener("click", () => {
-      setSidebarOpen(!isSidebarOpen());
-    });
+    rail.addEventListener("click", () => setSidebarOpen(true));
     $("#plan-comments-hide")?.addEventListener("click", () => setSidebarOpen(false));
     $("#plan-composer-cancel")?.addEventListener("click", () => closeComposer());
     $("#plan-composer-save")?.addEventListener("click", () => void saveComposer());
@@ -150,7 +235,10 @@
     const quote = $("#plan-composer-quote");
     if (quote) quote.textContent = `“${pendingSelection.quote}”`;
     composer?.classList.add("is-open");
-    $("#plan-composer-body")?.focus();
+    syncComposerNameFields();
+    const nameEl = $("#plan-composer-name");
+    if (nameEl && !(nameEl.value || "").trim()) nameEl.focus();
+    else $("#plan-composer-body")?.focus();
     hideAddButton();
   }
 
@@ -246,7 +334,6 @@
     if (normStart === -1) return null;
     const normEnd = normStart + quote.length;
 
-    // Map normalized offsets back onto the raw concatenated string.
     const map = [];
     let normPos = 0;
     let lastWasSpace = false;
@@ -424,7 +511,9 @@
         const id = btn.getAttribute("data-reply") || "";
         const box = $(`#reply-${CSS.escape(id)}`);
         box?.classList.add("is-open");
-        box?.querySelector("textarea")?.focus();
+        const nameEl = box?.querySelector("input[type='text']");
+        if (nameEl && !(nameEl.value || "").trim()) nameEl.focus();
+        else box?.querySelector("textarea")?.focus();
       });
     });
     list.querySelectorAll("[data-cancel-reply]").forEach((btn) => {
@@ -479,7 +568,16 @@
       viewer = data.viewer || null;
       applyHighlights();
       renderList();
+      syncIdentityPanel();
       if (viewer) {
+        const composer = $("#plan-comments-composer");
+        if (composer && !$(".plan-comments-signed-in", composer)) {
+          const quote = $("#plan-composer-quote");
+          quote?.insertAdjacentHTML(
+            "afterend",
+            `<p class="plan-comments-signed-in">Commenting as ${escapeHtml(viewer.name)}</p>`
+          );
+        }
         document.querySelector('label[for="plan-composer-name"]')?.remove();
         $("#plan-composer-name")?.remove();
       }
@@ -496,16 +594,8 @@
       showError("Write a comment before saving.");
       return;
     }
-    let author_name = viewer?.name || "";
-    if (!viewer) {
-      const nameEl = $("#plan-composer-name");
-      author_name = (nameEl?.value || "").trim();
-      if (!author_name) {
-        showError("Enter your name to comment.");
-        return;
-      }
-      saveGuestName(author_name);
-    }
+    const author_name = requireAuthorName($("#plan-comments-composer"));
+    if (!author_name) return;
 
     saving = true;
     showError("");
@@ -544,16 +634,8 @@
       showError("Write a reply before saving.");
       return;
     }
-    let author_name = viewer?.name || "";
-    if (!viewer) {
-      const nameEl = box.querySelector("input");
-      author_name = (nameEl?.value || "").trim() || guestName();
-      if (!author_name) {
-        showError("Enter your name to reply.");
-        return;
-      }
-      saveGuestName(author_name);
-    }
+    const author_name = requireAuthorName(box);
+    if (!author_name) return;
 
     saving = true;
     showError("");
@@ -610,6 +692,38 @@
     }
   }
 
+  function fixStickyNav() {
+    const nav = document.querySelector("nav.plan-sticky-nav, nav[aria-label='Plan sections']");
+    if (!nav) return;
+    nav.classList.add("plan-sticky-nav");
+    nav.style.position = "sticky";
+    nav.style.top = "0";
+    nav.style.zIndex = "50";
+
+    let banner = document.querySelector(".plan-draft-banner");
+    if (!banner) {
+      const legacy = Array.from(document.querySelectorAll('[role="status"]')).find((el) =>
+        (el.textContent || "").includes("Internal draft")
+      );
+      if (legacy) {
+        legacy.classList.add("plan-draft-banner");
+        banner = legacy;
+      }
+    }
+    if (banner && banner.parentElement !== nav) {
+      banner.classList.add("plan-draft-banner");
+      banner.style.position = "static";
+      banner.style.zIndex = "";
+      nav.insertBefore(banner, nav.firstChild);
+    }
+
+    document.querySelectorAll(".plan-comments-toggle, #plan-comments-toggle").forEach((el) => {
+      const wrap = el.closest("div");
+      if (wrap && wrap.parentElement && wrap.children.length <= 2) wrap.remove();
+      else el.remove();
+    });
+  }
+
   function initOpenState() {
     let open = true;
     try {
@@ -624,6 +738,7 @@
   }
 
   function init() {
+    fixStickyNav();
     buildShell();
     initOpenState();
     document.addEventListener("mouseup", () => {

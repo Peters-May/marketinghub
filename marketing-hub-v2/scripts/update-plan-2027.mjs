@@ -70,10 +70,7 @@ tpl = tpl.replace(
   "<title>2027 Marketing Strategy (draft)</title>"
 );
 
-const banner = `<div role="status" style="position:sticky;top:0;z-index:50;background:#071A2E;color:#E3E6E9;font-family:'Archivo',Arial,sans-serif;font-size:13px;line-height:1.4;letter-spacing:0.02em;text-align:center;padding:10px 16px;border-bottom:1px solid #1B3A5B">Internal draft — Marketing 2027 strategy (not final)</div>\n`;
-if (!tpl.includes("Internal draft")) {
-  tpl = tpl.replace("<body>", `<body>\n${banner}`);
-}
+const banner = `<div role="status" class="plan-draft-banner" style="background:#071A2E;color:#E3E6E9;font-family:'Archivo',Arial,sans-serif;font-size:13px;line-height:1.4;letter-spacing:0.02em;text-align:center;padding:10px 16px;border-bottom:1px solid #1B3A5B">Internal draft — Marketing 2027 strategy (not final)</div>`;
 
 tpl = tpl.replace(
   /<sc-if value="\{\{ showPhotos \}\}"[\s\S]*?<\/sc-if>/,
@@ -85,22 +82,30 @@ tpl = tpl.replace(
 );
 
 tpl = tpl.replace(
-  'style="position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid #e3e6e9"',
-  'class="plan-sticky-nav" style="position:sticky;top:40px;z-index:20;background:#fff;border-bottom:1px solid #e3e6e9"'
+  /<nav aria-label="Plan sections"[^>]*>/,
+  `<nav aria-label="Plan sections" class="plan-sticky-nav" style="position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #e3e6e9">\n${banner}\n`
 );
 
-const commentsBtn = `<div style="margin-left:auto;display:flex;align-items:center;flex-shrink:0;padding-left:12px"><button type="button" class="plan-comments-toggle" id="plan-comments-toggle" aria-expanded="true" aria-controls="plan-comments-sidebar" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #e3e6e9;border-radius:999px;background:#fff;color:#0b2545;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Comments <span class="plan-comments-badge" id="plan-comments-badge" hidden style="min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#007dc5;color:#fff;font-size:11px;line-height:18px;text-align:center">0</span></button></div>`;
-
+// Remove any legacy standalone draft banner / header Comments control from older exports.
 tpl = tpl.replace(
-  /(<div style="max-width:1240px;margin:0 auto;padding:0 32px;display:flex;gap:24px;overflow-x:auto;font-size:14px;font-weight:600;white-space:nowrap">)([\s\S]*?)(<\/div>\s*<div aria-label="Jump to division")/,
-  `$1$2${commentsBtn}$3`
+  /<div role="status"[^>]*>Internal draft — Marketing 2027 strategy \(not final\)<\/div>\s*/g,
+  (match) => (match.includes("plan-draft-banner") ? match : "")
+);
+tpl = tpl.replace(
+  /<div style="margin-left:auto;display:flex;align-items:center;flex-shrink:0;padding-left:12px"><button type="button" class="plan-comments-toggle"[\s\S]*?<\/button><\/div>/g,
+  ""
 );
 
 const headExtras = `<link rel="stylesheet" href="/plan/2027/annotations.css">
-<style>html{scroll-padding-top:140px}body.plan-comments-open{padding-right:320px}@media (max-width:899px){body.plan-comments-open{padding-right:0}}</style>
+<style>html{scroll-padding-top:140px}body.plan-comments-open{padding-right:320px}@media (max-width:899px){body.plan-comments-open{padding-right:0}}x-dc{display:block}nav.plan-sticky-nav{position:sticky;top:0;z-index:50}</style>
 `;
 if (!tpl.includes("annotations.css")) {
   tpl = tpl.replace("</head>", `${headExtras}</head>`);
+} else {
+  tpl = tpl.replace(
+    /<style>html\{scroll-padding-top:140px\}[\s\S]*?<\/style>/,
+    `<style>html{scroll-padding-top:140px}body.plan-comments-open{padding-right:320px}@media (max-width:899px){body.plan-comments-open{padding-right:0}}x-dc{display:block}nav.plan-sticky-nav{position:sticky;top:0;z-index:50}</style>`
+  );
 }
 if (!tpl.includes("annotations.js")) {
   tpl = tpl.replace(
@@ -113,7 +118,7 @@ fs.writeFileSync(path.join(outDir, "index.html"), tpl, "utf8");
 console.log("index.html bytes", tpl.length);
 console.log({
   draft: tpl.includes("Internal draft"),
-  comments: tpl.includes("plan-comments-toggle"),
+  stickyNav: tpl.includes("plan-sticky-nav"),
   hero: tpl.includes("assets/hero.png"),
   jump: tpl.includes("Jump to division"),
   annotations: tpl.includes("annotations.js"),
