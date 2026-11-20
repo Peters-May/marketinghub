@@ -268,8 +268,8 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
   {
     id: "themes",
     selector: '[data-tour="nav-themes"]',
-    title: "Themes",
-    body: "Quarterly themes → main pieces → offshoots. Admin planning view.",
+    title: "Strategy",
+    body: "Toggle 2026 quarterly themes or the 2027 marketing plan draft.",
     href: "/app/themes",
     placement: "right",
   },

@@ -108,8 +108,8 @@ export const STAFF_NAV: NavItem[] = [
   },
   {
     href: "/app/themes",
-    label: "Themes",
-    description: "Quarterly theme → main → offshoot content",
+    label: "Strategy",
+    description: "Annual marketing plan and quarterly themes",
     icon: Sparkles,
   },
   {

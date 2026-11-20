@@ -284,6 +284,34 @@ export type ShareReviewResponse = {
   created_at: string;
 };
 
+/** Reply on a strategy-plan text annotation. */
+export type PlanAnnotationReply = {
+  id: string;
+  body: string;
+  author_name: string;
+  author_user_id: string;
+  created_at: string;
+};
+
+/**
+ * Adobe-style text-selection comment on a marketing plan draft.
+ * Anchored with quote + prefix/suffix (Hypothesis-style).
+ */
+export type PlanAnnotation = {
+  id: string;
+  plan_id: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  section_id: string;
+  body: string;
+  author_name: string;
+  author_user_id: string;
+  created_at: string;
+  resolved_at: string | null;
+  replies: PlanAnnotationReply[];
+};
+
 export type ReleasePerson = {
   name: string;
   role: string;
@@ -1649,6 +1677,8 @@ export type HubStore = {
   assistant_reviews: AssistantReview[];
   /** Public share-for-approval responses (content + email). */
   share_reviews: ShareReviewResponse[];
+  /** Text-selection comments on strategy plan drafts (e.g. 2027). */
+  plan_annotations: PlanAnnotation[];
   /** Public newsroom configuration. */
   newsroom_settings: NewsroomSettings;
 };

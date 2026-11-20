@@ -330,6 +330,7 @@ function withDefaults(store: Partial<HubStore>): HubStore {
       )
     ),
     share_reviews: store.share_reviews ?? seed.share_reviews ?? [],
+    plan_annotations: store.plan_annotations ?? seed.plan_annotations ?? [],
     newsroom_settings: normalizeNewsroomSettings(
       store.newsroom_settings ?? seed.newsroom_settings
     ),
@@ -409,6 +410,7 @@ function needsKeyMigration(store: Partial<HubStore>): boolean {
     !store.ai_settings ||
     !store.assistant_reviews ||
     !store.share_reviews ||
+    !store.plan_annotations ||
     !store.newsroom_settings ||
     needsReleaseLibrary(store)
   );

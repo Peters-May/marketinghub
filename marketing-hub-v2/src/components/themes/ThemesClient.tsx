@@ -128,8 +128,18 @@ function pickDefaultTheme(list: QuarterlyTheme[]) {
   return pickCurrentTheme(list);
 }
 
+const STRATEGY_PLAN_YEAR = 2027;
+const STRATEGY_BASE_YEARS = [2026, STRATEGY_PLAN_YEAR] as const;
+
 function uniqueYears(list: QuarterlyTheme[]) {
   return Array.from(new Set(list.map((t) => t.year))).sort((a, b) => a - b);
+}
+
+/** Theme years plus fixed Strategy toggle years (2026 themes / 2027 plan). */
+function strategyYears(list: QuarterlyTheme[]) {
+  return Array.from(new Set([...uniqueYears(list), ...STRATEGY_BASE_YEARS])).sort(
+    (a, b) => a - b
+  );
 }
 
 export function ThemesClient({
@@ -183,8 +193,8 @@ export function ThemesClient({
   );
   const [yearTab, setYearTab] = useState<number>(() => {
     if (initialSelected) return initialSelected.year;
-    const years = uniqueYears(initialThemes);
-    return years[0] ?? new Date().getFullYear();
+    const years = strategyYears(initialThemes);
+    return years.includes(2026) ? 2026 : (years[0] ?? new Date().getFullYear());
   });
   const [themeEdit, setThemeEdit] = useState<ThemeEditForm | null>(() =>
     initialSelected ? themeToForm(initialSelected) : null
@@ -205,7 +215,8 @@ export function ThemesClient({
   const [addingMain, setAddingMain] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const years = useMemo(() => uniqueYears(themes), [themes]);
+  const years = useMemo(() => strategyYears(themes), [themes]);
+  const showingPlan = yearTab === STRATEGY_PLAN_YEAR;
 
   const yearThemes = useMemo(
     () => themes.filter((t) => t.year === yearTab),
@@ -412,7 +423,7 @@ export function ThemesClient({
         return pickDefaultTheme(remainingInYear)?.id ?? null;
       });
     } else {
-      const nextYears = uniqueYears(nextThemes);
+      const nextYears = strategyYears(nextThemes);
       const nextYear = nextYears.includes(yearTab)
         ? yearTab
         : nextYears[0] ?? yearTab;
@@ -565,28 +576,35 @@ export function ThemesClient({
   return (
     <div>
       <PageHeader
-        title="Quarterly themes"
-        description="Theme → main content → offshoot pieces. Plan the quarter’s spine, then branch social and supporting assets."
+        title="Strategy"
+        description={
+          showingPlan
+            ? "2027 marketing strategy and plan — internal draft. Share the public link when you need feedback without a Hub login."
+            : "Theme → main content → offshoot pieces. Plan the quarter’s spine, then branch social and supporting assets."
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <a
-              href="/plan/2027"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary"
-            >
-              <ExternalLink className="h-4 w-4" />
-              2027 marketing plan (draft)
-            </a>
-            <Link href="/app/content" className="btn-secondary">
-              <ExternalLink className="h-4 w-4" />
-              Content table
-            </Link>
+            {showingPlan ? (
+              <a
+                href="/plan/2027/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open shareable draft
+              </a>
+            ) : (
+              <Link href="/app/content" className="btn-secondary">
+                <ExternalLink className="h-4 w-4" />
+                Content table
+              </Link>
+            )}
           </div>
         }
       />
 
-      {error ? (
+      {error && !showingPlan ? (
         <div
           className="mb-4 rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3 text-sm text-[var(--danger)]"
           role="alert"
@@ -599,7 +617,7 @@ export function ThemesClient({
         <div
           className="mb-5 inline-flex flex-wrap gap-1 rounded-2xl border border-border bg-white p-1"
           role="tablist"
-          aria-label="Theme years"
+          aria-label="Strategy year"
         >
           {years.map((year) => (
             <button
@@ -616,11 +634,26 @@ export function ThemesClient({
               onClick={() => selectYear(year)}
             >
               {year}
+              {year === STRATEGY_PLAN_YEAR ? (
+                <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide opacity-80">
+                  Draft
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
       ) : null}
 
+      {showingPlan ? (
+        <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+          <iframe
+            title="2027 marketing strategy and plan (draft)"
+            src="/plan/2027/"
+            className="block h-[calc(100vh-11rem)] w-full min-h-[640px] border-0 bg-white"
+          />
+        </div>
+      ) : (
+      <>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {yearThemes.map((theme) => {
           const active = theme.id === selectedId;
@@ -1282,6 +1315,8 @@ export function ThemesClient({
               </div>
         </RecordDrawer>
       ) : null}
+      </>
+      )}
     </div>
   );
 }

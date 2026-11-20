@@ -121,7 +121,7 @@ export default async function AppHomePage() {
               </div>
               {isAdmin ? (
                 <Link href="/app/themes" className="btn-secondary shrink-0">
-                  Open themes
+                  Open strategy
                 </Link>
               ) : null}
             </div>

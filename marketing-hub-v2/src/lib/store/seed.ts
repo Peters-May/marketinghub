@@ -1532,6 +1532,7 @@ export function createSeedStore(): HubStore {
     },
     assistant_reviews: [],
     share_reviews: [],
+    plan_annotations: [],
     newsroom_settings: {
       ...DEFAULT_NEWSROOM_SETTINGS,
       updated_at: now,
