@@ -3,10 +3,12 @@ import path from "path";
 import zlib from "zlib";
 
 const src =
+  process.argv[2] ||
   "c:/Users/Sophie.Edgerley/Downloads/Output format discovery – 2027 Marketing Strategy v3.html";
 const outDir =
   "c:/Users/Sophie.Edgerley/OneDrive - Peters&May/Marketing/Website/2025/Marketing Hub/marketing-hub-v2/public/plan/2027";
 
+console.log("source:", src);
 const html = fs.readFileSync(src, "utf8");
 const manifest = JSON.parse(
   html.match(/<script type="__bundler\/manifest">([\s\S]*?)<\/script>/)[1]

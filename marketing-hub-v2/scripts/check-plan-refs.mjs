@@ -1,0 +1,10 @@
+import fs from "fs";
+const h = fs.readFileSync("public/plan/2027/index.html", "utf8");
+const scripts = [...h.matchAll(/src="([^"]+)"/g)].map((m) => m[1]);
+console.log("scripts:\n" + scripts.join("\n"));
+const files = fs.readdirSync("public/plan/2027");
+const uuidFiles = files.filter((f) => /^[0-9a-f]{8}-/.test(f));
+const missing = uuidFiles.filter((f) => !h.includes(f));
+const present = uuidFiles.filter((f) => h.includes(f));
+console.log("\npresent uuid files", present.length, present);
+console.log("unreferenced uuid files", missing.length, missing);
