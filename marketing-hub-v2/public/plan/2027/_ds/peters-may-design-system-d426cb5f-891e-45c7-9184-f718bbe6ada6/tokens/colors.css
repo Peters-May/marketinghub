@@ -1,0 +1,82 @@
+/* Peters & May — Colour tokens (Brand Guidelines v2.0, July 2026)
+   Navy leads, blue accents; red and grey stay in the logo artwork.
+   Legacy 2016 gradients, superyacht gold and racing yellow are retired. */
+
+:root {
+  /* ---- Lead colours ---- */
+  --pm-navy: #0b2545;          /* Ensign Navy — carries the brand */
+  --pm-navy-deep: #071a2e;     /* Deep Navy */
+  --pm-navy-slate: #1b3a5b;    /* Slate Navy */
+  --pm-blue: #007dc5;          /* P&M Blue — the single accent */
+  --pm-blue-dark: #005f97;     /* pressed/hover shade, derived */
+  --pm-white: #ffffff;
+
+  /* ---- UI greys (artwork band and UI) ---- */
+  --pm-mist: #e3e6e9;
+  --pm-harbour-grey: #8a9099;
+
+  /* ---- Logo-only colour — never use as a UI or layout colour ---- */
+  --pm-logo-red: #ed1c24;       /* Ensign Red — confined to approved lock-up artwork */
+
+  /* ---- Neutral scale (cool, navy-anchored) ---- */
+  --pm-neutral-0:  #ffffff;
+  --pm-neutral-50: #f4f6f7;
+  --pm-neutral-100:#e3e6e9;    /* = Mist */
+  --pm-neutral-200:#d3d7dc;
+  --pm-neutral-300:#b7bdc4;
+  --pm-neutral-400:#8a9099;    /* = Harbour Grey */
+  --pm-neutral-500:#6b7280;
+  --pm-neutral-600:#4d5560;
+  --pm-neutral-700:#33404f;
+  --pm-neutral-800:#1b3a5b;    /* = Slate Navy */
+  --pm-neutral-900:#0b2545;    /* = Ensign Navy */
+
+  /* ---- Semantic: surfaces ----
+     Navy-led for brand/marketing; white-led for documents, quotations,
+     dashboards, where legibility comes first. No fixed proportions. */
+  --surface-page:    var(--pm-white);
+  --surface-card:    var(--pm-white);
+  --surface-raised:  var(--pm-white);
+  --surface-sunken:  var(--pm-mist);
+  --surface-inverse: var(--pm-navy);
+  --surface-inverse-deep: var(--pm-navy-deep);
+  --surface-brand:   var(--pm-navy);
+  --surface-brand-dark: var(--pm-navy-deep);
+  --surface-accent:  var(--pm-blue);
+
+  /* ---- Semantic: text ---- */
+  --text-strong:  var(--pm-navy);
+  --text-body:    #1f2937;
+  --text-muted:   #5b6472;
+  --text-subtle:  var(--pm-harbour-grey);
+  --text-inverse: var(--pm-white);
+  --text-on-brand:var(--pm-white);
+  --text-link:    var(--pm-blue);
+  --text-link-hover: var(--pm-blue-dark);
+
+  /* ---- Semantic: borders ----
+     Quiet by design: hairlines only, no shadows or coloured borders
+     outside interactive states. */
+  --border-subtle:  var(--pm-mist);
+  --border-default: #c7ccd1;
+  --border-strong:  var(--pm-harbour-grey);
+  --border-brand:   var(--pm-navy);
+
+  /* ---- Semantic: interactive (P&M Blue is the single accent) ---- */
+  --accent:        var(--pm-blue);
+  --accent-hover:  #0a6aa6;
+  --accent-active: var(--pm-blue-dark);
+  --accent-soft:   #e6f2fa;
+
+  /* ---- Status (from the approved digital token set — never brand red) ---- */
+  --status-success: #1f7a4c;
+  --status-success-soft: #e5f3ea;
+  --status-warning: #9a6b13;
+  --status-warning-soft: #f6efe0;
+  --status-info:    var(--pm-blue);
+  --status-info-soft: #e6f2fa;
+  --status-danger:  #b3261e;    /* UI-safe red — distinct from Ensign Red logo colour */
+  --status-danger-soft: #f7e8e7;
+
+  --focus-ring: 0 0 0 3px rgba(0,125,197,0.35);
+}

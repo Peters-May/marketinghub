@@ -1,0 +1,7 @@
+/* Peters & May — Webfonts (Brand Guidelines v2.0, July 2026)
+   League Spartan sets headlines; Archivo is the working type family;
+   Arial is the fallback where fonts cannot be installed. Both are SIL
+   Open Font License — free for print, web and client-facing use.
+   Myriad Pro and Source Sans 3 (interim substitute) are retired. */
+
+@import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@400;500;600;700&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');

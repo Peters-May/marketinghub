@@ -568,10 +568,21 @@ export function ThemesClient({
         title="Quarterly themes"
         description="Theme → main content → offshoot pieces. Plan the quarter’s spine, then branch social and supporting assets."
         actions={
-          <Link href="/app/content" className="btn-secondary">
-            <ExternalLink className="h-4 w-4" />
-            Content table
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/plan/2027"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary"
+            >
+              <ExternalLink className="h-4 w-4" />
+              2027 marketing plan (draft)
+            </a>
+            <Link href="/app/content" className="btn-secondary">
+              <ExternalLink className="h-4 w-4" />
+              Content table
+            </Link>
+          </div>
         }
       />
 
