@@ -5,7 +5,11 @@ import type {
   BudgetPaymentStatus,
   BudgetQuarter,
 } from "@/lib/types";
-import { createP6BudgetPayments } from "@/lib/budget/p6-2026";
+import {
+  createP10BudgetPayments,
+  hasLegacyP6BudgetPayments,
+  stripLegacyP6BudgetPayments,
+} from "@/lib/budget/p10-2026";
 
 export type BudgetAmount = number | null;
 
@@ -752,25 +756,29 @@ export function createDefaultBudgetPayments(
   return [
     ...createGoogleAdsPayments(lines, now),
     ...createPressServicePayments(lines, now),
-    ...createP6BudgetPayments(lines, now),
+    ...createP10BudgetPayments(lines, now),
   ];
 }
 
-/** Add statement months that are not already in the store. Does not overwrite edits. */
+/** Add seeded payments that are not already in the store. Replaces legacy P6 rows with P10. */
 export function mergeDefaultBudgetPayments(
   payments: BudgetPayment[],
   lines: BudgetLine[]
 ): BudgetPayment[] {
+  const cleaned = stripLegacyP6BudgetPayments(payments);
   const seeded = createDefaultBudgetPayments(lines);
-  const existingIds = new Set(payments.map((payment) => payment.id));
+  const existingIds = new Set(cleaned.map((payment) => payment.id));
   const missing = seeded.filter((payment) => !existingIds.has(payment.id));
-  return missing.length === 0 ? payments : [...payments, ...missing];
+  if (missing.length === 0) return cleaned;
+  return [...cleaned, ...missing];
 }
 
 export function needsDefaultBudgetPaymentMigration(
   payments: BudgetPayment[] | undefined
 ): boolean {
-  const ids = new Set((payments ?? []).map((payment) => payment.id));
+  const list = payments ?? [];
+  if (hasLegacyP6BudgetPayments(list)) return true;
+  const ids = new Set(list.map((payment) => payment.id));
   return createDefaultBudgetPayments().some((payment) => !ids.has(payment.id));
 }
 

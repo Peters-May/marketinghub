@@ -1,7 +1,7 @@
 import type { BudgetLine, BudgetPayment } from "@/lib/types";
-import p6Rows from "@/lib/budget/p6-marketing-2026.json";
+import p10Rows from "@/lib/budget/p10-marketing-2026.json";
 
-type P6Row = {
+type P10Row = {
   paid_at: string | null;
   code: string;
   job: string;
@@ -35,18 +35,18 @@ function resolveLineId(draftId: string, lines: BudgetLine[]): string {
   return lines.find((line) => line.id === id)?.id ?? id;
 }
 
-export function createP6BudgetPayments(
+export function createP10BudgetPayments(
   lines: BudgetLine[],
   now = new Date().toISOString()
 ): BudgetPayment[] {
-  return (p6Rows as P6Row[]).flatMap((row, index) => {
+  return (p10Rows as P10Row[]).flatMap((row, index) => {
     const draftId = draftIdForMarketingCode(row.code);
     if (!draftId) return [];
     const label = [row.code, row.job].filter(Boolean).join(" · ");
     const period = row.period ? `Period ${row.period}` : "";
     return [
       {
-        id: `pay_p6_${String(index + 1).padStart(3, "0")}`,
+        id: `pay_p10_${String(index + 1).padStart(3, "0")}`,
         budget_line_id: resolveLineId(draftId, lines),
         paid_at: row.paid_at,
         supplier: row.job || row.code,
@@ -54,11 +54,22 @@ export function createP6BudgetPayments(
         amount: row.amount,
         status: "paid",
         invoice_url: "",
-        created_by: "P6 marketing breakdown",
+        created_by: "P10 marketing breakdown",
         created_by_user_id: null,
         created_at: now,
         updated_at: now,
       },
     ];
   });
+}
+
+/** True when store still has superseded P6 finance breakdown payments. */
+export function hasLegacyP6BudgetPayments(payments: BudgetPayment[]): boolean {
+  return payments.some((payment) => payment.id.startsWith("pay_p6_"));
+}
+
+export function stripLegacyP6BudgetPayments(
+  payments: BudgetPayment[]
+): BudgetPayment[] {
+  return payments.filter((payment) => !payment.id.startsWith("pay_p6_"));
 }

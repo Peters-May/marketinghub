@@ -1,0 +1,3040 @@
+[
+  {
+    "paid_at": "2025-09-30",
+    "code": "MB3",
+    "job": "MB3",
+    "period": "Jan 2026",
+    "amount": 14.96
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MB7",
+    "job": "MB7",
+    "period": "Jan 2026",
+    "amount": 53.77
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MT4",
+    "job": "MT4 parking",
+    "period": "Mar 2026",
+    "amount": 10.45
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MT4",
+    "job": "MT4 food/drinks",
+    "period": "Mar 2026",
+    "amount": 3.79
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MT4",
+    "job": "MT4 food drinks",
+    "period": "Mar 2026",
+    "amount": 34.34
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MT4",
+    "job": "MT4 food",
+    "period": "Mar 2026",
+    "amount": 16.28
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MT4",
+    "job": "MT4",
+    "period": "Mar 2026",
+    "amount": 2.0
+  },
+  {
+    "paid_at": "2025-10-31",
+    "code": "MB7",
+    "job": "MB7",
+    "period": "Jan 2026",
+    "amount": 269.13
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT1",
+    "job": "MT1",
+    "period": "Jan 2026",
+    "amount": 74.28
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT2",
+    "job": "MT2 Sales trip to London with Kristina - Drinks with IYC",
+    "period": "Apr 2026",
+    "amount": 32.9
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT2",
+    "job": "MT2 - sales trip to London with Kristina",
+    "period": "Apr 2026",
+    "amount": 40.4
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT2",
+    "job": "MT2 - Sales trip to London with Kristina - drinks with IYC",
+    "period": "Apr 2026",
+    "amount": 36.75
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT2",
+    "job": "MT2 - Sales trip to London with Kristina",
+    "period": "Apr 2026",
+    "amount": 27.8
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MT2",
+    "job": "MT2 - Sales trip to London - Drinks with IYC",
+    "period": "Apr 2026",
+    "amount": 15.25
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MSI",
+    "job": "MSI - ARC St. Lucia",
+    "period": "Apr 2026",
+    "amount": 11.02
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1, drink at the ARC",
+    "period": "Apr 2026",
+    "amount": 1.96
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 ARC - flights to St. Lucia",
+    "period": "Apr 2026",
+    "amount": 47.0
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 ARC - flight to St. Lucia",
+    "period": "Apr 2026",
+    "amount": 100.0
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 ARC - St. Lucia.  Resort tax I think",
+    "period": "Apr 2026",
+    "amount": 83.02
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 ARC - Flights to St. Lucia",
+    "period": "Apr 2026",
+    "amount": 1304.78
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 - drink, ARC",
+    "period": "Apr 2026",
+    "amount": 1.68
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 - dinner at airport for ARC",
+    "period": "Apr 2026",
+    "amount": 12.9
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 - ARC St. Lucia",
+    "period": "Apr 2026",
+    "amount": 281.38
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1 - ARC - drink in Rodney Bay with Nathan",
+    "period": "Apr 2026",
+    "amount": 3.9
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "MS1",
+    "period": "Apr 2026",
+    "amount": 23.12
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "ARC St. Lucia hotel",
+    "period": "Apr 2026",
+    "amount": 224.21
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MS1",
+    "job": "ARC St. Lucia Hotel",
+    "period": "Apr 2026",
+    "amount": 231.92
+  },
+  {
+    "paid_at": "2025-11-30",
+    "code": "MTG1",
+    "job": "UltraBulk supplier Lunch train ticket (to London)",
+    "period": "Jan 2026",
+    "amount": 42.88
+  },
+  {
+    "paid_at": "2025-12-29",
+    "code": "MS1",
+    "job": "World Cruising Club",
+    "period": "Jan 2026",
+    "amount": 840.0
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Sponsored Jobs on Indeed.com",
+    "period": "Jan 2026",
+    "amount": 224.33
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MB1",
+    "job": "MB1 - Dusseldorf Boat Show 2026.",
+    "period": "Mar 2026",
+    "amount": 80.75
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT4",
+    "job": "MT4 PARKING SCHIPHOL - OOG NETWORK EVENT",
+    "period": "Mar 2026",
+    "amount": 79.54
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MTG",
+    "job": "MTG2",
+    "period": "Feb 2026",
+    "amount": 44.08
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT1",
+    "job": "MT14 cancellation hotel sales trip London",
+    "period": "Feb 2026",
+    "amount": -131.37
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT1",
+    "job": "MT14 Taxi Airport fee",
+    "period": "Feb 2026",
+    "amount": 19.8
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT1",
+    "job": "MT14",
+    "period": "Feb 2026",
+    "amount": 496.19
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Feb 2026",
+    "amount": 244.69
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT1",
+    "job": "MT11",
+    "period": "Jan 2026",
+    "amount": 238.39
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MTG1",
+    "job": "Ultrabulk Lunch Travel",
+    "period": "Jan 2026",
+    "amount": 21.18
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MTL",
+    "job": "MTL",
+    "period": "Jan 2026",
+    "amount": 34.85
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT9",
+    "job": "MT9",
+    "period": "Jan 2026",
+    "amount": 134.83
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT4",
+    "job": "MT4",
+    "period": "Jan 2026",
+    "amount": 1433.68
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MT1",
+    "job": "MT12",
+    "period": "Jan 2026",
+    "amount": 985.82
+  },
+  {
+    "paid_at": "2026-01-05",
+    "code": "MTG2",
+    "job": "Fairmead Communications Ltd",
+    "period": "Jan 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-01-12",
+    "code": "MTL",
+    "job": "Marketing",
+    "period": "Jan 2026",
+    "amount": 27.28
+  },
+  {
+    "paid_at": "2026-01-13",
+    "code": "MC",
+    "job": "Andark Promotions Limited",
+    "period": "Jan 2026",
+    "amount": 706.32
+  },
+  {
+    "paid_at": "2026-01-14",
+    "code": "MB8",
+    "job": "St. Petersburg Boat show expenses  marketing code MB8",
+    "period": "Feb 2026",
+    "amount": 312.8
+  },
+  {
+    "paid_at": "2026-01-19",
+    "code": "MT6",
+    "job": "Please remember to process the transfer from the HSBC Spanish account to avoid the transfer fees. MARKETING CODE MT6",
+    "period": "Jan 2026",
+    "amount": 15.63
+  },
+  {
+    "paid_at": "2026-01-20",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Sponsored Jobs on Indeed.com",
+    "period": "Jan 2026",
+    "amount": 441.5
+  },
+  {
+    "paid_at": "2026-01-23",
+    "code": "MB1",
+    "job": "Hotel Amano",
+    "period": "Jan 2026",
+    "amount": 3964.53
+  },
+  {
+    "paid_at": "2026-01-29",
+    "code": "MT11",
+    "job": "Seamax Logistics Limited",
+    "period": "Jan 2026",
+    "amount": 1445.15
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - lunch with Cass and Simon at Dusseldorf Boat Show",
+    "period": "Apr 2026",
+    "amount": 63.78
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - Dusseldorf Boat Show.",
+    "period": "Apr 2026",
+    "amount": 24.31
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1",
+    "period": "Apr 2026",
+    "amount": 50.05
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 flight poland",
+    "period": "Mar 2026",
+    "amount": 274.26
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4  REFUND CANCLED TICKETS DUBAI",
+    "period": "Mar 2026",
+    "amount": -412.06
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4",
+    "period": "Mar 2026",
+    "amount": 1210.85
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Mar 2026",
+    "amount": 214.81
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 see other KLM lines",
+    "period": "Mar 2026",
+    "amount": 68.58
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 parking near hotel company car dusseldorf",
+    "period": "Mar 2026",
+    "amount": 52.27
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 parking",
+    "period": "Mar 2026",
+    "amount": 7.2
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drnks food",
+    "period": "Mar 2026",
+    "amount": 20.21
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drniks",
+    "period": "Mar 2026",
+    "amount": 4.79
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drinks/eat",
+    "period": "Mar 2026",
+    "amount": 14.46
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drinks on the road",
+    "period": "Mar 2026",
+    "amount": 2.18
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drinks food",
+    "period": "Mar 2026",
+    "amount": 9.57
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 drinks",
+    "period": "Mar 2026",
+    "amount": 7.4
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 cash money change for OOG Dubai and FSFS + OPCA Thailand  changed Dubai dirham and thai baht",
+    "period": "Mar 2026",
+    "amount": 270.0
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 carfuel company car no ticket only picture",
+    "period": "Mar 2026",
+    "amount": 55.0
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 Koffie",
+    "period": "Mar 2026",
+    "amount": 2.67
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 Flight ticket the3 other 3 lines (in total 4x KLM) all belong to this one",
+    "period": "Mar 2026",
+    "amount": 779.62
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4 Dinner with client Retrieve Recovery International",
+    "period": "Mar 2026",
+    "amount": 120.1
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT4",
+    "job": "MT4",
+    "period": "Mar 2026",
+    "amount": 65.92
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 drinks dusseldorf show with client",
+    "period": "Mar 2026",
+    "amount": 26.57
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "Boatshow Dusseldorf Entree Tickets - MB1",
+    "period": "Mar 2026",
+    "amount": 62.72
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - Dusseldorf Boat Show 2026",
+    "period": "Mar 2026",
+    "amount": 201.27
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6 Sales visit to Lanzarote",
+    "period": "Mar 2026",
+    "amount": 91.64
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6 Parking RCNV visiting Gladiator, Paprec and Alpha +",
+    "period": "Mar 2026",
+    "amount": 2.1
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Feb 2026",
+    "amount": 322.21
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "SumUp  *Taxibet - MB1 taxi airport to hotel SJ- CA- RH -  EUR40.00",
+    "period": "Feb 2026",
+    "amount": 34.75
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB6",
+    "job": "MB6 Airport Parking  LHR",
+    "period": "Feb 2026",
+    "amount": 73.74
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 Airport parking (SJ, RH, CA)",
+    "period": "Feb 2026",
+    "amount": 58.74
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 = Boat Show Ticket 2 days SJ",
+    "period": "Feb 2026",
+    "amount": 31.27
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - staff refreshments at Hotel",
+    "period": "Feb 2026",
+    "amount": 10.3
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "Lara Taxi GmbH  - MB1 taxi to airport- SJ- RH- CA- LC- SG -  EUR36.00",
+    "period": "Feb 2026",
+    "amount": 31.48
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB6",
+    "job": "BRITISH AIRWAYS - MB6 Car Hire 3 days -  GBP169.00",
+    "period": "Feb 2026",
+    "amount": 169.0
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB3",
+    "job": "MB3 Southampton Business Expo Ticket",
+    "period": "Feb 2026",
+    "amount": 4.17
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1- water",
+    "period": "Feb 2026",
+    "amount": 2.61
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - water for Kristina/Rich/Me",
+    "period": "Feb 2026",
+    "amount": 9.17
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - lunch for Rich/me",
+    "period": "Feb 2026",
+    "amount": 20.99
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - drinks for Rich / Me",
+    "period": "Feb 2026",
+    "amount": 7.0
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1 - boat show tickets",
+    "period": "Feb 2026",
+    "amount": 31.27
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6 - Petrol car",
+    "period": "Feb 2026",
+    "amount": 13.41
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6 - Lunch Rapid Transit",
+    "period": "Feb 2026",
+    "amount": 42.36
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6 -  PMI AIRPORT PARKING",
+    "period": "Feb 2026",
+    "amount": 6.31
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT6",
+    "job": "MT6",
+    "period": "Feb 2026",
+    "amount": 264.86
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MT1",
+    "job": "MT12",
+    "period": "Feb 2026",
+    "amount": 171.3
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB8",
+    "job": "Marketing Code MB8",
+    "period": "Feb 2026",
+    "amount": 71.0
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Feb 2026",
+    "amount": 23.03
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB8",
+    "job": "MB8 West Palm Beach Flights",
+    "period": "Feb 2026",
+    "amount": 788.15
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Feb 2026",
+    "amount": 322.86
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB1",
+    "job": "MB1",
+    "period": "Feb 2026",
+    "amount": 945.29
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Indeed Ireland Operations Ltd",
+    "period": "Feb 2026",
+    "amount": 249.52
+  },
+  {
+    "paid_at": "2026-02-01",
+    "code": "MP1",
+    "job": "Maritime Filming Uk Ltd",
+    "period": "Feb 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-02-01",
+    "code": "MP2",
+    "job": "Uppcy Ltd T/a Uppcyx",
+    "period": "Feb 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-02-03",
+    "code": "MTG2",
+    "job": "Fairmead Communications Ltd",
+    "period": "Feb 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-02-12",
+    "code": "MB6",
+    "job": "MB6 Miami Boat Show",
+    "period": "Apr 2026",
+    "amount": 24.32
+  },
+  {
+    "paid_at": "2026-02-18",
+    "code": "MB6",
+    "job": "Miami Boat Show- 02/11-02/12",
+    "period": "Feb 2026",
+    "amount": 189.54
+  },
+  {
+    "paid_at": "2026-02-18",
+    "code": "MB8",
+    "job": "MB8 Booked a hotel for Tulln boat show per accident used private credit card please rufund back",
+    "period": "Mar 2026",
+    "amount": 170.95
+  },
+  {
+    "paid_at": "2026-02-19",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Indeed Ireland Operations Ltd",
+    "period": "Feb 2026",
+    "amount": 447.16
+  },
+  {
+    "paid_at": "2026-02-23",
+    "code": "Travel - Orbis / BBK Rotterday",
+    "job": "MW & SJ flights with BA (LHR - Brussels - LHR). Meetings with Orbis & BBK Rotterdam",
+    "period": "Feb 2026",
+    "amount": 309.3
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT1",
+    "job": "mt1",
+    "period": "Apr 2026",
+    "amount": 4.76
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT1",
+    "job": "mt1",
+    "period": "Apr 2026",
+    "amount": 4.0
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT1",
+    "job": "mt1",
+    "period": "Apr 2026",
+    "amount": 13.46
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT1",
+    "job": "mt1",
+    "period": "Apr 2026",
+    "amount": 4.7
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Miami Boat Show parking",
+    "period": "Apr 2026",
+    "amount": 6.53
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Hotel parking (3 nights)",
+    "period": "Apr 2026",
+    "amount": 165.65
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Car Hire",
+    "period": "Apr 2026",
+    "amount": 79.08
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Boat Show Parking",
+    "period": "Apr 2026",
+    "amount": 15.18
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "Palma Boat Show MB8",
+    "period": "Apr 2026",
+    "amount": 118.46
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "TRIP TO LANZAROTE MT6",
+    "period": "Mar 2026",
+    "amount": 62.74
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "TRIP TO LANZAROTE -  MT6",
+    "period": "Mar 2026",
+    "amount": 19.6
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MTL",
+    "job": "MTL",
+    "period": "Mar 2026",
+    "amount": 8.99
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Mar 2026",
+    "amount": 324.9
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "Marketing MB8 - Stockholm boat show",
+    "period": "Mar 2026",
+    "amount": 240.28
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT1",
+    "job": "MT12",
+    "period": "Mar 2026",
+    "amount": 37.81
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Mar 2026",
+    "amount": 58.65
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Mar 2026",
+    "amount": 794.93
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "Singapore boat show - MB8",
+    "period": "Mar 2026",
+    "amount": 600.32
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT8",
+    "job": "MT8 Travel to the show",
+    "period": "Mar 2026",
+    "amount": 6.17
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT8",
+    "job": "MT8 Dubai break bulk Middle East event",
+    "period": "Mar 2026",
+    "amount": 518.12
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "MB8 Singapore boat show flight",
+    "period": "Mar 2026",
+    "amount": 556.71
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "Sales trip lanzarote - MT6",
+    "period": "Mar 2026",
+    "amount": 4.29
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "Sales trip Lanzarote MT6",
+    "period": "Mar 2026",
+    "amount": 72.18
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "TRIP TO LANZAROTE MT6",
+    "period": "Mar 2026",
+    "amount": 178.71
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MT6",
+    "job": "SALES TRIP TO LANZAROTE MT6",
+    "period": "Mar 2026",
+    "amount": 39.64
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Sponsored Jobs on Indeed.com",
+    "period": "Feb 2026",
+    "amount": 172.41
+  },
+  {
+    "paid_at": "2026-03-01",
+    "code": "MP1",
+    "job": "Maritime Filming Uk Ltd",
+    "period": "Mar 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-03-01",
+    "code": "MP2",
+    "job": "Uppcy Ltd T/a Uppcyx",
+    "period": "Mar 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-03-03",
+    "code": "MTG2",
+    "job": "27820 THB",
+    "period": "Mar 2026",
+    "amount": 659.86
+  },
+  {
+    "paid_at": "2026-03-04",
+    "code": "M8",
+    "job": "M8",
+    "period": "Mar 2026",
+    "amount": 50.21
+  },
+  {
+    "paid_at": "2026-03-06",
+    "code": "MTG2",
+    "job": "Fairmead Communications Ltd",
+    "period": "Mar 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-03-09",
+    "code": "MT12",
+    "job": "MT12",
+    "period": "Feb 2026",
+    "amount": 144.31
+  },
+  {
+    "paid_at": "2026-03-24",
+    "code": "MT11",
+    "job": "AIN Group Pte Ltd",
+    "period": "Mar 2026",
+    "amount": 1071.36
+  },
+  {
+    "paid_at": "2026-03-25",
+    "code": "MC",
+    "job": "Printing Crazy",
+    "period": "Apr 2026",
+    "amount": 47.8
+  },
+  {
+    "paid_at": "2026-03-25",
+    "code": "MB4",
+    "job": "MB4 flight to Nice (SJ)",
+    "period": "Apr 2026",
+    "amount": 278.55
+  },
+  {
+    "paid_at": "2026-03-25",
+    "code": "MB2",
+    "job": "MB2 Flights to Simon, Richard and Cass to Cannes Boat Show 2026",
+    "period": "Apr 2026",
+    "amount": 733.65
+  },
+  {
+    "paid_at": "2026-03-25",
+    "code": "MB2",
+    "job": "MB2 Car Hire for Cannes Boat Show",
+    "period": "Apr 2026",
+    "amount": 291.0
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT1",
+    "job": "MT12",
+    "period": "Apr 2026",
+    "amount": 331.98
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Apr 2026",
+    "amount": 1819.86
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8  SINGAPORE BOATSHOW 2026",
+    "period": "Apr 2026",
+    "amount": 344.32
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "Indeed.com - sponsored jobs",
+    "job": "Sponsored Jobs on Indeed.com",
+    "period": "Mar 2026",
+    "amount": 51.87
+  },
+  {
+    "paid_at": "2026-04-01",
+    "code": "MP2",
+    "job": "Uppcy Ltd T/a Uppcyx",
+    "period": "Apr 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-04-01",
+    "code": "MP1",
+    "job": "Maritime Filming Uk Ltd",
+    "period": "Apr 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-04-01",
+    "code": "MTG2",
+    "job": "Fairmead Communications Ltd",
+    "period": "Apr 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-04-08",
+    "code": "MM",
+    "job": "MM  Hong Kong Boating Industry Association Membership HKD3,500*0.0934=GBP326",
+    "period": "Apr 2026",
+    "amount": 326.0
+  },
+  {
+    "paid_at": "2026-04-15",
+    "code": "MB8",
+    "job": "MB8 Newport Beach Boat Show",
+    "period": "Apr 2026",
+    "amount": 413.01
+  },
+  {
+    "paid_at": "2026-04-24",
+    "code": "MM",
+    "job": "MM  Hong Kong Boating Industry Association Membership HKD3,500*0.0934=GBP326",
+    "period": "Apr 2026",
+    "amount": -326.0
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MC",
+    "job": "Corporate Express Couriers",
+    "period": "Apr 2026",
+    "amount": 118.33
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MS1",
+    "job": "World Cruising Club",
+    "period": "Apr 2026",
+    "amount": 2500.0
+  },
+  {
+    "paid_at": "2025-09-30",
+    "code": "MB3",
+    "job": "MB3",
+    "period": "May 2026",
+    "amount": 65.83
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - parking",
+    "period": "May 2026",
+    "amount": 1.44
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 - portable phone charger rented during the boat show",
+    "period": "May 2026",
+    "amount": 7.47
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 - Stockholm Boat Show 2026",
+    "period": "May 2026",
+    "amount": 606.6
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - bussines trip to Palma (dinner Inma and Elo)",
+    "period": "May 2026",
+    "amount": 44.61
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT11",
+    "job": "Oceanology Exhibtion - Train ticket MT11",
+    "period": "May 2026",
+    "amount": 72.6
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT 6",
+    "period": "May 2026",
+    "amount": 69.01
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Car rental in Palma",
+    "period": "May 2026",
+    "amount": 73.04
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 flights to Lanzarote",
+    "period": "May 2026",
+    "amount": 236.07
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Parking Varadero Valencia / visiting clients.",
+    "period": "May 2026",
+    "amount": 1.44
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 bussines trip to Palma (hotel room Inma and Elo)",
+    "period": "May 2026",
+    "amount": 117.73
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - March sales visit to Palma",
+    "period": "May 2026",
+    "amount": 16.08
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Inma & Elo's lunch, during day trip to South of Valencia to visit clients like (Astondoa, Nautica Mengual, Jover etc.)",
+    "period": "May 2026",
+    "amount": 13.95
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Ylenia (Django) + Ana + Inma lunch",
+    "period": "May 2026",
+    "amount": 88.66
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Elo & Inma lunch",
+    "period": "May 2026",
+    "amount": 9.19
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 - Copenhagen Boat Show 2026",
+    "period": "May 2026",
+    "amount": 313.57
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - coffe trip to palma (March)",
+    "period": "May 2026",
+    "amount": 2.24
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "May 2026",
+    "amount": 409.47
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Elo & Inma coffe",
+    "period": "May 2026",
+    "amount": 8.37
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 - Fight Valencia - Palma ( for Palma Boat show) --- Inma and Elo's flight",
+    "period": "May 2026",
+    "amount": 230.65
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - bussines trip to Palma (lunch Inma and Elo)",
+    "period": "May 2026",
+    "amount": 33.99
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 - CPH Boat Show 2026",
+    "period": "May 2026",
+    "amount": 429.39
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Django (Parking Ana)",
+    "period": "May 2026",
+    "amount": 3.03
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT11",
+    "job": "Oceanology Exhibition - Car parking MT11",
+    "period": "May 2026",
+    "amount": 16.92
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - car fuel in Palma",
+    "period": "May 2026",
+    "amount": 8.93
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT11",
+    "job": "MT 11 - Oceanology exhibtion Lunch",
+    "period": "May 2026",
+    "amount": 14.13
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8 Singapore boat show",
+    "period": "May 2026",
+    "amount": 208.85
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Sales trip to Palma",
+    "period": "May 2026",
+    "amount": 1.79
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 bussines trip to Palma - Parking Palma",
+    "period": "May 2026",
+    "amount": 4.93
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MT6",
+    "job": "MT6 - Django meeting",
+    "period": "May 2026",
+    "amount": 3.12
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - refreshment drink",
+    "period": "May 2026",
+    "amount": 4.7
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - dinner p&m team",
+    "period": "May 2026",
+    "amount": 45.7
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore boatshow 2026",
+    "period": "May 2026",
+    "amount": 1.29
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - coffee",
+    "period": "May 2026",
+    "amount": 9.32
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Food in Singapore",
+    "period": "May 2026",
+    "amount": 59.07
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 P&M dinner",
+    "period": "May 2026",
+    "amount": 31.27
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "May 2026",
+    "amount": 78.36
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 2 nights hotel, Singapore Boatshow 2026",
+    "period": "May 2026",
+    "amount": 138.33
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 back from Singapore boatshow",
+    "period": "May 2026",
+    "amount": 6.62
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - client drinks oceanskies",
+    "period": "May 2026",
+    "amount": 25.89
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore Boatshow",
+    "period": "May 2026",
+    "amount": 0.17
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - Client drink - Sunseeker",
+    "period": "May 2026",
+    "amount": 33.17
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - dinner",
+    "period": "May 2026",
+    "amount": 34.1
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MT11",
+    "job": "",
+    "period": "May 2026",
+    "amount": 336.48
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB2",
+    "job": "MB2 CANNES boat show",
+    "period": "May 2026",
+    "amount": 541.66
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - refreshment",
+    "period": "May 2026",
+    "amount": 11.02
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - waters",
+    "period": "May 2026",
+    "amount": 6.79
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MT1",
+    "job": "MT1 Sales Visit 30.04",
+    "period": "May 2026",
+    "amount": 68.66
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - lunch",
+    "period": "May 2026",
+    "amount": 27.42
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore Boatshow 2026 Shanghai airport to Train station",
+    "period": "May 2026",
+    "amount": 2.25
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MT11",
+    "job": "",
+    "period": "May 2026",
+    "amount": 336.48
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - lunch",
+    "period": "May 2026",
+    "amount": 8.67
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore boatshow",
+    "period": "May 2026",
+    "amount": 0.17
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Transport card Singapore SGD30 plus 3% bank charge",
+    "period": "May 2026",
+    "amount": 18.69
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - travel",
+    "period": "May 2026",
+    "amount": 41.5
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore Boatshow 2026",
+    "period": "May 2026",
+    "amount": 3.47
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Singapore Boatshow 2026 Taxi to Hangzhou airport CNY198.47",
+    "period": "May 2026",
+    "amount": 27.73
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 food in Singapore Apr. 26th 2026",
+    "period": "May 2026",
+    "amount": 43.01
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - travel",
+    "period": "May 2026",
+    "amount": 10.27
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - water",
+    "period": "May 2026",
+    "amount": 1.74
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MM",
+    "job": "OPCA + FSFS valet parking schiphol",
+    "period": "May 2026",
+    "amount": 92.36
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 taxi refund",
+    "period": "May 2026",
+    "amount": -1.73
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - drink",
+    "period": "May 2026",
+    "amount": 3.79
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MT4",
+    "job": "BREAKBULK TICKET ROTTERDAM AHOY",
+    "period": "May 2026",
+    "amount": 187.19
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "Mb8 - apartment supplies (breakfast etc)",
+    "period": "May 2026",
+    "amount": 18.18
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - show drinks - princess",
+    "period": "May 2026",
+    "amount": 57.69
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - drinks",
+    "period": "May 2026",
+    "amount": 14.33
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MT11",
+    "job": "",
+    "period": "May 2026",
+    "amount": -336.48
+  },
+  {
+    "paid_at": "2026-05-01",
+    "code": "MP2",
+    "job": "",
+    "period": "May 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-05-01",
+    "code": "MP1",
+    "job": "",
+    "period": "May 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-05-01",
+    "code": "MP1",
+    "job": "",
+    "period": "May 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-05-27",
+    "code": "Other",
+    "job": "private credit card (my wife's card) useage   due to lost company credit card see list of expenses enclosed  need final balance back Euro 311.51 as Inge already down paid Euro 500,00",
+    "period": "May 2026",
+    "amount": 706.95
+  },
+  {
+    "paid_at": "2026-05-29",
+    "code": "MS2",
+    "job": "",
+    "period": "May 2026",
+    "amount": 349.26
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MM",
+    "job": "",
+    "period": "May 2026",
+    "amount": -2500.0
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 797.15
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MP2",
+    "job": "mp2",
+    "period": "Jun 2026",
+    "amount": 37.7
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Jun 2026",
+    "amount": 822.93
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MC",
+    "job": "MC",
+    "period": "Jun 2026",
+    "amount": 498.82
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB1",
+    "job": "MB1",
+    "period": "Jun 2026",
+    "amount": 634.93
+  },
+  {
+    "paid_at": "2026-04-28",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 17.31
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 324.09
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "mp2",
+    "job": "mp2",
+    "period": "Jun 2026",
+    "amount": 30.11
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Jun 2026",
+    "amount": 343.98
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 -Palma BS",
+    "period": "Jun 2026",
+    "amount": 5.91
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - Palma boat show",
+    "period": "Jun 2026",
+    "amount": 306.86
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - Palma Boat Show",
+    "period": "Jun 2026",
+    "amount": 48.28
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 - Palma BS",
+    "period": "Jun 2026",
+    "amount": 70.76
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 272.94
+  },
+  {
+    "paid_at": "2026-05-29",
+    "code": "MC",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 62.8
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 1765.53
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 21.1
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8 - PALMA BS",
+    "period": "Jun 2026",
+    "amount": 64.26
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MT11",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 274.21
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MT14",
+    "job": "MT14",
+    "period": "Jun 2026",
+    "amount": 4.65
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jun 2026",
+    "amount": 346.73
+  },
+  {
+    "paid_at": "2026-06-01",
+    "code": "MP1",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-06-01",
+    "code": "MP2",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-06-08",
+    "code": "MTG2",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-06-09",
+    "code": "MTL",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 55.0
+  },
+  {
+    "paid_at": "2026-06-09",
+    "code": "MTL",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 55.0
+  },
+  {
+    "paid_at": "2026-06-10",
+    "code": "MTL",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 55.0
+  },
+  {
+    "paid_at": "2026-06-15",
+    "code": "MC",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 1477.47
+  },
+  {
+    "paid_at": "2026-06-16",
+    "code": "MC",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 487.8
+  },
+  {
+    "paid_at": "2026-06-26",
+    "code": "MS2",
+    "job": "",
+    "period": "Jun 2026",
+    "amount": 2000.0
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MP2",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 123.82
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MP1",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 169.11
+  },
+  {
+    "paid_at": "2025-12-31",
+    "code": "MTL",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 33.29
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB6",
+    "job": "MB6 Boat Show St Petersburg, Florida",
+    "period": "Aug 2026",
+    "amount": 18.45
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MTL",
+    "job": "MTL Business Cards",
+    "period": "Aug 2026",
+    "amount": 83.58
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB6",
+    "job": "MB6 Alexandra Boat Show Hotel",
+    "period": "Aug 2026",
+    "amount": 123.55
+  },
+  {
+    "paid_at": "2026-01-31",
+    "code": "MB6",
+    "job": "MB6 Alexandra Flight to St Petersburg, Fl Boatshow",
+    "period": "Aug 2026",
+    "amount": 78.24
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Miami Boat SHow, Water Bottles",
+    "period": "Aug 2026",
+    "amount": 13.73
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Dinner / Drinks with Alexandra and Denison Broker, Miami Boat Show",
+    "period": "Aug 2026",
+    "amount": 168.92
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 ATM withdrawal for boat show parking",
+    "period": "Aug 2026",
+    "amount": 77.44
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Alexandra Miami Boat Show Uber",
+    "period": "Aug 2026",
+    "amount": 72.57
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6  Dinner with Simon, Pascal and Team",
+    "period": "Aug 2026",
+    "amount": 676.12
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Boat Show Tickets, Simon, Alexandra and I.",
+    "period": "Aug 2026",
+    "amount": 276.8
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6  Water",
+    "period": "Aug 2026",
+    "amount": 5.26
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Lunch with Simon, Miami Boat Show",
+    "period": "Aug 2026",
+    "amount": 51.75
+  },
+  {
+    "paid_at": "2026-02-28",
+    "code": "MB6",
+    "job": "MB6 Day One Parking Miami Boat Show",
+    "period": "Aug 2026",
+    "amount": 18.57
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Drinks with Client, Boat Show",
+    "period": "Aug 2026",
+    "amount": 30.03
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jul 2026",
+    "amount": 2767.66
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Drinks and Lunch for Boat Show",
+    "period": "Aug 2026",
+    "amount": 55.3
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Parking for BS",
+    "period": "Aug 2026",
+    "amount": 15.6
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "Second Day Lunch",
+    "period": "Aug 2026",
+    "amount": 65.73
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Boat Show Parking",
+    "period": "Aug 2026",
+    "amount": 15.6
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MTL",
+    "job": "MTL Business Cards for KW",
+    "period": "Aug 2026",
+    "amount": 47.69
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "Second Day PBBS",
+    "period": "Aug 2026",
+    "amount": 43.08
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Jul 2026",
+    "amount": 164.08
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Lunch with KW and Alexandra",
+    "period": "Aug 2026",
+    "amount": 69.83
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jul 2026",
+    "amount": 87.81
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Train Ticket for Palm Beach Boat Show",
+    "period": "Aug 2026",
+    "amount": 43.08
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB8",
+    "job": "mb8",
+    "period": "Jul 2026",
+    "amount": 16.02
+  },
+  {
+    "paid_at": "2026-03-31",
+    "code": "MB6",
+    "job": "MB6 Dinner with Atlantic Project Cargo",
+    "period": "Aug 2026",
+    "amount": 77.85
+  },
+  {
+    "paid_at": "2026-04-01",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jul 2026",
+    "amount": 8.61
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB1",
+    "job": "MB1",
+    "period": "Aug 2026",
+    "amount": 17.0
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Aug 2026",
+    "amount": 1253.85
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Aug 2026",
+    "amount": 284.26
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Flight for Newport Beach Newport Boat Show",
+    "period": "Aug 2026",
+    "amount": 380.19
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Entrance for Newport Beach BS",
+    "period": "Aug 2026",
+    "amount": 111.42
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8 Alexandra Newport Beach Boat Show - Hotel",
+    "period": "Aug 2026",
+    "amount": 420.37
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Jul 2026",
+    "amount": 1788.07
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Aug 2026",
+    "amount": 310.09
+  },
+  {
+    "paid_at": "2026-04-30",
+    "code": "MTG1",
+    "job": "MTG1",
+    "period": "Jul 2026",
+    "amount": 537.5
+  },
+  {
+    "paid_at": "2026-05-01",
+    "code": "MM",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 624.88
+  },
+  {
+    "paid_at": "2026-05-15",
+    "code": "MT11",
+    "job": "MT11",
+    "period": "Jul 2026",
+    "amount": 58.9
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 23.76
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Jul 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 30.71
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "TICKET",
+    "job": "Ticket for Breakbulk 2026",
+    "period": "Aug 2026",
+    "amount": 215.42
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 258.37
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "E-Sim for Thailand / AGM FSFS and OPCA",
+    "job": "E-Sim for Thailand / AGM FSFS and OPCA",
+    "period": "Aug 2026",
+    "amount": 26.57
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "Flights to Breakbulk 2026",
+    "period": "Aug 2026",
+    "amount": 226.65
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "drinks",
+    "job": "drinks",
+    "period": "Aug 2026",
+    "amount": 12.24
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 301.2
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "Parking",
+    "job": "Parking for ARC Event in Lymington",
+    "period": "Jul 2026",
+    "amount": 3.62
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 75.83
+  },
+  {
+    "paid_at": "2026-06-22",
+    "code": "SGSE2604006",
+    "job": "SGSE2604006",
+    "period": "Jul 2026",
+    "amount": 1.73
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Rotterdam BBK Accommodation (SJ- RB- KM- MW)",
+    "period": "Jul 2026",
+    "amount": 607.65
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Aug 2026",
+    "amount": 335.04
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Aug 2026",
+    "amount": 939.58
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT",
+    "job": "MT 4Use tram - no tickets - goes by credit card scan  Breakbulk Rotterdam",
+    "period": "Jul 2026",
+    "amount": 1.77
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT4",
+    "job": "MT4 Use train Oudenbosch to Rotterdam  no tickets - goes by credit card scan  Breakbulk Rotterdam",
+    "period": "Jul 2026",
+    "amount": 12.64
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB",
+    "job": "MB*",
+    "period": "Aug 2026",
+    "amount": 11.87
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MTG2",
+    "job": "MTG2",
+    "period": "Aug 2026",
+    "amount": 369.24
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "TP52",
+    "job": "TP52 meeting in Porto cervo",
+    "period": "Jul 2026",
+    "amount": 153.29
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "TP52",
+    "job": "TP52 Trip to Porto Cervo",
+    "period": "Jul 2026",
+    "amount": 196.59
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT4",
+    "job": "MT4 parking ticket ahoy  Breakbulk Rotterdam",
+    "period": "Jul 2026",
+    "amount": 15.12
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Jul 2026",
+    "amount": 375.6
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 206.77
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB6",
+    "job": "MTG1 & 2 ??",
+    "period": "Aug 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Jul 2026",
+    "amount": 381.64
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Rotterdam BBK",
+    "period": "Jul 2026",
+    "amount": 75.29
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT6",
+    "job": "TP 52 trip to Porto Cervo",
+    "period": "Jul 2026",
+    "amount": 226.45
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT4",
+    "job": "MT4 Use tram - no tickets - goes by credit card scan  Breakbulk Rotterdam",
+    "period": "Jul 2026",
+    "amount": 1.67
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT4",
+    "job": "MT4 Use taxi - Breakbulk Rotterdam",
+    "period": "Jul 2026",
+    "amount": 130.67
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MS2",
+    "job": "MS2 52 Super Series 2027",
+    "period": "Aug 2026",
+    "amount": 232.58
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "TP52",
+    "job": "TP52 TRIP TO PORTO CERVO",
+    "period": "Jul 2026",
+    "amount": 675.9
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "MB8",
+    "period": "Aug 2026",
+    "amount": 323.68
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Rotterdam BBK Ticket SJ",
+    "period": "Jul 2026",
+    "amount": 285.22
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT4",
+    "job": "parking ticket Ahoy MT4 breakbulk rotterdam",
+    "period": "Jul 2026",
+    "amount": 15.12
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Rotterdam BBK Parking (SJ- MW)",
+    "period": "Jul 2026",
+    "amount": 68.12
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB3",
+    "job": "MB3",
+    "period": "Jul 2026",
+    "amount": 5.5
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MT",
+    "job": "MT 4 drinks  breakbulk rotterdam",
+    "period": "Jul 2026",
+    "amount": 9.36
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "TP",
+    "job": "TP 52 TRIP TO PORTO CERVO",
+    "period": "Jul 2026",
+    "amount": 50.92
+  },
+  {
+    "paid_at": "2026-07-01",
+    "code": "MP2",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 1310.0
+  },
+  {
+    "paid_at": "2026-07-01",
+    "code": "MP1",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-07-06",
+    "code": "MTG2",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-07-07",
+    "code": "MTL",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 55.0
+  },
+  {
+    "paid_at": "2026-07-08",
+    "code": "MM",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 1868.23
+  },
+  {
+    "paid_at": "2026-07-20",
+    "code": "MS2",
+    "job": "",
+    "period": "Jul 2026",
+    "amount": 742.9
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MS2",
+    "job": "MS2 52 Super Series 2027",
+    "period": "Aug 2026",
+    "amount": 486.68
+  },
+  {
+    "paid_at": "2026-08-01",
+    "code": "MTG2",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-08-01",
+    "code": "MP2",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 1360.0
+  },
+  {
+    "paid_at": "2026-08-01",
+    "code": "MP1",
+    "job": "",
+    "period": "Aug 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-08-11",
+    "code": "MB6",
+    "job": "MB6 Miami Boat Show Car hire (4 days)",
+    "period": "Aug 2026",
+    "amount": 209.0
+  },
+  {
+    "paid_at": "2026-08-11",
+    "code": "MB1",
+    "job": "MB1 Flights for SJ RH and CL to Dusseldorf Boat Show (Used ON BUSINESS POINTS so cost is for taxes only)",
+    "period": "Aug 2026",
+    "amount": 242.25
+  },
+  {
+    "paid_at": "2026-08-20",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Aug 2026",
+    "amount": 529.3
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Airport parking for Breakbulk",
+    "period": "Sep 2026",
+    "amount": 97.42
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Seaworks Parking",
+    "period": "Sep 2026",
+    "amount": 15.0
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Seaworks Lunch",
+    "period": "Sep 2026",
+    "amount": 13.75
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Travel",
+    "period": "Sep 2026",
+    "amount": 12.77
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Train for Kyle & Rob",
+    "period": "Sep 2026",
+    "amount": 30.31
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Train",
+    "period": "Sep 2026",
+    "amount": 2.49
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Taxi",
+    "period": "Sep 2026",
+    "amount": 37.21
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Food",
+    "period": "Sep 2026",
+    "amount": 12.7
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Drink",
+    "period": "Sep 2026",
+    "amount": 3.77
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Coffee",
+    "period": "Sep 2026",
+    "amount": 3.45
+  },
+  {
+    "paid_at": "2026-06-30",
+    "code": "MB8",
+    "job": "Breakbulk - Airport food",
+    "period": "Sep 2026",
+    "amount": 10.29
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM",
+    "period": "Sep 2026",
+    "amount": 7.43
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MTG2",
+    "job": "MTG2",
+    "period": "Sep 2026",
+    "amount": 30.76
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MP2",
+    "job": "MP2",
+    "period": "Sep 2026",
+    "amount": 730.81
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MC",
+    "job": "MC",
+    "period": "Sep 2026",
+    "amount": 97.83
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM One day hotel in Shenzhen",
+    "period": "Sep 2026",
+    "amount": 30.51
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM Hangzhou to Shenzhen for HKBIA meeting",
+    "period": "Sep 2026",
+    "amount": 96.2
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM HKBIA Annual Meeting 2026",
+    "period": "Sep 2026",
+    "amount": 53.88
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM HKBIA Annual General Meeting 2026",
+    "period": "Sep 2026",
+    "amount": 97.34
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM Guangdong Sinoway Composite Materials Co. Ltd visit",
+    "period": "Sep 2026",
+    "amount": 3.45
+  },
+  {
+    "paid_at": "2026-07-31",
+    "code": "MM",
+    "job": "MM Flight from Shenzhen to Hangzhou",
+    "period": "Sep 2026",
+    "amount": 121.91
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Sep 2026",
+    "amount": 75.77
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MT4",
+    "job": "Transport Logistic Munich | May 26 - 29 Munchen | HOTEL costs via Booking.com final invoice to follow later after i have been there",
+    "period": "Sep 2026",
+    "amount": 509.68
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB2",
+    "job": "Hotel Cannes 2026 - boooked on booking.com no invoice",
+    "period": "Sep 2026",
+    "amount": 512.51
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB2",
+    "job": "MB2 - Cannes YF",
+    "period": "Sep 2026",
+    "amount": 241.21
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "food in airport Shenzhen",
+    "period": "Sep 2026",
+    "amount": 10.02
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "TAXI FEE train station to Nansha Hotel",
+    "period": "Sep 2026",
+    "amount": 1.96
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "Nansha to Shenzhen railway",
+    "period": "Sep 2026",
+    "amount": 5.68
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "Metro in Shenzhen",
+    "period": "Sep 2026",
+    "amount": 1.5
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "Hangzhou airport shuttle bus back home",
+    "period": "Sep 2026",
+    "amount": 11.17
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "1 night in Nansha for Guangzhou Sinoway shipyard visit",
+    "period": "Sep 2026",
+    "amount": 30.95
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MT6",
+    "job": "Palma sales trip",
+    "period": "Sep 2026",
+    "amount": 105.89
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MT6",
+    "job": "Palma Sales Trip October",
+    "period": "Sep 2026",
+    "amount": 129.0
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MT14",
+    "job": "MT14",
+    "period": "Sep 2026",
+    "amount": 542.38
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB7",
+    "job": "MB7",
+    "period": "Sep 2026",
+    "amount": 2086.95
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Sep 2026",
+    "amount": 3586.67
+  },
+  {
+    "paid_at": "2026-08-31",
+    "code": "MB8",
+    "job": "MB8 - Copenhagen Boat Show 2026",
+    "period": "Sep 2026",
+    "amount": 158.83
+  },
+  {
+    "paid_at": "2026-09-01",
+    "code": "MP1",
+    "job": "",
+    "period": "Sep 2026",
+    "amount": 1000.0
+  },
+  {
+    "paid_at": "2026-09-01",
+    "code": "MP2",
+    "job": "",
+    "period": "Sep 2026",
+    "amount": 1360.0
+  },
+  {
+    "paid_at": "2026-09-08",
+    "code": "MTG2",
+    "job": "",
+    "period": "Sep 2026",
+    "amount": 299.0
+  },
+  {
+    "paid_at": "2026-05-31",
+    "code": "MB8",
+    "job": "Flight London to Amsterdam to BBK Rotterdam",
+    "period": "Oct 2026",
+    "amount": 670.73
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Oct 2026",
+    "amount": 1211.4
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB3",
+    "job": "MB3 - Ticket for boat show for Nicky Bull",
+    "period": "Oct 2026",
+    "amount": 1236.4
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB3",
+    "job": "MB3 - Parking while attending Southampton boat show MT11",
+    "period": "Oct 2026",
+    "amount": 1240.98
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "Please check with the Marketing Team for receipt",
+    "period": "Oct 2026",
+    "amount": 1295.28
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MS1",
+    "job": "MS1 / Hotel ARC Las Palmas (has been cancelled, there should be a refund in October)",
+    "period": "Oct 2026",
+    "amount": 1931.39
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MS1",
+    "job": "MS1 / Flights ARC Las Palmas",
+    "period": "Oct 2026",
+    "amount": 2384.02
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Uber Cannes to Nice Airport",
+    "period": "Oct 2026",
+    "amount": 2430.07
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Uber Cannes",
+    "period": "Oct 2026",
+    "amount": 2467.22
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Team Lunch Cannes BS",
+    "period": "Oct 2026",
+    "amount": 2523.89
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Team Coffee Cannes BS",
+    "period": "Oct 2026",
+    "amount": 2538.07
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Taxi",
+    "period": "Oct 2026",
+    "amount": 2688.67
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Lunch Cannes BS Nice Airport",
+    "period": "Oct 2026",
+    "amount": 2705.86
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Lunch Cannes BS",
+    "period": "Oct 2026",
+    "amount": 2754.53
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Coffee Cannes",
+    "period": "Oct 2026",
+    "amount": 2762.06
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Cannes Uber",
+    "period": "Oct 2026",
+    "amount": 2800.94
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 Cannes BS Tickets",
+    "period": "Oct 2026",
+    "amount": 2854.04
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Oct 2026",
+    "amount": 2898.36
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB8",
+    "job": "MB8 - Barcelona Boat show",
+    "period": "Oct 2026",
+    "amount": 3120.5
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB8",
+    "job": "Waters for the team",
+    "period": "Oct 2026",
+    "amount": 3131.67
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MS1",
+    "job": "MS1 - Hotel and parking for Las Palmas flights (Flight is a 7:20 AM from Gatwick)",
+    "period": "Oct 2026",
+    "amount": 3232.62
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MS1",
+    "job": "MS1 - Flights to Las Palmas - ARC",
+    "period": "Oct 2026",
+    "amount": 3404.08
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB3",
+    "job": "MB3 - Southampton boat show ticket for me",
+    "period": "Oct 2026",
+    "amount": 3442.41
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 - Trip from/to accomodation",
+    "period": "Oct 2026",
+    "amount": 3451.94
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 - Trip from/to accommodation in Cannes",
+    "period": "Oct 2026",
+    "amount": 3497.08
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 - Drinks",
+    "period": "Oct 2026",
+    "amount": 3508.09
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 - Cannes Boat Show Ticket",
+    "period": "Oct 2026",
+    "amount": 3559.54
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2 - Breakfast/drinks for Simon/Rich/Me",
+    "period": "Oct 2026",
+    "amount": 3599.39
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "MB2",
+    "period": "Oct 2026",
+    "amount": 3833.63
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "Boat show",
+    "period": "Oct 2026",
+    "amount": 3858.63
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB8",
+    "job": "MB8 - Copenhagen Boat Show 2026",
+    "period": "Oct 2026",
+    "amount": 3868.64
+  },
+  {
+    "paid_at": "2026-09-30",
+    "code": "MB2",
+    "job": "Mb2",
+    "period": "Oct 2026",
+    "amount": 4203.53
+  },
+  {
+    "paid_at": "2026-10-02",
+    "code": "MP2",
+    "job": "",
+    "period": "Oct 2026",
+    "amount": -7773.84
+  },
+  {
+    "paid_at": "2026-10-06",
+    "code": "MS2",
+    "job": "",
+    "period": "Oct 2026",
+    "amount": -3992.03
+  },
+  {
+    "paid_at": "2026-10-09",
+    "code": "MTG2",
+    "job": "",
+    "period": "Oct 2026",
+    "amount": -3693.03
+  },
+  {
+    "paid_at": "2026-10-26",
+    "code": "MS1",
+    "job": "",
+    "period": "Oct 2026",
+    "amount": -2393.03
+  }
+]
