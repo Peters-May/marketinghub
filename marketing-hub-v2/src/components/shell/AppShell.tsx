@@ -114,7 +114,11 @@ function ShellInner({
     budgetInMemberNav,
     chatInMemberNav,
   });
-  const canUseAssistant = accessRole === "admin" || accessRole === "staff";
+  // SEO / External previews (and real SEO users) should not see the Hub Assistant.
+  const canUseAssistant =
+    (accessRole === "admin" || accessRole === "staff") &&
+    view !== "seo" &&
+    view !== "external";
   const assistantReadOnly = accessRole !== "admin";
 
   useEffect(() => {

@@ -4,7 +4,7 @@ export function canAccessWebsiteChat(
   user: { role?: string; websiteChat?: boolean } | null | undefined
 ) {
   if (!user) return false;
-  if (user.role === "admin" || user.role === "seo") return true;
+  if (user.role === "admin") return true;
   if (user.role === "staff") return user.websiteChat === true;
   return false;
 }

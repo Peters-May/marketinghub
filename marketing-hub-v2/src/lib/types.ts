@@ -21,7 +21,7 @@ export type HubUser = {
   full_name: string;
   role: HubAccessRole;
   notes: string;
-  /** Member-only grant for Website chat. Admins and SEO do not need this. */
+  /** Member-only grant for Website chat. Admins do not need this; SEO never has it. */
   website_chat?: boolean;
   /** Present when loaded from Supabase Auth. */
   last_sign_in_at?: string | null;

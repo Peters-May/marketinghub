@@ -6,9 +6,9 @@ import {
 import { navForView } from "@/lib/nav";
 
 describe("website chat access", () => {
-  it("lets admins and SEO in, and members only when granted", () => {
+  it("lets admins in, members only when granted, and never SEO", () => {
     expect(canAccessWebsiteChat({ role: "admin" })).toBe(true);
-    expect(canAccessWebsiteChat({ role: "seo" })).toBe(true);
+    expect(canAccessWebsiteChat({ role: "seo" })).toBe(false);
     expect(canAccessWebsiteChat({ role: "staff" })).toBe(false);
     expect(
       canAccessWebsiteChat({ role: "staff", websiteChat: true })
@@ -36,8 +36,6 @@ describe("website chat access", () => {
     expect(navForView("admin").map((item) => item.href)).toContain("/app/chat");
     expect(navForView("seo").map((item) => item.href)).toEqual([
       "/app/enquiries",
-      "/app/chat",
-      "/app/knowledge",
     ]);
   });
 });

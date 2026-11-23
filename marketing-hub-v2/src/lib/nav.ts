@@ -139,7 +139,6 @@ export const STAFF_NAV: NavItem[] = [
     label: "Website chat",
     description: "Train, test, deploy, and reply to the site chatbot",
     icon: MessageCircle,
-    seo: true,
     chatAccess: true,
   },
   {
@@ -147,7 +146,6 @@ export const STAFF_NAV: NavItem[] = [
     label: "Knowledge",
     description: "Indexed pages, documents, gaps — train public and internal AI",
     icon: BookOpen,
-    seo: true,
     chatAccess: true,
   },
   {

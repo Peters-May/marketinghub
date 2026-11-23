@@ -849,7 +849,7 @@ export function UsersAdminClient({
                       />
                       {u.website_chat ? "On" : "Off"}
                     </label>
-                  ) : u.role === "admin" || u.role === "seo" ? (
+                  ) : u.role === "admin" ? (
                     <span className="text-xs text-muted">Included</span>
                   ) : (
                     <span className="text-xs text-muted">—</span>

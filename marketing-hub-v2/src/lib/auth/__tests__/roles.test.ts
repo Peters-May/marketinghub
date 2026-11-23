@@ -19,19 +19,19 @@ describe("SEO role", () => {
     expect(canAccessEnquiries("seo")).toBe(true);
   });
 
-  it("only allows Enquiries, Website chat, and My details app paths", () => {
+  it("only allows Enquiries and My details app paths", () => {
     expect(isSeoAllowedAppPath("/app/enquiries")).toBe(true);
     expect(isSeoAllowedAppPath("/app/enquiries/export")).toBe(true);
-    expect(isSeoAllowedAppPath("/app/chat")).toBe(true);
-    expect(isSeoAllowedAppPath("/app/knowledge")).toBe(true);
+    expect(isSeoAllowedAppPath("/app/chat")).toBe(false);
+    expect(isSeoAllowedAppPath("/app/knowledge")).toBe(false);
     expect(isSeoAllowedAppPath("/app/me")).toBe(true);
     expect(isSeoAllowedAppPath("/app")).toBe(false);
     expect(isSeoAllowedAppPath("/app/events")).toBe(false);
     expect(isSeoAllowedAppPath("/app/contacts")).toBe(false);
   });
 
-  it("shows Enquiries and Website chat in SEO nav", () => {
+  it("shows only Enquiries in SEO nav", () => {
     const hrefs = navForView("seo").map((item) => item.href);
-    expect(hrefs).toEqual(["/app/enquiries", "/app/chat", "/app/knowledge"]);
+    expect(hrefs).toEqual(["/app/enquiries"]);
   });
 });
