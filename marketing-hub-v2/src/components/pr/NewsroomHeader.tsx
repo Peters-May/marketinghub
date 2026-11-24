@@ -62,8 +62,8 @@ export function NewsroomHeader({
           <NavLink href="/newsroom#releases" current={active === "news"}>
             Press releases
           </NavLink>
-          <NavLink href="/media" current={active === "media"}>
-            Media kit
+          <NavLink href="/media#gallery" current={active === "media"}>
+            Media library
           </NavLink>
           <NavLink href="/newsroom#press-office">Press contacts</NavLink>
           <a

@@ -37,11 +37,12 @@ export function MediaPageChrome({
         <div className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-8 px-6 py-12 md:py-16">
           <div>
             <h1 className="font-display text-4xl leading-[1.05] tracking-tight md:text-5xl">
-              Media kit
+              Media library
             </h1>
             <p className="mt-4 max-w-[52ch] text-lg leading-relaxed text-white/80">
-              Logos, photography and presentations for editorial use. Browse
-              freely, then sign in to download full-resolution files.
+              The public gallery, plus logos and presentations for editorial
+              use. Browse freely, then sign in to download full-resolution
+              files.
             </p>
           </div>
           <div data-tour="media-auth" className="flex flex-wrap items-center gap-3">
@@ -59,6 +60,10 @@ export function MediaPageChrome({
           </div>
         </div>
       </section>
+
+      <div id="gallery" data-tour="media-gallery" className="mx-auto max-w-6xl scroll-mt-6 px-6 pt-10">
+        {children}
+      </div>
 
       <section aria-label="Press resources" className="mx-auto max-w-6xl px-6 py-10">
         <ul className="grid gap-8 md:grid-cols-3">
@@ -100,10 +105,6 @@ export function MediaPageChrome({
           </li>
         </ul>
       </section>
-
-      <div data-tour="media-gallery" className="mx-auto max-w-6xl px-6">
-        {children}
-      </div>
 
       <NewsroomFooter />
     </div>

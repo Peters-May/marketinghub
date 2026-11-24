@@ -202,8 +202,8 @@ export function NewsroomReleaseFrame({
                   </li>
                 ))}
                 <li>
-                  <Link href="/media" className={sideLink}>
-                    Full media kit
+                  <Link href="/media#gallery" className={sideLink}>
+                    Public gallery
                   </Link>
                 </li>
               </ul>

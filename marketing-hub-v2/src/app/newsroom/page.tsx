@@ -114,10 +114,10 @@ export default async function NewsroomPage({
             </a>
             <div className="mt-5">
               <Link
-                href="/media"
+                href="/media#gallery"
                 className="inline-flex rounded-sm bg-white px-4 py-2 text-sm font-medium text-[#0B2545] hover:bg-[#E3E6E9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
-                Open the media kit
+                Open the media library
               </Link>
             </div>
           </div>
@@ -257,12 +257,17 @@ export default async function NewsroomPage({
         <aside className="space-y-8 lg:sticky lg:top-6 lg:self-start">
           <section aria-labelledby="kit-title" className="bg-[#E3E6E9]/50 p-6">
             <h2 id="kit-title" className="font-display text-lg">
-              Media kit
+              Media library
             </h2>
             <ul className="mt-4 space-y-3 text-sm">
               <li>
+                <Link href="/media#gallery" className="font-medium text-[#007DC5] underline-offset-4 hover:underline">
+                  Public gallery
+                </Link>
+              </li>
+              <li>
                 <Link href="/media" className="font-medium text-[#007DC5] underline-offset-4 hover:underline">
-                  Logos, images and presentations
+                  Logos and presentations
                 </Link>
               </li>
               <li>

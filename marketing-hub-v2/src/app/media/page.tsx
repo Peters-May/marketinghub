@@ -6,9 +6,9 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getNewsroomSettings } from "@/lib/data/repos";
 
 export const metadata: Metadata = {
-  title: { absolute: "Media kit | Peters & May Newsroom" },
+  title: { absolute: "Media library | Peters & May Newsroom" },
   description:
-    "Logos, photography, presentations and brand guidelines from Peters & May for editorial use.",
+    "Public gallery, logos and presentations from Peters & May for editorial use.",
 };
 
 export default async function PublicMediaPage() {
@@ -30,8 +30,8 @@ export default async function PublicMediaPage() {
     >
       <MediaGallery
         key={canDownload ? "download" : "view"}
-        title="Image and logo library"
-        description="Logos, presentations and photography. Sign in to download."
+        title="Public gallery"
+        description="Photography, logos and presentations. Sign in to download."
         showStaffChrome={false}
         initialCanDownload={canDownload}
         scope="public"

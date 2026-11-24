@@ -31,8 +31,8 @@ export function NewsroomFooter() {
               </a>
             </li>
             <li>
-              <Link href="/media" className="hover:text-white">
-                Media kit
+              <Link href="/media#gallery" className="hover:text-white">
+                Media library
               </Link>
             </li>
             <li>

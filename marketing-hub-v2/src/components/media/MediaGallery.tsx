@@ -637,6 +637,7 @@ export function MediaGallery({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const maxUploadBytes = allowManage ? MAX_UPLOAD_BYTES_ADMIN : MAX_UPLOAD_BYTES;
   const prevCanDownloadRef = useRef(initialCanDownload);
+  const openedGalleryFromUrl = useRef(false);
 
   useEffect(() => {
     return onTourPrepare((action) => {
@@ -670,6 +671,23 @@ export function MediaGallery({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // /media#gallery opens the public photo folders, not the category grid.
+  useEffect(() => {
+    if (openedGalleryFromUrl.current || loading || !data) return;
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "").toLowerCase();
+    if (hash !== "gallery") return;
+    const match = (data.categories ?? []).find(
+      (name) => name.trim().toLowerCase() === "gallery"
+    );
+    if (!match) return;
+    openedGalleryFromUrl.current = true;
+    setCollection(match);
+    setActiveSubfolder(null);
+    setLightboxIndex(null);
+    setSelectedItemId(null);
+  }, [loading, data]);
 
   useHubDataRefresh("library", () => {
     void load();
