@@ -31,7 +31,12 @@ export function MediaPageChrome({
 }) {
   const body = (
     <div className="min-h-screen bg-white text-[#0B2545]">
-      <NewsroomHeader settings={settings} active="media" />
+      <NewsroomHeader
+        settings={settings}
+        active="media"
+        signedIn={signedIn}
+        returnTo="/media"
+      />
 
       <section data-tour="media-header" className="bg-[#0B2545] text-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-8 px-6 py-12 md:py-16">
@@ -81,7 +86,7 @@ export function MediaPageChrome({
           </li>
           <li className="border-t-2 border-[#0B2545] pt-4">
             <h2 className="font-display text-lg">Company boilerplate</h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#4D5C6A]">
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#4D5C6A]">
               {COMPANY_BOILERPLATE}
             </p>
             <CopyButton

@@ -9,7 +9,7 @@ export function NewsroomFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-12 md:grid-cols-[2fr_1fr_1fr]">
         <div>
           <p className="font-display text-lg">Peters &amp; May</p>
-          <p className="mt-3 max-w-[52ch] text-sm leading-relaxed text-white/70">
+          <p className="mt-3 max-w-[52ch] whitespace-pre-line text-sm leading-relaxed text-white/70">
             {COMPANY_BOILERPLATE}
           </p>
         </div>

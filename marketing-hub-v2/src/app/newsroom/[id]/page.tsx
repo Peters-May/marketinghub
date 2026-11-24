@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/auth/session";
 import { NewsroomReleaseFrame } from "@/components/pr/NewsroomReleaseFrame";
 import {
   getNewsroomSettings,
@@ -31,10 +32,11 @@ export default async function NewsroomReleasePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [settings, release, published] = await Promise.all([
+  const [settings, release, published, sessionUser] = await Promise.all([
     getNewsroomSettings(),
     getPublishedPressRelease(id),
     listPublishedPressReleases(),
+    getSessionUser().catch(() => null),
   ]);
   if (!release) notFound();
   const document = seedReleaseDocument(release.pr_document, release.notes);
@@ -46,6 +48,11 @@ export default async function NewsroomReleasePage({
   const related = published.filter((r) => r.id !== release.id).slice(0, 3);
 
   return (
-    <NewsroomReleaseFrame settings={settings} release={release} related={related} />
+    <NewsroomReleaseFrame
+      settings={settings}
+      release={release}
+      related={related}
+      signedIn={Boolean(sessionUser)}
+    />
   );
 }

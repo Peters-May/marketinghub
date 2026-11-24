@@ -39,5 +39,12 @@ export default async function NewsroomPreviewPage({
     getPressRelease(id),
   ]);
   if (!release) notFound();
-  return <NewsroomReleaseFrame settings={settings} release={release} preview />;
+  return (
+    <NewsroomReleaseFrame
+      settings={settings}
+      release={release}
+      preview
+      signedIn
+    />
+  );
 }

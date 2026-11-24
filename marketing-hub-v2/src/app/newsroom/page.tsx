@@ -5,6 +5,7 @@ import {
   listContacts,
   listPublishedPressReleases,
 } from "@/lib/data/repos";
+import { getSessionUser } from "@/lib/auth/session";
 import { NewsroomHeader } from "@/components/pr/NewsroomHeader";
 import { NewsroomFooter } from "@/components/newsroom/NewsroomFooter";
 import { ReleaseRegister } from "@/components/newsroom/ReleaseRegister";
@@ -64,10 +65,11 @@ export default async function NewsroomPage({
   const query = (await searchParams) ?? {};
   const topicParam = typeof query.topic === "string" ? query.topic : "";
 
-  const [settings, releases, contacts] = await Promise.all([
+  const [settings, releases, contacts, sessionUser] = await Promise.all([
     getNewsroomSettings(),
     listPublishedPressReleases(),
     listContacts(),
+    getSessionUser().catch(() => null),
   ]);
 
   const pinned = releases.filter((r) => r.pin_homepage);
@@ -88,7 +90,12 @@ export default async function NewsroomPage({
 
   return (
     <div className="min-h-screen bg-white text-[#0B2545]">
-      <NewsroomHeader settings={settings} active="news" />
+      <NewsroomHeader
+        settings={settings}
+        active="news"
+        signedIn={Boolean(sessionUser)}
+        returnTo="/newsroom"
+      />
 
       {/* Masthead: who we are, and how to reach the press office */}
       <section className="bg-[#0B2545] text-white">
@@ -352,7 +359,7 @@ export default async function NewsroomPage({
             {settings.description ? (
               <p className="whitespace-pre-wrap">{linkifySite(settings.description)}</p>
             ) : (
-              <p>{COMPANY_BOILERPLATE}</p>
+              <p className="whitespace-pre-line">{COMPANY_BOILERPLATE}</p>
             )}
           </div>
         </div>

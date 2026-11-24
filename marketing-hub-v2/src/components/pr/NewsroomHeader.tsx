@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { NewsroomSettings } from "@/lib/types";
 import { BRAND_LOGO_SRC } from "@/components/shell/BrandLockup";
+import { NewsroomAuthLink } from "@/components/pr/NewsroomAuthLink";
 
 export type NewsroomSection = "news" | "media" | "release";
 
@@ -39,11 +40,18 @@ function NavLink({
 export function NewsroomHeader({
   settings,
   active = "news",
+  signedIn = false,
+  returnTo,
 }: {
   settings: NewsroomSettings;
   active?: NewsroomSection;
+  signedIn?: boolean;
+  /** Page to return to after sign-in or sign-out. */
+  returnTo?: string;
 }) {
   const logo = settings.logo_url || BRAND_LOGO_SRC;
+  const afterAuth =
+    returnTo || (active === "media" ? "/media" : "/newsroom");
   return (
     <header className="border-b border-[#E3E6E9] bg-white">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-4">
@@ -72,6 +80,7 @@ export function NewsroomHeader({
           >
             petersandmay.com
           </a>
+          <NewsroomAuthLink signedIn={signedIn} returnTo={afterAuth} />
         </nav>
       </div>
     </header>

@@ -40,12 +40,14 @@ export function NewsroomReleaseFrame({
   release,
   related = [],
   preview = false,
+  signedIn = false,
 }: {
   settings: NewsroomSettings;
   release: ContentItem;
   /** Other published releases to suggest under the story. */
   related?: ContentItem[];
   preview?: boolean;
+  signedIn?: boolean;
 }) {
   const document = seedReleaseDocument(release.pr_document, release.notes);
   const date = release.due_date;
@@ -79,7 +81,16 @@ export function NewsroomReleaseFrame({
           Preview. This page is not on the public newsroom.
         </p>
       ) : null}
-      <NewsroomHeader settings={settings} active="release" />
+      <NewsroomHeader
+        settings={settings}
+        active="release"
+        signedIn={signedIn}
+        returnTo={
+          preview
+            ? `/newsroom/preview/${release.id}`
+            : `/newsroom/${release.id}`
+        }
+      />
 
       <div className="border-b border-[#E3E6E9] bg-[#F5F7F9]">
         <header className="mx-auto max-w-6xl px-6 py-10 md:py-14">
