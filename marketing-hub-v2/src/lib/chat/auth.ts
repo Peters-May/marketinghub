@@ -34,6 +34,37 @@ export function requireChatSiteKey(request: Request): boolean {
   return false;
 }
 
+/** Visitor token from create-session (header only — never query string). */
+export function chatVisitorTokenFromRequest(request: Request): string {
+  return (
+    request.headers.get("x-chat-visitor-token")?.trim() ??
+    request.headers.get("X-Chat-Visitor-Token")?.trim() ??
+    ""
+  );
+}
+
+/**
+ * Sessions with a stored visitor_secret must present X-Chat-Visitor-Token when
+ * enforcement is on. Defaults off so Hub can deploy before the WP plugin;
+ * set CHAT_REQUIRE_VISITOR_SECRET=true after the plugin ships (tokens are
+ * already issued/stored). Legacy rows with a null secret stay site-key-only.
+ */
+export function visitorSecretRequired(): boolean {
+  const raw = process.env.CHAT_REQUIRE_VISITOR_SECRET?.trim().toLowerCase();
+  if (raw === "true" || raw === "1" || raw === "on") return true;
+  return false;
+}
+
+export function visitorTokenMatches(
+  request: Request,
+  visitorSecret: string | null | undefined
+): boolean {
+  if (!visitorSecret) return true;
+  if (!visitorSecretRequired()) return true;
+  const provided = chatVisitorTokenFromRequest(request);
+  return secretsMatch(provided, visitorSecret);
+}
+
 const CHAT_CORS_DEFAULTS = [
   "https://www.petersandmay.com",
   "https://petersandmay.com",
@@ -78,7 +109,7 @@ export function applyChatCors(request: Request, response: Response): Response {
     response.headers.set("Vary", "Origin");
     response.headers.set(
       "Access-Control-Allow-Headers",
-      "Content-Type, X-Chat-Site-Key, Authorization"
+      "Content-Type, X-Chat-Site-Key, X-Chat-Visitor-Token, Authorization"
     );
     response.headers.set(
       "Access-Control-Allow-Methods",

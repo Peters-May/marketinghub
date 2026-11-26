@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isStaffSession } from "@/lib/auth/roles";
+import { getSessionUser } from "@/lib/auth/session";
 import { mcpCorsPreflight } from "@/lib/mcp/cors";
 import {
   createAuthorizationCode,
@@ -55,6 +57,16 @@ export async function GET(request: NextRequest) {
     return errorPage("Invalid redirect URI.");
   }
 
+  const user = await getSessionUser();
+  if (!user || !isStaffSession(user.role)) {
+    const login = new URL("/login", request.nextUrl.origin);
+    login.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`
+    );
+    return NextResponse.redirect(login, 302);
+  }
+
   const approve = params.get("approve") === "1";
   if (!approve) {
     const next = new URL(request.url);
@@ -73,6 +85,7 @@ export async function GET(request: NextRequest) {
   </head>
   <body>
     <h1>Connect ChatGPT to Marketing Hub</h1>
+    <p>Signed in as <strong>${escapeAttr(user.full_name || user.email)}</strong>.</p>
     <p>Allow ChatGPT to use Hub tools: social drafts, themes, events, and the WhatsApp enquiry tracker.</p>
     <form method="get" action="${escapeAttr(next.pathname)}">
       ${Array.from(next.searchParams.entries())

@@ -1,6 +1,10 @@
-import { requireChatSiteKey } from "@/lib/chat/auth";
+import { requireChatSiteKey, visitorTokenMatches } from "@/lib/chat/auth";
 import { chatError, chatJson, chatOptions } from "@/lib/chat/http";
-import { getChatSession, updateChatSession } from "@/lib/chat/data";
+import {
+  getChatSession,
+  publicChatSession,
+  updateChatSession,
+} from "@/lib/chat/data";
 import { syncClosedChatSessionToPortal } from "@/lib/chat/lead";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
@@ -26,12 +30,15 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const session = await getChatSession(id);
     if (!session) return chatError(request, "Not found", 404);
+    if (!visitorTokenMatches(request, session.visitor_secret)) {
+      return chatError(request, "Unauthorized", 401);
+    }
 
     // Already closed: do not re-email the transcript on every retry.
     if (session.status === "closed") {
       return chatJson(request, {
         ok: true,
-        session,
+        session: publicChatSession(session),
         portal_sync: { ok: true, skipped: true, reason: "already_closed" },
       });
     }
@@ -41,7 +48,7 @@ export async function POST(request: Request, ctx: Ctx) {
 
     return chatJson(request, {
       ok: true,
-      session: updated,
+      session: updated ? publicChatSession(updated) : null,
       portal_sync,
     });
   } catch (err) {

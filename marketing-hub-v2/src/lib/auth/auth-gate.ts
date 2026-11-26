@@ -24,8 +24,11 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function authGateSecret() {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  return secret || null;
+  // Dedicated secret preferred so a leaked service-role key cannot forge gates.
+  const dedicated = process.env.AUTH_GATE_SECRET?.trim();
+  if (dedicated) return dedicated;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  return service || null;
 }
 
 export function authGateFreshness(gate: AuthGate, now = Date.now()): AuthGateFreshness {

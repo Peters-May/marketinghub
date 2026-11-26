@@ -4,6 +4,10 @@ import { isStaffSession } from "@/lib/auth/roles";
 import { getSessionUser } from "@/lib/auth/session";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
 import {
+  assertResolvesToPublicIp,
+  isAllowedRemoteUrl,
+} from "@/lib/security/safe-remote-url";
+import {
   gallerySharePath,
   listMediaByShareToken,
   type MediaListItem,
@@ -13,29 +17,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function isAllowedRemoteUrl(raw: string): boolean {
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return false;
-    }
-    const host = parsed.hostname.toLowerCase();
-    if (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host === "0.0.0.0" ||
-      host.endsWith(".local") ||
-      host.startsWith("10.") ||
-      host.startsWith("192.168.") ||
-      host.startsWith("169.254.")
-    ) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
+const MAX_REDIRECTS = 3;
 
 function safeFilename(raw: string): string {
   const cleaned = raw.replace(/[\\/:*?"<>|\r\n]+/g, "_").trim();
@@ -46,6 +28,37 @@ function contentDisposition(filename: string): string {
   const ascii = filename.replace(/[^\x20-\x7E]/g, "_");
   const encoded = encodeURIComponent(filename);
   return `attachment; filename="${ascii.replace(/"/g, "")}"; filename*=UTF-8''${encoded}`;
+}
+
+async function fetchAllowedRemote(startUrl: string): Promise<Response> {
+  let current = startUrl;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    if (!isAllowedRemoteUrl(current)) {
+      throw new Error("URL host is not allowed");
+    }
+    const host = new URL(current).hostname;
+    if (!(await assertResolvesToPublicIp(host))) {
+      throw new Error("URL resolved to a blocked address");
+    }
+
+    const upstream = await fetch(current, {
+      redirect: "manual",
+      headers: { Accept: "*/*" },
+      cache: "no-store",
+    });
+
+    if (upstream.status >= 300 && upstream.status < 400) {
+      const location = upstream.headers.get("location");
+      if (!location) {
+        throw new Error(`Could not fetch file (${upstream.status})`);
+      }
+      current = new URL(location, current).toString();
+      continue;
+    }
+
+    return upstream;
+  }
+  throw new Error("Too many redirects");
 }
 
 export async function GET(request: NextRequest) {
@@ -123,11 +136,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(url, {
-      redirect: "follow",
-      headers: { Accept: "*/*" },
-      cache: "no-store",
-    });
+    const upstream = await fetchAllowedRemote(url);
     if (!upstream.ok) {
       return NextResponse.json(
         { error: `Could not fetch file (${upstream.status})` },

@@ -1,11 +1,19 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { isProductionRuntime } from "@/lib/auth/config";
 
 function secret(): string {
-  return (
-    process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim() ||
-    process.env.RESEND_API_KEY?.trim() ||
-    "marketing-hub-dev-unsubscribe"
-  );
+  const dedicated = process.env.EMAIL_UNSUBSCRIBE_SECRET?.trim();
+  if (dedicated) return dedicated;
+  // Keep RESEND fallback so existing emailed tokens keep verifying until
+  // EMAIL_UNSUBSCRIBE_SECRET is set and campaigns are re-sent.
+  const resend = process.env.RESEND_API_KEY?.trim();
+  if (resend) return resend;
+  if (isProductionRuntime()) {
+    throw new Error(
+      "EMAIL_UNSUBSCRIBE_SECRET or RESEND_API_KEY is required in production"
+    );
+  }
+  return "marketing-hub-dev-unsubscribe";
 }
 
 function sign(payload: string): string {

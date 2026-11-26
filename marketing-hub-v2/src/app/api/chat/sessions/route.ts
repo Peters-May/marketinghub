@@ -1,7 +1,11 @@
 import { rateLimitPublic } from "@/lib/security/rate-limit";
 import { requireChatSiteKey } from "@/lib/chat/auth";
 import { chatError, chatJson, chatOptions } from "@/lib/chat/http";
-import { createChatSession, getChatSettings } from "@/lib/chat/data";
+import {
+  createChatSession,
+  getChatSettings,
+  publicChatSession,
+} from "@/lib/chat/data";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 
 export async function OPTIONS(request: Request) {
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
         : {};
     // Public widget must never mark sessions as test (hides from inbox / analytics).
     // Hub Test playground creates sessions via /api/chat/admin only.
-    const { session, welcome } = await createChatSession({
+    const { session, welcome, visitor_token } = await createChatSession({
       page_url: typeof body?.page_url === "string" ? body.page_url : "",
       page_title: typeof body?.page_title === "string" ? body.page_title : "",
       referrer: typeof body?.referrer === "string" ? body.referrer : "",
@@ -49,7 +53,8 @@ export async function POST(request: Request) {
       is_test: false,
     });
     return chatJson(request, {
-      session,
+      session: publicChatSession(session),
+      visitor_token,
       message: welcome,
       office_hours_note: settings.office_hours_note,
     });

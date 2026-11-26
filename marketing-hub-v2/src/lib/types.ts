@@ -1141,6 +1141,11 @@ export type ChatSession = {
   visitor_company: string;
   /** Country or city where the visitor is based (operator routing hint). */
   visitor_location: string;
+  /**
+   * Per-session secret for public widget calls. Never expose to Hub staff UI
+   * or logs; only returned once at create as `visitor_token`.
+   */
+  visitor_secret?: string | null;
   enquiry_id: string | null;
   assignee_email: string;
   is_test: boolean;

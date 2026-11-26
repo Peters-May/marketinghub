@@ -1,31 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/api";
 import {
   createPlanAnnotation,
   listPlanAnnotations,
 } from "@/lib/plan/annotations";
+import { rateLimitPublic } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const [annotations, user] = await Promise.all([
-    listPlanAnnotations("2027"),
-    getSessionUser(),
-  ]);
+export async function GET(req: NextRequest) {
+  const limited = rateLimitPublic(req, "plan-annotations-get", 60);
+  if (!limited.ok) return limited.response;
+
+  const { user, error } = await requireStaff();
+  if (error) return error;
+
+  const annotations = await listPlanAnnotations("2027");
   return NextResponse.json({
     annotations,
-    viewer: user
-      ? {
-          name: user.full_name,
-          user_id: user.id,
-          role: user.role,
-        }
-      : null,
+    viewer: {
+      name: user.full_name,
+      user_id: user.id,
+      role: user.role,
+    },
   });
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser();
+  const limited = rateLimitPublic(req, "plan-annotations-post", 30);
+  if (!limited.ok) return limited.response;
+
+  const { user, error } = await requireStaff();
+  if (error) return error;
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -33,9 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const authorName = user
-    ? user.full_name
-    : String(body.author_name ?? "").trim();
+  const authorName = user.full_name?.trim();
   if (!authorName) {
     return NextResponse.json(
       { error: "Your name is required to comment." },
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
     section_id: String(body.section_id ?? ""),
     body: commentBody,
     author_name: authorName,
-    author_user_id: user?.id ?? "",
+    author_user_id: user.id,
   });
 
   if (!annotation) {

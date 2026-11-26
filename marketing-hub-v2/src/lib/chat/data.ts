@@ -64,6 +64,7 @@ function rowToKb(row: Record<string, unknown>): ChatKbDocument {
 
 function rowToSession(row: Record<string, unknown>): ChatSession {
   const status = asString(row.status, "ai") as ChatSessionStatus;
+  const secret = asString(row.visitor_secret);
   return {
     id: asString(row.id),
     status: STATUSES.includes(status) ? status : "ai",
@@ -75,6 +76,7 @@ function rowToSession(row: Record<string, unknown>): ChatSession {
     visitor_email: asString(row.visitor_email),
     visitor_company: asString(row.visitor_company),
     visitor_location: asString(row.visitor_location),
+    visitor_secret: secret || null,
     enquiry_id: row.enquiry_id ? asString(row.enquiry_id) : null,
     assignee_email: asString(row.assignee_email),
     is_test: Boolean(row.is_test),
@@ -82,6 +84,14 @@ function rowToSession(row: Record<string, unknown>): ChatSession {
     created_at: asString(row.created_at),
     updated_at: asString(row.updated_at),
   };
+}
+
+/** Public/session payloads must never include the visitor secret. */
+export function publicChatSession(
+  session: ChatSession
+): Omit<ChatSession, "visitor_secret"> {
+  const { visitor_secret: _secret, ...rest } = session;
+  return rest;
 }
 
 function rowToAttachments(
@@ -350,13 +360,20 @@ export async function createChatSession(input: {
   referrer?: string;
   utm?: Record<string, unknown>;
   is_test?: boolean;
-}): Promise<{ session: ChatSession; welcome: ChatMessage }> {
+}): Promise<{
+  session: ChatSession;
+  welcome: ChatMessage;
+  visitor_token: string;
+}> {
   const supabase = requireService();
   const settings = await getChatSettings();
   const now = new Date().toISOString();
   // Full UUID — short 8-char ids were enumerable with only the site key.
   const id = `chat_${crypto.randomUUID()}`;
-  const sessionRow = {
+  const visitor_token =
+    crypto.randomUUID().replace(/-/g, "") +
+    crypto.randomUUID().replace(/-/g, "");
+  const baseRow = {
     id,
     status: "ai" as const,
     page_url: (input.page_url ?? "").trim().slice(0, 2000),
@@ -368,12 +385,28 @@ export async function createChatSession(input: {
     created_at: now,
     updated_at: now,
   };
-  const { data: sessionData, error: sessionError } = await supabase
-    .from("chat_sessions")
-    .insert(sessionRow)
-    .select("*")
-    .single();
-  if (sessionError) throw new Error(sessionError.message);
+  let sessionData: Record<string, unknown> | null = null;
+  {
+    const withSecret = await supabase
+      .from("chat_sessions")
+      .insert({ ...baseRow, visitor_secret: visitor_token })
+      .select("*")
+      .single();
+    if (!withSecret.error) {
+      sessionData = withSecret.data as Record<string, unknown>;
+    } else if (/visitor_secret/i.test(withSecret.error.message)) {
+      // Migration 056 not applied yet — keep chat working without IDOR tokens.
+      const fallback = await supabase
+        .from("chat_sessions")
+        .insert(baseRow)
+        .select("*")
+        .single();
+      if (fallback.error) throw new Error(fallback.error.message);
+      sessionData = fallback.data as Record<string, unknown>;
+    } else {
+      throw new Error(withSecret.error.message);
+    }
+  }
 
   const welcomeBody =
     settings.greeting.trim() ||
@@ -393,9 +426,13 @@ export async function createChatSession(input: {
     .single();
   if (msgError) throw new Error(msgError.message);
 
+  if (!sessionData) throw new Error("Failed to create chat session");
+  const session = rowToSession(sessionData);
   return {
-    session: rowToSession(sessionData as Record<string, unknown>),
+    session,
     welcome: rowToMessage(msgData as Record<string, unknown>),
+    // Only advertise the token when it was actually persisted.
+    visitor_token: session.visitor_secret ? visitor_token : "",
   };
 }
 

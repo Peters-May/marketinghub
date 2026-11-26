@@ -36,7 +36,7 @@ async function uploadToSupabase(
   try {
     const { createServiceClient } = await import("@/lib/supabase/admin");
     const supabase = createServiceClient();
-    const objectPath = `share-review/${Date.now()}-${filename}`;
+    const objectPath = `share-review/${crypto.randomUUID()}-${filename}`;
     const { error } = await supabase.storage
       .from("attachments")
       .upload(objectPath, bytes, { contentType, upsert: false });

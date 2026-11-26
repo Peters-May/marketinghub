@@ -1,10 +1,15 @@
-import { applyChatCors, requireChatSiteKey } from "@/lib/chat/auth";
+import {
+  applyChatCors,
+  requireChatSiteKey,
+  visitorTokenMatches,
+} from "@/lib/chat/auth";
 import { chatError, chatJson, chatOptions } from "@/lib/chat/http";
 import {
   addChatMessage,
   getChatSession,
   getChatSettings,
   listChatMessages,
+  publicChatSession,
   updateChatSession,
 } from "@/lib/chat/data";
 import { streamAssistantReply } from "@/lib/chat/rag";
@@ -70,8 +75,14 @@ export async function GET(request: Request, ctx: Ctx) {
   try {
     const session = await getChatSession(id);
     if (!session) return chatError(request, "Not found", 404);
+    if (!visitorTokenMatches(request, session.visitor_secret)) {
+      return chatError(request, "Unauthorized", 401);
+    }
     const messages = await listChatMessages(id, { after });
-    return chatJson(request, { session, messages });
+    return chatJson(request, {
+      session: publicChatSession(session),
+      messages,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed";
     return chatError(request, message, 500);
@@ -130,6 +141,9 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const session = await getChatSession(id);
     if (!session) return chatError(request, "Not found", 404);
+    if (!visitorTokenMatches(request, session.visitor_secret)) {
+      return chatError(request, "Unauthorized", 401);
+    }
     if (session.status === "closed") {
       return chatError(request, "This conversation is closed", 409);
     }

@@ -147,6 +147,17 @@ function pm_website_chat_proxy_hub($request) {
         'sslverify' => true,
     ];
 
+    $visitor_token = $request->get_header('x_chat_visitor_token');
+    if (!is_string($visitor_token) || $visitor_token === '') {
+        $visitor_token = isset($_SERVER['HTTP_X_CHAT_VISITOR_TOKEN'])
+            ? (string) wp_unslash($_SERVER['HTTP_X_CHAT_VISITOR_TOKEN'])
+            : '';
+    }
+    $visitor_token = sanitize_text_field($visitor_token);
+    if ($visitor_token !== '') {
+        $args['headers']['X-Chat-Visitor-Token'] = $visitor_token;
+    }
+
     if ($method !== 'GET') {
         if ($is_multipart) {
             // Rebuild multipart so Hub receives the file (WP REST may have parsed it).

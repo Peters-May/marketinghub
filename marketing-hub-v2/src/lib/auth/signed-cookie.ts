@@ -1,14 +1,20 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { isProductionRuntime } from "@/lib/auth/config";
 
 const SEP = ".";
 
 function signingSecret(): string {
-  return (
-    process.env.MEDIA_ACCESS_SECRET?.trim() ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    "dev-only-media-secret"
-  );
+  const dedicated = process.env.MEDIA_ACCESS_SECRET?.trim();
+  if (dedicated) return dedicated;
+  // Prefer service role over the public anon key (never forgeable from the browser).
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (service) return service;
+  if (isProductionRuntime()) {
+    throw new Error(
+      "MEDIA_ACCESS_SECRET or SUPABASE_SERVICE_ROLE_KEY is required in production"
+    );
+  }
+  return "dev-only-media-secret";
 }
 
 function sign(payload: string): string {

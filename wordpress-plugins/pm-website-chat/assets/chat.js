@@ -27,17 +27,27 @@
   /** Plain-text lines for download on close. */
   var transcriptLines = [];
   var SESSION_KEY = "pm_website_chat_session_id";
+  var VISITOR_TOKEN_KEY = "pm_website_chat_visitor_token";
+  var visitorToken = null;
 
-  function rememberSession(id) {
+  function rememberSession(id, token) {
     sessionId = id || null;
+    if (arguments.length > 1) {
+      visitorToken = token || null;
+    } else if (!sessionId) {
+      visitorToken = null;
+    }
     try {
       if (sessionId) sessionStorage.setItem(SESSION_KEY, sessionId);
       else sessionStorage.removeItem(SESSION_KEY);
+      if (visitorToken) sessionStorage.setItem(VISITOR_TOKEN_KEY, visitorToken);
+      else sessionStorage.removeItem(VISITOR_TOKEN_KEY);
     } catch (e) {}
   }
 
   function readRememberedSession() {
     try {
+      visitorToken = sessionStorage.getItem(VISITOR_TOKEN_KEY) || null;
       return sessionStorage.getItem(SESSION_KEY) || null;
     } catch (e) {
       return null;
@@ -144,6 +154,9 @@
     }
     if (!useProxy && cfg.siteKey) {
       h["X-Chat-Site-Key"] = cfg.siteKey;
+    }
+    if (visitorToken) {
+      h["X-Chat-Visitor-Token"] = visitorToken;
     }
     return h;
   }
@@ -1725,7 +1738,10 @@
         });
       })
       .then(function (data) {
-        rememberSession(data.session && data.session.id);
+        rememberSession(
+          data.session && data.session.id,
+          data.visitor_token || null
+        );
         if (data.message && data.message.id) {
           seenIds[data.message.id] = true;
           lastMessageAt = data.message.created_at;

@@ -8,6 +8,7 @@ import {
   syncMerchOrderPrimaryFields,
 } from "@/lib/merch/order-items";
 import { resolveMerchRequestedFor } from "@/lib/merch/requested-for";
+import { rateLimitPublic } from "@/lib/security/rate-limit";
 
 function plainNotes(value: unknown): string {
   if (typeof value !== "string") return "";
@@ -16,6 +17,9 @@ function plainNotes(value: unknown): string {
 
 /** Guest clothing request from the public shop — no login required. */
 export async function POST(request: NextRequest) {
+  const limited = rateLimitPublic(request, "shop-orders", 20);
+  if (!limited.ok) return limited.response;
+
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return jsonError("Invalid request", 400);

@@ -87,55 +87,31 @@
     }
   }
 
+  function loginHref() {
+    const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    return `/login?next=${encodeURIComponent(next || "/plan/2027/")}`;
+  }
+
   function authorFieldsHtml(prefix) {
     if (viewer) {
       return `<p class="plan-comments-signed-in">Commenting as ${escapeHtml(viewer.name)}</p>`;
     }
-    return `<label for="${prefix}-name">Your name</label>
-      <input id="${prefix}-name" type="text" maxlength="120" value="${escapeHtml(guestName())}" placeholder="So we know who to follow up with" required autocomplete="name" />`;
+    return `<p class="plan-comments-identity-hint">Sign in to the Marketing Hub to leave comments.
+      <a class="plan-btn plan-btn-primary" href="${escapeHtml(loginHref())}" style="margin-left:8px;display:inline-block;padding:6px 10px;text-decoration:none">Sign in</a>
+    </p>`;
   }
 
-  function syncIdentityPanel(forceEdit = false) {
+  function syncIdentityPanel() {
     const panel = $("#plan-comments-identity");
     if (!panel) return;
+    panel.classList.add("is-visible");
     if (viewer) {
-      panel.classList.add("is-visible");
       panel.innerHTML = `<p class="plan-comments-signed-in">Commenting as ${escapeHtml(viewer.name)}</p>`;
       return;
     }
-    const name = guestName();
-    panel.classList.add("is-visible");
-    if (name && !forceEdit) {
-      panel.innerHTML = `
-        <p class="plan-comments-signed-in">Commenting as <strong>${escapeHtml(name)}</strong>
-          <button type="button" class="plan-btn" id="plan-identity-edit" style="margin-left:8px;padding:4px 8px;font-size:11px">Change</button>
-        </p>`;
-      $("#plan-identity-edit")?.addEventListener("click", () => syncIdentityPanel(true));
-      return;
-    }
     panel.innerHTML = `
-      <p class="plan-comments-identity-hint">Add your name so Marketing knows who to follow up with.</p>
-      <div class="plan-comments-identity-row">
-        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
-          <label for="plan-identity-name">Your name</label>
-          <input id="plan-identity-name" type="text" maxlength="120" value="${escapeHtml(name)}" placeholder="e.g. Alex from Sales" autocomplete="name" />
-        </div>
-        <button type="button" class="plan-btn plan-btn-primary" id="plan-identity-save">Save</button>
-      </div>`;
-    $("#plan-identity-save")?.addEventListener("click", () => {
-      const input = /** @type {HTMLInputElement | null} */ ($("#plan-identity-name"));
-      const next = (input?.value || "").trim();
-      if (!next) {
-        showError("Enter your name so we know who to follow up with.");
-        input?.focus();
-        return;
-      }
-      saveGuestName(next);
-      showError("");
-      syncComposerNameFields();
-      syncIdentityPanel();
-    });
-    window.setTimeout(() => $("#plan-identity-name")?.focus(), 0);
+      <p class="plan-comments-identity-hint">Comments are limited to signed-in Hub staff.</p>
+      <p><a class="plan-btn plan-btn-primary" href="${escapeHtml(loginHref())}" style="display:inline-block;padding:8px 12px;text-decoration:none">Sign in to comment</a></p>`;
   }
 
   function syncComposerNameFields() {
@@ -145,23 +121,12 @@
     });
   }
 
-  function requireAuthorName(scope) {
+  function requireAuthorName() {
     if (viewer?.name) return viewer.name;
-    const nameEl =
-      scope?.querySelector?.("input[type='text']") ||
-      $("#plan-composer-name") ||
-      $("#plan-identity-name");
-    const author_name = (nameEl?.value || guestName() || "").trim();
-    if (!author_name) {
-      showError("Enter your name so we know who to follow up with.");
-      setSidebarOpen(true);
-      syncIdentityPanel();
-      (nameEl || $("#plan-identity-name"))?.focus();
-      return "";
-    }
-    saveGuestName(author_name);
-    syncComposerNameFields();
-    return author_name;
+    showError("Sign in to the Marketing Hub to leave comments.");
+    setSidebarOpen(true);
+    syncIdentityPanel();
+    return "";
   }
 
   function buildShell() {
@@ -562,6 +527,15 @@
     showError("");
     try {
       const res = await fetch(API, { credentials: "same-origin" });
+      if (res.status === 401 || res.status === 403) {
+        annotations = [];
+        viewer = null;
+        applyHighlights();
+        renderList();
+        syncIdentityPanel();
+        showError("Sign in to the Marketing Hub to view and leave comments.");
+        return;
+      }
       if (!res.ok) throw new Error("Could not load comments.");
       const data = await res.json();
       annotations = Array.isArray(data.annotations) ? data.annotations : [];
@@ -594,7 +568,7 @@
       showError("Write a comment before saving.");
       return;
     }
-    const author_name = requireAuthorName($("#plan-comments-composer"));
+    const author_name = requireAuthorName();
     if (!author_name) return;
 
     saving = true;
@@ -634,7 +608,7 @@
       showError("Write a reply before saving.");
       return;
     }
-    const author_name = requireAuthorName(box);
+    const author_name = requireAuthorName();
     if (!author_name) return;
 
     saving = true;

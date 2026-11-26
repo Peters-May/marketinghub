@@ -1,4 +1,4 @@
-import { requireChatSiteKey } from "@/lib/chat/auth";
+import { requireChatSiteKey, visitorTokenMatches } from "@/lib/chat/auth";
 import { chatError, chatJson, chatOptions } from "@/lib/chat/http";
 import { getChatSession, getChatSettings } from "@/lib/chat/data";
 import { rateLimitPublic } from "@/lib/security/rate-limit";
@@ -57,6 +57,9 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const session = await getChatSession(id);
     if (!session) return chatError(request, "Not found", 404);
+    if (!visitorTokenMatches(request, session.visitor_secret)) {
+      return chatError(request, "Unauthorized", 401);
+    }
     if (session.status === "closed") {
       return chatError(request, "This conversation is closed", 409);
     }
@@ -96,7 +99,7 @@ export async function POST(request: Request, ctx: Ctx) {
     }
 
     const bytes = Buffer.from(await blob.arrayBuffer());
-    const filename = `${Date.now()}-${safeName(originalName)}`;
+    const filename = `${crypto.randomUUID()}-${safeName(originalName)}`;
     const objectPath = `chat/${id}/${filename}`;
     const supabase = createServiceClient();
     const { error } = await supabase.storage
@@ -105,10 +108,15 @@ export async function POST(request: Request, ctx: Ctx) {
     if (error) {
       return chatError(request, error.message || "Upload failed", 500);
     }
-    const { data } = supabase.storage
+    // Prefer a long-lived signed URL so the object need not be world-listable.
+    // Fall back to public URL when the bucket is still configured as public.
+    const signed = await supabase.storage
+      .from("attachments")
+      .createSignedUrl(objectPath, 60 * 60 * 24 * 365);
+    const { data: publicData } = supabase.storage
       .from("attachments")
       .getPublicUrl(objectPath);
-    const url = data.publicUrl || "";
+    const url = signed.data?.signedUrl || publicData.publicUrl || "";
     if (!url) {
       return chatError(request, "Upload failed", 500);
     }

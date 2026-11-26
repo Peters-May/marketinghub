@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth/session";
+import { requireStaff } from "@/lib/api";
 import { replyToPlanAnnotation } from "@/lib/plan/annotations";
+import { rateLimitPublic } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,12 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const user = await getSessionUser();
+  const limited = rateLimitPublic(req, "plan-annotation-replies", 30);
+  if (!limited.ok) return limited.response;
+
+  const { user, error } = await requireStaff();
+  if (error) return error;
+
   const { id } = await context.params;
   let body: Record<string, unknown>;
   try {
@@ -17,9 +23,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const authorName = user
-    ? user.full_name
-    : String(body.author_name ?? "").trim();
+  const authorName = user.full_name?.trim();
   if (!authorName) {
     return NextResponse.json(
       { error: "Your name is required to reply." },
@@ -39,7 +43,7 @@ export async function POST(
     id,
     body: replyBody,
     author_name: authorName,
-    author_user_id: user?.id ?? "",
+    author_user_id: user.id,
   });
 
   if (!annotation) {

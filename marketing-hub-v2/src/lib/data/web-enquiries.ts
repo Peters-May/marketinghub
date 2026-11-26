@@ -160,10 +160,6 @@ export function requireWebhookSecret(request: Request): boolean {
   const expected = process.env.WEB_ENQUIRY_WEBHOOK_SECRET?.trim();
   if (!expected) return false;
 
-  const url = new URL(request.url);
-  const key = url.searchParams.get("key")?.trim() ?? "";
-  if (key && secretsMatch(key, expected)) return true;
-
   const headerSecret =
     request.headers.get("x-webhook-secret")?.trim() ?? "";
   if (headerSecret && secretsMatch(headerSecret, expected)) return true;
@@ -173,6 +169,12 @@ export function requireWebhookSecret(request: Request): boolean {
     const token = auth.slice(7).trim();
     if (token && secretsMatch(token, expected)) return true;
   }
+
+  // Query ?key= still accepted for existing WordPress/quote integrations, but
+  // prefer Authorization / x-webhook-secret (query strings leak in logs).
+  const url = new URL(request.url);
+  const key = url.searchParams.get("key")?.trim() ?? "";
+  if (key && secretsMatch(key, expected)) return true;
 
   return false;
 }
