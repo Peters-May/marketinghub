@@ -133,20 +133,73 @@ function SummaryCard({
   );
 }
 
+type YearEventCostGroup = {
+  eventId: string;
+  title: string;
+  startsAt: string | null;
+  count: number;
+  totals: ReturnType<typeof costTotalsByCurrency>;
+};
+
+function normalizeMatchText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Match Boot Düsseldorf event costs to Boat Show / Düsseldorf budget lines. */
+function eventMatchesBudgetLine(
+  eventTitle: string,
+  line: Pick<BudgetLine, "name" | "children">
+) {
+  const eventNorm = normalizeMatchText(eventTitle);
+  if (!eventNorm) return false;
+  const needles = [line.name, ...line.children.map((child) => child.name)]
+    .map(normalizeMatchText)
+    .filter(Boolean);
+  return needles.some((needle) => {
+    if (eventNorm.includes(needle) || needle.includes(eventNorm)) return true;
+    if (
+      needle.includes("boat show") &&
+      (eventNorm.includes("boot") || eventNorm.includes("boat"))
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function eventMatchesBreakdownChild(eventTitle: string, childName: string) {
+  const eventNorm = normalizeMatchText(eventTitle);
+  const childNorm = normalizeMatchText(childName);
+  if (!eventNorm || !childNorm) return false;
+  return eventNorm.includes(childNorm) || childNorm.includes(eventNorm);
+}
+
 function SpendBar({ planned, used }: { planned: number; used: number }) {
   const over = planned > 0 ? used > planned : used > 0;
   const pct =
     planned > 0 ? Math.min(100, (used / planned) * 100) : used > 0 ? 100 : 0;
   return (
-    <div className="h-2 overflow-hidden rounded-full bg-sand">
-      <div
-        className={cn(
-          "h-full rounded-full",
-          over ? "bg-amber-600" : "bg-brand"
-        )}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
+    <span className="block max-w-xs">
+      <span className="block h-2 overflow-hidden rounded-full bg-sand">
+        <span
+          className={cn(
+            "block h-full rounded-full",
+            over ? "bg-amber-600" : "bg-brand"
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      {used <= 0 ? (
+        <span className="mt-1 block text-[11px] text-muted">
+          No payments logged
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -155,19 +208,23 @@ function BudgetLineTableRows({
   spend,
   open,
   payments,
+  relatedEvents,
   onToggle,
   onEdit,
   onDelete,
   onAddPayment,
+  onOpenEventCosts,
 }: {
   line: BudgetLine;
   spend?: LineSpend;
   open: boolean;
   payments: BudgetPayment[];
+  relatedEvents: YearEventCostGroup[];
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAddPayment: () => void;
+  onOpenEventCosts: () => void;
 }) {
   const historic = isHistoricBudgetLine(line);
   return (
@@ -194,13 +251,27 @@ function BudgetLineTableRows({
                   2025 {gbp(line.prior_year)} · {line.notes || "Not continued"}
                 </span>
               ) : (
-                <span className="mt-2 block max-w-xs">
+                <span className="mt-2 block">
                   <SpendBar
                     planned={spend?.planned ?? line.planned}
                     used={spend?.used ?? 0}
                   />
                 </span>
               )}
+              {relatedEvents.length > 0 ? (
+                <span className="mt-1.5 block text-[11px] text-accent">
+                  Event sheet
+                  {relatedEvents.length === 1 ? "" : "s"}:{" "}
+                  {relatedEvents
+                    .map(
+                      (event) =>
+                        `${event.title} (${event.count} line${
+                          event.count === 1 ? "" : "s"
+                        })`
+                    )
+                    .join(" · ")}
+                </span>
+              ) : null}
             </span>
           </button>
         </td>
@@ -245,9 +316,49 @@ function BudgetLineTableRows({
       {open ? (
         <tr>
           <td className="bg-sand/30 px-5 pb-4 pt-0" colSpan={6}>
-            <div className="ml-6 rounded-xl border border-border bg-white p-3">
+            <div className="ml-6 space-y-3 rounded-xl border border-border bg-white p-3">
               {line.notes ? (
-                <p className="mb-2 text-xs text-muted">{line.notes}</p>
+                <p className="text-xs text-muted">{line.notes}</p>
+              ) : null}
+              {relatedEvents.length > 0 ? (
+                <div className="rounded-lg border border-accent/20 bg-accent-soft/40 px-3 py-2">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-brand">
+                      Linked event costs (sheet totals, not yet payments)
+                    </p>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-accent hover:underline"
+                      onClick={onOpenEventCosts}
+                    >
+                      Open event costs
+                    </button>
+                  </div>
+                  <ul className="space-y-2 text-xs">
+                    {relatedEvents.map((event) => (
+                      <li
+                        key={event.eventId}
+                        className="flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <span>
+                          {event.title}
+                          <span className="text-muted">
+                            {" "}
+                            · {event.count} line
+                            {event.count === 1 ? "" : "s"}
+                          </span>
+                        </span>
+                        <span className="flex flex-wrap gap-2 tabular-nums">
+                          {event.totals.map((item) => (
+                            <span key={item.currency}>
+                              {formatCostAmount(item.total, item.currency)}
+                            </span>
+                          ))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               {payments.length === 0 ? (
                 <p className="text-xs text-muted">No payments yet.</p>
@@ -272,7 +383,7 @@ function BudgetLineTableRows({
               )}
               <button
                 type="button"
-                className="btn-secondary mt-3 text-xs"
+                className="btn-secondary text-xs"
                 onClick={onAddPayment}
               >
                 Add payment
@@ -384,29 +495,38 @@ export function BudgetClient({
   );
 
   const yearEventCostGroups = useMemo(() => {
-    const byEvent = new Map<
-      string,
-      { title: string; startsAt: string | null; count: number }
-    >();
+    const byEvent = new Map<string, YearEventCostGroup & { lines: typeof yearEventCostLines }>();
     for (const line of yearEventCostLines) {
       const existing = byEvent.get(line.eventId);
       if (existing) {
         existing.count += 1;
+        existing.lines.push(line);
         continue;
       }
       const event = costEvents.find((item) => item.id === line.eventId);
       byEvent.set(line.eventId, {
+        eventId: line.eventId,
         title: event?.title || line.eventTitle,
         startsAt: event?.startsAt ?? line.startsAt,
         count: 1,
+        totals: [],
+        lines: [line],
       });
     }
-    return [...byEvent.values()].sort((a, b) => {
-      if (a.startsAt && b.startsAt) return a.startsAt.localeCompare(b.startsAt);
-      if (a.startsAt) return -1;
-      if (b.startsAt) return 1;
-      return a.title.localeCompare(b.title);
-    });
+    return [...byEvent.values()]
+      .map((group) => ({
+        eventId: group.eventId,
+        title: group.title,
+        startsAt: group.startsAt,
+        count: group.count,
+        totals: costTotalsByCurrency(group.lines),
+      }))
+      .sort((a, b) => {
+        if (a.startsAt && b.startsAt) return a.startsAt.localeCompare(b.startsAt);
+        if (a.startsAt) return -1;
+        if (b.startsAt) return 1;
+        return a.title.localeCompare(b.title);
+      });
   }, [yearEventCostLines, costEvents]);
 
   const totals = useMemo(
@@ -498,6 +618,9 @@ export function BudgetClient({
   function renderBudgetLine(line: BudgetLine) {
     const spend = totals.byLine[line.id];
     const open = openLineId === line.id;
+    const relatedEvents = yearEventCostGroups.filter((event) =>
+      eventMatchesBudgetLine(event.title, line)
+    );
     return (
       <BudgetLineTableRows
         key={line.id}
@@ -507,6 +630,7 @@ export function BudgetClient({
         payments={yearPayments.filter(
           (payment) => payment.budget_line_id === line.id
         )}
+        relatedEvents={relatedEvents}
         onToggle={() => setOpenLineId(open ? null : line.id)}
         onEdit={() => {
           setEditingLineId(line.id);
@@ -522,6 +646,7 @@ export function BudgetClient({
         onAddPayment={() => {
           void addPaymentRow(line.id);
         }}
+        onOpenEventCosts={() => setTab("event_costs")}
       />
     );
   }
@@ -792,12 +917,21 @@ export function BudgetClient({
                 <ul className="divide-y divide-border rounded-xl border border-border">
                   {yearEventCostGroups.map((group) => (
                     <li
-                      key={`${group.title}-${group.startsAt ?? "none"}`}
+                      key={group.eventId}
                       className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm"
                     >
-                      <span className="font-medium text-brand">{group.title}</span>
-                      <span className="text-xs text-muted">
-                        {group.count} {group.count === 1 ? "line" : "lines"}
+                      <span>
+                        <span className="font-medium text-brand">{group.title}</span>
+                        <span className="ml-2 text-xs text-muted">
+                          {group.count} {group.count === 1 ? "line" : "lines"}
+                        </span>
+                      </span>
+                      <span className="flex flex-wrap gap-2 text-xs font-medium tabular-nums">
+                        {group.totals.map((item) => (
+                          <span key={item.currency}>
+                            {formatCostAmount(item.total, item.currency)}
+                          </span>
+                        ))}
                       </span>
                     </li>
                   ))}
@@ -1023,27 +1157,47 @@ export function BudgetClient({
                   <p className="text-xs text-muted">
                     {line.code ? `${line.code} · ` : ""}
                     {gbp(line.planned)} planned
+                    {yearLabel ? ` · ${yearLabel} event sheets where matched` : ""}
                   </p>
                 </div>
                 <ul className="divide-y divide-border">
-                  {line.children.map((child) => (
-                    <li
-                      key={child.name}
-                      className="flex items-start justify-between gap-4 px-5 py-3 text-sm"
-                    >
-                      <span>
-                        {child.name}
-                        {child.note ? (
-                          <span className="mt-1 block text-xs text-muted">
-                            {child.note}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="shrink-0 tabular-nums">
-                        {gbp(child.amount)}
-                      </span>
-                    </li>
-                  ))}
+                  {line.children.map((child) => {
+                    const matchedEvents = yearEventCostGroups.filter((event) =>
+                      eventMatchesBreakdownChild(event.title, child.name)
+                    );
+                    return (
+                      <li
+                        key={child.name}
+                        className="flex items-start justify-between gap-4 px-5 py-3 text-sm"
+                      >
+                        <span>
+                          {child.name}
+                          {child.note ? (
+                            <span className="mt-1 block text-xs text-muted">
+                              {child.note}
+                            </span>
+                          ) : null}
+                          {matchedEvents.length > 0 ? (
+                            <span className="mt-1 block text-xs text-accent">
+                              {matchedEvents
+                                .map(
+                                  (event) =>
+                                    `${event.title}: ${event.totals
+                                      .map((item) =>
+                                        formatCostAmount(item.total, item.currency)
+                                      )
+                                      .join(" · ")}`
+                                )
+                                .join(" · ")}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {gbp(child.amount)}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
