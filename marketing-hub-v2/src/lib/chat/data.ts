@@ -90,7 +90,8 @@ function rowToSession(row: Record<string, unknown>): ChatSession {
 export function publicChatSession(
   session: ChatSession
 ): Omit<ChatSession, "visitor_secret"> {
-  const { visitor_secret: _secret, ...rest } = session;
+  const { visitor_secret: _, ...rest } = session;
+  void _;
   return rest;
 }
 
