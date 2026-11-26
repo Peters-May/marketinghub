@@ -30,6 +30,10 @@ import {
 import { BudgetPaymentsSheet } from "@/components/budget/BudgetPaymentsSheet";
 import { FilterBar, matchesSearch } from "@/components/ui/FilterBar";
 import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  costTotalsByCurrency,
+  formatCostAmount,
+} from "@/lib/events/costs";
 import { cn } from "@/lib/utils";
 
 function gbp(value: number | null | undefined) {
@@ -54,6 +58,28 @@ const BUDGET_YEARS = [2026, 2027] as const;
 type BudgetYear = (typeof BUDGET_YEARS)[number];
 
 type TabId = (typeof TABS)[number]["id"];
+
+/** Prefer 2027 once planning starts (Oct+) or when that year already has event costs. */
+function initialBudgetYear(
+  metaYear: number,
+  eventCosts: BudgetEventCostLine[],
+  costEvents: BudgetCostEvent[]
+): BudgetYear {
+  const fromMeta: BudgetYear = metaYear === 2027 ? 2027 : 2026;
+  const eventYearById = new Map(
+    costEvents.map((event) => [event.id, event.startsAt?.slice(0, 4) ?? ""])
+  );
+  const has2027Costs = eventCosts.some((line) => {
+    const year = eventYearById.get(line.eventId) || line.startsAt?.slice(0, 4);
+    return year === "2027";
+  });
+  if (!has2027Costs) return fromMeta;
+  const now = new Date();
+  const planningNext =
+    now.getFullYear() > fromMeta ||
+    (now.getFullYear() === fromMeta && now.getMonth() >= 9);
+  return planningNext ? 2027 : fromMeta;
+}
 
 const STATUS_OPTIONS: { value: BudgetPaymentStatus; label: string }[] = [
   { value: "paid", label: "Paid" },
@@ -321,10 +347,9 @@ export function BudgetClient({
     "Q1"
   );
   const [paymentsSheetKey, setPaymentsSheetKey] = useState(0);
-  const [budgetYear, setBudgetYear] = useState<BudgetYear>(() => {
-    const fromMeta = Number(meta.year);
-    return fromMeta === 2027 ? 2027 : 2026;
-  });
+  const [budgetYear, setBudgetYear] = useState<BudgetYear>(() =>
+    initialBudgetYear(Number(meta.year), eventCosts, costEvents)
+  );
   const yearLabel = String(budgetYear);
 
   const eventYearById = useMemo(() => {
@@ -345,6 +370,44 @@ export function BudgetClient({
       return payment.paid_at?.startsWith(yearLabel) ?? false;
     });
   }, [payments, eventYearById, yearLabel]);
+
+  const yearEventCostLines = useMemo(() => {
+    return eventCosts.filter((line) => {
+      const year = eventYearById.get(line.eventId) || line.startsAt?.slice(0, 4);
+      return year === yearLabel;
+    });
+  }, [eventCosts, eventYearById, yearLabel]);
+
+  const yearEventCostTotals = useMemo(
+    () => costTotalsByCurrency(yearEventCostLines),
+    [yearEventCostLines]
+  );
+
+  const yearEventCostGroups = useMemo(() => {
+    const byEvent = new Map<
+      string,
+      { title: string; startsAt: string | null; count: number }
+    >();
+    for (const line of yearEventCostLines) {
+      const existing = byEvent.get(line.eventId);
+      if (existing) {
+        existing.count += 1;
+        continue;
+      }
+      const event = costEvents.find((item) => item.id === line.eventId);
+      byEvent.set(line.eventId, {
+        title: event?.title || line.eventTitle,
+        startsAt: event?.startsAt ?? line.startsAt,
+        count: 1,
+      });
+    }
+    return [...byEvent.values()].sort((a, b) => {
+      if (a.startsAt && b.startsAt) return a.startsAt.localeCompare(b.startsAt);
+      if (a.startsAt) return -1;
+      if (b.startsAt) return 1;
+      return a.title.localeCompare(b.title);
+    });
+  }, [yearEventCostLines, costEvents]);
 
   const totals = useMemo(
     () => computeBudgetTotals(lines, yearPayments),
@@ -514,7 +577,7 @@ export function BudgetClient({
     <div>
       <PageHeader
         title={`Marketing Budget ${budgetYear}`}
-        description={`${meta.source} · amounts in ${meta.currency}. Switch year to separate 2026 and 2027 spend — Boot and other January shows sit in their event year.`}
+        description={`${meta.source} · amounts in ${meta.currency}. Switch year for payments and event costs — Boot Düsseldorf 2027 sits under 2027 (by event start date).`}
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -628,21 +691,27 @@ export function BudgetClient({
       ) : null}
 
       <div className="mb-6 inline-flex flex-wrap rounded-xl border border-border bg-sand/60 p-1">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition",
-              tab === item.id
-                ? "bg-white text-brand shadow-sm"
-                : "text-muted hover:text-foreground"
-            )}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
+        {TABS.map((item) => {
+          const label =
+            item.id === "event_costs" && yearEventCostLines.length > 0
+              ? `Event costs (${yearEventCostLines.length})`
+              : item.label;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                tab === item.id
+                  ? "bg-white text-brand shadow-sm"
+                  : "text-muted hover:text-foreground"
+              )}
+              onClick={() => setTab(item.id)}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "overview" ? (
@@ -678,6 +747,63 @@ export function BudgetClient({
                 </div>
               );
             })}
+          </div>
+
+          <div className="surface-card p-5">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg text-brand">
+                  {yearLabel} event costs
+                </h2>
+                <p className="text-xs text-muted">
+                  From event sheets (by event start date). Not counted in paid /
+                  remaining above until logged as a payment.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary !py-1.5"
+                onClick={() => setTab("event_costs")}
+              >
+                Open event costs
+              </button>
+            </div>
+            {yearEventCostLines.length === 0 ? (
+              <p className="text-sm text-muted">
+                No {yearLabel} event cost lines yet. Add them on an event, or on
+                the Event costs tab.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {yearEventCostTotals.map((item) => (
+                    <span
+                      key={item.currency}
+                      className="rounded-full bg-background px-3 py-1 text-sm font-medium tabular-nums"
+                    >
+                      {formatCostAmount(item.total, item.currency)}
+                    </span>
+                  ))}
+                  <span className="text-xs text-muted">
+                    {yearEventCostLines.length} lines · {yearEventCostGroups.length}{" "}
+                    {yearEventCostGroups.length === 1 ? "event" : "events"}
+                  </span>
+                </div>
+                <ul className="divide-y divide-border rounded-xl border border-border">
+                  {yearEventCostGroups.map((group) => (
+                    <li
+                      key={`${group.title}-${group.startsAt ?? "none"}`}
+                      className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm"
+                    >
+                      <span className="font-medium text-brand">{group.title}</span>
+                      <span className="text-xs text-muted">
+                        {group.count} {group.count === 1 ? "line" : "lines"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {showLineForm ? (
